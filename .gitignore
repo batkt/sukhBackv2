@@ -1,0 +1,11 @@
+/node_modules
+yarn.lock
+# package-lock.json - Uncomment to ignore, or commit it for reproducible builds
+# package-lock.json
+/zurag
+/file
+**/*.log
+db/*
+/.vscode
+
+

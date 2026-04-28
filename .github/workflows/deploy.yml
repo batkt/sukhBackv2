@@ -1,0 +1,49 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+
+    - name: Install dependencies
+      run: |
+        if [ -f package-lock.json ]; then
+          npm ci
+        else
+          echo "⚠️ package-lock.json not found, using npm install"
+          npm install
+        fi
+
+    # Deploy to server via SSH
+    - name: Deploy to server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SSH_HOST }}
+        username: ${{ secrets.SSH_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: ${{ secrets.SSH_PORT || 22 }}
+        timeout: 60s
+        debug: true
+        script: |
+          cd ${{ secrets.DEPLOY_PATH }}
+          git pull origin main
+          if [ -f package-lock.json ]; then
+            npm ci --production
+          else
+            npm install --production
+          fi
+          pm2 reload amarSukhBack || pm2 start index.js --name amarSukhBack
+

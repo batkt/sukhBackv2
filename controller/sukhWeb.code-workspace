@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../../sukhWeb"
+		},
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../sukhApp"
+		}
+	],
+	"settings": {}
+}

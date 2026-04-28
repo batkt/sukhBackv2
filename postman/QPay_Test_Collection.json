@@ -1,0 +1,190 @@
+{
+  "info": {
+    "name": "QPay Test Collection",
+    "description": "Collection for testing QPay integration with real currency",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8084",
+      "type": "string"
+    },
+    {
+      "key": "baiguullagiinId",
+      "value": "YOUR_ORG_ID_HERE",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "YOUR_AUTH_TOKEN_HERE",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Create Test Invoice",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"baiguullagiinId\": \"{{baiguullagiinId}}\",\n  \"amount\": 1000,\n  \"description\": \"QPay Test Payment - {{$timestamp}}\",\n  \"tukhainBaaziinKholbolt\": \"default\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/qpayTest/createTestInvoice",
+          "host": ["{{baseUrl}}"],
+          "path": ["qpayTest", "createTestInvoice"]
+        },
+        "description": "Create a test payment invoice with QPay"
+      },
+      "response": []
+    },
+    {
+      "name": "2. Check Test Payment Status",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"testPaymentId\": \"TEST_PAYMENT_ID_HERE\",\n  \"baiguullagiinId\": \"{{baiguullagiinId}}\",\n  \"tukhainBaaziinKholbolt\": \"default\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/qpayTest/checkTestPaymentStatus",
+          "host": ["{{baseUrl}}"],
+          "path": ["qpayTest", "checkTestPaymentStatus"]
+        },
+        "description": "Check the status of a test payment"
+      },
+      "response": []
+    },
+    {
+      "name": "3. Get Test Payments",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/qpayTest/getTestPayments?baiguullagiinId={{baiguullagiinId}}&limit=10&page=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["qpayTest", "getTestPayments"],
+          "query": [
+            {
+              "key": "baiguullagiinId",
+              "value": "{{baiguullagiinId}}"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            },
+            {
+              "key": "page",
+              "value": "1"
+            }
+          ]
+        },
+        "description": "Get list of test payments with pagination"
+      },
+      "response": []
+    },
+    {
+      "name": "4. QPay Test Callback (Simulate)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"invoice_id\": \"TEST_INVOICE_ID\",\n  \"payment_status\": \"PAID\",\n  \"payment_id\": \"TEST_PAYMENT_ID\",\n  \"transaction_id\": \"TEST_TRANSACTION_ID\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/qpayTest/testCallback/{{baiguullagiinId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["qpayTest", "testCallback", "{{baiguullagiinId}}"]
+        },
+        "description": "Simulate QPay callback for testing"
+      },
+      "response": []
+    },
+    {
+      "name": "5. Create Real Invoice Payment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nekhemjlekhId\": \"INVOICE_ID_HERE\",\n  \"baiguullagiinId\": \"{{baiguullagiinId}}\",\n  \"barilgiinId\": \"BRANCH_ID_HERE\",\n  \"tukhainBaaziinKholbolt\": \"default\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/qpay/qpayInvoiceGargaya",
+          "host": ["{{baseUrl}}"],
+          "path": ["qpay", "qpayInvoiceGargaya"]
+        },
+        "description": "Create QPay payment for real invoice"
+      },
+      "response": []
+    },
+    {
+      "name": "6. Check Real Invoice Payment Status",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nekhemjlekhId\": \"INVOICE_ID_HERE\",\n  \"baiguullagiinId\": \"{{baiguullagiinId}}\",\n  \"barilgiinId\": \"BRANCH_ID_HERE\",\n  \"tukhainBaaziinKholbolt\": \"default\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/qpay/qpayInvoiceShalgay",
+          "host": ["{{baseUrl}}"],
+          "path": ["qpay", "qpayInvoiceShalgay"]
+        },
+        "description": "Check status of real invoice payment"
+      },
+      "response": []
+    }
+  ]
+}

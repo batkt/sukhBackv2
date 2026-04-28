@@ -1,0 +1,4016 @@
+{
+	"info": {
+		"_postman_id": "cc3dbc64-ecff-4e04-9d7f-2bd82466c2dd",
+		"name": "WalletApi V2",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "45272067",
+		"_collection_link": "https://dark-space-995425.postman.co/workspace/Team-Workspace~38b06b28-3017-4c94-8c98-912b787497b1/collection/45272067-cc3dbc64-ecff-4e04-9d7f-2bd82466c2dd?action=share&source=collection_link&creator=45272067"
+	},
+	"item": [
+		{
+			"name": "auth",
+			"item": [
+				{
+					"name": "token",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\":\"neo_bpay\",\n    \"password\":\"123456\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{Wallet-Service}}/auth/token",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"auth",
+								"token"
+							]
+						},
+						"description": "Холболтын токен авах"
+					},
+					"response": []
+				},
+				{
+					"name": "forgot",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/forgot",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"forgot"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Хэтэвч, холболтын токен үүсгэх API, токен нь 24 цагийн хугацаанд хүчинтэй байна."
+		},
+		{
+			"name": "user",
+			"item": [
+				{
+					"name": "register",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "userId",
+								"value": "99111633"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\":\"davaa999@gmail.com\",\n    \"phone\":\"99111633\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{Wallet-Service}}/api/user",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"user"
+							]
+						},
+						"description": "Хэрэглэгч бүртгүүлэх хүсэлт"
+					},
+					"response": [
+						{
+							"name": "register",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "userId",
+										"value": "99111633"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\":\"davaa999@gmail.com\",\n    \"phone\":\"99111633\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{Wallet-Service}}/api/user",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"user"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "161"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"a1-dDKQ5Wfp+NED6/onoRWc4x34J2w\""
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "bpay-wallet-service.sid=s%3ANa4LRFDTmdhrMdmFqKGTNbr-3__U5nQf.KxZJUiHFfgMXje01aZyvTPa4RKiobdHAJHR%2BIyxjm2M; Path=/; Expires=Mon, 12 May 2025 20:01:55 GMT; HttpOnly"
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 05 May 2025 20:01:55 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Амжилттай\",\n    \"data\": {\n        \"userId\": \"491068ed-5cb0-432c-8720-48628e31357b\",\n        \"email\": \"davaa999@gmail.com\",\n        \"phone\": \"99111633\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "edit",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "userId",
+								"value": "99111633"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\":\"davaa999@gmail.com\",\n    \"phone\":\"99111633\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{Wallet-Service}}/api/user",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"user"
+							]
+						},
+						"description": "Хэрэглэгчийн бүртгэл засах хүсэлт"
+					},
+					"response": []
+				},
+				{
+					"name": "get",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "userId",
+								"value": "99111633"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/user",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"user"
+							]
+						},
+						"description": "Хэрэглэгчийн бүртгэлийн мэдээлэл авах хүсэлт. Хэрэв хоосон хариу өгвөл user/register цонхыг харуулж, хэрэглэгчийг бүртгүүлнэ."
+					},
+					"response": [
+						{
+							"name": "get",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "userId",
+										"value": "99111633"
+									}
+								],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/user",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"user"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "161"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"a1-dDKQ5Wfp+NED6/onoRWc4x34J2w\""
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "bpay-wallet-service.sid=s%3Arj0ieawjq7wq4xEA4VKiNEiPVZKMbKkL.qgayOD9surfFMtexTAwuPaxrSqb0tqot8vV361zBBBY; Path=/; Expires=Mon, 12 May 2025 20:05:23 GMT; HttpOnly"
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 05 May 2025 20:05:23 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Амжилттай\",\n    \"data\": {\n        \"userId\": \"491068ed-5cb0-432c-8720-48628e31357b\",\n        \"email\": \"davaa999@gmail.com\",\n        \"phone\": \"99111633\"\n    }\n}"
+						}
+					]
+				}
+			],
+			"description": "Хэтэвчний хэрэглэгч шинээр бүртгүүлэх, бүртгэлтэй утасны дугаар, и-мэйл солих API. eBill модуль руу ороход eBill API service -ийн GET: {{Wallet-Service}}/api/user-ийг дуудаж, хэрэв хэрэглэгч бүртгэлгүй бол {} утга буцаана. Хоосон утга буцааж байвал хэрэглэгч бүртгэх user/register цонхыг харуулж хэрэглэгчийг бүртгүүлнэ."
+		},
+		{
+			"name": "biller",
+			"item": [
+				{
+					"name": "list",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "userId",
+								"value": "99111633"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/billers",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"billers"
+							]
+						},
+						"description": "Хаягийн мэдээллээр Биллингийн мэдээлэл хайх. Тухайн байр нь дэд бүртгэлийн дугаартай бол олон Биллинг олдоно, хэрэглэгч өөрийн Биллинг-ийг сонгож холбоно. Жишээ нь: ХУД, 15-р хороо, 106-1 байр, 8 тоот, ХУД, 15-р хороо, 106-2 байр, 8 тоот гэх мэт"
+					},
+					"response": [
+						{
+							"name": "Find-by-address",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "userId",
+										"value": "99111633"
+									}
+								],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/billing/address/:bairId/:doorNo",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"billing",
+										"address",
+										":bairId",
+										":doorNo"
+									],
+									"variable": [
+										{
+											"key": "bairId",
+											"value": "1140a0c9-b8a9-4e56-b487-326845d79546"
+										},
+										{
+											"key": "doorNo",
+											"value": "2"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "236"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"ec-sbaLbVvTUC76P3oEtIp0ihsGNjE\""
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 05 May 2025 20:28:19 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Амжилттай\",\n    \"data\": [\n        {\n            \"customerId\": \"73adc9cf-3702-4a15-bbd9-e37e890f030e\",\n            \"customerCode\": \"2001030043000020\",\n            \"customerName\": \"БАНЗРАГЧ\",\n            \"customerAddress\": \"3-РХР43.0-РБ2.0ТООТ\"\n        }\n    ]\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "address",
+			"item": [
+				{
+					"name": "city",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/address/city",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"address",
+								"city"
+							]
+						},
+						"description": "Хот, аймгийн жагсаалт авах хүсэлт"
+					},
+					"response": [
+						{
+							"name": "city",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/address/city",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"address",
+										"city"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "1615"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"64f-NLdun6Kj+8cFjxZFBA4SMuEYCtc\""
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "bpay-wallet-service.sid=s%3AOnEmDl0xdPpiIacxYPVuagaAmLPECmRX.4YmjwQ8cFTSixuCL6Ks1LJcbxcsThoiSZaYjSprJhe4; Path=/; Expires=Mon, 12 May 2025 20:12:54 GMT; HttpOnly"
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 05 May 2025 20:12:54 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Success\",\n    \"data\": [\n        {\n            \"id\": \"2a18c4e6-7ea8-43d4-80e7-b58a008efd40\",\n            \"name\": \"УЛААНБААТАР\"\n        },\n        {\n            \"id\": \"421c993a-adf7-4462-9405-f23bd7dce367\",\n            \"name\": \"АРХАНГАЙ\"\n        },\n        {\n            \"id\": \"27705d62-e46d-4b4a-aa7d-4defdf7fded5\",\n            \"name\": \"БАЯН-ӨЛГИЙ\"\n        },\n        {\n            \"id\": \"5bd84508-882a-442f-9984-d351f18da717\",\n            \"name\": \"БАЯНХОНГОР\"\n        },\n        {\n            \"id\": \"3c332971-b3c9-4f22-9339-667968698666\",\n            \"name\": \"БУЛГАН\"\n        },\n        {\n            \"id\": \"0bf45a09-89d1-4270-9530-e7f8795baa85\",\n            \"name\": \"ГОВЬ-АЛТАЙ\"\n        },\n        {\n            \"id\": \"0c39feee-f427-4499-a32f-25624cd9e51d\",\n            \"name\": \"ДОРНОГОВЬ\"\n        },\n        {\n            \"id\": \"a177944a-5aa7-4a3b-881f-0946362d9057\",\n            \"name\": \"ДОРНОД\"\n        },\n        {\n            \"id\": \"142230bb-3925-4128-89cf-8aec311ba6a0\",\n            \"name\": \"ДУНДГОВЬ\"\n        },\n        {\n            \"id\": \"93c0328c-a04a-4fc2-975e-dcfef6059db6\",\n            \"name\": \"ЗАВХАН\"\n        },\n        {\n            \"id\": \"69685fc2-6f14-4289-9330-596bc0de6166\",\n            \"name\": \"ӨВӨРХАНГАЙ\"\n        },\n        {\n            \"id\": \"41e0b892-ad22-4f84-8342-3def43219a08\",\n            \"name\": \"ӨМНӨГОВЬ\"\n        },\n        {\n            \"id\": \"9152204c-907f-4f00-b672-c854563ab38c\",\n            \"name\": \"СҮХБААТАР\"\n        },\n        {\n            \"id\": \"4901cb9e-d016-4678-aa68-3774dc87f477\",\n            \"name\": \"СЭЛЭНГЭ\"\n        },\n        {\n            \"id\": \"b0fd2c0e-cb3f-433b-afbc-0df574a6d6d3\",\n            \"name\": \"ТӨВ\"\n        },\n        {\n            \"id\": \"0cf55b67-bb94-445a-a783-c8216bcc8534\",\n            \"name\": \"УВС\"\n        },\n        {\n            \"id\": \"1f1021cb-8787-4d00-b880-42c255e16380\",\n            \"name\": \"ХОВД\"\n        },\n        {\n            \"id\": \"a1c569ba-2ff3-4e93-8993-e93c3aa667ce\",\n            \"name\": \"ХӨВСГӨЛ\"\n        },\n        {\n            \"id\": \"56bbe4bd-26a2-4c45-a21f-020b317f9b0c\",\n            \"name\": \"ХЭНТИЙ\"\n        },\n        {\n            \"id\": \"9e93f24b-c113-4f3e-84e3-5075147d2528\",\n            \"name\": \"ДАРХАН-УУЛ\"\n        },\n        {\n            \"id\": \"93ebb732-6c61-4862-b4a1-142ff98fee00\",\n            \"name\": \"ОРХОН\"\n        },\n        {\n            \"id\": \"fc752672-7aa2-4d80-a7d9-30181bbd5b80\",\n            \"name\": \"ГОВЬСҮМБЭР\"\n        }\n    ]\n}"
+						}
+					]
+				},
+				{
+					"name": "district",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/address/district/:cityId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"address",
+								"district",
+								":cityId"
+							],
+							"variable": [
+								{
+									"key": "cityId",
+									"value": "2a18c4e6-7ea8-43d4-80e7-b58a008efd40"
+								}
+							]
+						},
+						"description": "Дүүрэг, сумын жагсаалт авах хүсэлт"
+					},
+					"response": [
+						{
+							"name": "district",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/address/district/:cityId",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"address",
+										"district",
+										":cityId"
+									],
+									"variable": [
+										{
+											"key": "cityId",
+											"value": "2a18c4e6-7ea8-43d4-80e7-b58a008efd40"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "634"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"27a-xqNKk3c3DCHG7loqxa4O4P2mZDY\""
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 05 May 2025 20:12:59 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Success\",\n    \"data\": [\n        {\n            \"id\": \"7c7a929e-78b9-4f27-a4f0-57436d92a4f7\",\n            \"name\": \"ХУД\"\n        },\n        {\n            \"id\": \"587f358f-4f0d-4c78-b002-ba152f56f0b3\",\n            \"name\": \"БАГАНУУР\"\n        },\n        {\n            \"id\": \"a1f0b47e-4abf-48c3-880c-184ff0f97253\",\n            \"name\": \"БЗД\"\n        },\n        {\n            \"id\": \"24570053-5abe-4b69-9a64-69b434a6df41\",\n            \"name\": \"НАЛАЙХ\"\n        },\n        {\n            \"id\": \"c16f9040-ff85-4e29-b136-60def3d49d5c\",\n            \"name\": \"БГД\"\n        },\n        {\n            \"id\": \"50c6f5c0-8aff-4733-bb44-5f3cbfbd4bb0\",\n            \"name\": \"СБД\"\n        },\n        {\n            \"id\": \"79600b3a-73bc-49fe-a2fd-6cd3cef3b1e2\",\n            \"name\": \"ЧД\"\n        },\n        {\n            \"id\": \"301085c6-27d3-4977-b4d6-449fcf5a4b75\",\n            \"name\": \"БХАНГАЙ\"\n        },\n        {\n            \"id\": \"a3e68456-d0e5-47f8-8a19-78044c0c8a94\",\n            \"name\": \"СХД\"\n        }\n    ]\n}"
+						}
+					]
+				},
+				{
+					"name": "khoroo",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/address/khoroo/:districtId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"address",
+								"khoroo",
+								":districtId"
+							],
+							"variable": [
+								{
+									"key": "districtId",
+									"value": "7c7a929e-78b9-4f27-a4f0-57436d92a4f7"
+								}
+							]
+						},
+						"description": "Хорооны жагсаалт авах хүсэлт"
+					},
+					"response": [
+						{
+							"name": "khoroo",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/address/khoroo/:districtId",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"address",
+										"khoroo",
+										":districtId"
+									],
+									"variable": [
+										{
+											"key": "districtId",
+											"value": "7c7a929e-78b9-4f27-a4f0-57436d92a4f7"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "1468"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"5bc-zkMzhDWBWHeWySt5aGfxas4q/OE\""
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 05 May 2025 20:13:47 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Success\",\n    \"data\": [\n        {\n            \"id\": \"1e104956-1744-45ab-8266-292194eb1ab9\",\n            \"name\": \"ХУД 20-р хороо\"\n        },\n        {\n            \"id\": \"3a62523b-319b-45c6-acd0-5abc1ae83cba\",\n            \"name\": \"ХУД 16-р хороо\"\n        },\n        {\n            \"id\": \"df867208-6fdb-422c-a8bb-78e3339d84df\",\n            \"name\": \"ХУД 25-р хороо\"\n        },\n        {\n            \"id\": \"2aa8681d-aea6-487f-802b-8e716273daee\",\n            \"name\": \"ХУД 11-р хороо\"\n        },\n        {\n            \"id\": \"cb196f3d-ce71-4859-a0c4-ea876d19b7b6\",\n            \"name\": \"ХУД 15-р хороо\"\n        },\n        {\n            \"id\": \"9f97e788-4e34-4b5b-a683-34f79197c159\",\n            \"name\": \"ХУД 17-р хороо\"\n        },\n        {\n            \"id\": \"ce80832c-a0e4-41fa-94bf-0e1fc835bb83\",\n            \"name\": \"ХУД 6-р хороо\"\n        },\n        {\n            \"id\": \"3926aaca-9174-4265-b387-f39b2489a55f\",\n            \"name\": \"ХУД 8-р хороо\"\n        },\n        {\n            \"id\": \"32637fed-41ac-4f5c-86e5-e82fbaec4b6c\",\n            \"name\": \"ХУД 5-р хороо\"\n        },\n        {\n            \"id\": \"27235509-56e8-4986-a12f-3c58ade40ecd\",\n            \"name\": \"ХУД 3-р хороо\"\n        },\n        {\n            \"id\": \"24ef96a4-6a65-447f-9dd8-4769db712655\",\n            \"name\": \"ХУД 2-р хороо\"\n        },\n        {\n            \"id\": \"9bcf1698-124a-4931-bd15-17b8084d58a0\",\n            \"name\": \"ХУД 21-р хороо\"\n        },\n        {\n            \"id\": \"89a14da8-dcc1-4655-9a4b-157eae39b1cf\",\n            \"name\": \"ХУД 19-р хороо\"\n        },\n        {\n            \"id\": \"380cbaa7-dad1-427e-8670-0c946f7cc3b0\",\n            \"name\": \"ХУД 7-р хороо\"\n        },\n        {\n            \"id\": \"e70bcc5e-e94f-49c4-9046-fced041154db\",\n            \"name\": \"ХУД 1-р хороо\"\n        },\n        {\n            \"id\": \"06903c1a-6b6a-4880-9394-fe28dbb4cce6\",\n            \"name\": \"ХУД 10-р хороо\"\n        },\n        {\n            \"id\": \"ff641d81-ccc1-43e9-88f6-bd8859223b7a\",\n            \"name\": \"ХУД 4-р хороо\"\n        },\n        {\n            \"id\": \"d2e4faa0-6af2-40d4-9c38-68b82cd0a82f\",\n            \"name\": \"ХУД 18-р хороо\"\n        }\n    ]\n}"
+						}
+					]
+				},
+				{
+					"name": "bair",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/address/bair/:khorooId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"address",
+								"bair",
+								":khorooId"
+							],
+							"variable": [
+								{
+									"key": "khorooId",
+									"value": "cb196f3d-ce71-4859-a0c4-ea876d19b7b6"
+								}
+							]
+						},
+						"description": "Байр, хашааны жагсаалт авах хүсэлт"
+					},
+					"response": [
+						{
+							"name": "building",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/address/bair/:khorooId",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"address",
+										"bair",
+										":khorooId"
+									],
+									"variable": [
+										{
+											"key": "khorooId",
+											"value": "1e104956-1744-45ab-8266-292194eb1ab9"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "1560"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"618-97U9AUFc9+xy6pL0Nm8RIuY+kng\""
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 05 May 2025 20:22:17 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Success\",\n    \"data\": [\n        {\n            \"id\": \"1140a0c9-b8a9-4e56-b487-326845d79546\",\n            \"name\": \"ХУД 20-р хороо 43-р байр\"\n        },\n        {\n            \"id\": \"c765e8fd-56c4-4866-a071-7090e42a7466\",\n            \"name\": \"ХУД 20-р хороо 52-р байр\"\n        },\n        {\n            \"id\": \"5f5855e5-80e3-41f2-9bbe-55f84b57f8c3\",\n            \"name\": \"ХУД 20-р хороо 57-р байр\"\n        },\n        {\n            \"id\": \"c9531c97-abc4-4272-9bd3-44020639c40c\",\n            \"name\": \"ХУД 20-р хороо 86-р байр\"\n        },\n        {\n            \"id\": \"de8b409a-8ee6-48d1-9152-e473c1821105\",\n            \"name\": \"ХУД 20-р хороо 90-р байр\"\n        },\n        {\n            \"id\": \"d50367f9-e063-4db8-aaeb-5aacb21596d2\",\n            \"name\": \"ХУД 20-р хороо 92-р байр\"\n        },\n        {\n            \"id\": \"0df1c8fb-2ac4-40bc-a892-03325e938fb2\",\n            \"name\": \"ХУД 20-р хороо 94-р байр\"\n        },\n        {\n            \"id\": \"49132c4a-8f67-4e6d-8998-0a888bec6a82\",\n            \"name\": \"ХУД 20-р хороо 100-р байр\"\n        },\n        {\n            \"id\": \"09756bdd-5d7d-4b39-bc20-52d533510844\",\n            \"name\": \"ХУД 20-р хороо 43-р байр\"\n        },\n        {\n            \"id\": \"3319d081-4387-44f9-b700-7744ff91d2d4\",\n            \"name\": \"ХУД 20-р хороо 52-р байр\"\n        },\n        {\n            \"id\": \"6401b971-0d16-4f22-a160-4187c608dc17\",\n            \"name\": \"ХУД 20-р хороо 57-р байр\"\n        },\n        {\n            \"id\": \"9b3d5faf-5600-4960-8790-76aa1dd27464\",\n            \"name\": \"ХУД 20-р хороо 86-р байр\"\n        },\n        {\n            \"id\": \"8b504277-2a25-47ad-bebb-083d6512fb56\",\n            \"name\": \"ХУД 20-р хороо 90-р байр\"\n        },\n        {\n            \"id\": \"5b0a56d5-5ea5-42b2-9c2e-9832eb7ee202\",\n            \"name\": \"ХУД 20-р хороо 92-р байр\"\n        },\n        {\n            \"id\": \"9b60b91f-304c-43b7-b6d5-839f5a5d47b9\",\n            \"name\": \"ХУД 20-р хороо 94-р байр\"\n        },\n        {\n            \"id\": \"4159c9f7-9bbf-439b-9f7f-8f28fc9744c7\",\n            \"name\": \"ХУД 20-р хороо 100-р байр\"\n        }\n    ]\n}"
+						}
+					]
+				}
+			],
+			"description": "Хаягийн мэдээллээр өгөгдөл дамжуулах сервис"
+		},
+		{
+			"name": "billing",
+			"item": [
+				{
+					"name": "Find-by-address",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "userId",
+								"value": "99111633"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/billing/address/:bairId/:doorNo",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"billing",
+								"address",
+								":bairId",
+								":doorNo"
+							],
+							"variable": [
+								{
+									"key": "bairId",
+									"value": "f167e60f-834f-4620-bfc1-5076222273d8"
+								},
+								{
+									"key": "doorNo",
+									"value": "71"
+								}
+							]
+						},
+						"description": "Хаягийн мэдээллээр Биллингийн мэдээлэл хайх. Тухайн байр нь дэд бүртгэлийн дугаартай бол олон Биллинг олдоно, хэрэглэгч өөрийн Биллинг-ийг сонгож холбоно. Жишээ нь: ХУД, 15-р хороо, 106-1 байр, 8 тоот, ХУД, 15-р хороо, 106-2 байр, 8 тоот гэх мэт"
+					},
+					"response": [
+						{
+							"name": "Find-by-address",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "userId",
+										"value": "99111633"
+									}
+								],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/billing/address/:bairId/:doorNo",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"billing",
+										"address",
+										":bairId",
+										":doorNo"
+									],
+									"variable": [
+										{
+											"key": "bairId",
+											"value": "1140a0c9-b8a9-4e56-b487-326845d79546"
+										},
+										{
+											"key": "doorNo",
+											"value": "2"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "236"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"ec-sbaLbVvTUC76P3oEtIp0ihsGNjE\""
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 05 May 2025 20:28:19 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Амжилттай\",\n    \"data\": [\n        {\n            \"customerId\": \"73adc9cf-3702-4a15-bbd9-e37e890f030e\",\n            \"customerCode\": \"2001030043000020\",\n            \"customerName\": \"БАНЗРАГЧ\",\n            \"customerAddress\": \"3-РХР43.0-РБ2.0ТООТ\"\n        }\n    ]\n}"
+						}
+					]
+				},
+				{
+					"name": "Find-by-biller",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "userId",
+								"value": "99111633",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/billing/biller/:billerCode/:customerCode",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"billing",
+								"biller",
+								":billerCode",
+								":customerCode"
+							],
+							"variable": [
+								{
+									"key": "billerCode",
+									"value": "ELECTRIC"
+								},
+								{
+									"key": "customerCode",
+									"value": "1107325"
+								}
+							]
+						},
+						"description": "Биллер байгууллагын бүртгэлтэй хэрэглэгчийн кодоор Биллинг хайж олох."
+					},
+					"response": [
+						{
+							"name": "Find-by-customer",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/billing/biller/:billerCode/:billerCustomerCode",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"billing",
+										"biller",
+										":billerCode",
+										":billerCustomerCode"
+									],
+									"variable": [
+										{
+											"key": "billerCode",
+											"value": "ELECTRIC"
+										},
+										{
+											"key": "billerCustomerCode",
+											"value": "4000627"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "201"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"c9-gdE1SrNuNCBJsE6eRaCsBM0ywKw\""
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 05 May 2025 20:29:29 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": false,\n    \"responseMsg\": \"Хэрэглэгч олдсонгүй\",\n    \"data\": {\n        \"code\": \"USER_NOT_FOUND\",\n        \"message\": \"Хэрэглэгч олдсонгүй\",\n        \"statusCode\": 400,\n        \"name\": \"ValidationError\"\n    }\n}"
+						},
+						{
+							"name": "Find-by-customer",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "userId",
+										"value": "99111633"
+									}
+								],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/billing/address/:bairId/:doorNo",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"billing",
+										"address",
+										":bairId",
+										":doorNo"
+									],
+									"variable": [
+										{
+											"key": "bairId",
+											"value": "1140a0c9-b8a9-4e56-b487-326845d79546"
+										},
+										{
+											"key": "doorNo",
+											"value": "2"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "236"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"ec-sbaLbVvTUC76P3oEtIp0ihsGNjE\""
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 05 May 2025 20:28:19 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Амжилттай\",\n    \"data\": [\n        {\n            \"customerId\": \"73adc9cf-3702-4a15-bbd9-e37e890f030e\",\n            \"customerCode\": \"2001030043000020\",\n            \"customerName\": \"БАНЗРАГЧ\",\n            \"customerAddress\": \"3-РХР43.0-РБ2.0ТООТ\"\n        }\n    ]\n}"
+						}
+					]
+				},
+				{
+					"name": "remove",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "userId",
+								"value": "99111633"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/billing/:billingId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"billing",
+								":billingId"
+							],
+							"variable": [
+								{
+									"key": "billingId",
+									"value": "849c7626-17d9-4168-9857-b93ec5d5fa99"
+								}
+							]
+						},
+						"description": "Холбосон Биллинг-ийн мэдээллийг арилгах."
+					},
+					"response": [
+						{
+							"name": "remove",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "userId",
+										"value": "99111633"
+									}
+								],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/billing/:billingId",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"billing",
+										":billingId"
+									],
+									"variable": [
+										{
+											"key": "billingId",
+											"value": "849c7626-17d9-4168-9857-b93ec5d5fa99"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "116"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"74-2mGG8/HxnjP79F7pi/yZa5Yaw0g\""
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 05 May 2025 20:37:29 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Амжилттай\",\n    \"data\": {\n        \"billingId\": \"849c7626-17d9-4168-9857-b93ec5d5fa99\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "removeBill",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "userId",
+								"value": "99111633"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/billing/bill/:billingId/:billId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"billing",
+								"bill",
+								":billingId",
+								":billId"
+							],
+							"variable": [
+								{
+									"key": "billingId",
+									"value": "52cf409d-446f-4981-bad7-96324d6627e0"
+								},
+								{
+									"key": "billId",
+									"value": "6e37c10d-8c91-4259-954d-719bd9d5c96e"
+								}
+							]
+						},
+						"description": "Холбосон Биллинг-ийн мэдээллийг арилгах."
+					},
+					"response": [
+						{
+							"name": "remove",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "userId",
+										"value": "99111633"
+									}
+								],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/billing/:billingId",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"billing",
+										":billingId"
+									],
+									"variable": [
+										{
+											"key": "billingId",
+											"value": "849c7626-17d9-4168-9857-b93ec5d5fa99"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "116"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"74-2mGG8/HxnjP79F7pi/yZa5Yaw0g\""
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 05 May 2025 20:37:29 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Амжилттай\",\n    \"data\": {\n        \"billingId\": \"849c7626-17d9-4168-9857-b93ec5d5fa99\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "recoverBill",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "userId",
+								"value": "670143962994"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"billingId\":\"4bc0a760-356b-47ff-a22f-ce726e6a368f\",\n    \"billId\":\"0e3ebc4e-43af-4f47-9cba-256847d2d3b7\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{Wallet-Service}}/api/billing/bill",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"billing",
+								"bill"
+							]
+						},
+						"description": "Холбосон Биллинг-ийн мэдээллийг арилгах."
+					},
+					"response": [
+						{
+							"name": "remove",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "userId",
+										"value": "99111633"
+									}
+								],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/billing/:billingId",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"billing",
+										":billingId"
+									],
+									"variable": [
+										{
+											"key": "billingId",
+											"value": "849c7626-17d9-4168-9857-b93ec5d5fa99"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "116"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"74-2mGG8/HxnjP79F7pi/yZa5Yaw0g\""
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 05 May 2025 20:37:29 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Амжилттай\",\n    \"data\": {\n        \"billingId\": \"849c7626-17d9-4168-9857-b93ec5d5fa99\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "list",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "userId",
+								"value": "670143962994"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/billing/list",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"billing",
+								"list"
+							]
+						},
+						"description": "Холбосон Биллингийн жагсаалт авах. Уг жагсаалтад төлөх биллийн тоо, төлөгдсөн биллийн мэдээлэл мөн хариу-д нь ирнэ."
+					},
+					"response": [
+						{
+							"name": "list",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "userId",
+										"value": "99111633"
+									}
+								],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/billing/list",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"billing",
+										"list"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "296"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"128-PeRrMfPPxRcffUqNVww3I6jIu9g\""
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "bpay-wallet-service.sid=s%3AUywlGfGchI88vWcQ-6XUA7Vc7BEu8y4u.KMT6FdIRmRzHJ4uC%2FqoeBiMgOUL9N0h5TFdrD0gFxRg; Path=/; Expires=Mon, 12 May 2025 20:38:04 GMT; HttpOnly"
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 05 May 2025 20:38:04 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Амжилттай\",\n    \"data\": [\n        {\n            \"billingId\": \"5a0d1da8-26ea-4e2d-bd42-79d7abec636e\",\n            \"billingName\": \"Орон сууцны төлбөр\",\n            \"customerName\": \"БАНЗРАГЧ\",\n            \"customerAddress\": \"3-РХР43.0-РБ2.0ТООТ\",\n            \"paidInvoicesCount\": 0,\n            \"paidInvoicesTotal\": 0\n        }\n    ]\n}"
+						}
+					]
+				},
+				{
+					"name": "getBills",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "userId",
+								"value": "670143962994"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/billing/bills/:billingId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"billing",
+								"bills",
+								":billingId"
+							],
+							"variable": [
+								{
+									"key": "billingId",
+									"value": "4bc0a760-356b-47ff-a22f-ce726e6a368f"
+								}
+							]
+						},
+						"description": "Холбосон Биллингийн жагсаалт авах. Уг жагсаалтад төлөх биллийн тоо, төлөгдсөн биллийн мэдээлэл мөн хариу-д нь ирнэ."
+					},
+					"response": [
+						{
+							"name": "getBills",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "userId",
+										"value": "99111633"
+									}
+								],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/billing/bills/:billingId",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"billing",
+										"bills",
+										":billingId"
+									],
+									"variable": [
+										{
+											"key": "billingId",
+											"value": "5a0d1da8-26ea-4e2d-bd42-79d7abec636e"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "1178"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"49a-bJRKxlZ1PEkkIZpHIe3CcjU5hQ8\""
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "bpay-wallet-service.sid=s%3A97XLhyB_YncXP-wdfX6G9Kz4Vy_JbyV8.Yj3nGGN9QDZdctoCdMwCFfJXZ6g%2B5maJ2wb6FdABmmU; Path=/; Expires=Mon, 12 May 2025 20:40:08 GMT; HttpOnly"
+								},
+								{
+									"key": "Date",
+									"value": "Mon, 05 May 2025 20:40:08 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Амжилттай\",\n    \"data\": {\n        \"billingId\": \"5a0d1da8-26ea-4e2d-bd42-79d7abec636e\",\n        \"billingName\": \"Орон сууцны төлбөр\",\n        \"customerName\": \"БАНЗРАГЧ\",\n        \"customerAddress\": \"3-РХР43.0-РБ2.0ТООТ\",\n        \"hasNewBills\": true,\n        \"newBillsCount\": 3,\n        \"newBillAmount\": 184145.1,\n        \"newBills\": [\n            {\n                \"billId\": \"34182345-af34-48d1-849c-a2207550dcb4\",\n                \"billerName\": \"ТҮМЭН НАЯД ХАЙРХАН ХХК\",\n                \"billtype\": \"Орон сууцны конторын төлбөр\",\n                \"billNo\": \"334559697\",\n                \"hasVat\": false,\n                \"billLateFee\": 20442.29,\n                \"billAmount\": 61326.87,\n                \"billTotalAmount\": 40884.58,\n                \"billPeriod\": \"2022-9\"\n            },\n            {\n                \"billId\": \"783c723b-1334-4026-81e3-85ebaea9be63\",\n                \"billerName\": \"ОСНАА ХҮТ-10\",\n                \"billtype\": \"Дулаан төлбөр\",\n                \"billNo\": \"387165203\",\n                \"hasVat\": false,\n                \"billLateFee\": 42646.73,\n                \"billAmount\": 127940.19,\n                \"billTotalAmount\": 85293.46,\n                \"billPeriod\": \"2024-5\"\n            },\n            {\n                \"billId\": \"baef488f-ee36-46d4-82f7-b0c616f0c46c\",\n                \"billerName\": \"ОСНАА ХҮТ-10\",\n                \"billtype\": \"Дулаан төлбөр\",\n                \"billNo\": \"389337526\",\n                \"hasVat\": false,\n                \"billLateFee\": 28983.53,\n                \"billAmount\": 86950.59,\n                \"billTotalAmount\": 57967.06,\n                \"billPeriod\": \"2024-6\"\n            }\n        ],\n        \"hiddenBillCount\": 0,\n        \"hiddenNewBills\": []\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "getPayments",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "userId",
+								"value": "99111633"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/billing/payments/:billingId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"billing",
+								"payments",
+								":billingId"
+							],
+							"variable": [
+								{
+									"key": "billingId",
+									"value": "52cf409d-446f-4981-bad7-96324d6627e0"
+								}
+							]
+						},
+						"description": "Холбосон Биллингийн жагсаалт авах. Уг жагсаалтад төлөх биллийн тоо, төлөгдсөн биллийн мэдээлэл мөн хариу-д нь ирнэ."
+					},
+					"response": []
+				},
+				{
+					"name": "save",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "userId",
+								"value": "99111633"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"customerId\":\"f0650a59-5815-4976-83a3-d38e6dc8547f\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{Wallet-Service}}/api/billing",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"billing"
+							]
+						},
+						"description": "Холбосон Биллингийн жагсаалт авах. Уг жагсаалтад төлөх биллийн тоо, төлөгдсөн биллийн мэдээлэл мөн хариу-д нь ирнэ."
+					},
+					"response": []
+				},
+				{
+					"name": "changeName",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "userId",
+								"value": "99111633"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\":\"Гэрийн төлбөр\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{Wallet-Service}}/api/billing/:billingId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"billing",
+								":billingId"
+							],
+							"variable": [
+								{
+									"key": "billingId",
+									"value": ""
+								}
+							]
+						},
+						"description": "Холбосон Биллингийн жагсаалт авах. Уг жагсаалтад төлөх биллийн тоо, төлөгдсөн биллийн мэдээлэл мөн хариу-д нь ирнэ."
+					},
+					"response": []
+				}
+			],
+			"description": "Хэтэвчний хэрэглэгчийн төлбөр төлөхөөр холбосон болон холбох Биллингийн мэдээллийн жагсаалт"
+		},
+		{
+			"name": "invoice",
+			"item": [
+				{
+					"name": "create",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"followOriginalHttpMethod": true,
+						"protocolVersion": "auto"
+					},
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "userId",
+								"value": "670143962994",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"billingId\": \"4bc0a760-356b-47ff-a22f-ce726e6a368f\",\n    \"billIds\": [\n        \"08b66ba1-2a16-461a-8d90-62058fa27878\",\n        \"c9b2ff6f-d603-48c3-8c7e-20d5ced132eb\"\n    ],\n    \"vatReceiveType\": \"CITIZEN\",\n    \"vatCompanyReg\":\"\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{Wallet-Service}}/api/invoice",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"invoice"
+							]
+						},
+						"description": "Сонгосон Билл -үүдийг төлөх төлбөрийн нэхэмжлэх үүсгэх"
+					},
+					"response": [
+						{
+							"name": "create",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "userId",
+										"value": "99111633",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"billingId\": \"5a0d1da8-26ea-4e2d-bd42-79d7abec636e\",\n    \"billIds\": [\n        \"9c4b4af9-ee9c-4c72-be69-2c3f2fa077f4\"\n    ],\n    \"vatReceiveType\": \"CITIZEN\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{Wallet-Service}}/api/invoice",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"invoice"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "691"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"2b3-D/YvXm5NfJuvkidEUJ1p7xYUGqA\""
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "bpay-wallet-service.sid=s%3AGdc3nL417_e4E5ix-Hf-Vf4JkfFjLQJh.J%2B3mJQTYh6vGBlsGzFHormEePOZFEtniZf4A96LcQYA; Path=/; Expires=Tue, 13 May 2025 04:01:03 GMT; HttpOnly"
+								},
+								{
+									"key": "Date",
+									"value": "Tue, 06 May 2025 04:01:03 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMessage\": \"Нэхэмжлэлийн мэдээллийг үүсгэж байна.\",\n    \"data\": {\n        \"invoiceId\": \"aa3b0544-fd41-4ef9-8b5a-f9d7d2e21b0c\",\n        \"invoiceStatus\": \"OPEN\",\n        \"invoiceStatusText\": \"Нээлттэй\",\n        \"isPayable\": true,\n        \"billingName\": \"Орон сууцны төлбөр\",\n        \"customerName\": \"БАНЗРАГЧ\",\n        \"customerAddress\": \"3-РХР43.0-РБ2.0ТООТ\",\n        \"invoiceAmount\": 61326.87,\n        \"surcharges\": [\n            {\n                \"name\": \"Гүйлгээний шимтгэл\",\n                \"amount\": 400\n            }\n        ],\n        \"invoiceTotal\": 61726.87,\n        \"lines\": [\n            {\n                \"lineId\": \"f483f383-36de-40df-a69c-c3abb871762b\",\n                \"billerName\": \"ТҮМЭН НАЯД ХАЙРХАН ХХК\",\n                \"billNo\": \"334559697\",\n                \"billPeriod\": \"2022-9\",\n                \"billAmount\": 40884.58\n            }\n        ]\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "get",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "userId",
+								"value": "99111633",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/invoice/:invoiceId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"invoice",
+								":invoiceId"
+							],
+							"variable": [
+								{
+									"key": "invoiceId",
+									"value": "2c31dc01-c6e4-4379-a3ea-210be9605f52"
+								}
+							]
+						},
+						"description": "Төлбөр төлөгдсөний дараа eBill системээс хэтэвчний CheckCallback -ийг дуудсаны дараа төлбөр шалгах хүсэлтийг дуудна. eBill системээс 1 минут-аас дээш хугацаанд хариу өгөөгүй бол шалгаж нэг удаа дуудна."
+					},
+					"response": [
+						{
+							"name": "get",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "userId",
+										"value": "99111633",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/invoice/:invoiceId",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"invoice",
+										":invoiceId"
+									],
+									"variable": [
+										{
+											"key": "invoiceId",
+											"value": "4c8294d2-df7b-44f7-acf2-aa9d60661d54"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "755"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"2f3-l2Yd/0V/kSTFQ7VrHjr0JRo92dA\""
+								},
+								{
+									"key": "Date",
+									"value": "Tue, 06 May 2025 04:02:23 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Амжилттай\",\n    \"data\": {\n        \"responseCode\": true,\n        \"responseMessage\": \"Нэхэмжлэлийн мэдээллийг үүсгэж байна.\",\n        \"data\": {\n            \"invoiceId\": \"aa3b0544-fd41-4ef9-8b5a-f9d7d2e21b0c\",\n            \"invoiceStatus\": \"OPEN\",\n            \"invoiceStatusText\": \"Нээлттэй\",\n            \"isPayable\": true,\n            \"billingName\": \"Орон сууцны төлбөр\",\n            \"customerName\": \"БАНЗРАГЧ\",\n            \"customerAddress\": \"3-РХР43.0-РБ2.0ТООТ\",\n            \"invoiceAmount\": 61326.87,\n            \"surcharges\": [\n                {\n                    \"name\": \"Гүйлгээний шимтгэл\",\n                    \"amount\": 400\n                }\n            ],\n            \"invoiceTotal\": 61726.87,\n            \"lines\": [\n                {\n                    \"lineId\": \"f483f383-36de-40df-a69c-c3abb871762b\",\n                    \"billerName\": \"ТҮМЭН НАЯД ХАЙРХАН ХХК\",\n                    \"billNo\": \"334559697\",\n                    \"billPeriod\": \"2022-9\",\n                    \"billAmount\": 40884.58\n                }\n            ]\n        }\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "cancel",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "userId",
+								"value": "99111633",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/invoice/:invoiceId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"invoice",
+								":invoiceId"
+							],
+							"variable": [
+								{
+									"key": "invoiceId",
+									"value": "aa3b0544-fd41-4ef9-8b5a-f9d7d2e21b0c"
+								}
+							]
+						},
+						"description": "Төлбөрийн нэхэмжлэхийг төлөх үйлдэл хийгээгүй бол системээс цуцлах үйлдлийг хийж болно. eBill систем 2 минутаас дээш хугацаанд төлөөгүй нэхэмжлэхийг автоматаар цуцлана."
+					},
+					"response": [
+						{
+							"name": "cancel",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "userId",
+										"value": "99111633",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/invoice/:invoiceId",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"invoice",
+										":invoiceId"
+									],
+									"variable": [
+										{
+											"key": "invoiceId",
+											"value": "aa3b0544-fd41-4ef9-8b5a-f9d7d2e21b0c"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "795"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"31b-seoioFbknfV/R9J/vbX9mYJ5EYE\""
+								},
+								{
+									"key": "Date",
+									"value": "Tue, 06 May 2025 04:12:13 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMessage\": \"Нэхэмжлэхийн цуцлагдсан\",\n    \"data\": {\n        \"responseCode\": true,\n        \"responseMessage\": \"Нэхэмжлэлийн мэдээллийг үүсгэж байна.\",\n        \"data\": {\n            \"invoiceId\": \"aa3b0544-fd41-4ef9-8b5a-f9d7d2e21b0c\",\n            \"invoiceStatus\": \"CANCELED\",\n            \"invoiceStatusText\": \"Цуцлагдсан\",\n            \"isPayable\": false,\n            \"billingName\": \"Орон сууцны төлбөр\",\n            \"customerName\": \"БАНЗРАГЧ\",\n            \"customerAddress\": \"3-РХР43.0-РБ2.0ТООТ\",\n            \"invoiceAmount\": 61326.87,\n            \"surcharges\": [\n                {\n                    \"name\": \"Гүйлгээний шимтгэл\",\n                    \"amount\": 400\n                }\n            ],\n            \"invoiceTotal\": 61726.87,\n            \"lines\": [\n                {\n                    \"lineId\": \"f483f383-36de-40df-a69c-c3abb871762b\",\n                    \"billerName\": \"ТҮМЭН НАЯД ХАЙРХАН ХХК\",\n                    \"billNo\": \"334559697\",\n                    \"billPeriod\": \"2022-9\",\n                    \"billAmount\": 40884.58\n                }\n            ]\n        }\n    }\n}"
+						}
+					]
+				}
+			],
+			"description": "Төлбөрийн хэсгийн API"
+		},
+		{
+			"name": "payment",
+			"item": [
+				{
+					"name": "create",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "",
+								"disabled": true
+							},
+							{
+								"key": "userId",
+								"value": "670143962994",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"invoiceId\":\"bd841f17-34e1-4963-aebf-c8c3644ee80e\"\n}\n\n",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{Wallet-Service}}/api/payment",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"payment"
+							]
+						},
+						"description": "Сонгосон Билл -үүдийг төлөх төлбөрийн нэхэмжлэх үүсгэх"
+					},
+					"response": [
+						{
+							"name": "create",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "",
+										"disabled": true
+									},
+									{
+										"key": "userId",
+										"value": "99111633",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"invoiceId\":\"4c8294d2-df7b-44f7-acf2-aa9d60661d54\"\n}\n\n",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{Wallet-Service}}/api/payment",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"payment"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "426"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"1aa-X5ZZZfyve1CGi9mL7PVaxGzv5DA\""
+								},
+								{
+									"key": "Date",
+									"value": "Tue, 06 May 2025 04:15:11 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMessage\": \"Нэхэмжлэлийн мэдээллийг үүсгэж байна.\",\n    \"data\": {\n        \"paymentId\": \"d3edebf1-68c8-458f-839c-a9ccdf57cc96\",\n        \"paymentAmount\": 61726.87,\n        \"receiverBankCode\": \"34000\",\n        \"receiverAccountName\": \"Токи ББСБ\",\n        \"receiverAccountNo\": \"MN290034349901397274\",\n        \"transactionDescrion\": \"eBill: TK-100061  cid: 2001030043000020 name: БАНЗРАГЧ, 3-РХР43.0-РБ2.0ТООТ\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "paidByQpay",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"qpayPaymentId\": \"2342\",\n    \"trxDate\": \"2025.12.13 12:12:12\",\n    \"trxNo\": \"221\",\n    \"trxDescription\": \"EM-123244\",\n    \"amount\": 44343.85,\n    \"receiverBankCode\": \"340000\",\n    \"receiverAccountNo\": \"34000823878342\",\n    \"receiverAccountName\": \"ebill Түр данс\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{Wallet-Service}}/api/payment/qpay/:paymentId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"payment",
+								"qpay",
+								":paymentId"
+							],
+							"variable": [
+								{
+									"key": "paymentId",
+									"value": "3bed8da5-daab-48ef-b3c3-67d76e39cd45"
+								}
+							]
+						},
+						"description": "Төлбөрийн нэхэмжлэхийг төлөх. Төлбөрийн нэхэмжлэхийн хариуд гүйлгээ хийх qPay -линк -ийн дагуу төлбөр төлнө. Тухайн төлбөрийн нэхэмжлэлийг үүсгэснээс хойш 2 минутын дотор төлбөрийг төлөх боломжтой байна. 2 минутаас хэтэрсэн бол дахин төлбөрийн нэхэмжлэх үүсгэж төлнө."
+					},
+					"response": [
+						{
+							"name": "paidByQpay",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"qpayPaymentId\": \"2342\",\n    \"trxDate\": \"2025.12.13 12:12:12\",\n    \"trxNo\": \"221\",\n    \"trxDescription\": \"EM-123244\",\n    \"amount\": 61726.87,\n    \"receiverBankCode\": \"32000\",\n    \"receiverAccountNo\": \"3200823878342\",\n    \"receiverAccountName\": \"ebill Түр данс\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{Wallet-Service}}/api/payment/qpay/:paymentId",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"payment",
+										"qpay",
+										":paymentId"
+									],
+									"variable": [
+										{
+											"key": "paymentId",
+											"value": "d3edebf1-68c8-458f-839c-a9ccdf57cc96"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "178"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"b2-xPTTcCpf6EecABwBudxdZ71WBiQ\""
+								},
+								{
+									"key": "Date",
+									"value": "Thu, 08 May 2025 03:03:11 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMessage\": \"Нэхэмжлэхийн төлбөр төлөлт хийгдэж байна\",\n    \"data\": {\n        \"paymentId\": \"d3edebf1-68c8-458f-839c-a9ccdf57cc96\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "paidByWallet",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"qpayPaymentId\": \"2342\",\n    \"trxDate\": \"2025.12.13 12:12:12\",\n    \"trxNo\": \"221\",\n    \"trxDescription\": \"EM-123244\",\n    \"amount\": 48844.6,\n    \"receiverBankCode\": \"32000\",\n    \"receiverAccountNo\": \"3200823878342\",\n    \"receiverAccountName\": \"ebill Түр данс\",\n    \"senderBankCode\": \"040000\",\n    \"senderAccountNo\":\"9823923982984734\",\n    \"senderAccountName\":\"Хэрэглэгч\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{Wallet-Service}}/api/payment/wallet/:paymentId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"payment",
+								"wallet",
+								":paymentId"
+							],
+							"variable": [
+								{
+									"key": "paymentId",
+									"value": "714e93ee-ac38-4ca5-b10b-856597a4559b"
+								}
+							]
+						},
+						"description": "Төлбөрийн нэхэмжлэхийг төлөх. Төлбөрийн нэхэмжлэхийн хариуд гүйлгээ хийх qPay -линк -ийн дагуу төлбөр төлнө. Тухайн төлбөрийн нэхэмжлэлийг үүсгэснээс хойш 2 минутын дотор төлбөрийг төлөх боломжтой байна. 2 минутаас хэтэрсэн бол дахин төлбөрийн нэхэмжлэх үүсгэж төлнө."
+					},
+					"response": [
+						{
+							"name": "paidByQpay",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"qpayPaymentId\": \"2342\",\n    \"trxDate\": \"2025.12.13 12:12:12\",\n    \"trxNo\": \"221\",\n    \"trxDescription\": \"EM-123244\",\n    \"amount\": 61726.87,\n    \"receiverBankCode\": \"32000\",\n    \"receiverAccountNo\": \"3200823878342\",\n    \"receiverAccountName\": \"ebill Түр данс\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{Wallet-Service}}/api/payment/qpay/:paymentId",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"payment",
+										"qpay",
+										":paymentId"
+									],
+									"variable": [
+										{
+											"key": "paymentId",
+											"value": "d3edebf1-68c8-458f-839c-a9ccdf57cc96"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "178"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"b2-xPTTcCpf6EecABwBudxdZ71WBiQ\""
+								},
+								{
+									"key": "Date",
+									"value": "Thu, 08 May 2025 03:03:11 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMessage\": \"Нэхэмжлэхийн төлбөр төлөлт хийгдэж байна\",\n    \"data\": {\n        \"paymentId\": \"d3edebf1-68c8-458f-839c-a9ccdf57cc96\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Check",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "userId",
+								"value": "670143962994",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/payment/:paymentId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"payment",
+								":paymentId"
+							],
+							"variable": [
+								{
+									"key": "paymentId",
+									"value": "3bed8da5-daab-48ef-b3c3-67d76e39cd45"
+								}
+							]
+						},
+						"description": "Төлбөр төлөгдсөний дараа eBill системээс хэтэвчний CheckCallback -ийг дуудсаны дараа төлбөр шалгах хүсэлтийг дуудна. eBill системээс 1 минут-аас дээш хугацаанд хариу өгөөгүй бол шалгаж нэг удаа дуудна."
+					},
+					"response": [
+						{
+							"name": "Check",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/payment/:paymentId",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"payment",
+										":paymentId"
+									],
+									"variable": [
+										{
+											"key": "paymentId",
+											"value": "d3edebf1-68c8-458f-839c-a9ccdf57cc96"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "2651"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"a5b-MRytXb0kDIUMDdwJHJ/MPF2A4aM\""
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "bpay-wallet-service.sid=s%3AnSX1EXi9JyR0p4Ikx0QYrgxvSry560gY.dbkjGTSOl0D2k3LY%2Fj1FQk3OfNQsrJgWq%2FcLPm8OYx4; Path=/; Expires=Thu, 15 May 2025 02:58:11 GMT; HttpOnly"
+								},
+								{
+									"key": "Date",
+									"value": "Thu, 08 May 2025 02:58:11 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Амжилттай\",\n    \"data\": {\n        \"paymentId\": \"d3edebf1-68c8-458f-839c-a9ccdf57cc96\",\n        \"invoiceNo\": \"TK-100061\",\n        \"paymentStatus\": \"PAID\",\n        \"paymentStatusText\": \"Төлөгдсөн\",\n        \"billingName\": \"Орон сууцны төлбөр\",\n        \"customerName\": \"БАНЗРАГЧ\",\n        \"customerAddress\": \"3-РХР43.0-РБ2.0ТООТ\",\n        \"amount\": 61326.87,\n        \"totalAmount\": 61726.87,\n        \"surcharges\": [\n            {\n                \"name\": \"Гүйлгээний шимтгэл\",\n                \"amount\": 400\n            }\n        ],\n        \"invoiceTaxes\": [],\n        \"lines\": [\n            {\n                \"lineId\": \"dd9ad5e4-7d8c-45ab-a1f1-c22785d786aa\",\n                \"billerName\": \"ТҮМЭН НАЯД ХАЙРХАН ХХК\",\n                \"billNo\": \"334559697\",\n                \"billPeriod\": \"2022-9\",\n                \"billAmount\": 40884.58,\n                \"billTransactions\": [\n                    {\n                        \"trxNo\": \"925790447492\",\n                        \"trxDate\": \"2025-05-06T12:42:01\",\n                        \"trxStatus\": \"SUCCESS\",\n                        \"trxStatusName\": \"Амжилттай\",\n                        \"trxDescription\": \"2001030043000020_БАНЗРАГЧ_КОНТОР_2022/9\",\n                        \"trxAmount\": 40884.58,\n                        \"receiverBankCode\": \"340000\",\n                        \"receiverAccountNo\": \"MN220034384000025844\",\n                        \"receiverAccountName\": \"ТҮМЭН НАЯД ХАЙРХАН \",\n                        \"senderAccountNo\": \"MN290034349901397274\"\n                    }\n                ]\n            }\n        ],\n        \"paymentTransactions\": [\n            {\n                \"trxNo\": \"221\",\n                \"trxDate\": \"2025.12.13 12:12:12\",\n                \"trxStatus\": \"SUCCESS\",\n                \"trxStatusName\": \"Амжилттай\",\n                \"trxDescription\": \"EM-123244\",\n                \"trxAmount\": 61726.87\n            },\n            {\n                \"trxNo\": \"221\",\n                \"trxDate\": \"2025.12.13 12:12:12\",\n                \"trxStatus\": \"SUCCESS\",\n                \"trxStatusName\": \"Амжилттай\",\n                \"trxDescription\": \"EM-123244\",\n                \"trxAmount\": 61726.87\n            },\n            {\n                \"trxNo\": \"221\",\n                \"trxDate\": \"2025.12.13 12:12:12\",\n                \"trxStatus\": \"SUCCESS\",\n                \"trxStatusName\": \"Амжилттай\",\n                \"trxDescription\": \"EM-123244\",\n                \"trxAmount\": 61726.87\n            },\n            {\n                \"trxNo\": \"221\",\n                \"trxDate\": \"2025.12.13 12:12:12\",\n                \"trxStatus\": \"SUCCESS\",\n                \"trxStatusName\": \"Амжилттай\",\n                \"trxDescription\": \"EM-123244\",\n                \"trxAmount\": 61726.87\n            },\n            {\n                \"trxNo\": \"221\",\n                \"trxDate\": \"2025.12.13 12:12:12\",\n                \"trxStatus\": \"SUCCESS\",\n                \"trxStatusName\": \"Амжилттай\",\n                \"trxDescription\": \"EM-123244\",\n                \"trxAmount\": 61726.87\n            },\n            {\n                \"trxNo\": \"221\",\n                \"trxDate\": \"2025.12.13 12:12:12\",\n                \"trxStatus\": \"SUCCESS\",\n                \"trxStatusName\": \"Амжилттай\",\n                \"trxDescription\": \"EM-123244\",\n                \"trxAmount\": 61726.87\n            },\n            {\n                \"trxNo\": \"221\",\n                \"trxDate\": \"2025.12.13 12:12:12\",\n                \"trxStatus\": \"SUCCESS\",\n                \"trxStatusName\": \"Амжилттай\",\n                \"trxDescription\": \"EM-123244\",\n                \"trxAmount\": 61726.87\n            },\n            {\n                \"trxNo\": \"221\",\n                \"trxDate\": \"2025.12.13 12:12:12\",\n                \"trxStatus\": \"SUCCESS\",\n                \"trxStatusName\": \"Амжилттай\",\n                \"trxDescription\": \"EM-123244\",\n                \"trxAmount\": 61726.87\n            },\n            {\n                \"trxNo\": \"221\",\n                \"trxDate\": \"2025.12.13 12:12:12\",\n                \"trxStatus\": \"SUCCESS\",\n                \"trxStatusName\": \"Амжилттай\",\n                \"trxDescription\": \"EM-123244\",\n                \"trxAmount\": 61726.87\n            },\n            {\n                \"trxNo\": \"221\",\n                \"trxDate\": \"2025.12.13 12:12:12\",\n                \"trxStatus\": \"SUCCESS\",\n                \"trxStatusName\": \"Амжилттай\",\n                \"trxDescription\": \"EM-123244\",\n                \"trxAmount\": 61726.87\n            }\n        ]\n    }\n}"
+						}
+					]
+				}
+			],
+			"description": "Төлбөрийн хэсгийн API"
+		},
+		{
+			"name": "Chat",
+			"item": [
+				{
+					"name": "Create",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "userId",
+								"value": "670143962994",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"paymentId\": \"45241434-7bcd-4646-8ec9-3143c1bc5825\",\n    \"reason\": \" төлбөр төлөгдөхгүй байна\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{Wallet-Service}}/api/chat",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"chat"
+							]
+						},
+						"description": "Төлөгдсөн болон цуцлагдсан төлбөрийн дагуу Хэрэглэгч хүсэлт илгээх, хариу авах хэсэг"
+					},
+					"response": [
+						{
+							"name": "Check",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "userId",
+										"value": "99111633",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"paymentId\":\"d3edebf1-68c8-458f-839c-a9ccdf57cc96\",\n    \"reason\":\" төлбөр төлөгдөхгүй байна\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{Wallet-Service}}/api/chat",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"chat"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "380"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"17c-oCo0PSX94Ke+GogV0cOjRjfa8PE\""
+								},
+								{
+									"key": "Date",
+									"value": "Thu, 08 May 2025 03:29:16 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMessage\": \"Туслалцааны мэдээлэл\",\n    \"data\": {\n        \"chatId\": \"7fe3292a-3685-483d-a191-160efe329e95\",\n        \"Subject\": \"Орон сууцны төлбөр\",\n        \"description\": \"TK-100061 Tue May 06 2025 12:12:35 GMT+0800 (Ulaanbaatar Standard Time) 61726.87\",\n        \"reason\": \" төлбөр төлөгдөхгүй байна\",\n        \"createdAt\": \"2025-05-08T03:07:24.941Z\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "send",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "",
+								"disabled": true
+							},
+							{
+								"key": "userId",
+								"value": "670143962994",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"message\":\"НӨАТ -ийн дүн зөрсөн байна.\"\n}\n\n",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{Wallet-Service}}/api/chat/:chatId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"chat",
+								":chatId"
+							],
+							"variable": [
+								{
+									"key": "chatId",
+									"value": "f3a00592-6a89-40b0-ac81-4a276cd321d5"
+								}
+							]
+						},
+						"description": "Хэрэглэгч хүсэлт илгээх"
+					},
+					"response": [
+						{
+							"name": "send",
+							"originalRequest": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "",
+										"disabled": true
+									},
+									{
+										"key": "userId",
+										"value": "99111633",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"message\":\"НӨАТ -ийн дүн зөрсөн байна.\"\n}\n\n",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{Wallet-Service}}/api/chat/:chatId",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"chat",
+										":chatId"
+									],
+									"variable": [
+										{
+											"key": "chatId",
+											"value": "7fe3292a-3685-483d-a191-160efe329e95"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "1161"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"489-iFeJqo2NO5jq48Hhn9xMeGnsIW8\""
+								},
+								{
+									"key": "Set-Cookie",
+									"value": "bpay-wallet-service.sid=s%3AYKAm8mn7LiMUnJI2MNvlKwG2pJako7eD.rTF7e2VQY9trkSszd10chh7TMbXbGoj4BiIcxXNiT40; Path=/; Expires=Thu, 15 May 2025 03:34:49 GMT; HttpOnly"
+								},
+								{
+									"key": "Date",
+									"value": "Thu, 08 May 2025 03:34:49 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMessage\": \"Амжилттай илгээгдлээ\",\n    \"data\": {\n        \"chatId\": \"7fe3292a-3685-483d-a191-160efe329e95\",\n        \"Subject\": \"Орон сууцны төлбөр\",\n        \"description\": \"TK-100061 Tue May 06 2025 12:12:35 GMT+0800 (Ulaanbaatar Standard Time) 61726.87\",\n        \"reason\": \" төлбөр төлөгдөхгүй байна\",\n        \"createdAt\": \"2025-05-08T03:07:24.941Z\",\n        \"messages\": [\n            {\n                \"messageId\": \"2cbd8f61-319a-4515-a3e3-0a26c9edf384\",\n                \"message\": \"НӨАТ -ийн дүн зөрсөн байна.\",\n                \"sent\": \"2025-05-08T03:30:58.725Z\",\n                \"senderId\": \"491068ed-5cb0-432c-8720-48628e31357b\",\n                \"senderType\": \"Хэтэвч хэрэглэгч\",\n                \"senderName\": \"Би\",\n                \"isSeenOther\": false,\n                \"seenOtherDate\": \"2025-05-08T03:34:49.802Z\",\n                \"seenOthers\": [],\n                \"seenMeDate\": \"2025-05-08T03:34:49.802Z\"\n            },\n            {\n                \"messageId\": \"b6407b87-e5ae-4095-85b7-a4decf5b8c61\",\n                \"message\": \"НӨАТ -ийн дүн зөрсөн байна.\",\n                \"sent\": \"2025-05-08T03:34:49.623Z\",\n                \"senderId\": \"491068ed-5cb0-432c-8720-48628e31357b\",\n                \"senderType\": \"Хэтэвч хэрэглэгч\",\n                \"senderName\": \"Би\",\n                \"isSeenOther\": false,\n                \"seenOtherDate\": \"2025-05-08T03:34:49.802Z\",\n                \"seenOthers\": [],\n                \"seenMeDate\": \"2025-05-08T03:34:49.802Z\"\n            }\n        ]\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "get",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "",
+								"disabled": true
+							},
+							{
+								"key": "userId",
+								"value": "670143962994",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/chat/:chatId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"chat",
+								":chatId"
+							],
+							"variable": [
+								{
+									"key": "chatId",
+									"value": "f3a00592-6a89-40b0-ac81-4a276cd321d5"
+								}
+							]
+						},
+						"description": "Төлбөр төлөгдсөний дараа eBill системээс хэтэвчний CheckCallback -ийг дуудсаны дараа төлбөр шалгах хүсэлтийг дуудна. eBill системээс 1 минут-аас дээш хугацаанд хариу өгөөгүй бол шалгаж нэг удаа дуудна."
+					},
+					"response": []
+				},
+				{
+					"name": "getByObject",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "",
+								"disabled": true
+							},
+							{
+								"key": "userId",
+								"value": "670143962994",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/chat/object/:objectId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"chat",
+								"object",
+								":objectId"
+							],
+							"variable": [
+								{
+									"key": "objectId",
+									"value": ""
+								}
+							]
+						},
+						"description": "Төлбөр төлөгдсөний дараа eBill системээс хэтэвчний CheckCallback -ийг дуудсаны дараа төлбөр шалгах хүсэлтийг дуудна. eBill системээс 1 минут-аас дээш хугацаанд хариу өгөөгүй бол шалгаж нэг удаа дуудна."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "notification",
+			"item": [
+				{
+					"name": "list",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "userId",
+								"value": "670143962994",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/notifications",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"notifications"
+							]
+						},
+						"description": "Хүсэлтийн дагуу харилцан солилцсон мессежний жагсаалт буцаах"
+					},
+					"response": [
+						{
+							"name": "list",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "userId",
+										"value": "99111633",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/notifications",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"notifications"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "351"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"15f-KkrX8uU15Hs6up1ByDIfv00Smxk\""
+								},
+								{
+									"key": "Date",
+									"value": "Thu, 08 May 2025 04:10:10 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Амжилттай\",\n    \"data\": [\n        {\n            \"notificationId\": \"b16f873d-4d47-4549-821c-47baf6d43d41\",\n            \"notificationTitle\": \"Төлбөр төлөлт амжилттай хийгдлээ\",\n            \"notificationMessage\": \"Таны Орон сууцны төлбөр төлбөрт 61326.87₮ төлөгдлөө.\",\n            \"readAt\": null,\n            \"isRead\": false\n        }\n    ]\n}"
+						}
+					]
+				},
+				{
+					"name": "get",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": ""
+							},
+							{
+								"key": "userId",
+								"value": "99111633",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{Wallet-Service}}/api/notification/:notificationId",
+							"host": [
+								"{{Wallet-Service}}"
+							],
+							"path": [
+								"api",
+								"notification",
+								":notificationId"
+							],
+							"variable": [
+								{
+									"key": "notificationId",
+									"value": "b8f5b23b-6017-4540-ab55-0f5f84af82d6"
+								}
+							]
+						},
+						"description": "Хэрэглэгчид илгээсэн мэдэгдлийн мэдээллийг авах"
+					},
+					"response": [
+						{
+							"name": "get",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": ""
+									},
+									{
+										"key": "userId",
+										"value": "99111633",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{Wallet-Service}}/api/notification/:notificationId",
+									"host": [
+										"{{Wallet-Service}}"
+									],
+									"path": [
+										"api",
+										"notification",
+										":notificationId"
+									],
+									"variable": [
+										{
+											"key": "notificationId",
+											"value": "b16f873d-4d47-4549-821c-47baf6d43d41"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "X-Powered-By",
+									"value": "Express"
+								},
+								{
+									"key": "Access-Control-Allow-Origin",
+									"value": "undefined"
+								},
+								{
+									"key": "Access-Control-Allow-Headers",
+									"value": "Content-Type, Authorization"
+								},
+								{
+									"key": "Access-Control-Allow-Credentials",
+									"value": "true"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Content-Length",
+									"value": "401"
+								},
+								{
+									"key": "ETag",
+									"value": "W/\"191-Ex8Zflx1fjgL4CbysWyAJi58WbY\""
+								},
+								{
+									"key": "Date",
+									"value": "Thu, 08 May 2025 04:10:41 GMT"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Keep-Alive",
+									"value": "timeout=5"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"responseCode\": true,\n    \"responseMsg\": \"Амжилттай\",\n    \"data\": {\n        \"notificationId\": \"b16f873d-4d47-4549-821c-47baf6d43d41\",\n        \"notificationTitle\": \"Төлбөр төлөлт амжилттай хийгдлээ\",\n        \"notificationMessage\": \"Таны Орон сууцны төлбөр төлбөрт 61326.87₮ төлөгдлөө.\",\n        \"readAt\": null,\n        \"view\": \"PAYMENT\",\n        \"objectId\": \"d3edebf1-68c8-458f-839c-a9ccdf57cc96\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "CallBack",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": ""
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://e-mongolia.mn/ebill/:notificationId",
+							"protocol": "https",
+							"host": [
+								"e-mongolia",
+								"mn"
+							],
+							"path": [
+								"ebill",
+								":notificationId"
+							],
+							"variable": [
+								{
+									"key": "notificationId",
+									"value": ""
+								}
+							]
+						},
+						"description": "Мэдэгдлийн мэдээллийг хүлээн авах хүсэлтийг Хэтэвч-д дамжуулах CallBack"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJUT0tJIiwic2lkIjoiZjY2MDU1ZWUtMjQ5NS00NjAxLWE0MWUtNDQwNzQwYzgwZmQ3Iiwic2NwIjoiQVVUSE9SSVpFRCIsImlhdCI6MTc1NTUxMzk3NywiZXhwIjozNTExMTI4NzU0fQ.YH_Bo-Z49g6f-i01c0tfZ8PLcxmocOUH1NdRIcT8fow",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "Wallet-Service",
+			"value": "http://localhost:30510/v1",
+			"type": "default"
+		}
+	]
+}
