@@ -127,6 +127,13 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use(
+  express.json({
+    limit: "50mb",
+    extended: true,
+  }),
+);
+
 // db.kholboltUusgey moved inside init block for crash safety
 
 app.use(
