@@ -343,8 +343,8 @@ router.post("/baiguullagaBurtgekh", async (req, res, next) => {
             req.body.baaziinNer,
             false,              // cloudMongoDBEsekh - false for local MongoDB
             "127.0.0.1:27017",  // clusterUrl
-            "",                 // password (No password)
-            "",                 // userName (No username)
+            "Br1stelback1",     // password
+            "admin",            // userName
           );
           console.log(
             `✅ Database connection created for: ${req.body.baaziinNer}`,
