@@ -116,7 +116,6 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization", "x-real-ip"],
   }),
 );
-app.options("(.*)", cors());
 app.use(
   express.json({
     limit: "50mb",
