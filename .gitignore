@@ -8,4 +8,4 @@ yarn.lock
 db/*
 /.vscode
 
-
+/.serviceAccountKey.json
