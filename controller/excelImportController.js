@@ -2551,10 +2551,9 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
 
         await newAvlaga.save();
 
-        // Update global balance on the geree
-        await GereeModel.findByIdAndUpdate(geree._id, {
-          $inc: { globalUldegdel: amount },
-        });
+
+        // Note: globalUldegdel on Geree is decommissioned. 
+        // Balances are now tracked solely in GuilgeeAvlaguud.
 
         // Also update any existing UNPAID invoices for this contract to include
         // the initial balance. Without this, invoices created before the initial

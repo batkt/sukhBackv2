@@ -67,8 +67,6 @@ router.post(
   importInitialBalanceFromExcel,
 );
 
-// Payment summary for a single geree
-router.post("/tulsunSummary", tokenShalgakh, gereeController.getTulsunSummary);
 
 // CRUD for related models
 crud(router, "ashiglaltiinZardluud", ashiglaltiinZardluud, UstsanBarimt);

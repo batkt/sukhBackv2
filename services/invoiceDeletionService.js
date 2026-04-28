@@ -28,7 +28,29 @@ async function deleteInvoice(invoiceId, baiguullagiinId) {
   return { success: true, message: "Invoice deleted" };
 }
 
+/**
+ * Run delete side effects - called from model pre hooks
+ */
+async function runDeleteSideEffects(doc) {
+  if (!doc) return;
+  const invoiceId = doc._id.toString();
+  const baiguullagiinId = doc.baiguullagiinId;
+  const kholbolt = getKholboltByBaiguullagiinId(baiguullagiinId);
+  if (!kholbolt) return;
+
+  const GuilgeeAvlaguudModel = GuilgeeAvlaguud(kholbolt);
+  const ledgerEntries = await GuilgeeAvlaguudModel.find({ nekhemjlekhId: invoiceId });
+  const hasPayments = ledgerEntries.some(e => e.tulsunDun > 0);
+
+  if (hasPayments) {
+    throw new Error("Cannot delete invoice with existing payments. Refund first.");
+  }
+
+  await GuilgeeAvlaguudModel.deleteMany({ nekhemjlekhId: invoiceId });
+}
+
 module.exports = {
   deleteInvoice,
+  runDeleteSideEffects,
   deleteAllInvoicesForOrg: async () => ({ success: false, message: "Use with caution" }),
 };
