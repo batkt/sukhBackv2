@@ -109,15 +109,17 @@ process.on("uncaughtException", (err) => {
 });
 
 app.use((req, res, next) => {
-  const origin = req.headers.origin || "*";
-  res.setHeader("Access-Control-Allow-Origin", origin);
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
   res.setHeader(
     "Access-Control-Allow-Methods",
     "GET, POST, PUT, DELETE, OPTIONS",
   );
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, x-real-ip, Origin, Accept",
+    "Content-Type, Authorization, x-real-ip, Origin, Accept, X-Requested-With, Cache-Control",
   );
   res.setHeader("Access-Control-Allow-Credentials", "true");
 
