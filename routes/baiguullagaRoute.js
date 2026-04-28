@@ -341,10 +341,10 @@ router.post("/baiguullagaBurtgekh", async (req, res, next) => {
           await db.kholboltNemye(
             baiguullaga._id,
             req.body.baaziinNer,
-            true,              // cloudMongoDBEsekh - false for local MongoDB
+            false,              // cloudMongoDBEsekh - false for local MongoDB
             "127.0.0.1:27017",  // clusterUrl
-            "Br1stelback1",     // password
-            "admin",            // userName
+            "",                 // password (No password)
+            "",                 // userName (No username)
           );
           console.log(
             `✅ Database connection created for: ${req.body.baaziinNer}`,
