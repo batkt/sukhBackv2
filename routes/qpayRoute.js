@@ -16,6 +16,8 @@ const {
   qpayShalgay,
 } = require("quickqpaypackvSukh");
 
+router.get("/qpayTulye/:baiguullagiinId/:barilgiinId/:dugaar", qpayTulye);
+
 // BANK ACCOUNT ENDPOINT - MUST BE FIRST TO AVOID ROUTE CONFLICTS
 router.get("/qpayBankAccountsView", async (req, res, next) => {
   try {
@@ -1962,9 +1964,9 @@ router.get(
       const newUldegdel = Math.max(0, currentUldegdel - paidAmount);
       const isFullyPaid = newUldegdel <= 0.01;
 
-      nekhemjlekh.tuluv = isFullyPaid ? "Төлсөн" : "Хэсэгчлэн төлсөн";
+      nekhemjlekh.tuluv = isFullyPaid ? "Төлсөн" : "Төлөөгүй";
       nekhemjlekh.tulsunOgnoo = new Date();
-      nekhemjlekh.uldegdel = isFullyPaid ? 0 : newUldegdel;
+      // uldegdel removed - now tracked in GuilgeeAvlaguud ledger
 
       nekhemjlekh.paymentHistory = nekhemjlekh.paymentHistory || [];
       nekhemjlekh.paymentHistory.push({
@@ -2549,11 +2551,11 @@ router.get(
                 );
                 const multiIsFullyPaid = multiNewUldegdel <= 0.01;
                 return {
-                  tuluv: multiIsFullyPaid ? "Төлсөн" : "Хэсэгчлэн төлсөн",
-                  tulsunOgnoo: new Date(),
+                  tuluv: multiIsFullyPaid ? "Төлсөн" : "Төлөөгүй",
                   ...(paymentTransactionId && {
                     qpayPaymentId: paymentTransactionId,
                   }),
+                  // uldegdel removed
                 };
               })(),
               $push: {

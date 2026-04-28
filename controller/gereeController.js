@@ -2,36 +2,11 @@ const asyncHandler = require("express-async-handler");
 const Geree = require("../models/geree");
 const AshiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
 const Baiguullaga = require("../models/baiguullaga");
-const OrshinSuugch = require("../models/orshinSuugch");
 const LiftShalgaya = require("../models/liftShalgaya");
 const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-const { Dugaarlalt } = require("zevbackv2");
-const moment = require("moment");
 const lodash = require("lodash");
 
 // --- Helpers ---
-
-function monthKeyMnLedger(d) {
-  const x = d instanceof Date ? d : new Date(d);
-  if (Number.isNaN(x.getTime())) return null;
-  try {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Ulaanbaatar",
-      year: "numeric",
-      month: "2-digit",
-    }).formatToParts(x);
-    const y = parts.find((p) => p.type === "year")?.value;
-    const m = parts.find((p) => p.type === "month")?.value;
-    if (y && m) return `${y}-${m}`;
-  } catch (_e) {}
-  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function isAvlagaOnlyShellNekhemjlekh(inv) {
-  const dugaar = String(inv.nekhemjlekhiinDugaar || "");
-  if (dugaar.startsWith("AVL-")) return true;
-  return inv.nekhemjlekhiin === "Авлагаар автоматаар үүсгэсэн нэхэмжлэх";
-}
 
 exports.postLiftShalgaya = asyncHandler(async (req, res, next) => {
   const { db } = require("zevbackv2");
@@ -74,8 +49,7 @@ exports.zaaltOlnoorOruulya = asyncHandler(async (req, res, next) => {
   let niitGereenuud = [];
   if (talbainDugaaruud.length > 0) {
     const gereenuud = await Geree(req.body.tukhainBaaziinKholbolt, true)
-      .find({ talbainIdnuud: { $in: talbainDugaaruud }, barilgiinId: req.body.barilgiinId, tuluv: 1 })
-      .select("+avlaga");
+      .find({ talbainIdnuud: { $in: talbainDugaaruud }, barilgiinId: req.body.barilgiinId, tuluv: "Идэвхтэй" });
 
     const oldooguiGeree = talbainDugaaruud
       .filter((a) => !gereenuud.find((b) => b.talbainIdnuud.includes(a)))
@@ -92,12 +66,16 @@ exports.zaaltOlnoorOruulya = asyncHandler(async (req, res, next) => {
     let umnukhZaalt = 0;
 
     if (["кВт", "1м3", "кг"].includes(ashiglaltiinZardal.turul)) {
-      let suuliinGuilgee = geree.avlaga.guilgeenuud.filter(
-        (x) => x.khemjikhNegj == ashiglaltiinZardal.turul && x.tailbar == ashiglaltiinZardal.ner && (!x.tooluuriinDugaar || tukhainZardal.tooluuriinDugaar == x.tooluuriinDugaar),
-      );
-      if (suuliinGuilgee.length > 0) {
-        suuliinGuilgee = lodash.orderBy(suuliinGuilgee, ["ognoo"], ["asc"]);
-        umnukhZaalt = suuliinGuilgee[suuliinGuilgee.length - 1].suuliinZaalt || 0;
+      const GuilgeeAvlaguudModel = GuilgeeAvlaguud(req.body.tukhainBaaziinKholbolt);
+      const suuliinGuilgee = await GuilgeeAvlaguudModel.findOne({
+        gereeniiId: String(geree._id),
+        khemjikhNegj: ashiglaltiinZardal.turul,
+        zardliinNer: ashiglaltiinZardal.ner,
+        ...((tukhainZardal.tooluuriinDugaar) && { tooluuriinDugaar: tukhainZardal.tooluuriinDugaar })
+      }).sort({ ognoo: -1 }).lean();
+
+      if (suuliinGuilgee) {
+        umnukhZaalt = suuliinGuilgee.suuliinZaalt || 0;
       }
     }
 
