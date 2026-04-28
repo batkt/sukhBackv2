@@ -96,9 +96,7 @@ router.use((req, res, next) => {
   next();
 });
 
-// Custom DELETE for guilgeeAvlaguud
-router.delete("/guilgeeAvlaguudTulukh/:id", tokenShalgakh, gereeController.deleteGuilgeeAvlaguudTulukh);
-router.delete("/guilgeeAvlaguudTulsun/:id", tokenShalgakh, gereeController.deleteGuilgeeAvlaguudTulsun);
+// Custom DELETE for guilgeeAvlaguud removed - use standard CRUD
 
 // Main GuilgeeAvlaguud CRUD
 crud(router, "guilgeeAvlaguud", GuilgeeAvlaguud, UstsanBarimt);
@@ -108,22 +106,10 @@ crud(
   router,
   "geree",
   Geree,
-  UstsanBarimt,
-  gereeController.gereeMiddleware
+  UstsanBarimt
 );
 
-// Legacy/Specific save endpoints
-router
-  .route("/gereeKhadgalya")
-  .post(
-    tokenShalgakh,
-    shalguurFieldValidate(["register", "customerTin"]),
-    gereeController.gereeKhadgalya
-  );
-
-router
-  .route("/gereeniiGuilgeeKhadgalya")
-  .post(tokenShalgakh, gereeController.gereeniiGuilgeeKhadgalya);
+// Legacy save endpoints removed - use standard CRUD
 
 router
   .route("/zaaltOlnoorOruulya")
