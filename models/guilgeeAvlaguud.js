@@ -5,12 +5,9 @@ mongoose.pluralize(null);
 
 const guilgeeAvlaguudSchema = new Schema(
   {
-    // chiglel: "tulukh" (төлөх/receivable) or "tulsun" (төлсөн/payment)
-    chiglel: {
-      type: String,
-      enum: ["tulukh", "tulsun"],
-      required: true,
-    },
+    // dun: positive for charges (receivables), negative for payments
+    dun: { type: Number, default: 0 },
+
 
     // Relation fields (shared)
     baiguullagiinId: { type: String, required: true },
@@ -79,7 +76,33 @@ const guilgeeAvlaguudSchema = new Schema(
   }
 );
 
+guilgeeAvlaguudSchema.pre("save", function (next) {
+  // If the new 'dun' field is set, synchronize it with undsenDun/tulsunDun
+  if (typeof this.dun === "number" && this.dun !== 0) {
+    if (this.dun > 0) {
+      // Charge (receivable)
+      this.undsenDun = this.dun;
+      this.tulukhDun = this.dun;
+      this.tulsunDun = 0;
+    } else {
+      // Payment (credit)
+      this.tulsunDun = Math.abs(this.dun);
+      this.undsenDun = 0;
+      this.tulukhDun = 0;
+    }
+  }
+
+  // Calculate local uldegdel for this specific transaction record
+  const charge = Number(this.undsenDun) || 0;
+  const payment = Number(this.tulsunDun) || 0;
+  this.uldegdel = Math.round((charge - payment) * 100) / 100;
+
+  next();
+});
+
+
 module.exports = function a(conn) {
+
   if (!conn || !conn.kholbolt)
     throw new Error("Холболтын мэдээлэл заавал бөглөх шаардлагатай!");
   conn = conn.kholbolt;

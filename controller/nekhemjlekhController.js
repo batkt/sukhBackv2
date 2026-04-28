@@ -1,201 +1,80 @@
-const nekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
-const Geree = require("../models/geree");
-const Baiguullaga = require("../models/baiguullaga");
-const NekhemjlekhCron = require("../models/cronSchedule");
-const OrshinSuugch = require("../models/orshinSuugch");
-const MsgTuukh = require("../models/msgTuukh");
-const Medegdel = require("../models/medegdel");
-const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-
-const request = require("request");
-const { db } = require("zevbackv2");
 const asyncHandler = require("express-async-handler");
-const { getKholboltByBaiguullagiinId } = require("../utils/dbConnection");
-const {
-  normalizeTurul,
-  normalizeZardluudTurul,
-  deduplicateZardluud,
-} = require("../utils/zardalUtils");
-const {
-  gereeNeesNekhemjlekhUusgekh,
-} = require("../services/invoiceCreationService");
-const { previewInvoice } = require("../services/invoicePreviewService");
-const {
-  manualSendInvoice,
-  manualSendMassInvoices,
-  manualSendSelectedInvoices,
-} = require("../services/invoiceSendService");
-const {
-  updateGereeAndNekhemjlekhFromZardluud,
-  deleteInvoiceZardal: deleteInvoiceZardalLogic,
-  recalculateGereeBalance: recalculateGereeBalanceLogic,
-} = require("../services/invoiceZardalService");
-const {
-  deleteInvoice: deleteInvoiceLogic,
-  deleteAllInvoicesForOrg: deleteAllInvoicesForOrgLogic,
-} = require("../services/invoiceDeletionService");
+const invoiceService = require("../services/invoiceService");
+const previewService = require("../services/invoicePreviewService");
+const sendService = require("../services/invoiceSendService");
+const paymentService = require("../services/invoicePaymentService");
+const zardalService = require("../services/invoiceZardalService");
+const deletionService = require("../services/invoiceDeletionService");
 
-const markInvoicesAsPaid = asyncHandler(async (req, res, next) => {
-  try {
-    const {
-      baiguullagiinId,
-      dun,
-      orshinSuugchId,
-      gereeniiId,
-      nekhemjlekhiinIds,
-      markEkhniiUldegdel = false,
-      tailbar = null,
-    } = req.body;
-
-    if (!baiguullagiinId) {
-      return res.status(400).json({
-        success: false,
-        error: "baiguullagiinId is required",
-      });
-    }
-
-    if (!dun || dun <= 0) {
-      return res.status(400).json({
-        success: false,
-        error: "dun (payment amount) is required and must be greater than 0",
-      });
-    }
-
-    const {
-      markInvoicesAsPaid: markInvoices,
-    } = require("../services/invoicePaymentService");
-
-    const result = await markInvoices({
-      baiguullagiinId,
-      dun,
-      orshinSuugchId,
-      gereeniiId,
-      nekhemjlekhiinIds,
-      markEkhniiUldegdel,
-      tailbar,
-    });
-
-    res.json(result);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+/**
+ * Common helper to emit socket updates
+ */
+function emitUpdate(req, baiguullagiinId) {
+  if (baiguullagiinId && req.app) {
+    try {
+      req.app.get("socketio").emit(`tulburUpdated:${baiguullagiinId}`, {});
+    } catch (e) {}
   }
+}
+
+const previewInvoice = asyncHandler(async (req, res) => {
+  const { gereeId, baiguullagiinId, barilgiinId, targetMonth, targetYear } = req.query;
+  const result = await previewService.previewInvoice(gereeId, baiguullagiinId, barilgiinId, {
+    targetMonth, targetYear
+  });
+  res.status(result.success ? 200 : 400).json(result);
 });
 
-const deleteInvoiceZardal = asyncHandler(async (req, res, next) => {
-  const { invoiceId, zardalId, baiguullagiinId } = req.body;
-
-  if (!invoiceId || !zardalId || !baiguullagiinId) {
-    return res.status(400).json({
-      success: false,
-      error: "invoiceId, zardalId, and baiguullagiinId are required",
-    });
+const manualSendInvoice = asyncHandler(async (req, res) => {
+  const { gereeId, gereeIds, baiguullagiinId, override, targetMonth, targetYear } = req.body;
+  const ids = gereeIds || (gereeId ? [gereeId] : []);
+  
+  if (ids.length === 0) {
+    return res.status(400).json({ success: false, error: "gereeId or gereeIds is required" });
   }
 
-  const result = await deleteInvoiceZardalLogic(
-    invoiceId,
-    zardalId,
-    baiguullagiinId,
-  );
-
-  if (result.statusCode && result.statusCode !== 200) {
-    return res.status(result.statusCode).json({
-      success: false,
-      error: result.error,
-      message: result.message,
-    });
-  }
-
-  if (result.success && baiguullagiinId) {
-    const io = req.app?.get("socketio");
-    if (io) io.emit(`tulburUpdated:${baiguullagiinId}`, {});
-  }
-
-  res.json({
-    success: result.success,
-    message: result.message,
-    newTotal: result.newTotal,
+  const result = await sendService.manualSendMassInvoices(baiguullagiinId, ids, override, {
+    targetMonth, targetYear
   });
+  emitUpdate(req, baiguullagiinId);
+  res.status(result.success ? 200 : 400).json(result);
 });
 
-const recalculateGereeBalance = asyncHandler(async (req, res) => {
-  const { gereeId, baiguullagiinId } = req.body;
-
-  if (!gereeId || !baiguullagiinId) {
-    return res.status(400).json({
-      success: false,
-      message: "gereeId and baiguullagiinId are required",
-    });
-  }
-
-  const result = await recalculateGereeBalanceLogic(gereeId, baiguullagiinId);
-
-  if (result.statusCode && result.statusCode !== 200) {
-    return res
-      .status(result.statusCode)
-      .json({ success: false, message: result.message });
-  }
-
-  res.json({
-    success: result.success,
-    message: result.message,
-    data: result.data,
+const manualSendMassInvoices = asyncHandler(async (req, res) => {
+  const { baiguullagiinId, gereeIds, override, targetMonth, targetYear } = req.body;
+  const result = await sendService.manualSendMassInvoices(baiguullagiinId, gereeIds, override, {
+    targetMonth, targetYear
   });
+  emitUpdate(req, baiguullagiinId);
+  res.status(result.success ? 200 : 400).json(result);
+});
+
+const markInvoicesAsPaid = asyncHandler(async (req, res) => {
+  const result = await paymentService.markInvoicesAsPaid(req.body);
+  emitUpdate(req, req.body.baiguullagiinId);
+  res.status(result.success ? 200 : 400).json(result);
 });
 
 const deleteInvoice = asyncHandler(async (req, res) => {
-  const { invoiceId: bodyInvId, baiguullagiinId: bodyOrgId } = req.body ?? {};
-  const { id: paramInvId } = req.params ?? {};
-  const { baiguullagiinId: queryOrgId } = req.query ?? {};
+  const { invoiceId, baiguullagiinId } = req.body;
+  const id = invoiceId || req.params.id;
+  const result = await deletionService.deleteInvoice(id, baiguullagiinId);
+  emitUpdate(req, baiguullagiinId);
+  res.status(result.success ? 200 : 400).json(result);
+});
 
-  const invoiceId = bodyInvId || paramInvId;
-  const baiguullagiinId = bodyOrgId || queryOrgId;
-
-  if (!baiguullagiinId) {
-    return res.status(400).json({
-      success: false,
-      error: "baiguullagiinId is required",
-    });
-  }
-  const result = invoiceId
-    ? await deleteInvoiceLogic(invoiceId, baiguullagiinId)
-    : await deleteAllInvoicesForOrgLogic(baiguullagiinId);
-
-  const statusCode = result.statusCode || (result.success ? 200 : 400);
-  if (result.success && baiguullagiinId) {
-    const io = req.app?.get("socketio");
-    if (io) io.emit(`tulburUpdated:${baiguullagiinId}`, {});
-  }
-  res.status(statusCode).json(
-    result.success
-      ? {
-          success: true,
-          message: result.message,
-          ...(result.deletedCount !== undefined && {
-            deletedCount: result.deletedCount,
-          }),
-          ...(result.deletedTulsunAvlaga !== undefined && {
-            deletedTulsunAvlaga: result.deletedTulsunAvlaga,
-          }),
-          ...(result.deletedTulukhAvlaga !== undefined && {
-            deletedTulukhAvlaga: result.deletedTulukhAvlaga,
-          }),
-        }
-      : { success: false, error: result.error },
-  );
+const deleteInvoiceZardal = asyncHandler(async (req, res) => {
+  const { invoiceId, zardalId, baiguullagiinId } = req.body;
+  const result = await zardalService.deleteInvoiceZardal(invoiceId, zardalId, baiguullagiinId);
+  emitUpdate(req, baiguullagiinId);
+  res.status(result.success ? 200 : 400).json(result);
 });
 
 module.exports = {
-  gereeNeesNekhemjlekhUusgekh,
-  updateGereeAndNekhemjlekhFromZardluud,
-  markInvoicesAsPaid,
   previewInvoice,
   manualSendInvoice,
   manualSendMassInvoices,
-  manualSendSelectedInvoices,
-  deleteInvoiceZardal,
-  recalculateGereeBalance,
+  markInvoicesAsPaid,
   deleteInvoice,
+  deleteInvoiceZardal,
 };

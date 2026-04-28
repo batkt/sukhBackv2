@@ -1141,17 +1141,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                   tuluv: "Идэвхтэй",
                 }).select("_id");
 
-                await GereeModel.updateMany(
-                  {
-                    _id: { $in: affectedGerees.map((g) => g._id) },
-                  },
-                  {
-                    $set: { ekhniiUldegdel: userData.ekhniiUldegdel },
-                  },
-                );
-
                 const GuilgeeAvlaguudTulukhModel = GuilgeeAvlaguud(tukhainBaaziinKholbolt);
-                const GuilgeeAvlaguudTulsunModel = GuilgeeAvlaguud(tukhainBaaziinKholbolt);
                 const targetEkhnii = Number(userData.ekhniiUldegdel) || 0;
 
                 for (const g of affectedGerees) {
@@ -1177,7 +1167,8 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                           $inc: {
                             undsenDun: delta,
                             tulukhDun: delta,
-                            uldegdel: delta,
+                            // uldegdel removed
+                            dun: delta,
                           },
                         },
                       );
@@ -1789,8 +1780,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                 temdeglel: `${userData.tailbar || "Excel файлаас автоматаар үүссэн гэрээ"} (Тоот: ${tootEntry.toot})`,
                 tailbar: userData.tailbar || tailbarFromZardluud || "",
                 actOgnoo: new Date(),
-                baritsaaniiUldegdel: 0,
-                ekhniiUldegdel: userData.ekhniiUldegdel || 0,
+                // ekhniiUldegdel removed
                 umnukhZaalt: userData.initialMeterReading || 0,
                 suuliinZaalt: userData.initialMeterReading || 0,
                 zaaltTog: 0, // Day reading (will be updated later)
@@ -1911,8 +1901,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
               userData.tailbar || "Excel файлаас автоматаар үүссэн гэрээ",
             tailbar: userData.tailbar || tailbarFromZardluud || "",
             actOgnoo: new Date(),
-            baritsaaniiUldegdel: 0,
-            ekhniiUldegdel: userData.ekhniiUldegdel || 0,
+            // ekhniiUldegdel removed
             umnukhZaalt: userData.initialMeterReading || 0,
             suuliinZaalt: userData.initialMeterReading || 0,
             zaaltTog: 0, // Day reading (will be updated later)
@@ -2548,10 +2537,9 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
           gereeniiDugaar: geree.gereeniiDugaar,
           orshinSuugchId: geree.orshinSuugchId,
           ognoo: importOgnoo,
-          undsenDun: amount,
-          tulukhDun: amount,
-          uldegdel: amount,
+          dun: amount,
           turul: "avlaga",
+
           zardliinNer: "Эхний үлдэгдэл",
           ekhniiUldegdelEsekh: true,
           source: "gar",
@@ -2620,8 +2608,7 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
                 niitTulbur: newNiitTulbur,
                 niitTulburOriginal:
                   (invoice.niitTulburOriginal || invoice.niitTulbur || 0) + amount,
-                uldegdel: newUldegdel,
-                ekhniiUldegdel: (invoice.ekhniiUldegdel || 0) + amount,
+                // uldegdel and ekhniiUldegdel removed
                 "medeelel.zardluud": zardluud,
               },
             });

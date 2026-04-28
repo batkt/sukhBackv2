@@ -2086,10 +2086,10 @@ router.get(
         await bankGuilgee.save();
       } catch (bankErr) {}
 
-      // Create gereeniiTulsunAvlaga record to register QPay payment
+      // Record the QPay payment in the ledger (automatically handles allocation)
       try {
-        const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-        const tulsunDoc = new GuilgeeAvlaguud(kholbolt)({
+        const guilgeeService = require("../services/guilgeeService");
+        await guilgeeService.recordPayment(kholbolt, {
           baiguullagiinId: String(nekhemjlekh.baiguullagiinId),
           baiguullagiinNer: nekhemjlekh.baiguullagiinNer || "",
           barilgiinId: nekhemjlekh.barilgiinId || "",
@@ -2098,55 +2098,12 @@ router.get(
           orshinSuugchId: nekhemjlekh.orshinSuugchId || "",
           nekhemjlekhId: nekhemjlekh._id?.toString() || null,
           ognoo: new Date(),
-          tulsunDun: paidAmount,
-          tulsunAldangi: 0,
-          turul: "төлөлт",
-          zardliinTurul: "",
-          zardliinId: "",
-          zardliinNer: "",
+          dun: paidAmount,
           tailbar: `QPay төлбөр - ${nekhemjlekh.gereeniiDugaar || ""}`,
           source: "nekhemjlekh",
-          guilgeeKhiisenAjiltniiNer: null,
-          guilgeeKhiisenAjiltniiId: null,
         });
-        await tulsunDoc.save();
-      } catch (tulsunErr) {
-        console.error(
-          "❌ [QPAY CALLBACK] Error creating gereeniiTulsunAvlaga:",
-          tulsunErr.message,
-        );
-      }
-
-      // Update gereeniiTulukhAvlaga uldegdel (reduce outstanding balance)
-      try {
-        const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-        let remainingForGeree = paidAmount;
-        const openTulukhRows = await GuilgeeAvlaguud(kholbolt)
-          .find({
-            gereeniiId: String(nekhemjlekh.gereeniiId),
-            baiguullagiinId: String(baiguullagiinId),
-            uldegdel: { $gt: 0 },
-          })
-          .sort({ ognoo: 1, createdAt: 1 })
-          .lean();
-
-        for (const row of openTulukhRows) {
-          if (remainingForGeree <= 0) break;
-          const rowUldegdel = row.uldegdel || 0;
-          if (rowUldegdel <= 0) continue;
-          const applyHere = Math.min(remainingForGeree, rowUldegdel);
-          const newRowUldegdel = rowUldegdel - applyHere;
-          await GuilgeeAvlaguud(kholbolt).updateOne(
-            { _id: row._id },
-            { $set: { uldegdel: newRowUldegdel } },
-          );
-          remainingForGeree -= applyHere;
-        }
-      } catch (tulukhErr) {
-        console.error(
-          "❌ [QPAY CALLBACK] Error updating gereeniiTulukhAvlaga:",
-          tulukhErr.message,
-        );
+      } catch (ledgerErr) {
+        console.error("❌ [QPAY CALLBACK] Ledger error:", ledgerErr.message);
       }
 
       // Recalculation logic removed as per request.
@@ -2594,7 +2551,6 @@ router.get(
                 return {
                   tuluv: multiIsFullyPaid ? "Төлсөн" : "Хэсэгчлэн төлсөн",
                   tulsunOgnoo: new Date(),
-                  uldegdel: multiIsFullyPaid ? 0 : multiNewUldegdel,
                   ...(paymentTransactionId && {
                     qpayPaymentId: paymentTransactionId,
                   }),
@@ -2705,11 +2661,10 @@ router.get(
             }
           } catch (bankErr) {}
 
-          // Create gereeniiTulsunAvlaga record to register QPay payment
+          // Record the QPay payment in the ledger
           try {
-            const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-            const multiPaidAmt = nekhemjlekh.niitTulbur || 0;
-            const tulsunDoc = new GuilgeeAvlaguud(kholbolt)({
+            const guilgeeService = require("../services/guilgeeService");
+            await guilgeeService.recordPayment(kholbolt, {
               baiguullagiinId: String(nekhemjlekh.baiguullagiinId),
               baiguullagiinNer: nekhemjlekh.baiguullagiinNer || "",
               barilgiinId: nekhemjlekh.barilgiinId || "",
@@ -2718,80 +2673,12 @@ router.get(
               orshinSuugchId: nekhemjlekh.orshinSuugchId || "",
               nekhemjlekhId: nekhemjlekh._id?.toString() || null,
               ognoo: new Date(),
-              tulsunDun: multiPaidAmt,
-              tulsunAldangi: 0,
-              turul: "төлөлт",
-              zardliinTurul: "",
-              zardliinId: "",
-              zardliinNer: "",
+              dun: nekhemjlekh.niitTulbur || 0,
               tailbar: `QPay төлбөр (Олон нэхэмжлэх) - ${nekhemjlekh.gereeniiDugaar || ""}`,
               source: "nekhemjlekh",
-              guilgeeKhiisenAjiltniiNer: null,
-              guilgeeKhiisenAjiltniiId: null,
             });
-            await tulsunDoc.save();
-          } catch (tulsunErr) {
-            console.error(
-              "❌ [QPAY MULTI CALLBACK] Error creating gereeniiTulsunAvlaga:",
-              tulsunErr.message,
-            );
-          }
-
-          // Update gereeniiTulukhAvlaga uldegdel
-          try {
-            const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-            const multiPaidAmt2 = nekhemjlekh.niitTulbur || 0;
-            let remainingForGeree = multiPaidAmt2;
-            const openTulukhRows = await GuilgeeAvlaguud(kholbolt)
-              .find({
-                gereeniiId: String(nekhemjlekh.gereeniiId),
-                baiguullagiinId: String(baiguullagiinId),
-                uldegdel: { $gt: 0 },
-              })
-              .sort({ ognoo: 1, createdAt: 1 })
-              .lean();
-
-            for (const row of openTulukhRows) {
-              if (remainingForGeree <= 0) break;
-              const rowUldegdel = row.uldegdel || 0;
-              if (rowUldegdel <= 0) continue;
-              const applyHere = Math.min(remainingForGeree, rowUldegdel);
-              const newRowUldegdel = rowUldegdel - applyHere;
-              await GuilgeeAvlaguud(kholbolt).updateOne(
-                { _id: row._id },
-                { $set: { uldegdel: newRowUldegdel } },
-              );
-              remainingForGeree -= applyHere;
-            }
-          } catch (tulukhErr) {
-            console.error(
-              "❌ [QPAY MULTI CALLBACK] Error updating gereeniiTulukhAvlaga:",
-              tulukhErr.message,
-            );
-          }
-
-          // Recalculate globalUldegdel using shared utility
-          const {
-          const GuilgeeAvlaguudRecalc = require("../models/guilgeeAvlaguud");
-          const GuilgeeAvlaguudRecalcMulti = require("../models/guilgeeAvlaguud");
-          try {
-            const updatedGereeMulti = await recalcMulti({
-              gereeId: nekhemjlekh.gereeniiId,
-              baiguullagiinId,
-              GereeModel: Geree(kholbolt),
-              NekhemjlekhiinTuukhModel: nekhemjlekhiinTuukh(kholbolt),
-              GuilgeeAvlaguudModel: GuilgeeAvlaguudRecalc(kholbolt),
-              GuilgeeAvlaguudModel:
-                GuilgeeAvlaguudRecalcMulti(kholbolt),
-            });
-
-            // NOTE: Do not overwrite the latest invoice's uldegdel with contract-wide globalUldegdel.
-            // That would make the newest month show accumulated debt from previous months.
-          } catch (recalcErr) {
-            console.error(
-              "❌ [QPAY MULTI CALLBACK] Error recalculating globalUldegdel:",
-              recalcErr.message,
-            );
+          } catch (ledgerErr) {
+            console.error("❌ [QPAY MULTI CALLBACK] Ledger error:", ledgerErr.message);
           }
 
           // Create ebarimt for each invoice

@@ -2854,7 +2854,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       if (!group.globalUldegdel && groupMap.has(gid)) {
          const meta = contractMap[gid];
          if (meta) {
-           group.globalUldegdel = Number(meta.globalUldegdel ?? meta.uldegdel ?? 0);
+           // globalUldegdel removed
          }
       }
       const paidDun = Number(p.tulsunDun || 0);

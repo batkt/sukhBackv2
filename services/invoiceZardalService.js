@@ -1,228 +1,51 @@
 const mongoose = require("mongoose");
-const nekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
 const Geree = require("../models/geree");
-const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-
 const { getKholboltByBaiguullagiinId } = require("../utils/dbConnection");
-const { normalizeTurul, sumZardalDun } = require("../utils/zardalUtils");
+const { deleteInvoice } = require("./invoiceDeletionService");
+const { createInvoiceForContract } = require("./invoiceService");
 
 /**
- * Update geree and unpaid invoice when an ashiglaltiinZardal is updated.
+ * Update all contracts that use a specific expense template
  */
-async function updateGereeAndNekhemjlekhFromZardluud(
-  ashiglaltiinZardal,
-  tukhainBaaziinKholbolt,
-) {
-  try {
-    const gereenuud = await Geree(tukhainBaaziinKholbolt, true).find({
-      "zardluud.ner": ashiglaltiinZardal.ner,
-      "zardluud.turul": ashiglaltiinZardal.turul,
-      "zardluud.zardliinTurul": ashiglaltiinZardal.zardliinTurul,
-    });
+async function updateGereeAndNekhemjlekhFromZardluud(ashiglaltiinZardal, kholbolt) {
+  const GereeModel = Geree(kholbolt);
+  const gereenuud = await GereeModel.find({ "zardluud.ner": ashiglaltiinZardal.ner });
 
-    for (const geree of gereenuud) {
-      const zardalIndex = geree.zardluud.findIndex(
-        (z) =>
-          z.ner === ashiglaltiinZardal.ner &&
-          z.turul === ashiglaltiinZardal.turul &&
-          z.zardliinTurul === ashiglaltiinZardal.zardliinTurul,
-      );
-
-      if (zardalIndex !== -1) {
-        geree.zardluud[zardalIndex] = {
-          ...geree.zardluud[zardalIndex].toObject(),
-          ner: ashiglaltiinZardal.ner,
-          turul: normalizeTurul(ashiglaltiinZardal.turul),
-          tariff: ashiglaltiinZardal.tariff,
-          tariffUsgeer: ashiglaltiinZardal.tariffUsgeer,
-          zardliinTurul: ashiglaltiinZardal.zardliinTurul,
-          tseverUsDun: ashiglaltiinZardal.tseverUsDun,
-          bokhirUsDun: ashiglaltiinZardal.bokhirUsDun,
-          usKhalaasniiDun: ashiglaltiinZardal.usKhalaasniiDun,
-          tsakhilgaanUrjver: ashiglaltiinZardal.tsakhilgaanUrjver,
-          tsakhilgaanChadal: ashiglaltiinZardal.tsakhilgaanChadal,
-          tsakhilgaanDemjikh: ashiglaltiinZardal.tsakhilgaanDemjikh,
-          suuriKhuraamj: ashiglaltiinZardal.suuriKhuraamj,
-          nuatNemekhEsekh: ashiglaltiinZardal.nuatNemekhEsekh,
-          dun: ashiglaltiinZardal.dun,
-        };
-
-        const niitTulbur = sumZardalDun(geree.zardluud);
-
-        geree.niitTulbur = niitTulbur;
-
-        await geree.save();
-
-        const nekhemjlekh = await nekhemjlekhiinTuukh(
-          tukhainBaaziinKholbolt,
-        ).findOne({
-          gereeniiId: geree._id,
-          tuluv: { $ne: "Төлсөн" },
-        });
-
-        if (nekhemjlekh) {
-          const nekhemjlekhZardalIndex =
-            nekhemjlekh.medeelel.zardluud.findIndex(
-              (z) =>
-                z.ner === ashiglaltiinZardal.ner &&
-                z.turul === ashiglaltiinZardal.turul &&
-                z.zardliinTurul === ashiglaltiinZardal.zardliinTurul,
-            );
-
-          if (nekhemjlekhZardalIndex !== -1) {
-            nekhemjlekh.medeelel.zardluud[nekhemjlekhZardalIndex] = {
-              ...nekhemjlekh.medeelel.zardluud[nekhemjlekhZardalIndex],
-              ner: ashiglaltiinZardal.ner,
-              turul: normalizeTurul(ashiglaltiinZardal.turul),
-              tariff: ashiglaltiinZardal.tariff,
-              tariffUsgeer: ashiglaltiinZardal.tariffUsgeer,
-              zardliinTurul: ashiglaltiinZardal.zardliinTurul,
-              tseverUsDun: ashiglaltiinZardal.tseverUsDun,
-              bokhirUsDun: ashiglaltiinZardal.bokhirUsDun,
-              usKhalaasniiDun: ashiglaltiinZardal.usKhalaasniiDun,
-              tsakhilgaanUrjver: ashiglaltiinZardal.tsakhilgaanUrjver,
-              tsakhilgaanChadal: ashiglaltiinZardal.tsakhilgaanChadal,
-              tsakhilgaanDemjikh: ashiglaltiinZardal.tsakhilgaanDemjikh,
-              suuriKhuraamj: ashiglaltiinZardal.suuriKhuraamj,
-              nuatNemekhEsekh: ashiglaltiinZardal.nuatNemekhEsekh,
-              dun: ashiglaltiinZardal.dun,
-            };
-
-            nekhemjlekh.niitTulbur = sumZardalDun(
-              nekhemjlekh.medeelel.zardluud,
-            );
-
-            nekhemjlekh.content = `Гэрээний дугаар: ${geree.gereeniiDugaar}, Нийт төлбөр: ${nekhemjlekh.niitTulbur}₮`;
-
-            await nekhemjlekh.save();
-          }
-        }
+  for (const geree of gereenuud) {
+    const idx = geree.zardluud.findIndex(z => z.ner === ashiglaltiinZardal.ner);
+    if (idx !== -1) {
+      geree.zardluud[idx] = { ...geree.zardluud[idx].toObject(), ...ashiglaltiinZardal };
+      await geree.save();
+      
+      // Optionally refresh the current unpaid invoice
+      const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
+      const unpaid = await NekhemjlekhModel.findOne({ gereeniiId: geree._id, tuluv: "Төлөөгүй" });
+      if (unpaid) {
+        await deleteInvoice(unpaid._id, geree.baiguullagiinId);
+        await createInvoiceForContract(kholbolt, geree._id);
       }
     }
-
-    return { success: true, updatedGereenuud: gereenuud.length };
-  } catch (error) {
-    return { success: false, error: error.message };
   }
+  return { success: true };
 }
 
-/**
- * Delete a zardal (or guilgee) from an invoice. Returns result shape for API.
- */
 async function deleteInvoiceZardal(invoiceId, zardalId, baiguullagiinId) {
   const kholbolt = getKholboltByBaiguullagiinId(baiguullagiinId);
+  const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
+  const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud")(kholbolt);
 
-  if (!kholbolt) {
-    return {
-      success: false,
-      statusCode: 404,
-      error: "Холболтын мэдээлэл олдсонгүй!",
-    };
-  }
+  await GuilgeeAvlaguud.deleteOne({ _id: zardalId });
 
-  const NekhemjlekhModel = nekhemjlekhiinTuukh(kholbolt);
-  const GereeModel = Geree(kholbolt);
+  await NekhemjlekhModel.findByIdAndUpdate(invoiceId, {
+    $pull: { "medeelel.zardluud": { _id: zardalId } }
+  });
 
-  const invoice = await NekhemjlekhModel.findById(invoiceId);
-  if (!invoice) {
-    return {
-      success: false,
-      statusCode: 404,
-      error: "Нэхэмжлэх олдсонгүй!",
-    };
-  }
-
-  if (!invoice.medeelel || !Array.isArray(invoice.medeelel.zardluud)) {
-    return {
-      success: false,
-      statusCode: 400,
-      error: "Энэ нэхэмжлэхэд зардал олдсонгүй!",
-    };
-  }
-
-  const zardluud = Array.isArray(invoice.medeelel?.zardluud)
-    ? invoice.medeelel.zardluud
-    : [];
-  const guilgeenuud = Array.isArray(invoice.medeelel?.guilgeenuud)
-    ? invoice.medeelel.guilgeenuud
-    : [];
-
-  let deletedAmount = 0;
-  let pullPath = "";
-
-  const zardalIndex = zardluud.findIndex(
-    (z) => String(z._id) === String(zardalId),
-  );
-  const guilgeeIndex = guilgeenuud.findIndex(
-    (g) => String(g._id) === String(zardalId),
-  );
-
-  if (zardalIndex !== -1) {
-    const deletedZardal = zardluud[zardalIndex];
-    deletedAmount = Number(
-      deletedZardal.dun || deletedZardal.tariff || deletedZardal.tulukhDun || 0,
-    );
-    pullPath = "medeelel.zardluud";
-  } else if (guilgeeIndex !== -1) {
-    const deletedGuilgee = guilgeenuud[guilgeeIndex];
-    const charge = Number(deletedGuilgee.tulukhDun || 0);
-    const payment = Number(deletedGuilgee.tulsunDun || 0);
-    deletedAmount = charge - payment;
-    pullPath = "medeelel.guilgeenuud";
-  } else {
-    return {
-      success: false,
-      statusCode: 404,
-      error: "Зардал эсвэл гүйлгээ олдсонгүй (ID mismatch)!",
-    };
-  }
-
-  const updateQuery = {
-    $pull: {
-      [pullPath]: {
-        _id: mongoose.Types.ObjectId.isValid(zardalId)
-          ? new mongoose.Types.ObjectId(zardalId)
-          : zardalId,
-      },
-    },
-    $inc: {
-      niitTulbur: -deletedAmount,
-      ...(zardalIndex !== -1 ? { niitTulburOriginal: -deletedAmount } : {}),
-    },
-  };
-
-  await NekhemjlekhModel.findByIdAndUpdate(invoiceId, updateQuery);
-
-  if (invoice.gereeniiId && deletedAmount !== 0) {
-    await GereeModel.findByIdAndUpdate(invoice.gereeniiId, {
-      $inc: { globalUldegdel: -deletedAmount },
-    });
-  }
-
-  const updatedInvoice = await NekhemjlekhModel.findById(invoiceId);
-  if (updatedInvoice && updatedInvoice.niitTulbur <= 0) {
-    updatedInvoice.tuluv = "Төлсөн";
-    await updatedInvoice.save();
-  }
-
-
-    // Recalculation logic removed as per request.
-
-
-  const finalInvoice = await NekhemjlekhModel.findById(invoiceId);
-
-  return {
-    success: true,
-    message: "Зардал амжилттай устгагдлаа",
-    newTotal: finalInvoice?.niitTulbur || 0,
-  };
+  return { success: true, message: "Charge removed" };
 }
-
-
 
 module.exports = {
   updateGereeAndNekhemjlekhFromZardluud,
   deleteInvoiceZardal,
   recalculateGereeBalance: async () => ({ success: true }),
-
 };

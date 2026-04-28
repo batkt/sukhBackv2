@@ -67,8 +67,6 @@ const orshinSuugchSchema = new Schema(
     soh: String, // Keep for backward compatibility
     orts: String, // Web only field, keep for backward compatibility
     tailbar: String,
-    ekhniiUldegdel: Number,
-    ekhniiUldegdelUsgeer: String,
     tsahilgaaniiZaalt: Number, // Initial electricity reading (кВт) - defaults to 200 if not provided
     odorZaalt: Number, // Latest Day reading for electricity
     shonoZaalt: Number, // Latest Night reading for electricity
