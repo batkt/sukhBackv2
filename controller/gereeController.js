@@ -64,17 +64,6 @@ exports.postLiftShalgaya = asyncHandler(async (req, res, next) => {
   res.json(result);
 });
 
-  const doc = await Model.findById(req.params.id);
-  if (!doc) return res.status(404).json({ error: "Олдсонгүй" });
-
-  const NekhemjlekhiinTuukhModel = require("../models/nekhemjlekhiinTuukh")(kholbolt);
-
-  await NekhemjlekhiinTuukhModel.updateMany(
-    { "medeelel.guilgeenuud._id": doc._id },
-    { $pull: { "medeelel.guilgeenuud": { _id: doc._id } } },
-  );
-
-
 exports.zaaltOlnoorOruulya = asyncHandler(async (req, res, next) => {
   const { db } = require("zevbackv2");
   const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(req.body.baiguullagiinId);
