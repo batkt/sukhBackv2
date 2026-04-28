@@ -341,17 +341,7 @@ const gereeNeesNekhemjlekhUusgekh = async (
               await existingInvoice.save();
 
               // Trigger contract-wide balance recalculation to ensure consistency
-              const { recalcGlobalUldegdel } = require("../utils/recalcGlobalUldegdel");
               const baiguullagiinIdStr = String(tempData.baiguullagiinId);
-              await recalcGlobalUldegdel({
-                gereeId: tempData._id,
-                baiguullagiinId: baiguullagiinIdStr,
-                GereeModel: Geree(tukhainBaaziinKholbolt),
-                NekhemjlekhiinTuukhModel: nekhemjlekhiinTuukh(tukhainBaaziinKholbolt),
-                GereeniiTulukhAvlagaModel: require("../models/gereeniiTulukhAvlaga")(tukhainBaaziinKholbolt),
-                GereeniiTulsunAvlagaModel: require("../models/gereeniiTulsunAvlaga")(tukhainBaaziinKholbolt),
-              });
-
               return {
                 success: true,
                 nekhemjlekh: existingInvoice,
@@ -792,8 +782,8 @@ const gereeNeesNekhemjlekhUusgekh = async (
     let tulukhAvlagaEkhniiRecords = [];
     if (includeEkhniiUldegdel) {
       try {
-        const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
-        tulukhAvlagaEkhniiRecords = await GereeniiTulukhAvlaga(
+        const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+        tulukhAvlagaEkhniiRecords = await GuilgeeAvlaguud(
           tukhainBaaziinKholbolt,
         )
           .find({
@@ -837,7 +827,7 @@ const gereeNeesNekhemjlekhUusgekh = async (
     const zardluudTotal = sumZardalDun(finalZardluud);
 
     let ekhniiUldegdelFromOrshinSuugch = 0;
-    let ekhniiUldegdelTailbar = ""; // Store the description from gereeniiTulukhAvlaga
+    let ekhniiUldegdelTailbar = ""; // Store the description from GuilgeeAvlaguud
     let ekhniiUldegdelRecordId = null; // Store the ID for reference
 
     // Only fetch and include ekhniiUldegdel if the flag is true (checkbox checked)
@@ -859,7 +849,7 @@ const gereeNeesNekhemjlekhUusgekh = async (
         ekhniiUldegdelRecordId = firstRecord._id?.toString();
       }
 
-      // Fallback to orshinSuugch.ekhniiUldegdel if no gereeniiTulukhAvlaga records found
+      // Fallback to orshinSuugch.ekhniiUldegdel if no GuilgeeAvlaguud records found
       if (ekhniiUldegdelFromOrshinSuugch === 0 && tempData.orshinSuugchId) {
         try {
           const orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt)
@@ -1332,7 +1322,7 @@ const gereeNeesNekhemjlekhUusgekh = async (
         nuatNemekhEsekh: false,
         nuatBodokhEsekh: false,
         isEkhniiUldegdel: true, // Flag to identify this row
-        tailbar: ekhniiUldegdelTailbar || "", // Include the description from gereeniiTulukhAvlaga
+        tailbar: ekhniiUldegdelTailbar || "", // Include the description from GuilgeeAvlaguud
       });
     }
 
@@ -1520,28 +1510,8 @@ const gereeNeesNekhemjlekhUusgekh = async (
       // Error updating geree nekhemjlekhiinOgnoo - silently continue
     }
 
-    // 2) Full recalculation so globalUldegdel & positiveBalance always match the ledger.
-    //    This replaces the old $inc approach which could leave them out of sync.
-    try {
-      const { recalcGlobalUldegdel } = require("../utils/recalcGlobalUldegdel");
-      const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
-      const GereeniiTulsunAvlaga = require("../models/gereeniiTulsunAvlaga");
-      const baiguullagiinIdStr = org._id
-        ? org._id.toString()
-        : org.id
-          ? org.id.toString()
-          : String(tempData.baiguullagiinId || "");
-      await recalcGlobalUldegdel({
-        gereeId: tempData._id.toString(),
-        baiguullagiinId: baiguullagiinIdStr,
-        GereeModel: Geree(tukhainBaaziinKholbolt),
-        NekhemjlekhiinTuukhModel: nekhemjlekhiinTuukh(tukhainBaaziinKholbolt),
-        GereeniiTulukhAvlagaModel: GereeniiTulukhAvlaga(tukhainBaaziinKholbolt),
-        GereeniiTulsunAvlagaModel: GereeniiTulsunAvlaga(tukhainBaaziinKholbolt),
-      });
-    } catch (recalcErr) {
-      console.error("⚠️ [INVOICE] recalcGlobalUldegdel after invoice create failed:", recalcErr.message);
-    }
+    // Recalculation logic removed as per request.
+
 
     // TEMPORARILY DISABLED: Send SMS to orshinSuugch when invoice is created
     // try {

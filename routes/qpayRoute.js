@@ -1061,7 +1061,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
         }
 
         const nekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
-        const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
+        const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
         const invoiceIds = req.body.nekhemjlekhiinTuukh;
 
         // Fetch all invoices
@@ -1103,7 +1103,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
                 59,
                 999,
               );
-              const avlagaRows = await GereeniiTulukhAvlaga(
+              const avlagaRows = await GuilgeeAvlaguud(
                 req.body.tukhainBaaziinKholbolt,
               )
                 .find({
@@ -1168,7 +1168,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
         if (!req.body.dun && req.body.tukhainBaaziinKholbolt) {
           try {
             const nekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
-            const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
+            const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
             const nekhemjlekh = await nekhemjlekhiinTuukh(
               req.body.tukhainBaaziinKholbolt,
             )
@@ -1198,7 +1198,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
                 59,
                 999,
               );
-              const avlagaRows = await GereeniiTulukhAvlaga(
+              const avlagaRows = await GuilgeeAvlaguud(
                 req.body.tukhainBaaziinKholbolt,
               )
                 .find({
@@ -2088,8 +2088,8 @@ router.get(
 
       // Create gereeniiTulsunAvlaga record to register QPay payment
       try {
-        const GereeniiTulsunAvlaga = require("../models/gereeniiTulsunAvlaga");
-        const tulsunDoc = new GereeniiTulsunAvlaga(kholbolt)({
+        const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+        const tulsunDoc = new GuilgeeAvlaguud(kholbolt)({
           baiguullagiinId: String(nekhemjlekh.baiguullagiinId),
           baiguullagiinNer: nekhemjlekh.baiguullagiinNer || "",
           barilgiinId: nekhemjlekh.barilgiinId || "",
@@ -2119,9 +2119,9 @@ router.get(
 
       // Update gereeniiTulukhAvlaga uldegdel (reduce outstanding balance)
       try {
-        const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
+        const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
         let remainingForGeree = paidAmount;
-        const openTulukhRows = await GereeniiTulukhAvlaga(kholbolt)
+        const openTulukhRows = await GuilgeeAvlaguud(kholbolt)
           .find({
             gereeniiId: String(nekhemjlekh.gereeniiId),
             baiguullagiinId: String(baiguullagiinId),
@@ -2136,7 +2136,7 @@ router.get(
           if (rowUldegdel <= 0) continue;
           const applyHere = Math.min(remainingForGeree, rowUldegdel);
           const newRowUldegdel = rowUldegdel - applyHere;
-          await GereeniiTulukhAvlaga(kholbolt).updateOne(
+          await GuilgeeAvlaguud(kholbolt).updateOne(
             { _id: row._id },
             { $set: { uldegdel: newRowUldegdel } },
           );
@@ -2149,30 +2149,8 @@ router.get(
         );
       }
 
-      // Recalculate globalUldegdel using shared utility
-      const {
-        recalcGlobalUldegdel: recalcSingle,
-      } = require("../utils/recalcGlobalUldegdel");
-      const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
-      const GereeniiTulsunAvlagaRecalcSingle = require("../models/gereeniiTulsunAvlaga");
-      try {
-        const updatedGeree = await recalcSingle({
-          gereeId: nekhemjlekh.gereeniiId,
-          baiguullagiinId,
-          GereeModel: Geree(kholbolt),
-          NekhemjlekhiinTuukhModel: nekhemjlekhiinTuukh(kholbolt),
-          GereeniiTulukhAvlagaModel: GereeniiTulukhAvlaga(kholbolt),
-          GereeniiTulsunAvlagaModel: GereeniiTulsunAvlagaRecalcSingle(kholbolt),
-        });
+      // Recalculation logic removed as per request.
 
-        // NOTE: Do not overwrite the latest invoice's uldegdel with contract-wide globalUldegdel.
-        // That would make the newest month show accumulated debt from previous months.
-      } catch (recalcErr) {
-        console.error(
-          "❌ [QPAY CALLBACK] Error recalculating globalUldegdel:",
-          recalcErr.message,
-        );
-      }
 
       try {
         const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(
@@ -2729,9 +2707,9 @@ router.get(
 
           // Create gereeniiTulsunAvlaga record to register QPay payment
           try {
-            const GereeniiTulsunAvlaga = require("../models/gereeniiTulsunAvlaga");
+            const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
             const multiPaidAmt = nekhemjlekh.niitTulbur || 0;
-            const tulsunDoc = new GereeniiTulsunAvlaga(kholbolt)({
+            const tulsunDoc = new GuilgeeAvlaguud(kholbolt)({
               baiguullagiinId: String(nekhemjlekh.baiguullagiinId),
               baiguullagiinNer: nekhemjlekh.baiguullagiinNer || "",
               barilgiinId: nekhemjlekh.barilgiinId || "",
@@ -2761,10 +2739,10 @@ router.get(
 
           // Update gereeniiTulukhAvlaga uldegdel
           try {
-            const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
+            const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
             const multiPaidAmt2 = nekhemjlekh.niitTulbur || 0;
             let remainingForGeree = multiPaidAmt2;
-            const openTulukhRows = await GereeniiTulukhAvlaga(kholbolt)
+            const openTulukhRows = await GuilgeeAvlaguud(kholbolt)
               .find({
                 gereeniiId: String(nekhemjlekh.gereeniiId),
                 baiguullagiinId: String(baiguullagiinId),
@@ -2779,7 +2757,7 @@ router.get(
               if (rowUldegdel <= 0) continue;
               const applyHere = Math.min(remainingForGeree, rowUldegdel);
               const newRowUldegdel = rowUldegdel - applyHere;
-              await GereeniiTulukhAvlaga(kholbolt).updateOne(
+              await GuilgeeAvlaguud(kholbolt).updateOne(
                 { _id: row._id },
                 { $set: { uldegdel: newRowUldegdel } },
               );
@@ -2794,19 +2772,17 @@ router.get(
 
           // Recalculate globalUldegdel using shared utility
           const {
-            recalcGlobalUldegdel: recalcMulti,
-          } = require("../utils/recalcGlobalUldegdel");
-          const GereeniiTulukhAvlagaRecalc = require("../models/gereeniiTulukhAvlaga");
-          const GereeniiTulsunAvlagaRecalcMulti = require("../models/gereeniiTulsunAvlaga");
+          const GuilgeeAvlaguudRecalc = require("../models/guilgeeAvlaguud");
+          const GuilgeeAvlaguudRecalcMulti = require("../models/guilgeeAvlaguud");
           try {
             const updatedGereeMulti = await recalcMulti({
               gereeId: nekhemjlekh.gereeniiId,
               baiguullagiinId,
               GereeModel: Geree(kholbolt),
               NekhemjlekhiinTuukhModel: nekhemjlekhiinTuukh(kholbolt),
-              GereeniiTulukhAvlagaModel: GereeniiTulukhAvlagaRecalc(kholbolt),
-              GereeniiTulsunAvlagaModel:
-                GereeniiTulsunAvlagaRecalcMulti(kholbolt),
+              GuilgeeAvlaguudModel: GuilgeeAvlaguudRecalc(kholbolt),
+              GuilgeeAvlaguudModel:
+                GuilgeeAvlaguudRecalcMulti(kholbolt),
             });
 
             // NOTE: Do not overwrite the latest invoice's uldegdel with contract-wide globalUldegdel.

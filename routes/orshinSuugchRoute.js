@@ -754,16 +754,6 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
 
           // 1. Update Contracts (Geree)
           if (Object.keys(syncData).length > 0) {
-            // Find active contracts first if we need to do subsequent processing (like recalc)
-            let affectedGereeIds = [];
-            if (syncData.ekhniiUldegdel !== undefined) {
-               const gerees = await GereeModel.find({
-                  orshinSuugchId: result._id.toString(),
-                  tuluv: "Идэвхтэй",
-               }).select("_id");
-               affectedGereeIds = gerees.map(g => g._id);
-            }
-
             await GereeModel.updateMany(
               {
                 orshinSuugchId: result._id.toString(),
@@ -771,98 +761,8 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
               },
               { $set: syncData },
             );
-
-            // If ekhniiUldegdel was updated, trigger recalculation of globalUldegdel for all affected contracts
-            if (syncData.ekhniiUldegdel !== undefined && affectedGereeIds.length > 0) {
-              try {
-                const { recalcGlobalUldegdel } = require("../utils/recalcGlobalUldegdel");
-                const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
-                const GereeniiTulsunAvlaga = require("../models/gereeniiTulsunAvlaga");
-                
-                const TulukhModel = GereeniiTulukhAvlaga(tukhainBaaziinKholbolt);
-                const TulsunModel = GereeniiTulsunAvlaga(tukhainBaaziinKholbolt);
-                const targetEkhnii = Number(syncData.ekhniiUldegdel) || 0;
-
-                // Keep contract-level opening receivable rows in sync with edited value.
-                for (const gId of affectedGereeIds) {
-                  const rows = await TulukhModel.find({
-                    gereeniiId: String(gId),
-                    baiguullagiinId: String(orgId),
-                    $or: [
-                      { ekhniiUldegdelEsekh: true },
-                      { zardliinNer: "Эхний үлдэгдэл" },
-                      { tailbar: /эхний\s*үлдэгдэл/i },
-                    ],
-                  })
-                    .sort({ createdAt: -1 })
-                    .lean();
-
-                  const currentTotal = rows.reduce(
-                    (sum, r) => sum + (Number(r.undsenDun) || 0),
-                    0,
-                  );
-                  const delta = Math.round((targetEkhnii - currentTotal) * 100) / 100;
-
-                  if (Math.abs(delta) > 0.01) {
-                    if (rows.length > 0) {
-                      // Reuse the latest opening-balance row (including legacy name-based rows)
-                      // so orshinSuugch edits do not create duplicate "Эхний үлдэгдэл" entries.
-                      await TulukhModel.updateOne(
-                        { _id: rows[0]._id },
-                        {
-                          $set: {
-                            ekhniiUldegdelEsekh: true,
-                            zardliinNer: "Эхний үлдэгдэл",
-                          },
-                          $inc: {
-                            undsenDun: delta,
-                            tulukhDun: delta,
-                            uldegdel: delta,
-                          },
-                        },
-                      );
-                    } else if (delta > 0) {
-                      const gereeDoc = await GereeModel.findById(gId).lean();
-                      await TulukhModel.create({
-                        baiguullagiinId: String(orgId),
-                        baiguullagiinNer: gereeDoc?.baiguullagiinNer || "",
-                        barilgiinId: gereeDoc?.barilgiinId || "",
-                        gereeniiId: String(gId),
-                        gereeniiDugaar: gereeDoc?.gereeniiDugaar || "",
-                        orshinSuugchId: gereeDoc?.orshinSuugchId || result._id?.toString(),
-                        ognoo: new Date(),
-                        undsenDun: delta,
-                        tulukhDun: delta,
-                        uldegdel: delta,
-                        turul: "avlaga",
-                        zardliinNer: "Эхний үлдэгдэл",
-                        ekhniiUldegdelEsekh: true,
-                        source: "gar",
-                        tailbar: "Оршин суугчийн засвараар синк",
-                        guilgeeKhiisenAjiltniiNer:
-                          req.body?.nevtersenAjiltniiToken?.ner || "System",
-                        guilgeeKhiisenAjiltniiId:
-                          req.body?.nevtersenAjiltniiToken?.id || null,
-                      });
-                    }
-                  }
-                }
-
-                for (const gId of affectedGereeIds) {
-                  await recalcGlobalUldegdel({
-                    gereeId: gId,
-                    baiguullagiinId: orgId,
-                    GereeModel: GereeModel,
-                    NekhemjlekhiinTuukhModel: NekhemjlekhModel,
-                    GereeniiTulukhAvlagaModel: TulukhModel,
-                    GereeniiTulsunAvlagaModel: TulsunModel,
-                  });
-                }
-              } catch (recalcErr) {
-                console.error("❌ [RECALC] Error during orshinSuugch sync:", recalcErr.message);
-              }
-            }
           }
+
 
           // 2. Update Invoices (nekhemjlekhiinTuukh) - update all associated records for consistency
           if (Object.keys(invoiceUpdateData).length > 0) {

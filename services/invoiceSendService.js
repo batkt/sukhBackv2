@@ -449,24 +449,8 @@ const manualSendInvoice = async (
         // Trigger a full balance recalculation so geree.globalUldegdel stays in sync
         try {
           const {
-            recalcGlobalUldegdel,
-          } = require("../utils/recalcGlobalUldegdel");
-          const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
-          const GereeniiTulsunAvlaga = require("../models/gereeniiTulsunAvlaga");
-          await recalcGlobalUldegdel({
-            gereeId: String(gereeId),
-            baiguullagiinId: String(baiguullagiinId),
-            GereeModel: Geree(tukhainBaaziinKholbolt),
-            NekhemjlekhiinTuukhModel: nekhemjlekhiinTuukh(
-              tukhainBaaziinKholbolt,
-            ),
-            GereeniiTulukhAvlagaModel: GereeniiTulukhAvlaga(
-              tukhainBaaziinKholbolt,
-            ),
-            GereeniiTulsunAvlagaModel: GereeniiTulsunAvlaga(
-              tukhainBaaziinKholbolt,
-            ),
-          });
+          const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+
         } catch (_recalcErr) {
           // Recalc failed — invoice itself was already saved correctly
         }

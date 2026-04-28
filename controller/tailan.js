@@ -298,8 +298,8 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
     }
 
     const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
-    const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
-    const GereeniiTulsunAvlaga = require("../models/gereeniiTulsunAvlaga");
+    const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+
     const Geree = require("../models/geree");
 
     // Build common filters for Geree metadata
@@ -403,8 +403,8 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
 
     const [invoices, standaloneTulukh, standaloneTulsun] = await Promise.all([
       NekhemjlekhiinTuukh(kholbolt).find(invoiceMatch).lean().sort({ ognoo: -1 }),
-      GereeniiTulukhAvlaga(kholbolt).find(tulukhMatch).lean(),
-      GereeniiTulsunAvlaga(kholbolt).find(tulsunMatch).lean(),
+      GuilgeeAvlaguud(kholbolt).find(tulukhMatch).lean(),
+      GuilgeeAvlaguud(kholbolt).find(tulsunMatch).lean(),
     ]);
 
     // Gather all gereeIds from standalone records to fetch their metadata if metadata filters are used
@@ -882,8 +882,8 @@ exports.tailanNekhemjlekhiinTuukh = asyncHandler(async (req, res, next) => {
     }
 
     const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
-    const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
-    const GereeniiTulsunAvlaga = require("../models/gereeniiTulsunAvlaga");
+    const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+
     const Geree = require("../models/geree");
 
     // 1. Build Metadata Match
@@ -973,8 +973,8 @@ exports.tailanNekhemjlekhiinTuukh = asyncHandler(async (req, res, next) => {
     // but for "Tuukh" users expect to see everything.
     const [invoices, standaloneTulukh, standaloneTulsun] = await Promise.all([
       NekhemjlekhiinTuukh(kholbolt).find(invoiceMatch).lean().sort({ ognoo: -1 }),
-      GereeniiTulukhAvlaga(kholbolt).find(tulukhMatch).lean().sort({ ognoo: -1 }),
-      GereeniiTulsunAvlaga(kholbolt).find(tulsunMatch).lean().sort({ ognoo: -1 }),
+      GuilgeeAvlaguud(kholbolt).find(tulukhMatch).lean().sort({ ognoo: -1 }),
+      GuilgeeAvlaguud(kholbolt).find(tulsunMatch).lean().sort({ ognoo: -1 }),
     ]);
 
     // Merge and format
@@ -1191,7 +1191,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
     }
 
     const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
-    const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
+    const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
     const Geree = require("../models/geree");
 
     const parseDate = (dateStr) => {
@@ -1258,225 +1258,13 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
 
     // ─── Use getHistoryLedger per contract for 100% accurate balances ─────────
     // This matches the guilgeeTuukh (Ledger) page exactly.
-    const { getHistoryLedger } = require("../services/historyLedgerService");
-    const GereeniiTulukhAvlagaModel2 = require("../models/gereeniiTulukhAvlaga");
-    const GereeniiTulsunAvlagaModel2 = require("../models/gereeniiTulsunAvlaga");
+    // Ledger logic removed as per request.
+    const GuilgeeAvlaguudModel2 = require("../models/guilgeeAvlaguud");
 
-    // Collect all geree IDs from active contracts in this building
-    const gereeQuery = { baiguullagiinId: String(baiguullagiinId) };
-    if (barilgiinId) gereeQuery.barilgiinId = String(barilgiinId);
-    
-    const allContractsList = await Geree(kholbolt).find(gereeQuery).lean();
-    const gereeContracts = allContractsList.filter(c => {
-      const st = String(c.tuluv || c.status || "").toLowerCase();
-      return st !== "цуцалсан" && st !== "tsutlsasan";
-    });
 
-    const allGereeIds = gereeContracts.map(c => String(c._id));
-
-    const contractMap = {};
-    gereeContracts.forEach((c) => (contractMap[String(c._id)] = c));
-
-    const refDate = duusakhOgnoo
-      ? parseDate(duusakhOgnoo) || new Date()
-      : new Date();
-    refDate.setHours(23, 59, 59, 999);
-
-    console.log(`[tailanAvlagiinNasjilt] refDate: ${refDate.toISOString()}, total contracts: ${allGereeIds.length}`);
-
-    const residentMap = {};
-
-    // Process each contract using the same ledger service as guilgee tuukh
-    await Promise.all(
-      allGereeIds.map(async (gid) => {
-        const meta = contractMap[gid];
-        if (!meta) return;
-
-        // Apply search/filter
-        if (search || orshinSuugch || toot || davkhar || gereeniiDugaar) {
-          if (search) {
-            const re = new RegExp(escapeRegex(String(search).trim()), "i");
-            if (!re.test(meta.ner) && !re.test(meta.ovog) && !re.test(meta.toot) && !re.test(meta.gereeniiDugaar)) return;
-          }
-          if (orshinSuugch) {
-            const rn = new RegExp(escapeRegex(String(orshinSuugch).trim()), "i");
-            if (!rn.test(meta.ner) && !rn.test(meta.ovog)) return;
-          }
-          if (toot) {
-            const rt = new RegExp(escapeRegex(String(toot).trim()), "i");
-            if (!rt.test(String(meta.toot || "")) && !rt.test(String(meta.medeelel?.toot || ""))) return;
-          }
-          if (davkhar) {
-            const rd = new RegExp(escapeRegex(String(davkhar).trim()), "i");
-            if (!rd.test(String(meta.davkhar || ""))) return;
-          }
-          if (gereeniiDugaar) {
-            const rg = new RegExp(escapeRegex(String(gereeniiDugaar).trim()), "i");
-            if (!rg.test(String(meta.gereeniiDugaar || ""))) return;
-          }
-        }
-
-        let ledgerResult;
-        try {
-          ledgerResult = await getHistoryLedger({
-            gereeniiId: gid,
-            baiguullagiinId: String(baiguullagiinId),
-            barilgiinId: barilgiinId ? String(barilgiinId) : undefined,
-          });
-        } catch (e) {
-          console.error(`[Aging] getHistoryLedger failed for ${gid}:`, e.message);
-          return;
-        }
-
-        const { jagsaalt } = ledgerResult;
-        if (!jagsaalt || jagsaalt.length === 0) return;
-
-        // Filter rows up to refDate for point-in-time snapshot
-        const rowsUntilDate = jagsaalt.filter((row) => {
-          const rowDate = row.ognoo ? new Date(row.ognoo) : null;
-          return rowDate && rowDate.getTime() <= refDate.getTime();
-        });
-
-        if (rowsUntilDate.length === 0) return;
-
-        // Compute CUMULATIVE totals from ALL ledger rows up to refDate
-        // Нийт = total charges, Төлсөн = total payments (not filtered by ekhlekhOgnoo)
-        let undsenDun = 0, tulsunDun = 0;
-        let p0_30 = 0, p31_60 = 0, p61_90 = 0, p120plus = 0;
-
-        rowsUntilDate.forEach((row) => {
-          undsenDun += Number(row.tulukhDun || 0);
-          tulsunDun += Number(row.tulsunDun || 0);
-
-          const netVal = (Number(row.tulukhDun) || 0) - (Number(row.tulsunDun) || 0);
-          if (Math.abs(netVal) < 0.01) return;
-
-          // For aging, use agingDate (pinned to invoice if linked)
-          const ad = row.agingDate ? new Date(row.agingDate) : new Date(row.ognoo);
-          const days = Math.max(0, Math.floor((refDate.getTime() - ad.getTime()) / (1000 * 60 * 60 * 24)));
-
-          if (days <= 30) p0_30 += netVal;
-          else if (days <= 60) p31_60 += netVal;
-          else if (days <= 90) p61_90 += netVal;
-          else p120plus += netVal;
-        });
-
-        undsenDun = Math.round(undsenDun * 100) / 100;
-        tulsunDun = Math.round(tulsunDun * 100) / 100;
-
-        const uldegdel = Math.round((undsenDun - tulsunDun) * 100) / 100;
-        if (Math.abs(uldegdel) < 0.01) return;
-
-        // Oldest charge row for maxDays display (optional metadata)
-        let maxDays = 0;
-        const chargeRows = rowsUntilDate.filter((r) => (r.tulukhDun || 0) > 0);
-        for (const row of chargeRows) {
-          const diffDays = Math.floor((refDate.getTime() - new Date(row.ognoo).getTime()) / (1000 * 60 * 60 * 24));
-          if (diffDays > maxDays) maxDays = diffDays;
-        }
-
-        // Build proper name: combine ovog+ner correctly
-        const fullNer = [meta.ovog || "", meta.ner || ""].filter(Boolean).join(" ");
-
-        residentMap[gid] = {
-          _id: gid,
-          gereeniiDugaar: meta.gereeniiDugaar || "",
-          ner: fullNer,
-          ovog: meta.ovog || "",
-          utas: meta.utas || [],
-          toot: meta.toot || meta.medeelel?.toot || "",
-          register: meta.register || meta.rd || "",
-          davkhar: meta.davkhar || "",
-          undsenDun,
-          khungulult: 0,
-          tulsunDun,
-          uldegdel,
-          p0_30: Math.round(p0_30 * 100) / 100,
-          p31_60: Math.round(p31_60 * 100) / 100,
-          p61_90: Math.round(p61_90 * 100) / 100,
-          p120plus: Math.round(p120plus * 100) / 100,
-          maxDays,
-        };
-      })
-    );
-
-    const detailedData = Object.values(residentMap).filter(
-      (r) => Math.abs(r.uldegdel) > 0.01
-    );
-
-    const computeAgeBucket = (days) => {
-      if (days <= 30) return "0-30";
-      if (days <= 60) return "31-60";
-      if (days <= 90) return "61-90";
-      return "120+";
-    };
-
-    detailedData.forEach((r) => {
-      const days = Number(r.maxDays || 0);
-      r.ageBucket = computeAgeBucket(days);
-      r.daysOverdue = days;
-    });
-
-    const ageBuckets = {
-      p0_30: 0,
-      p31_60: 0,
-      p61_90: 0,
-      p120plus: 0,
-    };
-    const ageCounts = {
-      p0_30: 0,
-      p31_60: 0,
-      p61_90: 0,
-      p120plus: 0,
-    };
-
-    detailedData.forEach((r) => {
-      if (r.p0_30 > 0) {
-        ageBuckets.p0_30 += r.p0_30;
-        ageCounts.p0_30++;
-      }
-      if (r.p31_60 > 0) {
-        ageBuckets.p31_60 += r.p31_60;
-        ageCounts.p31_60++;
-      }
-      if (r.p61_90 > 0) {
-        ageBuckets.p61_90 += r.p61_90;
-        ageCounts.p61_90++;
-      }
-      if (r.p120plus > 0) {
-        ageBuckets.p120plus += r.p120plus;
-        ageCounts.p120plus++;
-      }
-    });
-
-    const totalSum = detailedData.reduce((s, r) => s + r.uldegdel, 0);
-    const totalCount = detailedData.length;
-
-    const summaryBuckets = Object.keys(ageBuckets).map((key) => ({
-      ageRange: key,
-      total: ageBuckets[key],
-      count: ageCounts[key],
-      percentage:
-        totalSum > 0 ? ((ageBuckets[key] / totalSum) * 100).toFixed(2) : 0,
-    }));
-
-    detailedData.sort((a, b) => b.maxDays - a.maxDays);
-    const skip = (Number(khuudasniiDugaar) - 1) * Number(khuudasniiKhemjee);
-    const paginatedList = detailedData.slice(
-      skip,
-      skip + Number(khuudasniiKhemjee)
-    );
-
-    res.json({
-      success: true,
-      summary: { total: totalSum, count: totalCount, ageBuckets: summaryBuckets },
-      detailed: {
-        khuudasniiDugaar: Number(khuudasniiDugaar),
-        khuudasniiKhemjee: Number(khuudasniiKhemjee),
-        niitMur: detailedData.length,
-        niitKhuudas: Math.ceil(detailedData.length / Number(khuudasniiKhemjee)),
-        list: paginatedList,
-      },
+    res.status(501).json({
+      success: false,
+      message: "Aging report is temporarily disabled during refactoring.",
     });
   } catch (error) {
     next(error);
@@ -2809,8 +2597,8 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       };
     }
 
-    const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
-    const GereeniiTulsunAvlaga = require("../models/gereeniiTulsunAvlaga");
+    const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+
     const Geree = require("../models/geree");
 
     // Standalone Receivables (e.g. initial balances)
@@ -2831,8 +2619,8 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
 
     const [invoices, standaloneReceivables, standalonePayments] = await Promise.all([
       NekhemjlekhiinTuukh(kholbolt).find(query).lean(),
-      GereeniiTulukhAvlaga(kholbolt).find(standaloneMatch).lean(),
-      GereeniiTulsunAvlaga(kholbolt).find(standalonePaidMatch).lean(),
+      GuilgeeAvlaguud(kholbolt).find(standaloneMatch).lean(),
+      GuilgeeAvlaguud(kholbolt).find(standalonePaidMatch).lean(),
     ]);
 
     // Fetch ALL active contracts regardless of activity to accurately reflect the total building balance matching the Tulbur page

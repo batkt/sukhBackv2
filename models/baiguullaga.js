@@ -88,41 +88,7 @@ const baiguullagaSchema = new Schema(
             davtamjUtga: Number,
             orshinSuugchMashiniiLimit: Number
           },
-          /** Ашиглалтын зардлууд - барилга тус бүрт тусдаа */
-          ashiglaltiinZardluud: [
-            {
-              ner: String,
-              turul: String,
-              bodokhArga: String,
-              tseverUsDun: Number,
-              bokhirUsDun: Number,
-              usKhalaasniiDun: Number,
-              tsakhilgaanUrjver: Number,
-              tsakhilgaanChadal: Number,
-              tsakhilgaanDemjikh: Number,
-              tailbar: String,
-              tariff: Number,
-              tariffUsgeer: String,
-              suuriKhuraamj: Number,
-              nuatNemekhEsekh: Boolean,
-              togtmolUtga: Number,
-              choloolugdsonDavkhar: Boolean,
-              zardliinTurul: String,
-              dun: Number,
-              ognoonuud: [Date],
-              nuatBodokhEsekh: Boolean,
-              zaalt: Boolean, // Electricity (цахилгаан) flag
-              zaaltTariff: Number, // кВт tariff for electricity (legacy - use zaaltTariffTiers if available)
-              zaaltDefaultDun: Number, // Default amount for electricity calculation
-              // Tiered pricing: zaaltTariffTiers = [{ threshold: 175, tariff: 175 }, { threshold: 256, tariff: 256 }, { threshold: Infinity, tariff: 285 }]
-              zaaltTariffTiers: [
-                {
-                  threshold: Number, // Usage threshold (кВт)
-                  tariff: Number, // Tariff rate for this tier (Төг/кВт.цаг)
-                },
-              ],
-            },
-          ],
+
           /** Лифт шалгая - хөлөгдсөн давхрууд */
           liftShalgaya: {
             choloolugdokhDavkhar: [String],
@@ -249,155 +215,7 @@ const baiguullagaSchema = new Schema(
 baiguullagaSchema.index({ register: 1 });
 baiguullagaSchema.index({ id: 1 });
 
-// Shared function to update geree.zardluud when baiguullaga.barilguud[].tokhirgoo.ashiglaltiinZardluud changes
-async function updateGereeFromBaiguullagaZardluud(doc) {
-  try {
-    if (!doc || !doc.barilguud || !Array.isArray(doc.barilguud)) {
-      return;
-    }
 
-    const { db } = require("zevbackv2");
-    const Geree = require("./geree");
-
-    const kholbolt = db.kholboltuud.find(
-      (a) => String(a.baiguullagiinId) === String(doc._id)
-    );
-
-    if (!kholbolt) {
-      return;
-    }
-
-    // Process each barilga's ashiglaltiinZardluud
-    for (const barilga of doc.barilguud) {
-      if (
-        !barilga._id ||
-        !barilga.tokhirgoo ||
-        !barilga.tokhirgoo.ashiglaltiinZardluud ||
-        !Array.isArray(barilga.tokhirgoo.ashiglaltiinZardluud)
-      ) {
-        continue;
-      }
-
-      const barilgiinId = barilga._id.toString();
-      const ashiglaltiinZardluud = barilga.tokhirgoo.ashiglaltiinZardluud;
-
-      // Find all active geree documents for this baiguullaga and barilga
-      const gereenuud = await Geree(kholbolt, true).find({
-        baiguullagiinId: doc._id.toString(),
-        barilgiinId: barilgiinId,
-        tuluv: "Идэвхтэй", // Only update active contracts
-      });
-      
-      for (const geree of gereenuud) {
-        if (!geree.zardluud) {
-          geree.zardluud = [];
-        }
-
-        // Get current zardluud from building config
-        const buildingZardluudMap = new Map();
-        for (const zardal of ashiglaltiinZardluud) {
-          const key = `${zardal.ner || ""}_${zardal.turul || ""}_${zardal.zardliinTurul || ""}`;
-          buildingZardluudMap.set(key, zardal);
-        }
-
-        // Remove zardluud that no longer exist in building config (matching by barilgiinId)
-        geree.zardluud = geree.zardluud.filter((z) => {
-          // Keep zardluud from other barilgas
-          if (z.barilgiinId && String(z.barilgiinId) !== barilgiinId) {
-            return true;
-          }
-          // Keep zardluud that don't have barilgiinId (backward compatibility)
-          if (!z.barilgiinId) {
-            // Only remove if it matches a building zardal (to avoid removing unrelated zardluud)
-            const key = `${z.ner || ""}_${z.turul || ""}_${z.zardliinTurul || ""}`;
-            return !buildingZardluudMap.has(key);
-          }
-          // For zardluud from this barilga, check if it still exists in building config
-          const key = `${z.ner || ""}_${z.turul || ""}_${z.zardliinTurul || ""}`;
-          return buildingZardluudMap.has(key);
-        });
-
-        // Update or add zardluud from building config
-        for (const buildingZardal of ashiglaltiinZardluud) {
-          const key = `${buildingZardal.ner || ""}_${buildingZardal.turul || ""}_${buildingZardal.zardliinTurul || ""}`;
-          
-          // Find existing zardal in geree
-          // Match by ner, turul, zardliinTurul
-          // For barilgiinId: if geree zardal doesn't have barilgiinId, it's from this building (backward compatibility)
-          // If geree zardal has barilgiinId, it must match this building's barilgiinId
-          const existingIndex = geree.zardluud.findIndex((z) => {
-            const matchesNer = z.ner === buildingZardal.ner;
-            const matchesTurul = z.turul === buildingZardal.turul;
-            const matchesZardliinTurul = z.zardliinTurul === buildingZardal.zardliinTurul;
-            
-            // For backward compatibility: if zardal doesn't have barilgiinId, assume it's from this building
-            // If zardal has barilgiinId, it must match this building's barilgiinId
-            const matchesBarilgiinId = !z.barilgiinId || String(z.barilgiinId) === barilgiinId;
-            
-            return matchesNer && matchesTurul && matchesZardliinTurul && matchesBarilgiinId;
-          });
-
-          const newZardal = {
-            ner: buildingZardal.ner,
-            turul: buildingZardal.turul,
-            tariff: buildingZardal.tariff,
-            tariffUsgeer: buildingZardal.tariffUsgeer,
-            zardliinTurul: buildingZardal.zardliinTurul,
-            barilgiinId: barilgiinId,
-            tulukhDun: 0,
-            dun: buildingZardal.dun || 0,
-            bodokhArga: buildingZardal.bodokhArga || "",
-            tseverUsDun: buildingZardal.tseverUsDun || 0,
-            bokhirUsDun: buildingZardal.bokhirUsDun || 0,
-            usKhalaasniiDun: buildingZardal.usKhalaasniiDun || 0,
-            tsakhilgaanUrjver: buildingZardal.tsakhilgaanUrjver || 1,
-            tsakhilgaanChadal: buildingZardal.tsakhilgaanChadal || 0,
-            tsakhilgaanDemjikh: buildingZardal.tsakhilgaanDemjikh || 0,
-            suuriKhuraamj: buildingZardal.suuriKhuraamj || 0,
-            nuatNemekhEsekh: buildingZardal.nuatNemekhEsekh || false,
-            ognoonuud: buildingZardal.ognoonuud || [],
-            zaalt: buildingZardal.zaalt || false,
-            zaaltTariff: buildingZardal.zaaltTariff || 0,
-            zaaltDefaultDun: buildingZardal.zaaltDefaultDun || 0,
-            zaaltTariffTiers: buildingZardal.zaaltTariffTiers || [],
-          };
-
-          if (existingIndex !== -1) {
-            // Update existing zardal
-            geree.zardluud[existingIndex] = {
-              ...geree.zardluud[existingIndex].toObject(),
-              ...newZardal,
-            };
-          } else {
-            // Add new zardal
-            geree.zardluud.push(newZardal);
-          }
-        }
-
-        // Recalculate niitTulbur
-        const niitTulbur = geree.zardluud.reduce((sum, zardal) => {
-          return sum + (zardal.tariff || 0);
-        }, 0);
-
-        const oldNiitTulbur = geree.niitTulbur;
-        geree.niitTulbur = niitTulbur;
-
-        // Save the updated geree
-        await geree.save();
-        // NOTE: Do NOT update existing nekhemjlekhiinTuukh (invoice) records
-        // Once an invoice is created, it should NEVER be modified
-        // This ensures historical accuracy - invoices represent what was billed at a specific point in time
-      }
-    }
-  } catch (error) {
-    console.error(
-      "Error updating geree.zardluud after baiguullaga.ashiglaltiinZardluud update:",
-      error
-    );
-  }
-}
-
-// Pre-save hook to validate that toots are unique across all davkhars
  baiguullagaSchema.pre("save", function (next) {
   try {
     const error = validateDavkhariinToonuud(this.barilguud);
@@ -427,16 +245,14 @@ baiguullagaSchema.post("save", async function (doc) {
     console.error(`❌ [VALIDATION POST-SAVE] Error stack:`, err.stack);
   }
   
-  await updateGereeFromBaiguullagaZardluud(doc);
+
 });
 
-// Helper function to validate davkhariinToonuud for duplicate toots
 function validateDavkhariinToonuud(barilguud) {
   if (!barilguud || !Array.isArray(barilguud)) {
     return null; // No error
   }
 
-  // Check each building's davkhariinToonuud for duplicate toots across davkhars
   for (let barilgaIndex = 0; barilgaIndex < barilguud.length; barilgaIndex++) {
     const barilga = barilguud[barilgaIndex];
     if (!barilga.tokhirgoo || !barilga.tokhirgoo.davkhariinToonuud) {
@@ -444,29 +260,26 @@ function validateDavkhariinToonuud(barilguud) {
     }
 
     const davkhariinToonuud = barilga.tokhirgoo.davkhariinToonuud;
-    const tootMap = new Map(); // Map<toot, davkhar>
+    const tootMap = new Map(); 
     for (const [floorKey, tootArray] of Object.entries(davkhariinToonuud)) {
       if (!tootArray || !Array.isArray(tootArray)) {
         continue;
       }
 
-      // Extract davkhar from floorKey
       let davkhar = "";
       if (floorKey.includes("::")) {
         const parts = floorKey.split("::");
-        davkhar = parts[1] || parts[0]; // davkhar is the second part (e.g., "1::4" -> "4")
+        davkhar = parts[1] || parts[0];
       } else {
-        davkhar = floorKey; // If no ::, the key itself is davkhar (e.g., "1" -> "1")
+        davkhar = floorKey;
       }
 
-      // Parse toot list from array (can be comma-separated string or array)
       let tootList = [];
       if (typeof tootArray[0] === "string" && tootArray[0].includes(",")) {
         tootList = tootArray[0].split(",").map((t) => t.trim()).filter((t) => t);
       } else {
         tootList = tootArray.map((t) => String(t).trim()).filter((t) => t);
       }
-      // Check each toot for duplicates across davkhars
       for (const toot of tootList) {
         if (tootMap.has(toot)) {
           const existingDavkhar = tootMap.get(toot);
@@ -484,12 +297,8 @@ function validateDavkhariinToonuud(barilguud) {
   return null; // No error
 }
 
-// Pre-updateOne hook (for updateOne operations)
-// Only validate if entire barilguud array is being updated (not nested path updates)
 baiguullagaSchema.pre("updateOne", function (next) {
   try {
-    // Only validate if barilguud is directly in _update (full array update)
-    // Skip validation for nested path updates like "barilguud.0.tokhirgoo.davkhariinToonuud"
     if (this._update && this._update.barilguud && !this._update.$set) {
       const error = validateDavkhariinToonuud(this._update.barilguud);
       if (error) {
@@ -503,21 +312,16 @@ baiguullagaSchema.pre("updateOne", function (next) {
   }
 });
 
-// Pre-findOneAndUpdate hook (for findOneAndUpdate operations)
-// Validate both full array updates AND nested path updates that modify davkhariinToonuud
 baiguullagaSchema.pre("findOneAndUpdate", async function (next) {
   try {
     let barilguudToValidate = null;
     
-    // Case 1: Direct barilguud update (PUT with full object, Mongoose sets it directly)
     if (this._update && this._update.barilguud && !this._update.$set) {
       barilguudToValidate = this._update.barilguud;
     }
-    // Case 2: barilguud in $set (PUT with full object wrapped in $set)
     else if (this._update && this._update.$set && this._update.$set.barilguud) {
       barilguudToValidate = this._update.$set.barilguud;
     }
-    // Case 3: Nested davkhariinToonuud update via $set (partial update)
     else if (this._update && this._update.$set) {
       const setKeys = Object.keys(this._update.$set);
       const isDavkhariinToonuudUpdate = setKeys.some(key => 
@@ -567,22 +371,7 @@ baiguullagaSchema.pre("findOneAndUpdate", async function (next) {
   }
 });
 
-baiguullagaSchema.post("findOneAndUpdate", async function (doc) {
-  if (doc) {
-    await updateGereeFromBaiguullagaZardluud(doc);
-  }
-});
 
-baiguullagaSchema.post("updateOne", async function () {
-  try {
-    const doc = await this.model.findOne(this.getQuery());
-    if (doc) {
-      await updateGereeFromBaiguullagaZardluud(doc);
-    }
-  } catch (error) {
-    console.error("Error in updateOne hook:", error);
-  }
-});
 
 // Add audit hooks for tracking changes (including tokhirgoo) - after all hooks
 const { addAuditHooks } = require("../utils/auditHooks");

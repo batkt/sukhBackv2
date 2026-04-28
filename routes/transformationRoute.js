@@ -17,8 +17,8 @@ const UilchilgeeniiZardluud = require("../models/uilchilgeeniiZardluud");
 const TootBurtgel = require("../models/tootBurtgel");
 const MsgTuukh = require("../models/msgTuukh");
 const NekhemjlekhCron = require("../models/cronSchedule");
-const GereeniiTulsunAvlaga = require("../models/gereeniiTulsunAvlaga");
-const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
+const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+
 const GereeniiZaalt = require("../models/gereeniiZaalt");
 const GereeniiZagvar = require("../models/gereeniiZagvar");
 const NekhemjlekhiinZagvar = require("../models/nekhemjlekhiinZagvar");
@@ -158,8 +158,8 @@ router.post("/transformation/transformBarilga", tokenShalgakh, async (req, res, 
         { name: "tootBurtgel", factory: TootBurtgel },
         { name: "msgTuukh", factory: MsgTuukh },
         { name: "nekhemjlekhCron", factory: NekhemjlekhCron },
-        { name: "gereeniiTulsunAvlaga", factory: GereeniiTulsunAvlaga },
-        { name: "gereeniiTulukhAvlaga", factory: GereeniiTulukhAvlaga },
+        { name: "guilgeeAvlaguud", factory: GuilgeeAvlaguud },
+        { name: "guilgeeAvlaguud", factory: GuilgeeAvlaguud },
         { name: "gereeniiZaalt", factory: GereeniiZaalt },
         { name: "gereeniiZagvar", factory: GereeniiZagvar },
         { name: "nekhemjlekhiinZagvar", factory: NekhemjlekhiinZagvar },

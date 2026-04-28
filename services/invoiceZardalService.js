@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
 const nekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
 const Geree = require("../models/geree");
-const GereeniiTulsunAvlaga = require("../models/gereeniiTulsunAvlaga");
-const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
+const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+
 const { getKholboltByBaiguullagiinId } = require("../utils/dbConnection");
 const { normalizeTurul, sumZardalDun } = require("../utils/zardalUtils");
 
@@ -206,9 +206,8 @@ async function deleteInvoiceZardal(invoiceId, zardalId, baiguullagiinId) {
   }
 
 
-  if (invoice.gereeniiId) {
-    await recalculateGereeBalance(invoice.gereeniiId, baiguullagiinId);
-  }
+    // Recalculation logic removed as per request.
+
 
   const finalInvoice = await NekhemjlekhModel.findById(invoiceId);
 
@@ -219,51 +218,11 @@ async function deleteInvoiceZardal(invoiceId, zardalId, baiguullagiinId) {
   };
 }
 
-/**
- * Recalculate geree globalUldegdel from raw amounts (totalCharges - totalPayments).
- * totalCharges = geree.ekhniiUldegdel + SUM(invoice originals excl. ekhnii) + SUM(avlaga originals)
- * totalPayments = SUM(tulsunAvlaga.tulsunDun)
- */
-async function recalculateGereeBalance(gereeId, baiguullagiinId) {
-  const kholbolt = getKholboltByBaiguullagiinId(baiguullagiinId);
 
-  if (!kholbolt) {
-    return {
-      success: false,
-      statusCode: 404,
-      message: "Connection not found",
-    };
-  }
-
-  const NekhemjlekhiinTuukhModel = nekhemjlekhiinTuukh(kholbolt);
-  const GereeModel = Geree(kholbolt);
-
-  const { recalcGlobalUldegdel } = require("../utils/recalcGlobalUldegdel");
-  const updatedGeree = await recalcGlobalUldegdel({
-    gereeId,
-    baiguullagiinId,
-    GereeModel,
-    NekhemjlekhiinTuukhModel,
-    GereeniiTulukhAvlagaModel: GereeniiTulukhAvlaga(kholbolt),
-    GereeniiTulsunAvlagaModel: GereeniiTulsunAvlaga(kholbolt),
-  });
-
-  if (!updatedGeree) {
-    return { success: false, statusCode: 404, message: "Geree not found" };
-  }
-
-  return {
-    success: true,
-    message: "Balance recalculated successfully",
-    data: {
-      globalUldegdel: updatedGeree.globalUldegdel,
-      positiveBalance: updatedGeree.positiveBalance,
-    },
-  };
-}
 
 module.exports = {
   updateGereeAndNekhemjlekhFromZardluud,
   deleteInvoiceZardal,
-  recalculateGereeBalance,
+  recalculateGereeBalance: async () => ({ success: true }),
+
 };

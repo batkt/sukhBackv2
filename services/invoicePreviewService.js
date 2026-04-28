@@ -151,13 +151,13 @@ const previewInvoice = async (
     }
 
     let ekhniiUldegdelAmount = 0;
-    let ekhniiUldegdelTailbar = ""; // Store the description from gereeniiTulukhAvlaga
+    let ekhniiUldegdelTailbar = ""; // Store the description from GuilgeeAvlaguud
 
     if (includeEkhniiUldegdel) {
-      // First check gereeniiTulukhAvlaga for ekhniiUldegdel records (primary source)
+      // First check GuilgeeAvlaguud for ekhniiUldegdel records (primary source)
       try {
-      const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
-      const tulukhAvlagaRecords = await GereeniiTulukhAvlaga(
+      const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+      const tulukhAvlagaRecords = await GuilgeeAvlaguud(
         tukhainBaaziinKholbolt,
       )
         .find({
@@ -184,10 +184,10 @@ const previewInvoice = async (
           firstRecord.tailbar || firstRecord.temdeglel || "";
       }
     } catch (error) {
-      // Error fetching ekhniiUldegdel from gereeniiTulukhAvlaga - silently continue
+      // Error fetching ekhniiUldegdel from GuilgeeAvlaguud - silently continue
     }
 
-    // Fallback to orshinSuugch.ekhniiUldegdel if no gereeniiTulukhAvlaga records found
+    // Fallback to orshinSuugch.ekhniiUldegdel if no GuilgeeAvlaguud records found
     if (ekhniiUldegdelAmount === 0 && geree.orshinSuugchId) {
       try {
         const orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt)
@@ -420,7 +420,7 @@ const previewInvoice = async (
       togtmolUtga: 0,
       choloolugdsonDavkhar: false,
       isEkhniiUldegdel: true, // Flag to identify this row
-      tailbar: ekhniiUldegdelTailbar || "", // Include the description from gereeniiTulukhAvlaga
+      tailbar: ekhniiUldegdelTailbar || "", // Include the description from GuilgeeAvlaguud
     });
     }
 

@@ -1,8 +1,8 @@
 const { db } = require("zevbackv2");
 const nekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
 const Geree = require("../models/geree");
-const GereeniiTulsunAvlaga = require("../models/gereeniiTulsunAvlaga");
-const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
+const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+
 const { parseOgnooKeepClock } = require("../utils/parseOgnooKeepClock");
 
 function isAvlagaOnlyShellInvoiceDoc(inv) {
@@ -12,7 +12,7 @@ function isAvlagaOnlyShellInvoiceDoc(inv) {
 }
 
 async function applyPaymentToOpenTulukhAvlaga({
-  GereeniiTulukhAvlagaModel,
+  GuilgeeAvlaguudModel,
   baiguullagiinId,
   gereeniiId,
   amount,
@@ -20,7 +20,7 @@ async function applyPaymentToOpenTulukhAvlaga({
   let remaining = Number(amount) || 0;
   if (remaining <= 0.01) return 0;
 
-  const openTulukhRows = await GereeniiTulukhAvlagaModel.find({
+  const openTulukhRows = await GuilgeeAvlaguudModel.find({
     gereeniiId: String(gereeniiId),
     baiguullagiinId: String(baiguullagiinId),
     uldegdel: { $gt: 0 },
@@ -36,7 +36,7 @@ async function applyPaymentToOpenTulukhAvlaga({
     const applyHere = Math.min(remaining, currentUldegdel);
     const newUldegdel = Math.round((currentUldegdel - applyHere) * 100) / 100;
 
-    await GereeniiTulukhAvlagaModel.updateOne(
+    await GuilgeeAvlaguudModel.updateOne(
       { _id: row._id },
       { $set: { uldegdel: newUldegdel } },
     );
@@ -177,8 +177,8 @@ async function markInvoicesAsPaid(options) {
 
   const NekhemjlekhiinTuukh = nekhemjlekhiinTuukh(kholbolt);
   const GereeModel = Geree(kholbolt);
-  const GereeniiTulsunAvlagaModel = GereeniiTulsunAvlaga(kholbolt);
-  const GereeniiTulukhAvlagaModel = GereeniiTulukhAvlaga(kholbolt);
+  const GuilgeeAvlaguudModel = GuilgeeAvlaguud(kholbolt);
+
 
   // Build query to find invoices
   const query = {
@@ -302,7 +302,7 @@ async function markInvoicesAsPaid(options) {
       // First, apply payment to outstanding gereeniiTulukhAvlaga records
       let remainingForAvlaga = dun;
       try {
-        const openTulukhRows = await GereeniiTulukhAvlagaModel.find({
+        const openTulukhRows = await GuilgeeAvlaguudModel.find({
           gereeniiId: String(gereeToUpdate._id),
           baiguullagiinId: String(baiguullagiinId),
           uldegdel: { $gt: 0 },
@@ -318,7 +318,7 @@ async function markInvoicesAsPaid(options) {
           const applyHere = Math.min(remainingForAvlaga, currentUldegdel);
           const newUldegdel = currentUldegdel - applyHere;
 
-          await GereeniiTulukhAvlagaModel.updateOne(
+          await GuilgeeAvlaguudModel.updateOne(
             { _id: row._id },
             { $set: { uldegdel: newUldegdel } },
           );
@@ -327,7 +327,7 @@ async function markInvoicesAsPaid(options) {
         }
       } catch (tulukhErr) {
         console.error(
-          `❌ [INVOICE PAYMENT] Error applying payment to gereeniiTulukhAvlaga (no invoices branch):`,
+          `❌ [INVOICE PAYMENT] Error applying payment to GuilgeeAvlaguud (no invoices branch):`,
           tulukhErr.message,
         );
       }
@@ -339,7 +339,7 @@ async function markInvoicesAsPaid(options) {
 
       let totalUnpaidForRecalc = 0;
       try {
-        const tulukhRowsAfter = await GereeniiTulukhAvlagaModel.find({
+        const tulukhRowsAfter = await GuilgeeAvlaguudModel.find({
           gereeniiId: String(gereeToUpdate._id),
           baiguullagiinId: String(baiguullagiinId),
         })
@@ -366,7 +366,7 @@ async function markInvoicesAsPaid(options) {
       // towards the dashboard balance reduction.
       try {
         const paymentDate = resolvePaymentOgnoo();
-        const prepayDoc = new GereeniiTulsunAvlagaModel({
+        const prepayDoc = new GuilgeeAvlaguudModel({
           baiguullagiinId: String(baiguullagiinId),
           baiguullagiinNer: gereeToUpdate.baiguullagiinNer || "",
           barilgiinId: gereeToUpdate.barilgiinId || "",
@@ -521,13 +521,12 @@ async function markInvoicesAsPaid(options) {
         continue;
       }
 
-      // Special case: AVL-* invoice is just a shell that mirrors open receivables (gereeniiTulukhAvlaga).
-      // If we record payment only on the invoice, recalcGlobalUldegdel will immediately pull the avlaga back in,
+      // Special case: AVL-* invoice is just a shell that mirrors open receivables (GuilgeeAvlaguud).
       // making it look like payment "didn't work". So we must also reduce the underlying open avlaga rows.
       try {
         if (isAvlagaOnlyShellInvoiceDoc(updatedInvoice)) {
           await applyPaymentToOpenTulukhAvlaga({
-            GereeniiTulukhAvlagaModel,
+            GuilgeeAvlaguudModel,
             baiguullagiinId,
             gereeniiId: updatedInvoice.gereeniiId,
             amount: amountToApply,
@@ -577,7 +576,7 @@ async function markInvoicesAsPaid(options) {
     const firstInvoice =
       updatedInvoices.length > 0 ? updatedInvoices[0].invoice : invoices[0];
     try {
-      const tulsunDoc = new GereeniiTulsunAvlagaModel({
+      const tulsunDoc = new GuilgeeAvlaguudModel({
         baiguullagiinId: String(firstInvoice.baiguullagiinId),
         baiguullagiinNer: firstInvoice.baiguullagiinNer || "",
         barilgiinId: firstInvoice.barilgiinId || "",
@@ -606,7 +605,7 @@ async function markInvoicesAsPaid(options) {
       tulsunAvlagaDocs.push(savedTulsun);
     } catch (tulsunError) {
       console.error(
-        "❌ [INVOICE PAYMENT] Error creating gereeniiTulsunAvlaga:",
+        "❌ [INVOICE PAYMENT] Error creating GuilgeeAvlaguud (payment):",
         tulsunError.message,
       );
     }
@@ -652,7 +651,7 @@ async function markInvoicesAsPaid(options) {
           let leftoverForGeree = balancePerGeree;
 
           try {
-            const openTulukhRows = await GereeniiTulukhAvlagaModel.find({
+            const openTulukhRows = await GuilgeeAvlaguudModel.find({
               gereeniiId: String(gereeId),
               baiguullagiinId: String(baiguullagiinId),
               uldegdel: { $gt: 0 },
@@ -668,7 +667,7 @@ async function markInvoicesAsPaid(options) {
               const applyHere = Math.min(leftoverForGeree, currentUldegdel);
               const newUldegdel = currentUldegdel - applyHere;
 
-              await GereeniiTulukhAvlagaModel.updateOne(
+              await GuilgeeAvlaguudModel.updateOne(
                 { _id: row._id },
                 { $set: { uldegdel: newUldegdel } },
               );
@@ -701,35 +700,8 @@ async function markInvoicesAsPaid(options) {
     }
   }
 
-  // Recalculate and store globalUldegdel on affected gerees using shared utility
-  const { recalcGlobalUldegdel } = require("../utils/recalcGlobalUldegdel");
-  try {
-    for (const gereeId of gereesNeedingRecalc) {
-      try {
-        const updatedGeree = await recalcGlobalUldegdel({
-          gereeId,
-          baiguullagiinId,
-          GereeModel,
-          NekhemjlekhiinTuukhModel: NekhemjlekhiinTuukh,
-          GereeniiTulukhAvlagaModel,
-          GereeniiTulsunAvlagaModel,
-        });
+  // Recalculation logic removed as per request.
 
-        // NOTE: Do not overwrite the latest invoice's uldegdel with contract-wide globalUldegdel.
-        // That behavior makes the newest month show accumulated debt from previous months.
-      } catch (recalcError) {
-        console.error(
-          `❌ [INVOICE PAYMENT] Error recalculating globalUldegdel for geree ${gereeId}:`,
-          recalcError.message,
-        );
-      }
-    }
-  } catch (outerRecalcError) {
-    console.error(
-      "❌ [INVOICE PAYMENT] Error in globalUldegdel recalculation loop:",
-      outerRecalcError.message,
-    );
-  }
 
   return {
     success: true,
@@ -773,7 +745,7 @@ async function markInvoicesAsPaid(options) {
 }
 
 /**
- * Get payment summary (tulsunDun) for a single geree from gereeniiTulsunAvlaga.
+ * Get payment summary (tulsunDun) for a single geree from GuilgeeAvlaguud.
  *
  * Returns total paid, split by invoice payments and prepayments.
  *
@@ -805,7 +777,7 @@ async function getGereeniiTulsunSummary(options) {
     throw new Error(`Холболт олдсонгүй: ${baiguullagiinId}`);
   }
 
-  const GereeniiTulsunAvlagaModel = GereeniiTulsunAvlaga(kholbolt);
+  const GuilgeeAvlaguudModel = GuilgeeAvlaguud(kholbolt);
 
   const match = { baiguullagiinId: String(baiguullagiinId) };
   if (gereeniiId) match.gereeniiId = String(gereeniiId);
@@ -817,7 +789,7 @@ async function getGereeniiTulsunSummary(options) {
     if (duusakhOgnoo) match.ognoo.$lte = new Date(duusakhOgnoo);
   }
 
-  const [row] = await GereeniiTulsunAvlagaModel.aggregate([
+  const [row] = await GuilgeeAvlaguudModel.aggregate([
     {
       $match: match,
     },

@@ -7,7 +7,7 @@ const Geree = require("../models/geree");
 const aldaa = require("../components/aldaa");
 const { gereeNeesNekhemjlekhUusgekh } = require("./nekhemjlekhController");
 const walletApiService = require("../services/walletApiService");
-const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
+const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
 const { Dans } = require("zevbackv2");
 
 /**
@@ -168,47 +168,9 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
         }
       });
 
-      // Get latest uldegdel from ledger for each contract
-      const { getHistoryLedger } = require("../services/historyLedgerService");
+      // Ledger recalculation logic removed as per request.
       const uldegdelMap = {};
 
-      // Fetch ledger for each unique contract to get latest uldegdel
-      // Use Promise.all for parallel requests (but limit concurrency to avoid overwhelming the database)
-      const ledgerPromises = gereeniiIds.map(async (gereeniiId) => {
-        try {
-          const ledgerResult = await getHistoryLedger({
-            gereeniiId: gereeniiId.toString(),
-            baiguullagiinId: baiguullagiinId,
-          });
-
-          // Get the last entry's uldegdel
-          if (
-            ledgerResult &&
-            ledgerResult.jagsaalt &&
-            ledgerResult.jagsaalt.length > 0
-          ) {
-            const lastEntry =
-              ledgerResult.jagsaalt[ledgerResult.jagsaalt.length - 1];
-            const uldegdel =
-              typeof lastEntry.uldegdel === "number" ? lastEntry.uldegdel : 0;
-            return { gereeniiId: gereeniiId.toString(), uldegdel };
-          } else {
-            return { gereeniiId: gereeniiId.toString(), uldegdel: 0 };
-          }
-        } catch (error) {
-          console.error(
-            `Error getting ledger for gereeniiId ${gereeniiId}:`,
-            error.message,
-          );
-          return { gereeniiId: gereeniiId.toString(), uldegdel: 0 };
-        }
-      });
-
-      // Wait for all ledger requests to complete
-      const ledgerResults = await Promise.all(ledgerPromises);
-      ledgerResults.forEach(({ gereeniiId, uldegdel }) => {
-        uldegdelMap[gereeniiId] = uldegdel;
-      });
 
       // Helper function to format numbers to 2 decimal places (returns string for Excel)
       const formatNumber = (value) => {
@@ -242,9 +204,8 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
         }
 
         // Get latest uldegdel from ledger (not from invoice)
-        const latestUldegdel = item.gereeniiId
-          ? uldegdelMap[item.gereeniiId.toString()] || 0
-          : 0;
+        const latestUldegdel = item.uldegdel || 0;
+
 
         return {
           dugaar: index + 1, // № (row number)
@@ -1172,8 +1133,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                 const NekhemjlekhModel = require("../models/nekhemjlekhiinTuukh")(
                   tukhainBaaziinKholbolt,
                 );
-                const { recalcGlobalUldegdel } = require("../utils/recalcGlobalUldegdel");
-                const GereeniiTulsunAvlaga = require("../models/gereeniiTulsunAvlaga");
+                const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
 
                 const affectedGerees = await GereeModel.find({
                   orshinSuugchId: existingOrshinSuugch._id.toString(),
@@ -1190,12 +1150,12 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                   },
                 );
 
-                const TulukhModel = GereeniiTulukhAvlaga(tukhainBaaziinKholbolt);
-                const TulsunModel = GereeniiTulsunAvlaga(tukhainBaaziinKholbolt);
+                const GuilgeeAvlaguudTulukhModel = GuilgeeAvlaguud(tukhainBaaziinKholbolt);
+                const GuilgeeAvlaguudTulsunModel = GuilgeeAvlaguud(tukhainBaaziinKholbolt);
                 const targetEkhnii = Number(userData.ekhniiUldegdel) || 0;
 
                 for (const g of affectedGerees) {
-                  const rows = await TulukhModel.find({
+                  const rows = await GuilgeeAvlaguudTulukhModel.find({
                     gereeniiId: String(g._id),
                     baiguullagiinId: String(baiguullaga._id),
                     ekhniiUldegdelEsekh: true,
@@ -1211,7 +1171,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
 
                   if (delta > 0.01) {
                     if (rows.length > 0) {
-                      await TulukhModel.updateOne(
+                      await GuilgeeAvlaguudTulukhModel.updateOne(
                         { _id: rows[0]._id },
                         {
                           $inc: {
@@ -1223,7 +1183,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                       );
                     } else {
                       const gereeDoc = await GereeModel.findById(g._id).lean();
-                      await TulukhModel.create({
+                      await GuilgeeAvlaguudTulukhModel.create({
                         baiguullagiinId: String(baiguullaga._id),
                         baiguullagiinNer: gereeDoc?.baiguullagiinNer || "",
                         barilgiinId: gereeDoc?.barilgiinId || "",
@@ -1246,14 +1206,6 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                     }
                   }
 
-                  await recalcGlobalUldegdel({
-                    gereeId: g._id,
-                    baiguullagiinId: String(baiguullaga._id),
-                    GereeModel,
-                    NekhemjlekhiinTuukhModel: NekhemjlekhModel,
-                    GereeniiTulukhAvlagaModel: TulukhModel,
-                    GereeniiTulsunAvlagaModel: TulsunModel,
-                  });
                 }
               }
             }
@@ -2528,7 +2480,7 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
     }
 
     const GereeModel = Geree(tukhainBaaziinKholbolt);
-    const TulukhAvlagaModel = GereeniiTulukhAvlaga(tukhainBaaziinKholbolt);
+    const GuilgeeAvlaguudTulukhModel = GuilgeeAvlaguud(tukhainBaaziinKholbolt);
 
     const results = {
       success: [],
@@ -2588,7 +2540,7 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
         }
 
         // Create initial balance record
-        const newAvlaga = new TulukhAvlagaModel({
+        const newAvlaga = new GuilgeeAvlaguudTulukhModel({
           baiguullagiinId: String(baiguullagiinId),
           baiguullagiinNer: geree.baiguullagiinNer,
           barilgiinId: geree.barilgiinId,
@@ -2676,21 +2628,8 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
           }
           // Keep contract balance and invoice balances in sync after import.
           try {
-            const { recalcGlobalUldegdel } = require("../utils/recalcGlobalUldegdel");
             const NekhemjlekhiinTuukhModel = require("../models/nekhemjlekhiinTuukh");
-            const GereeniiTulsunAvlaga = require("../models/gereeniiTulsunAvlaga");
-            await recalcGlobalUldegdel({
-              gereeId: geree._id,
-              baiguullagiinId: String(baiguullagiinId),
-              GereeModel,
-              NekhemjlekhiinTuukhModel: NekhemjlekhiinTuukhModel(
-                tukhainBaaziinKholbolt,
-              ),
-              GereeniiTulukhAvlagaModel: TulukhAvlagaModel,
-              GereeniiTulsunAvlagaModel: GereeniiTulsunAvlaga(
-                tukhainBaaziinKholbolt,
-              ),
-            });
+            const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
           } catch (recalcError) {
             console.error(
               "Error recalculating globalUldegdel after initial balance import:",

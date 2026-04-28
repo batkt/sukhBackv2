@@ -1,7 +1,7 @@
 const { getKholboltByBaiguullagiinId } = require("../utils/dbConnection");
 const Geree = require("../models/geree");
-const GereeniiTulsunAvlaga = require("../models/gereeniiTulsunAvlaga");
-const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
+const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+
 
 function getNekhemjlekhiinTuukhModel(kholbolt) {
   const nekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
@@ -9,40 +9,13 @@ function getNekhemjlekhiinTuukhModel(kholbolt) {
   return nekhemjlekhiinTuukh(conn);
 }
 
-/**
- * Recalculate and set geree.globalUldegdel from raw amounts (totalCharges - totalPayments).
- * totalCharges = geree.ekhniiUldegdel + SUM(invoice originals excl. ekhnii) + SUM(avlaga originals)
- * totalPayments = SUM(tulsunAvlaga.tulsunDun)
- * @param {string} gereeniiId - Contract ID
- * @param {string} baiguullagiinId - Org ID
- * @param {object} kholbolt - DB connection
- * @param {{ excludeInvoiceId?: string }} [opts] - If set, exclude this invoice (e.g. when it is about to be deleted)
- */
-async function recalculateGereeGlobalUldegdel(
-  gereeniiId,
-  baiguullagiinId,
-  kholbolt,
-  opts = {},
-) {
-  const NekhemjlekhiinTuukh = getNekhemjlekhiinTuukhModel(kholbolt);
 
-  const { recalcGlobalUldegdel } = require("../utils/recalcGlobalUldegdel");
-  await recalcGlobalUldegdel({
-    gereeId: gereeniiId,
-    baiguullagiinId,
-    GereeModel: Geree(kholbolt),
-    NekhemjlekhiinTuukhModel: NekhemjlekhiinTuukh,
-    GereeniiTulukhAvlagaModel: GereeniiTulukhAvlaga(kholbolt),
-    GereeniiTulsunAvlagaModel: GereeniiTulsunAvlaga(kholbolt),
-    excludeInvoiceId: opts.excludeInvoiceId,
-  });
-}
 
 /**
  * Delete an invoice and all connected data for a specific org only.
  * 1. Decrements Geree.globalUldegdel by unpaid amount
- * 2. Deletes GereeniiTulsunAvlaga records for this invoice (org-scoped)
- * 3. Deletes GereeniiTulukhAvlaga records for this invoice (org-scoped)
+ * 2. Deletes GuilgeeAvlaguud records for this invoice (org-scoped)
+ * 3. Deletes GuilgeeAvlaguud records for this invoice (org-scoped)
  * 4. Deletes the nekhemjlekhiinTuukh document
  * Call with (invoiceId, baiguullagiinId). Returns { success, error? }.
  */
@@ -87,7 +60,7 @@ async function deleteInvoice(invoiceId, baiguullagiinId) {
 /**
  * Delete all invoices (nekhemjlekhiinTuukh) for a given organization.
  * Each document is deleted individually so pre-delete hooks run and cascade
- * (Geree globalUldegdel, GereeniiTulsunAvlaga, GereeniiTulukhAvlaga) is applied.
+ * (Geree globalUldegdel, GuilgeeAvlaguud, GuilgeeAvlaguud) is applied.
  * Body: { baiguullagiinId }. Returns { success, deletedCount, message }.
  */
 async function deleteAllInvoicesForOrg(baiguullagiinId) {
@@ -127,27 +100,27 @@ async function deleteAllInvoicesForOrg(baiguullagiinId) {
   let tulukhUnlinked = 0;
   try {
     // SAFE: Unlink payments instead of deleting them.
-    const tulsunResult = await GereeniiTulsunAvlaga(kholbolt).updateMany(
+    const tulsunResult = await GuilgeeAvlaguud(kholbolt).updateMany(
       { baiguullagiinId: orgId },
       { $set: { nekhemjlekhId: null } }
     );
     tulsunUnlinked = tulsunResult.modifiedCount ?? 0;
   } catch (e) {
     console.error(
-      "[NEKHEMJLEKH] deleteAllInvoicesForOrg GereeniiTulsunAvlaga updateMany error:",
+      "[NEKHEMJLEKH] deleteAllInvoicesForOrg GuilgeeAvlaguud updateMany error:",
       e.message,
     );
   }
   try {
     // SAFE: Unlink receivables instead of deleting them.
-    const tulukhResult = await GereeniiTulukhAvlaga(kholbolt).updateMany(
+    const tulukhResult = await GuilgeeAvlaguud(kholbolt).updateMany(
       { baiguullagiinId: orgId },
       { $set: { nekhemjlekhId: null } }
     );
     tulukhUnlinked = tulukhResult.modifiedCount ?? 0;
   } catch (e) {
     console.error(
-      "[NEKHEMJLEKH] deleteAllInvoicesForOrg GereeniiTulukhAvlaga updateMany error:",
+      "[NEKHEMJLEKH] deleteAllInvoicesForOrg GuilgeeAvlaguud updateMany error:",
       e.message,
     );
   }
@@ -200,7 +173,7 @@ async function runDeleteSideEffects(doc) {
     try {
       // SAFE: Unlink payments instead of deleting them from the database.
       // This preserves financial history and prevents accidental data loss.
-      const tulsunUpdateResult = await GereeniiTulsunAvlaga(
+      const tulsunUpdateResult = await GuilgeeAvlaguud(
         kholbolt,
       ).updateMany(
         {
@@ -211,14 +184,14 @@ async function runDeleteSideEffects(doc) {
       );
     } catch (tulsunError) {
       console.error(
-        "Error cascade deleting gereeniiTulsunAvlaga:",
+        "Error cascade unlinking GuilgeeAvlaguud (payments):",
         tulsunError.message,
       );
     }
 
     try {
       // SAFE: Unlink receivables instead of deleting them.
-      const tulukhUpdateResult = await GereeniiTulukhAvlaga(
+      const tulukhUpdateResult = await GuilgeeAvlaguud(
         kholbolt,
       ).updateMany(
         {
@@ -229,14 +202,13 @@ async function runDeleteSideEffects(doc) {
       );
     } catch (tulukhError) {
       console.error(
-        "Error cascade deleting gereeniiTulukhAvlaga:",
+        "Error cascade unlinking GuilgeeAvlaguud (receivables):",
         tulukhError.message,
       );
     }
 
-    await recalculateGereeGlobalUldegdel(doc.gereeniiId, oid, kholbolt, {
-      excludeInvoiceId: invId,
-    });
+    // Recalculation logic removed as per request.
+
 
   } catch (error) {
     console.error("Error in runDeleteSideEffects:", error);

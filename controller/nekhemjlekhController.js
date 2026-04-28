@@ -5,8 +5,8 @@ const NekhemjlekhCron = require("../models/cronSchedule");
 const OrshinSuugch = require("../models/orshinSuugch");
 const MsgTuukh = require("../models/msgTuukh");
 const Medegdel = require("../models/medegdel");
-const GereeniiTulsunAvlaga = require("../models/gereeniiTulsunAvlaga");
-const GereeniiTulukhAvlaga = require("../models/gereeniiTulukhAvlaga");
+const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+
 const request = require("request");
 const { db } = require("zevbackv2");
 const asyncHandler = require("express-async-handler");
