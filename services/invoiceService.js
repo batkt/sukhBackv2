@@ -13,6 +13,17 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
   
   const charges = [];
 
+  // 1. Add Starting Balance if exists in the contract document
+  if (Number(geree.ekhniiUldegdel) > 0) {
+    charges.push({
+      ner: "Эхний үлдэгдэл",
+      dun: Number(geree.ekhniiUldegdel),
+      turul: "Авлага",
+      zardliinTurul: "Авлага",
+      isEkhniiUldegdel: true
+    });
+  }
+
   const fixedZardluud = (geree.zardluud || []).filter(z => !z.zaalt);
   for (const z of fixedZardluud) {
     const isLift = (z.ner || "").toLowerCase().includes("лифт") || (z.zardliinTurul || "").toLowerCase() === "лифт";
@@ -67,25 +78,6 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     }
   }
 
-  // Include orphan balances (like Starting Balance or manual receivables) that aren't tied to an invoice yet
-  const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-  const orphans = await GuilgeeAvlaguud(kholbolt).find({
-    gereeniiId: geree._id.toString(),
-    nekhemjlekhId: { $exists: false },
-    dun: { $gt: 0 }
-  }).lean();
-
-  for (const orphan of orphans) {
-    charges.push({
-      ner: orphan.zardliinNer,
-      dun: orphan.dun,
-      turul: orphan.zardliinTurul || "Авлага",
-      zardliinTurul: orphan.zardliinTurul || "Бусад",
-      isOrphan: true,
-      orphanId: orphan._id
-    });
-  }
-
   const total = charges.reduce((sum, c) => sum + c.dun, 0);
   return { charges, total };
 }
@@ -121,80 +113,40 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
   });
   await invoice.save();
 
+  let hasEkhniiUldegdel = false;
   for (const c of charges) {
-    if (c.isOrphan) {
-      // Update existing orphan to point to this invoice
-      const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
-      await GuilgeeAvlaguudModel.updateOne(
-        { _id: c.orphanId },
-        { $set: { nekhemjlekhId: invoice._id.toString() } },
-      );
-    } else {
-      // Create new charge record
-      await guilgeeService.recordCharge(kholbolt, {
-        baiguullagiinId: geree.baiguullagiinId,
-        baiguullagiinNer: geree.baiguullagiinNer,
-        barilgiinId: geree.barilgiinId,
-        gereeniiId: geree._id.toString(),
-        gereeniiDugaar: geree.gereeniiDugaar,
-        orshinSuugchId: geree.orshinSuugchId,
-        nekhemjlekhId: invoice._id.toString(),
-        dun: c.dun,
-        zardliinNer: c.ner,
-        zardliinTurul: c.zardliinTurul,
-        tailbar: c.ner,
-        ognoo: options.billingDate || new Date(),
-        source: "nekhemjlekh",
-        guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.burtgesenAjiltan,
-        guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
-      });
-    }
+    if (c.isEkhniiUldegdel) hasEkhniiUldegdel = true;
+
+    await guilgeeService.recordCharge(kholbolt, {
+      baiguullagiinId: geree.baiguullagiinId,
+      baiguullagiinNer: geree.baiguullagiinNer,
+      barilgiinId: geree.barilgiinId,
+      gereeniiId: geree._id.toString(),
+      gereeniiDugaar: geree.gereeniiDugaar,
+      orshinSuugchId: geree.orshinSuugchId,
+      nekhemjlekhId: invoice._id.toString(),
+      dun: c.dun,
+      zardliinNer: c.ner,
+      zardliinTurul: c.zardliinTurul,
+      tailbar: c.ner,
+      ognoo: options.billingDate || new Date(),
+      source: c.isEkhniiUldegdel ? "geree" : "nekhemjlekh",
+      ekhniiUldegdelEsekh: !!c.isEkhniiUldegdel,
+      guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.burtgesenAjiltan,
+      guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
+    });
   }
 
-  await ensureEkhniiUldegdel(kholbolt, geree, options);
+  // If Starting Balance was billed, clear it from the contract so it doesn't repeat
+  if (hasEkhniiUldegdel) {
+    await GereeModel.updateOne({ _id: geree._id }, { $set: { ekhniiUldegdel: 0 } });
+  }
 
   return { success: true, invoiceId: invoice._id, total };
 }
 
 async function ensureEkhniiUldegdel(kholbolt, geree, options = {}) {
-  let ekhniiUldegdel = Number(geree.ekhniiUldegdel) || 0;
-
-  if (ekhniiUldegdel === 0) {
-    const OrshinSuugchModel = require("../models/orshinSuugch")(kholbolt);
-    const resident = await OrshinSuugchModel.findById(geree.orshinSuugchId);
-    if (resident && resident.ekhniiUldegdel) {
-      ekhniiUldegdel = Number(resident.ekhniiUldegdel) || 0;
-    }
-  }
-
-  if (ekhniiUldegdel !== 0) {
-    const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
-    const existingEkhnii = await GuilgeeAvlaguudModel.findOne({
-      gereeniiId: geree._id.toString(),
-      ekhniiUldegdelEsekh: true,
-    });
-
-    if (!existingEkhnii) {
-      await guilgeeService.recordCharge(kholbolt, {
-        baiguullagiinId: geree.baiguullagiinId,
-        baiguullagiinNer: geree.baiguullagiinNer,
-        barilgiinId: geree.barilgiinId,
-        gereeniiId: geree._id.toString(),
-        gereeniiDugaar: geree.gereeniiDugaar,
-        orshinSuugchId: geree.orshinSuugchId,
-        dun: ekhniiUldegdel,
-        zardliinNer: "Эхний үлдэгдэл",
-        zardliinTurul: "Авлага",
-        tailbar: "Эхний үлдэгдэл",
-        ognoo: geree.createdAt || new Date(),
-        source: "geree",
-        ekhniiUldegdelEsekh: true,
-        guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.burtgesenAjiltan,
-        guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
-      });
-      return true;
-    }
-  }
+  // This logic is now handled during first invoice generation
   return false;
 }
 
