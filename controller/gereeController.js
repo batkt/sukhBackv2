@@ -258,7 +258,7 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     }
 
     nekhemjlekhuud.push({
-      ...invObj,
+      nekhemjlekhId: invId,
       uldegdel: uld
     });
 
