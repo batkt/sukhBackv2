@@ -57,6 +57,7 @@ const gereeSchema = new Schema(
     suuliinZaalt: Number, // Current total reading (Нийт одоо)
     zaaltTog: Number, // Day reading (Өдөр)
     zaaltUs: Number, // Night reading (Шөнө)
+    ekhniiUldegdel: Number, // Opening balance (Эхний үлдэгдэл)
     zardluud: [
       {
         ner: String,
