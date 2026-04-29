@@ -14,6 +14,9 @@ dotenv.config({ path: "./tokhirgoo/tokhirgoo.env" });
  */
 
 async function cleanStart() {
+  const baiguullagiinId = "69f06870687e1fcbab74be82";
+  const barilgiinId = "69f161e3e9e5c1202ca0153d";
+
   const baseUri = process.env.MONGODB_URI || "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSukh?authSource=admin";
   const orgUri = baseUri.replace("/amarSukh", "/suhTest");
 
@@ -64,9 +67,6 @@ async function cleanStart() {
     console.log("Seeding 3 test residents using orshinSuugchBurtgey...");
 
     const { orshinSuugchBurtgey } = require("./controller/orshinSuugch");
-
-    const baiguullagiinId = "69f06870687e1fcbab74be82";
-    const barilgiinId = "69f161e3e9e5c1202ca0153d";
 
     for (let i = 1; i <= 3; i++) {
       console.log(`Registering Resident ${i}...`);
