@@ -1,3 +1,4 @@
+const { db } = require("zevbackv2");
 const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
 const Geree = require("../models/geree");
 const Baiguullaga = require("../models/baiguullaga");
@@ -7,7 +8,7 @@ const guilgeeService = require("./guilgeeService");
 const { normalizeTurul } = require("../utils/zardalUtils");
 
 async function calculateGereeCharges(kholbolt, geree, options = {}) {
-  const baiguullaga = await Baiguullaga({ kholbolt }).findById(geree.baiguullagiinId).lean();
+  const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(geree.baiguullagiinId).lean();
   const barilga = baiguullaga?.barilguud?.find(b => String(b._id) === String(geree.barilgiinId));
   
   const charges = [];
@@ -29,12 +30,12 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
 
   const zaaltZardluud = (geree.zardluud || []).filter(z => z.zaalt);
   if (zaaltZardluud.length > 0) {
-    const orshinSuugch = await OrshinSuugch({ kholbolt }).findById(geree.orshinSuugchId).select("tsahilgaaniiZaalt").lean();
+    const orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt).findById(geree.orshinSuugchId).select("tsahilgaaniiZaalt").lean();
     const kwhTariff = orshinSuugch?.tsahilgaaniiZaalt || 0;
 
     for (const z of zaaltZardluud) {
       let zaaltDun = 0;
-      const latestReading = await ZaaltUnshlalt(kholbolt).findOne({ gereeniiId: geree._id })
+      const latestReading = await ZaaltUnshlalt(db.erunkhiiKholbolt).findOne({ gereeniiId: geree._id })
         .sort({ importOgnoo: -1, unshlaltiinOgnoo: -1 }).lean();
 
       if (latestReading && latestReading.zaaltDun > 0) {

@@ -5,7 +5,7 @@ const OrshinSuugch = require("../models/orshinSuugch");
 const Baiguullaga = require("../models/baiguullaga");
 const Geree = require("../models/geree");
 const aldaa = require("../components/aldaa");
-const { gereeNeesNekhemjlekhUusgekh } = require("./nekhemjlekhController");
+const invoiceService = require("../services/invoiceService");
 const walletApiService = require("../services/walletApiService");
 const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
 const { Dans } = require("zevbackv2");
@@ -21,9 +21,7 @@ function parseExcelNumber(val) {
 
   let str = val.toString().trim().replace(/,/g, "");
 
-  // Handle accounting format: (22) -> -22
   if (str.startsWith("(") && str.endsWith(")")) {
-    // Extract contents, trim any internal spaces, and add negative sign
     str = "-" + str.substring(1, str.length - 1).trim();
   }
 
@@ -66,7 +64,6 @@ function extractAllKeys(obj, prefix = "") {
   return keys;
 }
 
-// NekhemjlekhiinTuukh Excel Download
 exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
   async (req, res, next) => {
     try {
@@ -1807,11 +1804,13 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
 
               // Create invoice for this geree
               try {
-                const invoiceResult = await gereeNeesNekhemjlekhUusgekh(
-                  geree,
-                  baiguullaga,
+                const invoiceResult = await invoiceService.createInvoiceForContract(
                   tukhainBaaziinKholbolt,
-                  "automataar",
+                  geree._id,
+                  {
+                    billingDate: new Date(),
+                    forceEmpty: false
+                  }
                 );
 
                 if (!invoiceResult.success) {
@@ -1926,17 +1925,19 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             );
           }
 
-          try {
-            const invoiceResult = await gereeNeesNekhemjlekhUusgekh(
-              geree,
-              baiguullaga,
-              tukhainBaaziinKholbolt,
-              "automataar",
-            );
+            try {
+              const invoiceResult = await invoiceService.createInvoiceForContract(
+                tukhainBaaziinKholbolt,
+                geree._id,
+                {
+                  billingDate: new Date(),
+                  forceEmpty: false
+                }
+              );
 
-            if (!invoiceResult.success) {
-            }
-          } catch (invoiceError) {}
+              if (!invoiceResult.success) {
+              }
+            } catch (invoiceError) {}
         }
 
         results.success.push({

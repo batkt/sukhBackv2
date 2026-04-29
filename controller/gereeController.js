@@ -160,4 +160,90 @@ exports.zaaltOlnoorOruulya = asyncHandler(async (req, res, next) => {
   }
 });
 
+exports.createGeree = asyncHandler(async (req, res) => {
+  const { db } = require("zevbackv2");
+  const { baiguullagiinId, barilgiinId } = req.body;
 
+  if (!baiguullagiinId || !barilgiinId) {
+    return res.status(400).json({
+      success: false,
+      message: "baiguullagiinId and barilgiinId are required",
+    });
+  }
+
+  const tukhainBaaziinKholbolt = db.kholboltuud.find(
+    (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+  );
+
+  if (!tukhainBaaziinKholbolt) {
+    return res.status(404).json({
+      success: false,
+      message: "Байгууллагын холболт олдсонгүй",
+    });
+  }
+
+  const GereeModel = Geree(tukhainBaaziinKholbolt);
+  const BaiguullagaModel = Baiguullaga(db.erunkhiiKholbolt);
+
+  const baiguullaga = await BaiguullagaModel.findById(baiguullagiinId);
+  if (!baiguullaga) {
+    return res
+      .status(404)
+      .json({ success: false, message: "Байгууллага олдсонгүй" });
+  }
+
+  const barilga = baiguullaga.barilguud?.find(
+    (b) => String(b._id) === String(barilgiinId),
+  );
+  if (!barilga) {
+    return res
+      .status(404)
+      .json({ success: false, message: "Барилга олдсонгүй" });
+  }
+
+  // 1. Get default ashiglaltiinZardluud from building configuration
+  const defaultZardluud = barilga.tokhirgoo?.ashiglaltiinZardluud || [];
+
+  // 2. Prepare geree data, populating zardluud if empty
+  const contractData = {
+    ...req.body,
+    zardluud:
+      req.body.zardluud && req.body.zardluud.length > 0
+        ? req.body.zardluud
+        : defaultZardluud.map((z) => ({
+            ner: z.ner,
+            turul: z.turul,
+            zardliinTurul: z.zardliinTurul,
+            tariff: z.tariff,
+            tariffUsgeer: z.tariffUsgeer,
+            bodokhArga: z.bodokhArga,
+            tseverUsDun: z.tseverUsDun,
+            bokhirUsDun: z.bokhirUsDun,
+            usKhalaasniiDun: z.usKhalaasniiDun,
+            tsakhilgaanUrjver: z.tsakhilgaanUrjver || 1,
+            suuriKhuraamj: z.suuriKhuraamj || 0,
+            nuatNemekhEsekh: z.nuatNemekhEsekh || false,
+            barilgiinId: barilgiinId,
+          })),
+  };
+
+  const geree = new GereeModel(contractData);
+  await geree.save();
+
+  // 3. Create initial invoice (which automatically creates guilgeeAvlaguud records)
+  const invoiceService = require("../services/invoiceService");
+  try {
+    await invoiceService.createInvoiceForContract(
+      tukhainBaaziinKholbolt,
+      geree._id,
+      {
+        billingDate: new Date(),
+        forceEmpty: false,
+      },
+    );
+  } catch (err) {
+    console.error("Error creating initial invoice for new contract:", err);
+  }
+
+  res.status(201).json(geree);
+});

@@ -95,13 +95,11 @@ router.use((req, res, next) => {
   };
   next();
 });
-
-// Custom DELETE for guilgeeAvlaguud removed - use standard CRUD
-
 // Main GuilgeeAvlaguud CRUD
 crud(router, "guilgeeAvlaguud", GuilgeeAvlaguud, UstsanBarimt);
 
 // Geree CRUD with middleware
+router.post("/geree", tokenShalgakh, gereeController.createGeree);
 crud(
   router,
   "geree",
@@ -109,7 +107,6 @@ crud(
   UstsanBarimt
 );
 
-// Legacy save endpoints removed - use standard CRUD
 
 router
   .route("/zaaltOlnoorOruulya")
