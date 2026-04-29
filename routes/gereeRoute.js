@@ -98,6 +98,26 @@ router.use((req, res, next) => {
   };
   next();
 });
+// Intercept manual receivable creation to ensure they get a nekhemjlekhId
+router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
+  const { gereeniiId, nekhemjlekhId, tukhainBaaziinKholbolt } = req.body;
+  if (!nekhemjlekhId && gereeniiId && tukhainBaaziinKholbolt) {
+    try {
+      const invoiceService = require("../services/invoiceService");
+      const activeInv = await invoiceService.ensureActiveInvoice(
+        tukhainBaaziinKholbolt,
+        gereeniiId,
+      );
+      if (activeInv) {
+        req.body.nekhemjlekhId = activeInv._id.toString();
+      }
+    } catch (err) {
+      console.error("Error auto-linking manual receivable:", err);
+    }
+  }
+  next();
+});
+
 // Main GuilgeeAvlaguud CRUD
 crud(router, "guilgeeAvlaguud", GuilgeeAvlaguud, UstsanBarimt);
 
