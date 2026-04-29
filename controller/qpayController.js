@@ -322,6 +322,30 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
 
   await nekhemjlekh.save();
 
+  // Update QPay Record status for history/consistency
+  try {
+    const { QuickQpayObject } = require("quickqpaypackvSukh");
+    const QuickQpayModel = QuickQpayObject(kholbolt);
+    await QuickQpayModel.findOneAndUpdate(
+      { 
+        $or: [
+          { invoice_id: nekhemjlekh.qpayInvoiceId },
+          { "sukhNekhemjlekh.nekhemjlekhiinId": nekhemjlekhiinId }
+        ]
+      },
+      { 
+        $set: { 
+          tulsunEsekh: true, 
+          status: "paid", 
+          payment_id: paymentTransactionId || "manual_sync" 
+        } 
+      }
+    ).sort({ ognoo: -1 });
+    console.log(`✅ [QPAY-INVOICE CALLBACK] QuickQpayObject marked PAID`);
+  } catch (qpayUpdateErr) {
+    console.error("❌ [QPAY-INVOICE CALLBACK] QuickQpayObject status update failed:", qpayUpdateErr.message);
+  }
+
   // Socket updates
   const io = req.app.get("socketio");
   if (io) {
