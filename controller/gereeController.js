@@ -238,12 +238,12 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
       nekhemjlekhId: inv.id,
       niitTulbur: inv.charges,
       uldegdel: Number(uld.toFixed(2)),
-      tuluv: (inv.charges > 0 && uld <= 0) ? "Төлсөн" : "Төлөөгүй"
+      tuluv: uld <= 0 ? "Төлсөн" : "Төлөөгүй"
     });
 
     // Sync real invoice status if it exists
     if (inv.id !== "uninvoiced") {
-      const status = (inv.charges > 0 && uld <= 0) ? "Төлсөн" : "Төлөөгүй";
+      const status = uld <= 0 ? "Төлсөн" : "Төлөөгүй";
       await NekhemjlekhiinTuukhModel.updateOne(
         { _id: inv.id },
         { $set: { tuluv: status } }
@@ -251,9 +251,8 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     }
   }
 
-  // Ensure a new unpaid invoice exists if all current ones are paid
-  const anyUnpaid = nekhemjlekhuud.some(inv => inv.tuluv === "Төлөөгүй");
-  if (!anyUnpaid) {
+  const hasActiveContainer = nekhemjlekhuud.some(inv => inv.tuluv === "Төлөөгүй" || inv.niitTulbur === 0);
+  if (!hasActiveContainer) {
     const invoiceService = require("../services/invoiceService");
     await invoiceService.ensureActiveInvoice(
       GuilgeeAvlaguudModel.db, // Use the model's DB connection
