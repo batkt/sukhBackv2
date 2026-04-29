@@ -160,6 +160,103 @@ exports.zaaltOlnoorOruulya = asyncHandler(async (req, res, next) => {
   }
 });
 
+exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
+  const { db } = require("zevbackv2");
+  const { baiguullagiinId, barilgiinId, gereeniiId, gereeniiDugaar, ognoo } =
+    req.body;
+
+  if (!baiguullagiinId) {
+    return res.status(400).json({
+      success: false,
+      message: "baiguullagiinId is required",
+    });
+  }
+
+  const tukhainBaaziinKholbolt = db.kholboltuud.find(
+    (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+  );
+
+  if (!tukhainBaaziinKholbolt) {
+    return res.status(404).json({
+      success: false,
+      message: "Байгууллагын холболт олдсонгүй",
+    });
+  }
+
+  const GuilgeeAvlaguudModel = GuilgeeAvlaguud(tukhainBaaziinKholbolt);
+
+  const query = {
+    baiguullagiinId,
+    ...(barilgiinId && { barilgiinId }),
+  };
+
+  if (gereeniiId) {
+    query.gereeniiId = gereeniiId;
+  } else if (gereeniiDugaar) {
+    query.gereeniiDugaar = gereeniiDugaar;
+  }
+
+  if (ognoo && Array.isArray(ognoo) && ognoo.length === 2) {
+    const start = ognoo[0] ? new Date(ognoo[0]) : null;
+    const end = ognoo[1] ? new Date(ognoo[1] + "T23:59:59") : null;
+
+    if (start || end) {
+      query.ognoo = {};
+      if (start) query.ognoo.$gte = start;
+      if (end) query.ognoo.$lte = end;
+    }
+  }
+
+  // Aggregate for summary
+  const aggregationPipeline = [
+    { $match: query },
+    {
+      $group: {
+        _id: gereeniiId ? "$gereeniiId" : (gereeniiDugaar ? "$gereeniiDugaar" : { gereeniiId: "$gereeniiId", gereeniiDugaar: "$gereeniiDugaar" }),
+        totalTulbur: { $sum: { $cond: [{ $gt: ["$dun", 0] }, "$dun", 0] } },
+        totalTulsun: {
+          $sum: { $cond: [{ $lt: ["$dun", 0] }, { $abs: "$dun" }, 0] },
+        },
+        totalUldegdel: { $sum: "$dun" },
+      },
+    },
+  ];
+
+  const summaryResult = await GuilgeeAvlaguudModel.aggregate(aggregationPipeline);
+
+  // If specific contract requested, return single summary + items
+  if (gereeniiId || gereeniiDugaar) {
+    const items = await GuilgeeAvlaguudModel.find(query).sort({ ognoo: 1 });
+    const summary = summaryResult[0] || {
+      totalTulbur: 0,
+      totalTulsun: 0,
+      totalUldegdel: 0,
+    };
+
+    return res.json({
+      success: true,
+      summary: {
+        totalTulbur: Number(summary.totalTulbur.toFixed(2)),
+        totalTulsun: Number(summary.totalTulsun.toFixed(2)),
+        totalUldegdel: Number(summary.totalUldegdel.toFixed(2)),
+      },
+      items,
+    });
+  }
+
+  // Bulk request: return map-like results
+  res.json({
+    success: true,
+    summaries: summaryResult.map(s => ({
+      gereeniiId: s._id.gereeniiId,
+      gereeniiDugaar: s._id.gereeniiDugaar,
+      totalTulbur: Number(s.totalTulbur.toFixed(2)),
+      totalTulsun: Number(s.totalTulsun.toFixed(2)),
+      totalUldegdel: Number(s.totalUldegdel.toFixed(2)),
+    }))
+  });
+});
+
 exports.createGeree = asyncHandler(async (req, res) => {
   const { db } = require("zevbackv2");
   const { baiguullagiinId, barilgiinId } = req.body;

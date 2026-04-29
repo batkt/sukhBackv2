@@ -74,6 +74,7 @@ crud(router, "uilchilgeeniiZardluud", uilchilgeeniiZardluud, UstsanBarimt);
 
 // Lift Shalgaya
 router.post("/liftShalgaya", tokenShalgakh, gereeController.postLiftShalgaya);
+router.post("/uldegdelBodyo", tokenShalgakh, gereeController.uldegdelBodyo);
 crud(router, "liftShalgaya", LiftShalgaya, UstsanBarimt);
 
 // Emit tulburUpdated on delete of avlaga records so web clients refresh
