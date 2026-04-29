@@ -69,52 +69,24 @@ nekhemjlekhiinTuukhSchema.post("find", async function (docs) {
 
   try {
     const { db } = require("zevbackv2");
-    const AshiglaltiinZardluud = require("./ashiglaltiinZardluud");
+    const GuilgeeAvlaguud = require("./guilgeeAvlaguud");
 
-    // Get unique tailbar values and baiguullagiinId from docs
-    const tailbarMap = new Map();
-    docs.forEach((doc) => {
-      if (doc.tailbar && doc.baiguullagiinId) {
-        const key = `${doc.baiguullagiinId}|${doc.tailbar}`;
-        if (!tailbarMap.has(key)) {
-          tailbarMap.set(key, {
-            baiguullagiinId: doc.baiguullagiinId,
-            tailbar: doc.tailbar,
-            barilgiinId: doc.barilgiinId,
-          });
-        }
-      }
-    });
-
-    for (const [key, { baiguullagiinId, tailbar, barilgiinId }] of tailbarMap) {
+    for (const doc of docs) {
+      if (!doc.baiguullagiinId) continue;
       const kholbolt = db.kholboltuud.find(
-        (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+        (k) => String(k.baiguullagiinId) === String(doc.baiguullagiinId),
       );
 
       if (kholbolt) {
-        const query = {
-          baiguullagiinId: String(baiguullagiinId),
-          tailbar: tailbar,
-        };
-
-        if (barilgiinId) {
-          query.barilgiinId = String(barilgiinId);
-        }
-
-        const zardluud = await AshiglaltiinZardluud(kholbolt)
-          .find(query)
+        const items = await GuilgeeAvlaguud(kholbolt)
+          .find({ nekhemjlekhId: doc._id.toString(), dun: { $gt: 0 } })
           .lean();
 
-        // Attach zardluud to matching docs
-        docs.forEach((doc) => {
-          if (
-            doc.tailbar === tailbar &&
-            String(doc.baiguullagiinId) === String(baiguullagiinId) &&
-            (!barilgiinId || String(doc.barilgiinId) === String(barilgiinId))
-          ) {
-            doc.zardal = zardluud;
-          }
-        });
+        doc.zardal = items;
+        // Optionally also sync medeelel.zardluud if it exists
+        if (doc.medeelel) {
+          doc.medeelel.zardluud = items;
+        }
       }
     }
   } catch (error) {
@@ -123,29 +95,25 @@ nekhemjlekhiinTuukhSchema.post("find", async function (docs) {
 });
 
 nekhemjlekhiinTuukhSchema.post("findOne", async function (doc) {
-  if (!doc || !doc.tailbar || !doc.baiguullagiinId) return;
+  if (!doc || !doc.baiguullagiinId) return;
 
   try {
     const { db } = require("zevbackv2");
-    const AshiglaltiinZardluud = require("./ashiglaltiinZardluud");
+    const GuilgeeAvlaguud = require("./guilgeeAvlaguud");
 
     const kholbolt = db.kholboltuud.find(
       (k) => String(k.baiguullagiinId) === String(doc.baiguullagiinId),
     );
 
     if (kholbolt) {
-      const query = {
-        baiguullagiinId: String(doc.baiguullagiinId),
-        tailbar: doc.tailbar,
-      };
+      const items = await GuilgeeAvlaguud(kholbolt)
+        .find({ nekhemjlekhId: doc._id.toString(), dun: { $gt: 0 } })
+        .lean();
 
-      if (doc.barilgiinId) {
-        query.barilgiinId = String(doc.barilgiinId);
+      doc.zardal = items;
+      if (doc.medeelel) {
+        doc.medeelel.zardluud = items;
       }
-
-      const zardluud = await AshiglaltiinZardluud(kholbolt).find(query).lean();
-
-      doc.zardal = zardluud;
     }
   } catch (error) {
     console.error("Error populating zardal in nekhemjlekhiinTuukh:", error);
