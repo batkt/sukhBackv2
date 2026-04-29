@@ -200,12 +200,12 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   
   allItems.forEach((it) => {
     const dun = Number(it.dun || 0);
-    const invId = String(it.nekhemjlekhId || "uninvoiced");
+    const invId = it.nekhemjlekhId ? String(it.nekhemjlekhId) : "uninvoiced";
 
     if (dun > 0) {
       totalTulbur += dun;
       if (!invoiceData[invId]) {
-        invoiceData[invId] = { charges: 0, payments: 0, date: it.ognoo, id: invId };
+        invoiceData[invId] = { charges: 0, payments: 0, date: it.ognoo || it.createdAt, id: invId };
       }
       invoiceData[invId].charges += dun;
     } else {

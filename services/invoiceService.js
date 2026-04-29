@@ -175,12 +175,7 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
   };
   await invoice.save();
 
-  // If Starting Balance was billed, clear it from the contract so it doesn't repeat
-  if (hasEkhniiUldegdel) {
-    await GereeModel.updateOne({ _id: geree._id }, { $set: { ekhniiUldegdel: 0 } });
-  }
-
-  return { success: true, invoiceId: invoice._id, total };
+  return { success: true, invoiceId: invoice._id, total: invoice.niitTulbur };
 }
 
 async function ensureEkhniiUldegdel(kholbolt, geree, options = {}) {
