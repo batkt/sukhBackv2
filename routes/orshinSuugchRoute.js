@@ -101,11 +101,13 @@ const orshinSuugchSessionShalgaya = async (req, res, next) => {
 // Apply session check to all orshinSuugch routes
 router.use(orshinSuugchSessionShalgaya);
 
+const cacheMiddleware = require("../middleware/cacheMiddleware");
+
 // Custom DELETE handler for orshinSuugch - marks gerees as "Цуцалсан" before deleting
 router.delete("/orshinSuugch/:id", tokenShalgakh, orshinSuugchUstgakh);
 
 // Use crud for other operations (GET, POST, PUT) but not DELETE
-router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
+router.get("/orshinSuugch", tokenShalgakh, cacheMiddleware(300), async (req, res, next) => {
   try {
     const body = req.query;
 

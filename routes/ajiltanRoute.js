@@ -11,6 +11,18 @@ const {
   UstsanBarimt,
   tokenShalgakh,
 } = require("zevbackv2");
+const cacheMiddleware = require("../middleware/cacheMiddleware");
+
+router.get("/ajiltan", tokenShalgakh, cacheMiddleware(300), async (req, res, next) => {
+  try {
+     const { db, khuudaslalt } = require("zevbackv2");
+     const body = req.query;
+     if (!!body?.query) body.query = JSON.parse(body.query);
+     if (!!body?.order) body.order = JSON.parse(body.order);
+     khuudaslalt(Ajiltan(db.erunkhiiKholbolt), body).then(res.send.bind(res)).catch(next);
+  } catch (e) { next(e); }
+});
+
 const {
   ajiltanNevtrey,
   backAvya,

@@ -119,10 +119,26 @@ router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
   next();
 });
 
+router.get("/guilgeeAvlaguud", tokenShalgakh, cacheMiddleware(300), async (req, res, next) => {
+  try {
+     const body = req.query;
+     if (!!body?.query) body.query = JSON.parse(body.query);
+     if (!!body?.order) body.order = JSON.parse(body.order);
+     khuudaslalt(GuilgeeAvlaguud(req.body.tukhainBaaziinKholbolt), body).then(res.send.bind(res)).catch(next);
+  } catch (e) { next(e); }
+});
 // Main GuilgeeAvlaguud CRUD
 crud(router, "guilgeeAvlaguud", GuilgeeAvlaguud, UstsanBarimt);
 
-// Geree CRUD with middleware
+const cacheMiddleware = require("../middleware/cacheMiddleware");
+router.get("/geree", tokenShalgakh, cacheMiddleware(300), async (req, res, next) => {
+  try {
+     const body = req.query;
+     if (!!body?.query) body.query = JSON.parse(body.query);
+     if (!!body?.order) body.order = JSON.parse(body.order);
+     khuudaslalt(Geree(req.body.tukhainBaaziinKholbolt), body).then(res.send.bind(res)).catch(next);
+  } catch (e) { next(e); }
+});
 router.post("/geree", tokenShalgakh, gereeController.createGeree);
 crud(
   router,

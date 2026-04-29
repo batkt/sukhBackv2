@@ -9,9 +9,10 @@ const { tokenShalgakh, crud, UstsanBarimt, khuudaslalt } = require("zevbackv2");
 const axios = require("axios");
 const request = require("request");
 const NevtreltiinTuukh = require("../models/nevtreltiinTuukh");
+const cacheMiddleware = require("../middleware/cacheMiddleware");
 
 // Custom GET handler to filter barilguud by barilgiinId - must be before crud() call
-router.get("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
+router.get("/baiguullaga/:id", tokenShalgakh, cacheMiddleware(600), async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
     const { id } = req.params;
@@ -458,8 +459,7 @@ router.post("/baiguullagaAvya", (req, res, next) => {
       next(err);
     });
 });
-
-router.get("/baiguullagaBairshilaarAvya", (req, res, next) => {
+router.get("/baiguullagaBairshilaarAvya", cacheMiddleware(600), (req, res, next) => {
   const { db } = require("zevbackv2");
 
   Baiguullaga(db.erunkhiiKholbolt)
