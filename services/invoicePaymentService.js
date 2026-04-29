@@ -25,7 +25,10 @@ async function markInvoicesAsPaid(options) {
     baiguullagiinId,
     gereeniiId,
     dun,
+    ognoo: options.ognoo || new Date(), // Required field
     tailbar: tailbar || "Төлбөр төлөв",
+    guilgeeKhiisenAjiltniiId: options.ajiltanId,
+    guilgeeKhiisenAjiltniiNer: options.ajiltanNer,
     allocationFilter,
   });
 
