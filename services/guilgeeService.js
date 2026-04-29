@@ -54,8 +54,11 @@ async function recordPayment(kholbolt, data, options = {}) {
   const paidAmount = roundMoney(Math.abs(data.dun || 0));
 
   if (paidAmount <= 0) {
+    console.warn(`⚠️ [LEDGER] recordPayment: Invalid amount ${paidAmount}`);
     return { success: false, error: "Invalid payment amount" };
   }
+
+  console.log(`ℹ️ [LEDGER] Recording payment: gereeniiId=${data.gereeniiId}, amount=${paidAmount}, bankId=${data.bankniiGuilgeeId || 'N/A'}`);
 
   const { session } = options;
 
@@ -68,6 +71,7 @@ async function recordPayment(kholbolt, data, options = {}) {
     }).session(session);
 
     if (existing) {
+      console.log(`ℹ️ [LEDGER] Duplicate payment ignored: ${data.bankniiGuilgeeId}`);
       return { success: true, paymentRecord: existing, alreadyExists: true };
     }
   }
@@ -86,6 +90,7 @@ async function recordPayment(kholbolt, data, options = {}) {
   }
 
   await paymentRecord.save();
+  console.log(`✅ [LEDGER] Payment persisted: ${paymentRecord._id}, amount=${paymentRecord.dun}`);
 
   return {
     success: true,
@@ -136,7 +141,9 @@ async function getBalance(kholbolt, query) {
     },
   ]);
 
-  return result[0]?.uldegdel || 0;
+  const balance = result[0]?.uldegdel || 0;
+  console.log(`📊 [LEDGER] Balance check: query=${JSON.stringify(query)}, result=${balance}`);
+  return balance;
 }
 
 /**

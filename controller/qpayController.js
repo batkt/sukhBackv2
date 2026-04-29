@@ -88,12 +88,16 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
   }
   
   if (qpayBarimt.tulsunEsekh) {
-    console.log(`ℹ️ [QPAY CALLBACK] Already paid: dugaar=${dugaar}`);
+    console.log(`ℹ️ [QPAY CALLBACK] Already paid (idempotent): dugaar=${dugaar}`);
     return res.sendStatus(200);
   }
 
   const amount = parseFloat(qpayBarimt.qpay?.amount || qpayBarimt.amount || 0);
-  if (amount <= 0) return res.status(400).send("Invalid amount");
+  console.log(`ℹ️ [QPAY CALLBACK] Proceeding with payment: dugaar=${dugaar}, amount=${amount}`);
+  if (amount <= 0) {
+    console.error(`❌ [QPAY CALLBACK] Invalid amount for dugaar=${dugaar}: ${amount}`);
+    return res.status(400).send("Invalid amount");
+  }
 
   // Record payment in Ledger (Authoritative)
   await guilgeeService.recordPayment(kholbolt, {
@@ -131,6 +135,22 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     clearOrgCache(baiguullagiinId).catch(() => {});
     io.emit(`qpay/${baiguullagiinId}/${qpayBarimt.zakhialgiinDugaar}`);
     io.emit(`tulburUpdated:${baiguullagiinId}`, {});
+
+    // Targeted notification to the resident
+    try {
+      const GereeModel = Geree(kholbolt);
+      const geree = await GereeModel.findById(qpayBarimt.gereeniiId);
+      if (geree?.orshinSuugchId) {
+        io.emit(`orshinSuugch${geree.orshinSuugchId}`, {
+          title: "Төлбөр амжилттай",
+          message: `Таны ${amount}₮-ийн төлөлт амжилттай бүртгэгдлээ.`,
+          turul: "app",
+          baiguullagiinId
+        });
+      }
+    } catch (err) {
+      console.error("⚠️ [SOCKET] Failed to send resident notification:", err.message);
+    }
   }
 
   res.sendStatus(200);
@@ -150,7 +170,12 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
   const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
   const nekhemjlekh = await NekhemjlekhModel.findById(nekhemjlekhiinId);
 
-  if (!nekhemjlekh) return res.status(404).send("Invoice not found");
+  if (!nekhemjlekh) {
+    console.error(`❌ [QPAY-INVOICE CALLBACK] Invoice not found: ${nekhemjlekhiinId}`);
+    return res.status(404).send("Invoice not found");
+  }
+
+  console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Found invoice: ${nekhemjlekhiinId}, gereeniiId=${nekhemjlekh.gereeniiId}, niitTulbur=${nekhemjlekh.niitTulbur}`);
 
   // Allow re-processing to ensure ledger sync (recordPayment handles idempotency)
   let paymentTransactionId = req.query.qpay_payment_id || nekhemjlekh.qpayPaymentId;
@@ -161,20 +186,29 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
 
   if (nekhemjlekh.qpayInvoiceId) {
     try {
+      console.log(`📡 [QPAY_SYNC] Verifying status for QPay invoice: ${nekhemjlekh.qpayInvoiceId}`);
       const khariu = await qpayShalgay({ invoice_id: nekhemjlekh.qpayInvoiceId }, kholbolt);
+      console.log(`📡 [QPAY_SYNC] QPay Response: ${JSON.stringify(khariu)}`);
+      
       if (khariu?.payments?.[0]?.transactions?.[0]?.id) {
         paymentTransactionId = khariu.payments[0].transactions[0].id;
         if (khariu.payments[0].amount) {
           paidAmount = parseFloat(khariu.payments[0].amount);
+          console.log(`📡 [QPAY_SYNC] Verified amount: ${paidAmount}, transactionId: ${paymentTransactionId}`);
         }
+      } else {
+        console.warn(`📡 [QPAY_SYNC] No payment transactions found in QPay response for: ${nekhemjlekh.qpayInvoiceId}`);
       }
     } catch (err) {
       console.error("⚠️ [QPAY_SYNC] Failed to fetch QPay status:", err.message);
     }
+  } else {
+    console.log(`ℹ️ [QPAY_SYNC] No qpayInvoiceId found on invoice record; using niitTulbur for ledger record.`);
   }
 
   // Record in Ledger (GuilgeeAvlaguud)
-  await guilgeeService.recordPayment(kholbolt, {
+  console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Sending to Ledger: amount=${paidAmount}, transactionId=${paymentTransactionId}`);
+  const ledgerResult = await guilgeeService.recordPayment(kholbolt, {
     baiguullagiinId,
     gereeniiId: nekhemjlekh.gereeniiId,
     dun: paidAmount,
@@ -184,6 +218,7 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
     ognoo: new Date(),
     nekhemjlekhId: nekhemjlekhiinId,
   });
+  console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Ledger Result: ${JSON.stringify(ledgerResult)}`);
 
   // Update Invoice state
   const balance = await guilgeeService.getBalance(kholbolt, { nekhemjlekhId: nekhemjlekhiinId });
@@ -208,6 +243,22 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
     const { clearOrgCache } = require("../utils/redisClient");
     clearOrgCache(baiguullagiinId).catch(() => {});
     io.emit(`tulburUpdated:${baiguullagiinId}`, {});
+
+    // Targeted notification to the resident
+    try {
+      const GereeModel = Geree(kholbolt);
+      const geree = await GereeModel.findById(nekhemjlekh.gereeniiId);
+      if (geree?.orshinSuugchId) {
+        io.emit(`orshinSuugch${geree.orshinSuugchId}`, {
+          title: "Төлбөр амжилттай",
+          message: `Таны ${paidAmount}₮-ийн төлөлт амжилттай бүртгэгдлээ.`,
+          turul: "app",
+          baiguullagiinId
+        });
+      }
+    } catch (err) {
+      console.error("⚠️ [SOCKET] Failed to send resident notification:", err.message);
+    }
   }
 
   res.sendStatus(200);
