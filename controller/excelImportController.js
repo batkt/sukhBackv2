@@ -4,6 +4,7 @@ const excel = require("exceljs");
 const OrshinSuugch = require("../models/orshinSuugch");
 const Baiguullaga = require("../models/baiguullaga");
 const Geree = require("../models/geree");
+const AshiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
 const aldaa = require("../components/aldaa");
 const invoiceService = require("../services/invoiceService");
 const walletApiService = require("../services/walletApiService");
@@ -1499,8 +1500,12 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           (b) => String(b._id) === String(finalBarilgiinId),
         );
 
-        const ashiglaltiinZardluudData =
-          targetBarilgaForRow?.tokhirgoo?.ashiglaltiinZardluud || [];
+        const ashiglaltiinZardluudData = await AshiglaltiinZardluud(
+          tukhainBaaziinKholbolt,
+        ).find({
+          baiguullagiinId: baiguullagiinId,
+          barilgiinId: finalBarilgiinId,
+        });
         const liftShalgayaData = targetBarilgaForRow?.tokhirgoo?.liftShalgaya;
         const choloolugdokhDavkhar =
           liftShalgayaData?.choloolugdokhDavkhar || [];
@@ -1684,8 +1689,12 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                 continue;
               }
 
-              const ashiglaltiinZardluudData =
-                targetBarilgaForToot.tokhirgoo?.ashiglaltiinZardluud || [];
+              const ashiglaltiinZardluudData = await AshiglaltiinZardluud(
+                tukhainBaaziinKholbolt,
+              ).find({
+                baiguullagiinId: baiguullagiinId,
+                barilgiinId: tootEntry.barilgiinId,
+              });
               const liftShalgayaData =
                 targetBarilgaForToot.tokhirgoo?.liftShalgaya;
               const choloolugdokhDavkhar =

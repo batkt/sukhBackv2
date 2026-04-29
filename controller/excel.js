@@ -258,15 +258,11 @@ exports.gereeniiExcelAvya = asyncHandler(async (req, res, next) => {
     baiguullagiinId: req.body.baiguullagiinId,
     turul: "geree",
   });
-  // Get ashiglaltiinZardluud from baiguullaga.barilguud[].tokhirgoo
-  const Baiguullaga = require("../models/baiguullaga");
-  const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(
-    req.body.baiguullagiinId
-  );
-  const targetBarilga = baiguullaga?.barilguud?.find(
-    (b) => String(b._id) === String(req.params.barilgiinId)
-  );
-  var zardluud = targetBarilga?.tokhirgoo?.ashiglaltiinZardluud || [];
+  const AshiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
+  var zardluud = await AshiglaltiinZardluud(req.body.tukhainBaaziinKholbolt).find({
+    baiguullagiinId: req.body.baiguullagiinId,
+    barilgiinId: req.params.barilgiinId
+  });
   var dansnuud = await Dans(req.body.tukhainBaaziinKholbolt).find({
     baiguullagiinId: req.body.baiguullagiinId,
     barilgiinId: req.params.barilgiinId,
@@ -453,15 +449,11 @@ exports.gereeniiExcelTatya = asyncHandler(async (req, res, next) => {
       baiguullagiinId: req.body.baiguullagiinId,
       turul: "geree",
     });
-    // Get ashiglaltiinZardluud from baiguullaga.barilguud[].tokhirgoo
-    const Baiguullaga = require("../models/baiguullaga");
-    const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(
-      req.body.baiguullagiinId
-    );
-    const targetBarilga = baiguullaga?.barilguud?.find(
-      (b) => String(b._id) === String(req.body.barilgiinId)
-    );
-    var zardluud = targetBarilga?.tokhirgoo?.ashiglaltiinZardluud || [];
+    const AshiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
+    var zardluud = await AshiglaltiinZardluud(req.body.tukhainBaaziinKholbolt).find({
+      baiguullagiinId: req.body.baiguullagiinId,
+      barilgiinId: req.body.barilgiinId
+    });
     const { db } = require("zevbackv2");
     if (req.body.ognoo) ognoo = req.body.ognoo;
     else throw new aldaa("Огноо сонгоно уу!");

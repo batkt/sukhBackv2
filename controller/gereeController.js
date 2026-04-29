@@ -201,8 +201,12 @@ exports.createGeree = asyncHandler(async (req, res) => {
       .json({ success: false, message: "Барилга олдсонгүй" });
   }
 
-  // 1. Get default ashiglaltiinZardluud from building configuration
-  const defaultZardluud = barilga.tokhirgoo?.ashiglaltiinZardluud || [];
+  // 1. Get default ashiglaltiinZardluud from the collection
+  const AshiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
+  const defaultZardluud = await AshiglaltiinZardluud(tukhainBaaziinKholbolt).find({
+    baiguullagiinId: baiguullagiinId,
+    barilgiinId: barilgiinId,
+  });
 
   // 2. Prepare geree data, populating zardluud if empty
   const contractData = {

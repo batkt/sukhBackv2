@@ -1117,12 +1117,14 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
           throw new Error("Байгууллагын холболтын мэдээлэл олдсонгүй");
         }
 
-        // Get ashiglaltiinZardluud from baiguullaga.barilguud[].tokhirgoo
-        const targetBarilgaForZardluud = baiguullaga.barilguud?.find(
-          (b) => String(b._id) === String(barilgiinId),
-        );
-        const ashiglaltiinZardluudData =
-          targetBarilgaForZardluud?.tokhirgoo?.ashiglaltiinZardluud || [];
+        // Get ashiglaltiinZardluud from the collection
+        const AshiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
+        const ashiglaltiinZardluudData = await AshiglaltiinZardluud(
+          tukhainBaaziinKholbolt,
+        ).find({
+          baiguullagiinId: baiguullagiinId,
+          barilgiinId: barilgiinId,
+        });
 
         // Get liftShalgaya from baiguullaga.barilguud[].tokhirgoo
         const liftShalgayaData =
@@ -1379,19 +1381,20 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
             const geree = new Geree(tukhainBaaziinKholbolt)(contractData);
             await geree.save();
 
-            // Create invoice immediately (Like Excel Import)
+            // Create invoice immediately (Standardized Service)
             try {
-              const {
-                gereeNeesNekhemjlekhUusgekh,
-              } = require("./nekhemjlekhController");
-              await gereeNeesNekhemjlekhUusgekh(
-                geree,
-                baiguullaga,
+              const invoiceService = require("../services/invoiceService");
+              await invoiceService.createInvoiceForContract(
                 tukhainBaaziinKholbolt,
-                "automataar",
-                true,
+                geree._id,
+                {
+                  billingDate: new Date(),
+                  forceEmpty: false,
+                },
               );
-            } catch (invErr) {}
+            } catch (invErr) {
+              console.error("Error creating initial invoice during registration:", invErr);
+            }
 
             // Update davkhar with toot if provided
             if (tootEntry.toot && tootEntry.davkhar) {
