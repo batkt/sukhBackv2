@@ -279,18 +279,21 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
       uldegdel: uld,
     });
 
-    // Update invoice status if paid in the ledger
-    if (uld <= 0) {
-      await NekhemjlekhiinTuukhModel.updateOne(
-        { _id: invId, tuluv: { $ne: "Төлсөн" } },
-        { $set: { tuluv: "Төлсөн", tulsunOgnoo: new Date() } },
-      );
-    } else {
-      // Revert if balance exists but marked paid
-      await NekhemjlekhiinTuukhModel.updateOne(
-        { _id: invId, tuluv: "Төлсөн" },
-        { $set: { tuluv: "Төлөөгүй" } },
-      );
+    // Only update DB if it's a real invoice (valid ObjectId)
+    const isVirtual = invId.startsWith("ekhnii_") || invId.startsWith("id_");
+    if (!isVirtual) {
+      if (uld <= 0) {
+        await NekhemjlekhiinTuukhModel.updateOne(
+          { _id: invId, tuluv: { $ne: "Төлсөн" } },
+          { $set: { tuluv: "Төлсөн", tulsunOgnoo: new Date() } },
+        );
+      } else {
+        // Revert if balance exists but marked paid
+        await NekhemjlekhiinTuukhModel.updateOne(
+          { _id: invId, tuluv: "Төлсөн" },
+          { $set: { tuluv: "Төлөөгүй" } },
+        );
+      }
     }
   }
 
