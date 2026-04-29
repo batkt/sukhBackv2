@@ -238,14 +238,15 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
       nekhemjlekhId: inv.id,
       niitTulbur: inv.charges,
       uldegdel: Number(uld.toFixed(2)),
-      tuluv: uld <= 0 ? "Төлсөн" : "Төлөөгүй"
+      tuluv: (inv.charges > 0 && uld <= 0) ? "Төлсөн" : "Төлөөгүй"
     });
 
     // Sync real invoice status if it exists
     if (inv.id !== "uninvoiced") {
+      const status = (inv.charges > 0 && uld <= 0) ? "Төлсөн" : "Төлөөгүй";
       await NekhemjlekhiinTuukhModel.updateOne(
         { _id: inv.id },
-        { $set: { tuluv: uld <= 0 ? "Төлсөн" : "Төлөөгүй" } }
+        { $set: { tuluv: status } }
       ).catch(() => {});
     }
   }

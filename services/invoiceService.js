@@ -145,8 +145,26 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
   });
 
   if (!options.skipCharges) {
+    const billingMonth = (options.billingDate || new Date()).getMonth();
+    const billingYear = (options.billingDate || new Date()).getFullYear();
+
     for (const c of charges) {
       if (c.isEkhniiUldegdel && existingEkhnii) continue;
+
+      const existingCharge = await GuilgeeAvlaguudModel.findOne({
+        gereeniiId: geree._id.toString(),
+        zardliinNer: c.ner,
+        source: "nekhemjlekh",
+        ognoo: {
+          $gte: new Date(billingYear, billingMonth, 1),
+          $lte: new Date(billingYear, billingMonth, 31, 23, 59, 59)
+        }
+      });
+
+      if (existingCharge) {
+        console.log(`Skipping duplicate charge: ${c.ner} for this month`);
+        continue;
+      }
 
       await guilgeeService.recordCharge(kholbolt, {
         ...geree,
