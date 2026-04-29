@@ -1097,7 +1097,10 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
           throw new Error("Байгууллагын холболтын мэдээлэл олдсонгүй");
         }
 
-        // Get ashiglaltiinZardluud from the collection
+        const targetBarilgaForZardluud = baiguullaga.barilguud?.find(
+          (b) => String(b._id) === String(barilgiinId),
+        );
+
         const AshiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
         const ashiglaltiinZardluudData = await AshiglaltiinZardluud(
           tukhainBaaziinKholbolt,
