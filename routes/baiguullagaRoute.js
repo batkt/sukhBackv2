@@ -11,7 +11,7 @@ const request = require("request");
 const NevtreltiinTuukh = require("../models/nevtreltiinTuukh");
 
 // Custom GET handler to filter barilguud by barilgiinId - must be before crud() call
-router.get("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
+router.get("/baiguullaga/:id", async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
     const { id } = req.params;
