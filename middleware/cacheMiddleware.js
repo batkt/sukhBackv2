@@ -19,22 +19,41 @@ const cacheMiddleware = (ttl = 300) => {
 
     try {
       // Create a unique cache key based on URL, query params, and body
-      // We must remove circular objects like database connections before stringifying
+      // 1. Sanitize URL (Remove cache-busters like _t)
+      let sanitizedUrl = req.originalUrl || req.url;
+      try {
+        const [path, query] = sanitizedUrl.split("?");
+        if (query) {
+          const params = new URLSearchParams(query);
+          params.delete("_t");
+          params.delete("t");
+          params.delete("timestamp");
+          const newQuery = params.toString();
+          sanitizedUrl = newQuery ? `${path}?${newQuery}` : path;
+        }
+      } catch (e) {
+        // Fallback simple regex if URL parsing fails
+        sanitizedUrl = sanitizedUrl.replace(/([?&])(_t|t|timestamp)=[^&]+/g, "");
+      }
+
+      // 2. Sanitize Body (Remove circular objects and sensitive tokens)
       let sanitizedBody = "";
       if (req.body) {
         try {
           const { tukhainBaaziinKholbolt, erunkhiiKholbolt, nevtersenAjiltniiToken, ...rest } = req.body;
+          // Also remove cache busters if they are in the body
+          delete rest._t;
+          delete rest.t;
+          delete rest.timestamp;
           sanitizedBody = JSON.stringify(rest);
         } catch (e) {
-          // If stringification fails, use a fallback or skip body part
           sanitizedBody = "complex-body-hash";
         }
       }
       
-      const queryString = req.url;
       const baiguullagiinId = req.params.baiguullagiinId || req.query.baiguullagiinId || req.body.baiguullagiinId || "global";
       
-      const rawKey = `${baiguullagiinId}:${queryString}:${sanitizedBody}`;
+      const rawKey = `${baiguullagiinId}:${sanitizedUrl}:${sanitizedBody}`;
       const hash = crypto.createHash("md5").update(rawKey).digest("hex");
       const cacheKey = `api_cache:${hash}`;
 
@@ -42,9 +61,11 @@ const cacheMiddleware = (ttl = 300) => {
       const cachedData = await client.get(cacheKey);
 
       if (cachedData) {
-        // console.log(`[CACHE HIT] ${req.url}`);
+        console.log(`[CACHE HIT] ${req.method} ${sanitizedUrl}`);
         return res.json(JSON.parse(cachedData));
       }
+
+      console.log(`[CACHE MISS] ${req.method} ${sanitizedUrl}`);
 
       // If not in cache, capture the original res.json / res.send
       const originalJson = res.json.bind(res);
