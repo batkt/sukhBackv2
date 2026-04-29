@@ -204,6 +204,22 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
         guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.orshinSuugchId,
       });
     }
+
+    // 4.5. Reset pro-rating flags (one-time use)
+    if (geree.khonogoorBodokhEsekh) {
+      const GereeModel = Geree(kholbolt);
+      const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
+
+      await GereeModel.findByIdAndUpdate(geree._id, {
+        $set: { khonogoorBodokhEsekh: false, bodokhKhonog: 0 }
+      });
+
+      if (geree.orshinSuugchId) {
+        await OrshinSuugchModel.findByIdAndUpdate(geree.orshinSuugchId, {
+          $set: { khonogoorBodokhEsekh: false, bodokhKhonog: 0 }
+        });
+      }
+    }
   }
 
   // 5. Done. We no longer snapshot charges or totals into the invoice document.
