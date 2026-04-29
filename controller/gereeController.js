@@ -219,7 +219,7 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
         totalTulsun: {
           $sum: { $cond: [{ $lt: ["$dun", 0] }, { $abs: "$dun" }, 0] },
         },
-        totalUldegdel: { $sum: "$dun" },
+        uldegdel: { $sum: "$dun" },
       },
     },
   ];
@@ -232,7 +232,7 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     const summary = summaryResult[0] || {
       totalTulbur: 0,
       totalTulsun: 0,
-      totalUldegdel: 0,
+      uldegdel: 0,
     };
 
     return res.json({
@@ -240,7 +240,7 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
       summary: {
         totalTulbur: Number(summary.totalTulbur.toFixed(2)),
         totalTulsun: Number(summary.totalTulsun.toFixed(2)),
-        totalUldegdel: Number(summary.totalUldegdel.toFixed(2)),
+        uldegdel: Number(summary.uldegdel.toFixed(2)),
         gereeniiId: summary._id,
         gereeniiDugaar: summary.gereeniiDugaar,
         orshinSuugchId: summary.orshinSuugchId,
@@ -258,7 +258,7 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
       orshinSuugchId: s.orshinSuugchId,
       totalTulbur: Number(s.totalTulbur.toFixed(2)),
       totalTulsun: Number(s.totalTulsun.toFixed(2)),
-      totalUldegdel: Number(s.totalUldegdel.toFixed(2)),
+      uldegdel: Number(s.uldegdel.toFixed(2)),
     })),
   });
 });

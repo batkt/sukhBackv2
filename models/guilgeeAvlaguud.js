@@ -25,7 +25,6 @@ const guilgeeAvlaguudSchema = new Schema(
     undsenDun: { type: Number, default: 0 },
     tulukhDun: { type: Number, default: 0 },
     tulukhAldangi: { type: Number, default: 0 },
-    uldegdel: { type: Number, default: 0 },
 
     // Tulsun (payment) fields
     tulsunDun: { type: Number, default: 0 },
@@ -91,11 +90,6 @@ guilgeeAvlaguudSchema.pre("save", function (next) {
       this.tulukhDun = 0;
     }
   }
-
-  // Calculate local uldegdel for this specific transaction record
-  const charge = Number(this.undsenDun) || 0;
-  const payment = Number(this.tulsunDun) || 0;
-  this.uldegdel = Math.round((charge - payment) * 100) / 100;
 
   next();
 });

@@ -29,7 +29,6 @@ async function recordCharge(kholbolt, data, options = {}) {
     undsenDun: amount,
     tulukhDun: amount,
     tulsunDun: 0,
-    uldegdel: amount,
   });
 
   if (options.session) {
@@ -47,7 +46,7 @@ async function recordPayment(kholbolt, data, options = {}) {
     return { success: false, error: "Invalid payment amount" };
   }
 
-  const { session, allocationFilter } = options;
+  const { session } = options;
 
   const paymentRecord = new GuilgeeAvlaguudModel({
     ...data,
@@ -55,7 +54,6 @@ async function recordPayment(kholbolt, data, options = {}) {
     tulsunDun: paidAmount,
     undsenDun: 0,
     tulukhDun: 0,
-    uldegdel: -paidAmount,
     turul: "төлөлт",
   });
 
@@ -65,67 +63,9 @@ async function recordPayment(kholbolt, data, options = {}) {
 
   await paymentRecord.save();
 
-  let remaining = paidAmount;
-  const query = {
-    gereeniiId: data.gereeniiId,
-    baiguullagiinId: data.baiguullagiinId,
-    uldegdel: { $gt: 0 },
-  };
-
-  if (allocationFilter) {
-    Object.assign(query, allocationFilter);
-  }
-
-  const updateOps = [];
-
-  while (remaining > 0) {
-    const charge = await GuilgeeAvlaguudModel.findOne({
-      ...query,
-      uldegdel: { $gt: 0 },
-    }).sort({ ognoo: 1, createdAt: 1 });
-
-    if (!charge) break;
-
-    const applyHere = Math.min(remaining, charge.uldegdel);
-    const newTulsunDun = roundMoney((charge.tulsunDun || 0) + applyHere);
-    const newUldegdel = roundMoney(charge.undsenDun - newTulsunDun);
-
-    const updateResult = await GuilgeeAvlaguudModel.updateOne(
-      {
-        _id: charge._id,
-        uldegdel: charge.uldegdel,
-      },
-      {
-        $inc: { tulsunDun: applyHere },
-        $set: { uldegdel: newUldegdel },
-      },
-      { session }
-    );
-
-    if (updateResult.modifiedCount === 0) {
-      console.warn(`[GUILGEE] Race condition detected for charge ${charge._id}, retrying...`);
-      continue;
-    }
-
-    updateOps.push({
-      chargeId: charge._id,
-      applied: applyHere,
-      newTulsunDun,
-      newUldegdel,
-    });
-
-    remaining = roundMoney(remaining - applyHere);
-  }
-
-  if (remaining > 0) {
-    console.warn(`[GUILGEE] Overpayment: ${remaining} remains unallocated`);
-  }
-
   return {
     success: true,
     paymentRecord,
-    allocated: updateOps,
-    unallocated: remaining,
   };
 }
 
@@ -167,12 +107,12 @@ async function getBalance(kholbolt, query) {
     {
       $group: {
         _id: null,
-        totalUldegdel: { $sum: "$uldegdel" },
+        uldegdel: { $sum: "$dun" },
       },
     },
   ]);
 
-  return result[0]?.totalUldegdel || 0;
+  return result[0]?.uldegdel || 0;
 }
 
 /**
