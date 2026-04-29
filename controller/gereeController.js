@@ -228,10 +228,16 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
 
   for (const inv of sortedInvoices) {
     let uld = inv.charges - inv.payments;
+    
     if (uld > 0 && generalPayments > 0) {
       const deduct = Math.min(uld, generalPayments);
       uld -= deduct;
       generalPayments -= deduct;
+    }
+   
+    if (uld < 0) {
+      generalPayments += Math.abs(uld);
+      uld = 0;
     }
 
     nekhemjlekhuud.push({
