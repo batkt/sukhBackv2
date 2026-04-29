@@ -139,9 +139,13 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     source: "nekhemjlekh"
   });
 
-  for (const c of charges) {
+  const existingEkhnii = await GuilgeeAvlaguudModel.findOne({
+    gereeniiId: geree._id.toString(),
+    ekhniiUldegdelEsekh: true
+  });
 
-    if (c.isEkhniiUldegdel) continue; 
+  for (const c of charges) {
+    if (c.isEkhniiUldegdel && existingEkhnii) continue;
 
     await guilgeeService.recordCharge(kholbolt, {
       ...geree,
@@ -153,8 +157,8 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
       tailbar: c.ner,
       zardliinTurul: c.zardliinTurul,
       ognoo: options.billingDate || new Date(),
-      source: "nekhemjlekh",
-      ekhniiUldegdelEsekh: false,
+      source: c.isEkhniiUldegdel ? "geree" : "nekhemjlekh",
+      ekhniiUldegdelEsekh: !!c.isEkhniiUldegdel,
       guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
       guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.orshinSuugchId,
     });
