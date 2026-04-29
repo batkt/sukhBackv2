@@ -24,6 +24,25 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     });
   }
 
+  // 2. Add any unlinked ledger items (Manual Receivables, etc.)
+  const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+  const orphans = await GuilgeeAvlaguud(kholbolt).find({
+    gereeniiId: geree._id.toString(),
+    nekhemjlekhId: { $exists: false },
+    dun: { $gt: 0 }
+  }).lean();
+
+  for (const orphan of orphans) {
+    charges.push({
+      ner: orphan.zardliinNer || "Бусад",
+      dun: orphan.dun,
+      turul: orphan.zardliinTurul || "Авлага",
+      zardliinTurul: orphan.zardliinTurul || "Бусад",
+      isOrphan: true,
+      orphanId: orphan._id
+    });
+  }
+
   const fixedZardluud = (geree.zardluud || []).filter(z => !z.zaalt);
   for (const z of fixedZardluud) {
     const isLift = (z.ner || "").toLowerCase().includes("лифт") || (z.zardliinTurul || "").toLowerCase() === "лифт";
@@ -117,24 +136,33 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
   for (const c of charges) {
     if (c.isEkhniiUldegdel) hasEkhniiUldegdel = true;
 
-    await guilgeeService.recordCharge(kholbolt, {
-      baiguullagiinId: geree.baiguullagiinId,
-      baiguullagiinNer: geree.baiguullagiinNer,
-      barilgiinId: geree.barilgiinId,
-      gereeniiId: geree._id.toString(),
-      gereeniiDugaar: geree.gereeniiDugaar,
-      orshinSuugchId: geree.orshinSuugchId,
-      nekhemjlekhId: invoice._id.toString(),
-      dun: c.dun,
-      zardliinNer: c.ner,
-      zardliinTurul: c.zardliinTurul,
-      tailbar: c.ner,
-      ognoo: options.billingDate || new Date(),
-      source: c.isEkhniiUldegdel ? "geree" : "nekhemjlekh",
-      ekhniiUldegdelEsekh: !!c.isEkhniiUldegdel,
-      guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.burtgesenAjiltan,
-      guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
-    });
+    if (c.isOrphan) {
+      // Update existing orphan to point to this invoice
+      const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
+      await GuilgeeAvlaguudModel.updateOne(
+        { _id: c.orphanId },
+        { $set: { nekhemjlekhId: invoice._id.toString() } },
+      );
+    } else {
+      await guilgeeService.recordCharge(kholbolt, {
+        baiguullagiinId: geree.baiguullagiinId,
+        baiguullagiinNer: geree.baiguullagiinNer,
+        barilgiinId: geree.barilgiinId,
+        gereeniiId: geree._id.toString(),
+        gereeniiDugaar: geree.gereeniiDugaar,
+        orshinSuugchId: geree.orshinSuugchId,
+        nekhemjlekhId: invoice._id.toString(),
+        dun: c.dun,
+        zardliinNer: c.ner,
+        zardliinTurul: c.zardliinTurul,
+        tailbar: c.ner,
+        ognoo: options.billingDate || new Date(),
+        source: c.isEkhniiUldegdel ? "geree" : "nekhemjlekh",
+        ekhniiUldegdelEsekh: !!c.isEkhniiUldegdel,
+        guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.burtgesenAjiltan,
+        guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
+      });
+    }
   }
 
   // If Starting Balance was billed, clear it from the contract so it doesn't repeat

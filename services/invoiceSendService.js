@@ -36,12 +36,37 @@ async function manualSendInvoice(gereeId, baiguullagiinId, override = false, opt
   }
 }
 
-async function manualSendMassInvoices(baiguullagiinId, gereeIds, options = {}) {
+async function manualSendMassInvoices(baiguullagiinId, gereeIds, override = true, options = {}) {
   const results = [];
+  let created = 0;
+  let errors = 0;
+  const errorsList = [];
+
   for (const id of gereeIds) {
-    results.push(await manualSendInvoice(id, baiguullagiinId, true, options));
+    try {
+      const res = await manualSendInvoice(id, baiguullagiinId, override, options);
+      if (res.success) {
+        created++;
+        results.push(res);
+      } else {
+        errors++;
+        errorsList.push({ gereeId: id, error: res.error || res.message });
+      }
+    } catch (err) {
+      errors++;
+      errorsList.push({ gereeId: id, error: err.message });
+    }
   }
-  return { success: true, results };
+
+  return { 
+    success: true, 
+    data: { 
+      created, 
+      errors, 
+      errorsList,
+      results 
+    } 
+  };
 }
 
 module.exports = {
