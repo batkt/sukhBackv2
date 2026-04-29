@@ -74,7 +74,7 @@ process.env.UV_THREADPOOL_SIZE = 20;
     // 3. Connect to MongoDB (zevbackv2) - Moved inside to catch errors
     const MONGODB_URI =
       process.env.MONGODB_URI ||
-      "mongodb://127.0.0.1:27017/amarSukh";
+      "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSukh?authSource=admin";
     const maskedUri = MONGODB_URI.replace(/:([^:@]+)@/, ":****@");
     console.log(`🔌 [INIT] Connecting to MongoDB: ${maskedUri}`);
 

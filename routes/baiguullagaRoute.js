@@ -11,7 +11,7 @@ const request = require("request");
 const NevtreltiinTuukh = require("../models/nevtreltiinTuukh");
 
 // Custom GET handler to filter barilguud by barilgiinId - must be before crud() call
-router.get("/baiguullaga/:id", async (req, res, next) => {
+router.get("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
     const { id } = req.params;
@@ -341,10 +341,10 @@ router.post("/baiguullagaBurtgekh", async (req, res, next) => {
           await db.kholboltNemye(
             baiguullaga._id,
             req.body.baaziinNer,
-            false, // cloudMongoDBEsekh - false for local MongoDB
-            "127.0.0.1:27017", // clusterUrl
-            "", // password (No password)
-            "", // userName (No username)
+            false,              // cloudMongoDBEsekh - false for local MongoDB
+            "127.0.0.1:27017",  // clusterUrl
+            "Br1stelback1",     // password
+            "admin",            // userName
           );
           console.log(
             `✅ Database connection created for: ${req.body.baaziinNer}`,
