@@ -316,9 +316,11 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
     // baiguullagiinId can be determined from address selection later
     // Only require baiguullagiinId upfront if no email (direct OWN_ORG registration)
     let baiguullaga = null;
-    if (req.body.baiguullagiinId) {
+    let baiguullagiinId = req.body.baiguullagiinId || "";
+
+    if (baiguullagiinId) {
       baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(
-        req.body.baiguullagiinId,
+        baiguullagiinId,
       );
 
       if (!baiguullaga) {
@@ -361,9 +363,6 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
       // Proceed with registration - we don't want to block our own registration if BPay is down
     }
 
-    // Check for existing user by utas OR walletUserId (unified check)
-    // Allow same phone number to register multiple toots - no duplicate check
-    // If user exists, we'll use that user and add new toot to their toots array
     const existingUser = await OrshinSuugch(db.erunkhiiKholbolt).findOne({
       $or: [
         { utas: phoneNumber },
@@ -371,9 +370,7 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
       ],
     });
 
-    // Check for cancelled gerees by utas (user might have been deleted but gerees still exist)
-    // This allows restoring data when re-registering
-    // Only check if baiguullaga exists
+
     let tukhainBaaziinKholbolt = null;
     if (baiguullaga) {
       tukhainBaaziinKholbolt = db.kholboltuud.find(
@@ -384,7 +381,6 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
     let existingCancelledGeree = null;
     if (tukhainBaaziinKholbolt && baiguullaga) {
       const GereeModel = Geree(tukhainBaaziinKholbolt);
-      // Find cancelled geree by utas (not by orshinSuugchId since user was deleted)
       existingCancelledGeree = await GereeModel.findOne({
         utas: { $in: [req.body.utas] }, // utas is an array in geree
         tuluv: "Цуцалсан",
@@ -392,11 +388,9 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
       });
     }
 
-    // If baiguullaga is not set yet but we have address info, try to find it
-    // This can happen when email is provided but baiguullagiinId wasn't in request body
+   
     if (!baiguullaga && req.body.bairniiNer) {
-      // Try to find baiguullaga by searching through all organizations
-      // This is a fallback when baiguullagiinId wasn't provided upfront
+      
       const allBaiguullaguud = await Baiguullaga(db.erunkhiiKholbolt).find({});
       for (const org of allBaiguullaguud) {
         const matchingBarilga = org.barilguud?.find(
@@ -404,7 +398,7 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
         );
         if (matchingBarilga) {
           baiguullaga = org;
-          // Also set tukhainBaaziinKholbolt now that we have baiguullaga
+          baiguullagiinId = baiguullaga._id.toString();
           tukhainBaaziinKholbolt = db.kholboltuud.find(
             (kholbolt) =>
               kholbolt.baiguullagiinId === baiguullaga._id.toString(),
@@ -414,11 +408,9 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
       }
     }
 
-    // If still no baiguullaga and we need it, try to get it from address selection
-    // This handles the case where email is provided but baiguullagiinId needs to be determined
+    
     if (!baiguullaga && (req.body.duureg || req.body.horoo || req.body.soh)) {
-      // Try to find baiguullaga by location matching
-      // This is a fallback when baiguullagiinId wasn't provided upfront
+    
       const allBaiguullaguud = await Baiguullaga(db.erunkhiiKholbolt).find({});
       for (const org of allBaiguullaguud) {
         for (const barilga of org.barilguud || []) {
@@ -440,6 +432,7 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
 
           if (matchesDuureg && matchesHoroo && matchesSoh) {
             baiguullaga = org;
+            baiguullagiinId = baiguullaga._id.toString();
             // Also set tukhainBaaziinKholbolt now that we have baiguullaga
             tukhainBaaziinKholbolt = db.kholboltuud.find(
               (kholbolt) =>
@@ -452,25 +445,20 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
       }
     }
 
-    // If baiguullaga is still not found and we need it for OWN_ORG registration, throw error
-    // But if email is provided, allow registration to proceed without baiguullaga (wallet-only)
     if (!baiguullaga && !email) {
       throw new aldaa(
         "Байгууллагын мэдээлэл олдсонгүй! Хаягийн мэдээлэлээс байгууллагыг олж чадсангүй.",
       );
     }
 
-    // Use barilgiinId from request if provided - RESPECT IT!
-    // Check all possible fields where barilgiinId might be sent
+  
     let barilgiinId =
       (req.body.barilgiinId && req.body.barilgiinId.toString().trim()) ||
       (req.body.barilgaId && req.body.barilgaId.toString().trim()) ||
       null;
 
-    // If barilgiinId is provided, use it directly - don't search!
-    // Only validate if baiguullaga exists
+   
     if (barilgiinId && baiguullaga) {
-      // Validate that this barilgiinId exists in baiguullaga
       const providedBarilga = baiguullaga.barilguud?.find(
         (b) => String(b._id) === String(barilgiinId),
       );
@@ -480,7 +468,6 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
       }
     }
 
-    // If barilgiinId not provided but bairniiNer (building name) is provided, find by name
     if (!barilgiinId && req.body.bairniiNer && baiguullaga.barilguud) {
       const bairniiNerToFind = req.body.bairniiNer.toString().trim();
       const barilgaByName = baiguullaga.barilguud.find(
@@ -491,7 +478,6 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
       }
     }
 
-    // If still no barilgiinId, try to match by location (duureg, horoo, sohNer)
     if (
       !barilgiinId &&
       req.body.duureg &&
@@ -535,7 +521,6 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
       }
     }
 
-    // Only search for building if barilgiinId is NOT provided in the request
     if (
       !barilgiinId &&
       req.body.toot &&
@@ -624,11 +609,6 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
         barilgiinId = String(foundBuildings[0]._id);
       }
     }
-
-    // Multiple users can have the same toot, so no unique check needed
-    // Toot validation will be done when adding to toots array
-
-    // Automatically determine davkhar from toot if toot is provided
     let determinedDavkhar = req.body.davkhar || "";
 
     if (req.body.toot && barilgiinId) {
