@@ -319,6 +319,12 @@ exports.tokenoorAjiltanAvya = asyncHandler(async (req, res, next) => {
     Ajiltan(db.erunkhiiKholbolt)
       .findById(tokenObject.id)
       .then((urDun) => {
+        if (!urDun) {
+          return res.status(404).json({
+            success: false,
+            message: "Хэрэглэгч олдсонгүй",
+          });
+        }
         var urdunJson = urDun.toJSON();
         urdunJson.duusakhOgnoo = tokenObject.duusakhOgnoo;
         urdunJson.salbaruud = tokenObject.salbaruud;

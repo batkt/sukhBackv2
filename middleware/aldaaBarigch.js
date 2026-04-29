@@ -55,6 +55,12 @@ const aldaaBarigch = (err, req, res, next) => {
     ) {
       err.message = "Лицензийн хэсэгтэй холбогдоход алдаа гарлаа!";
     }
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    }
+    
     res.status(err.kod || 500).json({
       success: false,
       aldaa: err.message,

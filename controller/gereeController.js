@@ -190,7 +190,16 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   if (barilgiinId) query.barilgiinId = barilgiinId;
   if (gereeniiId) query.gereeniiId = gereeniiId;
 
-  const allItems = await GuilgeeAvlaguudModel.find(query).sort({ ognoo: 1, createdAt: 1 }).lean();
+  if (ognoo && Array.isArray(ognoo) && ognoo.length === 2) {
+    query.ognoo = {
+      $gte: new Date(ognoo[0]),
+      $lte: new Date(ognoo[1]),
+    };
+  }
+
+  const allItems = await GuilgeeAvlaguudModel.find(query)
+    .sort({ ognoo: 1, createdAt: 1 })
+    .lean();
 
   let totalTulbur = 0;
   let totalTulsun = 0;

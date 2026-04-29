@@ -4420,24 +4420,37 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
     if (tokenObject.id == "zochin")
       return next(new Error("Энэ үйлдлийг хийх эрх байхгүй байна!"));
 
-    OrshinSuugch(db.erunkhiiKholbolt)
-      .findById(tokenObject.id)
-      .then((urDun) => {
-        if (!urDun) {
-          return res.status(404).json({
-            success: false,
-            message: "Хэрэглэгч олдсонгүй",
-          });
-        }
-        var urdunJson = urDun.toJSON();
-        urdunJson.duusakhOgnoo = tokenObject.duusakhOgnoo;
-        urdunJson.salbaruud = tokenObject.salbaruud;
-        res.send(urdunJson);
-      })
-      .catch((err) => {
-        next(err);
-      });
+    try {
+      if (!db.erunkhiiKholbolt) {
+        console.error("❌ [Profile] Database connection (erunkhiiKholbolt) is missing!");
+        return res.status(500).json({
+          success: false,
+          message: "Өгөгдлийн баазтай холбогдоогүй байна. Түр хүлээнэ үү.",
+        });
+      }
+
+      const urDun = await OrshinSuugch(db.erunkhiiKholbolt).findById(
+        tokenObject.id,
+      );
+
+      if (!urDun) {
+        console.error(`❌ [Profile] User not found for ID: ${tokenObject.id}`);
+        return res.status(404).json({
+          success: false,
+          message: "Хэрэглэгч олдсонгүй",
+        });
+      }
+
+      const urdunJson = urDun.toJSON();
+      urdunJson.duusakhOgnoo = tokenObject.duusakhOgnoo;
+      urdunJson.salbaruud = tokenObject.salbaruud;
+      res.send(urdunJson);
+    } catch (dbErr) {
+      console.error("❌ [Profile] Database error:", dbErr.message);
+      return next(dbErr);
+    }
   } catch (error) {
+    console.error("❌ [Profile] Unexpected error:", error.message);
     next(error);
   }
 });
