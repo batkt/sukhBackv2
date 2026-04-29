@@ -5150,6 +5150,7 @@ exports.walletAddressDetails = asyncHandler(async (req, res, next) => {
  */
 exports.getBuildingToots = asyncHandler(async (req, res, next) => {
   const { bairId } = req.params;
+  const { orts } = req.query; // Optional: filter by entrance
   const { db } = require("zevbackv2");
 
   try {
@@ -5161,34 +5162,53 @@ exports.getBuildingToots = asyncHandler(async (req, res, next) => {
       const kholboltuud = db.kholboltuud || [];
 
       for (const kholbolt of kholboltuud) {
-        const baiguullaga = await Baiguullaga(kholbolt).findOne({
-          "barilguud._id": realBuildingId
-        }).select("barilguud").lean();
+        const baiguullaga = await Baiguullaga(kholbolt)
+          .findOne({
+            "barilguud._id": realBuildingId,
+          })
+          .select("barilguud")
+          .lean();
 
         if (baiguullaga && baiguullaga.barilguud) {
-          const barilga = baiguullaga.barilguud.find(b => b._id.toString() === realBuildingId);
-          if (barilga && barilga.tokhirgoo && barilga.tokhirgoo.davkhariinToonuud) {
+          const barilga = baiguullaga.barilguud.find(
+            (b) => b._id.toString() === realBuildingId,
+          );
+          if (
+            barilga &&
+            barilga.tokhirgoo &&
+            barilga.tokhirgoo.davkhariinToonuud
+          ) {
             const davkhars = barilga.tokhirgoo.davkhariinToonuud;
             const uniqueToots = new Set();
 
-            for (const floorArray of Object.values(davkhars)) {
+            for (const [key, floorArray] of Object.entries(davkhars)) {
+              // If orts is provided, only include toots from that entrance
+              // Key format: 'orts::davkhar'
+              if (orts && !key.startsWith(`${orts}::`)) {
+                continue;
+              }
+
               if (Array.isArray(floorArray)) {
-                floorArray.forEach(t => {
-                  if (typeof t === 'string' && t.includes(',')) {
-                    t.split(',').forEach(subT => uniqueToots.add(subT.trim()));
+                floorArray.forEach((t) => {
+                  if (typeof t === "string" && t.includes(",")) {
+                    t.split(",").forEach((subT) =>
+                      uniqueToots.add(subT.trim()),
+                    );
                   } else {
                     uniqueToots.add(String(t).trim());
                   }
                 });
               }
             }
-            toots = Array.from(uniqueToots).filter(t => t).sort((a, b) => {
-              // Try numeric sort
-              const numA = parseInt(a.replace(/\D/g, ''));
-              const numB = parseInt(b.replace(/\D/g, ''));
-              if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-              return a.localeCompare(b);
-            });
+            toots = Array.from(uniqueToots)
+              .filter((t) => t)
+              .sort((a, b) => {
+                // Try numeric sort
+                const numA = parseInt(a.replace(/\D/g, ""));
+                const numB = parseInt(b.replace(/\D/g, ""));
+                if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                return a.localeCompare(b);
+              });
             break;
           }
         }
@@ -5198,37 +5218,120 @@ exports.getBuildingToots = asyncHandler(async (req, res, next) => {
       // Look up residents in our DB who have this bairId to provide a selection list
       const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
       const residents = await OrshinSuugchModel.find({
-        $or: [
-          { bairId: bairId },
-          { "toots.bairId": bairId }
-        ]
-      }).select("toot toots.toot toots.bairId").lean();
+        $or: [{ bairId: bairId }, { "toots.bairId": bairId }],
+      })
+        .select("toot toots.toot toots.bairId toots.orts orts")
+        .lean();
 
       const uniqueToots = new Set();
-      residents.forEach(r => {
-        if (String(r.bairId) === String(bairId) && r.toot) uniqueToots.add(String(r.toot).trim());
+      residents.forEach((r) => {
+        // If orts is provided, only include if matches
+        if (String(r.bairId) === String(bairId) && r.toot) {
+          if (!orts || String(r.orts || "1") === String(orts)) {
+            uniqueToots.add(String(r.toot).trim());
+          }
+        }
         if (Array.isArray(r.toots)) {
-          r.toots.forEach(t => {
-            if (String(t.bairId) === String(bairId) && t.toot) uniqueToots.add(String(t.toot).trim());
+          r.toots.forEach((t) => {
+            if (String(t.bairId) === String(bairId) && t.toot) {
+              if (!orts || String(t.orts || "1") === String(orts)) {
+                uniqueToots.add(String(t.toot).trim());
+              }
+            }
           });
         }
       });
 
-      toots = Array.from(uniqueToots).filter(t => t).sort((a, b) => {
-        const numA = parseInt(a.replace(/\D/g, ''));
-        const numB = parseInt(b.replace(/\D/g, ''));
-        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-        return a.localeCompare(b);
-      });
+      toots = Array.from(uniqueToots)
+        .filter((t) => t)
+        .sort((a, b) => {
+          const numA = parseInt(a.replace(/\D/g, ""));
+          const numB = parseInt(b.replace(/\D/g, ""));
+          if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+          return a.localeCompare(b);
+        });
     }
 
     res.status(200).json({
       responseCode: true,
       responseMsg: "Амжилттай",
-      data: toots
+      data: toots,
     });
   } catch (error) {
     console.error("❌ [GET TOOTS] Error:", error.message);
     res.status(200).json({ responseCode: false, data: [] });
+  }
+});
+
+exports.getBuildingOrts = asyncHandler(async (req, res, next) => {
+  const { bairId } = req.params;
+  const { db } = require("zevbackv2");
+  try {
+    let orts = [];
+    if (bairId.startsWith("own_")) {
+      const realBuildingId = bairId.replace("own_", "");
+      const kholboltuud = db.kholboltuud || [];
+      for (const kholbolt of kholboltuud) {
+        const baiguullaga = await Baiguullaga(kholbolt)
+          .findOne({
+            "barilguud._id": realBuildingId,
+          })
+          .select("barilguud")
+          .lean();
+        if (baiguullaga && baiguullaga.barilguud) {
+          const barilga = baiguullaga.barilguud.find(
+            (b) => b._id.toString() === realBuildingId,
+          );
+          if (
+            barilga &&
+            barilga.tokhirgoo &&
+            barilga.tokhirgoo.davkhariinToonuud
+          ) {
+            const ortsSet = new Set();
+            for (const key of Object.keys(barilga.tokhirgoo.davkhariinToonuud)) {
+              if (key.includes("::")) {
+                ortsSet.add(key.split("::")[0]);
+              }
+            }
+            orts = Array.from(ortsSet).sort((a, b) => {
+              const numA = parseInt(a);
+              const numB = parseInt(b);
+              if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+              return a.localeCompare(b);
+            });
+            break;
+          }
+        }
+      }
+    }
+    res.json({ success: true, data: orts });
+  } catch (error) {
+    console.error("❌ [GET ORTS] Error:", error.message);
+    res.status(200).json({ success: false, data: [] });
+  }
+});
+
+exports.getProfileByPhoneOrCustomer = asyncHandler(async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const { phone, customerNo } = req.query; // Changed from body to query for GET request
+    const query = {};
+    if (phone) query.utas = phone;
+    if (customerNo) query.customerNo = customerNo;
+
+    if (Object.keys(query).length === 0) {
+      return res.status(400).json({ success: false, message: "Утас эсвэл харилцагчийн дугаар шаардлагатай" });
+    }
+
+    const user = await OrshinSuugch(db.erunkhiiKholbolt).findOne(query).lean();
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Хэрэглэгч олдсонгүй" });
+    }
+    res.json({ success: true, data: user });
+  } catch (error) {
+    console.error("❌ [GET PROFILE] Error:", error.message);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
