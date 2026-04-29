@@ -94,9 +94,8 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     tailbar: `QPay төлөлт (${dugaar})`,
     source: "nekhemjlekh",
     bankniiGuilgeeId: qpayBarimt.payment_id || dugaar,
-    allocationFilter: qpayBarimt.sukhNekhemjlekh?.nekhemjlekhiinId 
-      ? { nekhemjlekhId: qpayBarimt.sukhNekhemjlekh.nekhemjlekhiinId }
-      : {}
+    ognoo: new Date(),
+    nekhemjlekhId: qpayBarimt.sukhNekhemjlekh?.nekhemjlekhiinId
   });
 
   // Update record status
@@ -170,7 +169,8 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
     tailbar: `QPay төлөлт (Callback: ${nekhemjlekhiinId})`,
     source: "nekhemjlekh",
     bankniiGuilgeeId: paymentTransactionId || nekhemjlekh.qpayInvoiceId || "manual_sync",
-    allocationFilter: { nekhemjlekhId: nekhemjlekhiinId },
+    ognoo: new Date(),
+    nekhemjlekhId: nekhemjlekhiinId,
   });
 
   // Update Invoice state

@@ -25,17 +25,21 @@ router.get("/qpayBankAccountsView", async (req, res, next) => {
     const { baiguullagiinId, salbariinId } = req.query;
 
     if (!baiguullagiinId) {
+      console.warn("⚠️ [QPAY-BANK-ACCOUNTS] Reject: baiguullagiinId is missing");
       return res.status(400).send({
         success: false,
         message: "baiguullagiinId is required",
       });
     }
 
+    console.log(`ℹ️ [QPAY-BANK-ACCOUNTS] Fetching accounts for org: ${baiguullagiinId}, salbar: ${salbariinId || "ALL"}`);
+
     var kholbolt = db.kholboltuud.find(
       (a) => String(a.baiguullagiinId) === String(baiguullagiinId),
     );
 
     if (!kholbolt) {
+      console.error(`❌ [QPAY-BANK-ACCOUNTS] Organization connection not found for ID: ${baiguullagiinId}`);
       return res.status(404).send({
         success: false,
         message: "Organization connection not found",
@@ -54,6 +58,7 @@ router.get("/qpayBankAccountsView", async (req, res, next) => {
       !qpayConfig.salbaruud ||
       !Array.isArray(qpayConfig.salbaruud)
     ) {
+      console.log(`ℹ️ [QPAY-BANK-ACCOUNTS] No salbaruud found for org: ${baiguullagiinId}`);
       return res.send({
         success: true,
         bank_accounts: [],
@@ -99,7 +104,9 @@ router.get("/qpayBankAccountsView", async (req, res, next) => {
       baiguullagiinId: baiguullagiinId,
       salbaruud: result,
     });
+    console.log(`✅ [QPAY-BANK-ACCOUNTS] Returned ${result.length} salbaruud with bank accounts`);
   } catch (err) {
+    console.error("❌ [QPAY-BANK-ACCOUNTS] Fatal error:", err.message);
     next(err);
   }
 });
@@ -168,6 +175,8 @@ router.get(
       qpayObject.tulsunEsekh = true;
       qpayObject.isNew = false;
       await qpayObject.save();
+      console.log(`✅ [QPAY CALLBACK] Saved status=PAID for order: ${zd}`);
+
       const io = req.app.get("socketio");
       if (io) {
         io.emit(`qpay/${b}/${qpayObject.zakhialgiinDugaar}`);
@@ -192,6 +201,7 @@ router.get(
       });
       res.sendStatus(200);
     } catch (err) {
+      console.error(`❌ [QPAY CALLBACK] Fatal error for order ${req.params.zakhialgiinDugaar}:`, err.message);
       next(err);
     }
   },
@@ -262,6 +272,8 @@ router.get(
       qpayObject.tulsunEsekh = true;
       qpayObject.isNew = false;
       await qpayObject.save();
+      console.log(`✅ [QPAY CALLBACK GADAA] Saved status=PAID for order: ${zd}`);
+
       const ioSticker = req.app.get("socketio");
       if (ioSticker) {
         ioSticker.emit(`qpay/${b}/${qpayObject.zakhialgiinDugaar}`);
@@ -376,6 +388,14 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
     // - addressSource: "CUSTOM"     -> force custom QPay
     const addressSourceOverride = req.body.addressSource;
 
+    console.log(`ℹ️ [QPAY-GARGAYA] Request started`, {
+      baiguullagiinId: req.body.baiguullagiinId,
+      barilgiinId: req.body.barilgiinId,
+      dun: req.body.dun,
+      turul: req.body.turul,
+      addressSourceOverride,
+    });
+
     // Try to get user from token to check address / wallet source
     try {
       const jwt = require("jsonwebtoken");
@@ -424,9 +444,12 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
       }
     } catch (tokenError) {
       // Default to custom QPay if detection fails
+      console.warn(`⚠️ [QPAY-GARGAYA] Token detection failed or no token: ${tokenError.message}`);
       detectedSource = "CUSTOM";
       useWalletQPay = false;
     }
+
+    console.log(`ℹ️ [QPAY-GARGAYA] Decision: source=${detectedSource}, useWalletQPay=${useWalletQPay}, phone=${userPhoneNumber || "N/A"}`);
 
     // If useWalletQPay is true, route to Wallet API QPay
     if (useWalletQPay && userPhoneNumber) {
@@ -470,6 +493,8 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
             vatReceiveType: req.body.vatReceiveType || "CITIZEN",
             vatCompanyReg: req.body.vatCompanyReg || "",
           };
+
+          console.log(`ℹ️ [QPAY-WALLET] Auto-creating invoice for billing: ${req.body.billingId}`);
 
           try {
             const invoiceResult = await walletApiService.createInvoice(
@@ -518,6 +543,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
                 "Failed to create invoice - invoiceId not returned",
               );
             }
+            console.log(`✅ [QPAY-WALLET] Created invoiceId: ${invoiceId}`);
           } catch (invoiceError) {
             // If invoice creation fails because bill is already in another invoice
             const errorMessage = invoiceError.message || "";
@@ -528,6 +554,8 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
               errorMessage.includes("already") ||
               errorMessage.includes("төлөлт хийгдэж") ||
               errorMessage.includes("Билл өөр нэхэмжлэлээр");
+
+            console.warn(`⚠️ [QPAY-WALLET] Bill already in invoice, attempting to find existing payment: ${errorMessage}`);
 
             if (isBillAlreadyInInvoice) {
               try {
@@ -646,8 +674,10 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
                       source: "WALLET_API",
                     });
                   } else {
+                    console.log(`⚠️ [QPAY-WALLET] No paymentId found in existing payment`);
                   }
                 } else {
+                  console.log(`⚠️ [QPAY-WALLET] No existing payments found for billing: ${req.body.billingId}`);
                 }
               } catch (paymentError) {
                 // Don't throw - continue to return error about bill already in invoice
@@ -670,6 +700,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
             throw invoiceError;
           }
         } else if (!invoiceId) {
+          console.warn(`⚠️ [QPAY-WALLET] No invoiceId and cannot auto-create (missing billingId/billIds)`);
         }
 
         // Check if invoiceId is available (required for Wallet API payment)
@@ -702,6 +733,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
           userPhoneNumber,
           paymentData,
         );
+        console.log(`✅ [QPAY-WALLET] Created paymentId: ${result.paymentId} for invoice: ${invoiceId}`);
 
         // Check if bank details are in the initial createPayment response
         const hasInitialBankDetails =
@@ -773,7 +805,9 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
               } else {
               }
             }
-          } catch (getPaymentError) {}
+          } catch (getPaymentError) {
+            console.error(`❌ [QPAY-WALLET] Error getting payment details for ${result.paymentId}:`, getPaymentError.message);
+          }
 
           // Merge payment details with initial response
           Object.assign(result, {
@@ -786,6 +820,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
           });
 
           if (!bankCode || !accountNo) {
+            console.warn(`⚠️ [QPAY-WALLET] Still no bank details for payment ${result.paymentId} after polling delay`);
           }
         }
 
@@ -939,6 +974,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
         });
       } catch (walletQPayError) {
         // Fall back to custom QPay if Wallet QPay fails
+        console.error(`❌ [QPAY-WALLET] Fatal failure in wallet flow, falling back to CUSTOM:`, walletQPayError.message);
         useWalletQPay = false;
         detectedSource = "CUSTOM";
       }
@@ -1033,7 +1069,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
           req.body?.zakhialgiinDugaar;
       }
 
-      if (req.body.gereeniiId && req.body.dansniiDugaar) {
+      if (req.body.barilgiinId) {
         callback_url =
           process.env.UNDSEN_SERVER +
           "/qpayTulye/" +
@@ -1429,9 +1465,11 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
       dugaarlalt.dugaar = maxDugaar;
       await dugaarlalt.save();
 
+      console.log(`✅ [QPAY-GARGAYA] Success: invoice_id=${khariu.invoice_id || khariu.invoiceId || khariu.id}`);
       res.send(khariu);
     }
   } catch (err) {
+    console.error(`❌ [QPAY-GARGAYA] Fatal error:`, err.message);
     next(err);
   }
 });
@@ -1478,6 +1516,7 @@ router.post("/qpayShalgay", tokenShalgakh, async (req, res, next) => {
     }
 
     const khariu = await qpayShalgay(req.body, tukhainBaaziinKholbolt);
+    console.log(`✅ [QPAY-SHALGAY] Success: status=${khariu.invoice_status || khariu.tuluv || "UNKNOWN"}`);
     res.send(khariu);
   } catch (err) {
     // If QPay API itself returns 500, try to fall back to DB invoice status

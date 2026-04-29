@@ -59,6 +59,19 @@ async function recordPayment(kholbolt, data, options = {}) {
 
   const { session } = options;
 
+
+  if (data.bankniiGuilgeeId) {
+    const existing = await GuilgeeAvlaguudModel.findOne({
+      bankniiGuilgeeId: data.bankniiGuilgeeId,
+      baiguullagiinId: data.baiguullagiinId,
+      turul: "төлөлт"
+    }).session(session);
+
+    if (existing) {
+      return { success: true, paymentRecord: existing, alreadyExists: true };
+    }
+  }
+
   const paymentRecord = new GuilgeeAvlaguudModel({
     ...data,
     dun: -paidAmount,

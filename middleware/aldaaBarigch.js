@@ -43,6 +43,8 @@ const aldaaBarigch = (err, req, res, next) => {
         CAMERA_IP: req.body.CAMERA_IP,
         barilgiinId: req.body.barilgiinId,
         baiguullagiinId: req.body.baiguullagiinId,
+        invoice_id: req.body.invoice_id || req.body.invoiceId,
+        billingId: req.body.billingId,
       } : undefined,
     });
     
