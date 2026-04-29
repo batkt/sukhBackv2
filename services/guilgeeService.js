@@ -23,12 +23,23 @@ async function recordCharge(kholbolt, data, options = {}) {
   const GuilgeeAvlaguudModel = GuilgeeAvlaguud(kholbolt);
   const amount = roundMoney(Math.abs(data.dun || 0));
 
+  // Automatically find or CREATE a 'home' invoice if not provided
+  if (!data.nekhemjlekhId && data.gereeniiId) {
+    const invoiceService = require("./invoiceService");
+    const activeInv = await invoiceService.ensureActiveInvoice(kholbolt, data.gereeniiId);
+
+    if (activeInv) {
+      data.nekhemjlekhId = activeInv._id.toString();
+    }
+  }
+
   const charge = new GuilgeeAvlaguudModel({
     ...data,
     dun: amount,
     undsenDun: amount,
     tulukhDun: amount,
     tulsunDun: 0,
+    tulsunAldangi: 0,
   });
 
   if (options.session) {

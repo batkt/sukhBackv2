@@ -150,8 +150,36 @@ async function ensureEkhniiUldegdel(kholbolt, geree, options = {}) {
   return false;
 }
 
+async function ensureActiveInvoice(kholbolt, gereeId, options = {}) {
+  const NekhemjlekhiinTuukhModel = NekhemjlekhiinTuukh(kholbolt);
+  const GereeModel = Geree(kholbolt);
+
+  const unpaid = await NekhemjlekhiinTuukhModel.findOne({
+    gereeniiId: gereeId,
+    tuluv: "Төлөөгүй",
+  }).sort({ ognoo: -1, createdAt: -1 });
+
+  if (unpaid) return unpaid;
+
+  // If no unpaid invoice, create a new one to house any new debt
+  const geree = await GereeModel.findById(gereeId).lean();
+  if (!geree) return null;
+
+  const result = await createInvoiceForContract(kholbolt, gereeId, {
+    ...options,
+    forceEmpty: true, // Create even if only ekhniiUldegdel exists
+    billingDate: new Date()
+  });
+
+  if (result.success) {
+    return await NekhemjlekhiinTuukhModel.findById(result.invoiceId);
+  }
+  return null;
+}
+
 module.exports = {
   calculateGereeCharges,
   createInvoiceForContract,
   ensureEkhniiUldegdel,
+  ensureActiveInvoice,
 };
