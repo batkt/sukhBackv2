@@ -121,6 +121,8 @@ app.use(
       "Accept",
       "X-Requested-With",
       "Cache-Control",
+      "Pragma",
+      "userId",
       "X-Org-Only",
     ],
   })
