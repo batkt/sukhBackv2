@@ -62,9 +62,9 @@ async function nekhemjlekheesEbarimtShineUusgye(
     ebarimt.gereeniiDugaar = nekhemjlekh.gereeniiDugaar;
     ebarimt.utas = nekhemjlekh.utas?.[0] || "";
 
-    ebarimt.totalAmount = dun.toFixed(2);
-    ebarimt.totalVAT = !!nuatTulukhEsekh ? nuatBodyo(dun) : 0;
-    ebarimt.totalCityTax = "0.00";
+    ebarimt.totalAmount = Number(dun.toFixed(2));
+    ebarimt.totalVAT = Number(!!nuatTulukhEsekh ? nuatBodyo(dun) : 0);
+    ebarimt.totalCityTax = 0.00;
     ebarimt.branchNo = "001";
     ebarimt.districtCode = String(districtCode || "").padStart(4, "0");
     ebarimt.posNo = "0001";
@@ -80,10 +80,10 @@ async function nekhemjlekheesEbarimtShineUusgye(
       classificationCode: "7211200",
       measureUnit: "шир",
       qty: "1.00",
-      unitPrice: dun.toFixed(2),
-      totalVat: !!nuatTulukhEsekh ? nuatBodyo(dun) : 0,
-      totalCityTax: "0.00",
-      totalAmount: dun.toFixed(2),
+      unitPrice: Number(dun.toFixed(2)),
+      totalVat: Number(!!nuatTulukhEsekh ? nuatBodyo(dun) : 0),
+      totalCityTax: 0.00,
+      totalAmount: Number(dun.toFixed(2)),
     };
 
     if (
@@ -96,9 +96,9 @@ async function nekhemjlekheesEbarimtShineUusgye(
 
     ebarimt.receipts = [
       {
-        totalAmount: dun.toFixed(2),
-        totalVAT: !!nuatTulukhEsekh ? nuatBodyo(dun) : 0,
-        totalCityTax: "0.00",
+        totalAmount: Number(dun.toFixed(2)),
+        totalVAT: Number(!!nuatTulukhEsekh ? nuatBodyo(dun) : 0),
+        totalCityTax: 0.00,
         taxType: taxType,
         merchantTin: merchantTin,
         items: [item],
@@ -108,7 +108,7 @@ async function nekhemjlekheesEbarimtShineUusgye(
     ebarimt.payments = [
       {
         code: "PAYMENT_CARD",
-        paidAmount: dun.toFixed(2),
+        paidAmount: Number(dun.toFixed(2)),
         status: "PAID",
       },
     ];
@@ -140,7 +140,9 @@ async function ebarimtDuudya(ugugdul, onFinish, next, shine = false, baiguullagi
         url,
       });
       
-      request.post(url, { json: true, body: ugugdul }, (err, res1, body) => {
+      const requestBody = { receipt: typeof ugugdul.toObject === 'function' ? ugugdul.toObject() : ugugdul };
+      
+      request.post(url, { json: true, body: requestBody }, (err, res1, body) => {
         if (err) {
           console.error("[EBARIMT] request.post error:", err.message, { url });
           if (next) next(err);
