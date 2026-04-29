@@ -202,16 +202,20 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     const dun = Number(it.dun || 0);
     const invId = it.nekhemjlekhId ? String(it.nekhemjlekhId) : "uninvoiced";
 
+    // Ensure invoice container exists
+    if (invId !== "uninvoiced" && !invoiceData[invId]) {
+      invoiceData[invId] = { charges: 0, payments: 0, date: it.ognoo || it.createdAt, id: invId };
+    }
+
     if (dun > 0) {
       totalTulbur += dun;
-      if (!invoiceData[invId]) {
-        invoiceData[invId] = { charges: 0, payments: 0, date: it.ognoo || it.createdAt, id: invId };
+      if (invId !== "uninvoiced") {
+        invoiceData[invId].charges += dun;
       }
-      invoiceData[invId].charges += dun;
     } else {
       const amt = Math.abs(dun);
       totalTulsun += amt;
-      if (it.nekhemjlekhId && invoiceData[invId]) {
+      if (invId !== "uninvoiced") {
         invoiceData[invId].payments += amt;
       } else {
         generalPayments += amt;
@@ -244,6 +248,17 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
         { $set: { tuluv: uld <= 0 ? "Төлсөн" : "Төлөөгүй" } }
       ).catch(() => {});
     }
+  }
+
+  // Ensure a new unpaid invoice exists if all current ones are paid
+  const anyUnpaid = nekhemjlekhuud.some(inv => inv.tuluv === "Төлөөгүй");
+  if (!anyUnpaid) {
+    const invoiceService = require("../services/invoiceService");
+    await invoiceService.ensureActiveInvoice(
+      GuilgeeAvlaguudModel.db, // Use the model's DB connection
+      gereeniiId,
+      { skipCharges: true }
+    ).catch(err => console.error("Error auto-creating next invoice:", err));
   }
 
   res.json({

@@ -64,61 +64,6 @@ nekhemjlekhiinTuukhSchema.pre("save", function (next) {
   next();
 });
 
-nekhemjlekhiinTuukhSchema.post("find", async function (docs) {
-  if (!docs || docs.length === 0) return;
-
-  try {
-    const { db } = require("zevbackv2");
-    const GuilgeeAvlaguud = require("./guilgeeAvlaguud");
-
-    for (const doc of docs) {
-      if (!doc.baiguullagiinId) continue;
-      const kholbolt = db.kholboltuud.find(
-        (k) => String(k.baiguullagiinId) === String(doc.baiguullagiinId),
-      );
-
-      if (kholbolt) {
-        const items = await GuilgeeAvlaguud(kholbolt)
-          .find({ nekhemjlekhId: doc._id.toString(), dun: { $gt: 0 } })
-          .lean();
-
-        doc.zardal = items;
-        // Optionally also sync medeelel.zardluud if it exists
-        if (doc.medeelel) {
-          doc.medeelel.zardluud = items;
-        }
-      }
-    }
-  } catch (error) {
-    console.error("Error populating zardal in nekhemjlekhiinTuukh:", error);
-  }
-});
-
-nekhemjlekhiinTuukhSchema.post("findOne", async function (doc) {
-  if (!doc || !doc.baiguullagiinId) return;
-
-  try {
-    const { db } = require("zevbackv2");
-    const GuilgeeAvlaguud = require("./guilgeeAvlaguud");
-
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(doc.baiguullagiinId),
-    );
-
-    if (kholbolt) {
-      const items = await GuilgeeAvlaguud(kholbolt)
-        .find({ nekhemjlekhId: doc._id.toString(), dun: { $gt: 0 } })
-        .lean();
-
-      doc.zardal = items;
-      if (doc.medeelel) {
-        doc.medeelel.zardluud = items;
-      }
-    }
-  } catch (error) {
-    console.error("Error populating zardal in nekhemjlekhiinTuukh:", error);
-  }
-});
 const { runDeleteSideEffects } = require("../services/invoiceDeletionService");
 
 const handleBalanceOnDelete = async function (doc) {

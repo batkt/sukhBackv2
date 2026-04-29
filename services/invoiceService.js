@@ -144,43 +144,31 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     ekhniiUldegdelEsekh: true
   });
 
-  for (const c of charges) {
-    if (c.isEkhniiUldegdel && existingEkhnii) continue;
+  if (!options.skipCharges) {
+    for (const c of charges) {
+      if (c.isEkhniiUldegdel && existingEkhnii) continue;
 
-    await guilgeeService.recordCharge(kholbolt, {
-      ...geree,
-      _id: undefined,
-      gereeniiId: geree._id.toString(),
-      nekhemjlekhId: invoice._id.toString(),
-      dun: c.dun,
-      zardliinNer: c.ner,
-      tailbar: c.ner,
-      zardliinTurul: c.zardliinTurul,
-      ognoo: options.billingDate || new Date(),
-      source: c.isEkhniiUldegdel ? "geree" : "nekhemjlekh",
-      ekhniiUldegdelEsekh: !!c.isEkhniiUldegdel,
-      guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
-      guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.orshinSuugchId,
-    });
+      await guilgeeService.recordCharge(kholbolt, {
+        ...geree,
+        _id: undefined,
+        gereeniiId: geree._id.toString(),
+        nekhemjlekhId: invoice._id.toString(),
+        dun: c.dun,
+        zardliinNer: c.ner,
+        tailbar: c.ner,
+        zardliinTurul: c.zardliinTurul,
+        ognoo: options.billingDate || new Date(),
+        source: c.isEkhniiUldegdel ? "geree" : "nekhemjlekh",
+        ekhniiUldegdelEsekh: !!c.isEkhniiUldegdel,
+        guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
+        guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.orshinSuugchId,
+      });
+    }
   }
 
-  // 4. Update invoice with live total and snapshot from ledger
-  const allLedgerItems = await GuilgeeAvlaguudModel.find({ 
-    nekhemjlekhId: invoice._id.toString() 
-  }).lean();
-  
-  invoice.niitTulbur = allLedgerItems.reduce((sum, it) => sum + (it.dun || 0), 0);
-  invoice.medeelel = { 
-    zardluud: allLedgerItems.map(it => ({
-      ner: it.zardliinNer,
-      dun: it.dun,
-      turul: it.zardliinTurul,
-      isEkhniiUldegdel: it.ekhniiUldegdelEsekh
-    }))
-  };
-  await invoice.save();
-
-  return { success: true, invoiceId: invoice._id, total: invoice.niitTulbur };
+  // 5. Done. We no longer snapshot charges or totals into the invoice document.
+  // The ledger is the only source of truth.
+  return { success: true, invoiceId: invoice._id, status: invoice.tuluv };
 }
 
 async function ensureEkhniiUldegdel(kholbolt, geree, options = {}) {

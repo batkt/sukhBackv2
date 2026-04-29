@@ -107,6 +107,7 @@ router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
       const activeInv = await invoiceService.ensureActiveInvoice(
         tukhainBaaziinKholbolt,
         gereeniiId,
+        { skipCharges: true }
       );
       if (activeInv) {
         req.body.nekhemjlekhId = activeInv._id.toString();
