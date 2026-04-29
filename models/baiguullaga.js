@@ -88,6 +88,19 @@ const baiguullagaSchema = new Schema(
             davtamjUtga: Number,
             orshinSuugchMashiniiLimit: Number
           },
+          bodokhArgaEnabled: {
+            type: Boolean,
+            default: false,
+          },
+          bodokhArga: {
+            type: String,
+            enum: ["Хуанли", "Тогтмол"],
+            default: "Хуанли",
+          },
+          bodokhKhonog: {
+            type: Number,
+            default: 30,
+          },
 
           /** Лифт шалгая - хөлөгдсөн давхрууд */
           liftShalgaya: {
