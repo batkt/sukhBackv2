@@ -2,7 +2,6 @@ const asyncHandler = require("express-async-handler");
 const invoiceService = require("../services/invoiceService");
 const previewService = require("../services/invoicePreviewService");
 const sendService = require("../services/invoiceSendService");
-const paymentService = require("../services/invoicePaymentService");
 const zardalService = require("../services/invoiceZardalService");
 const deletionService = require("../services/invoiceDeletionService");
 
@@ -49,12 +48,6 @@ const manualSendMassInvoices = asyncHandler(async (req, res) => {
   res.status(result.success ? 200 : 400).json(result);
 });
 
-const markInvoicesAsPaid = asyncHandler(async (req, res) => {
-  const result = await paymentService.markInvoicesAsPaid(req.body);
-  emitUpdate(req, req.body.baiguullagiinId);
-  res.status(result.success ? 200 : 400).json(result);
-});
-
 const deleteInvoice = asyncHandler(async (req, res) => {
   const { invoiceId, baiguullagiinId } = req.body;
   const id = invoiceId || req.params.id;
@@ -74,7 +67,6 @@ module.exports = {
   previewInvoice,
   manualSendInvoice,
   manualSendMassInvoices,
-  markInvoicesAsPaid,
   deleteInvoice,
   deleteInvoiceZardal,
 };

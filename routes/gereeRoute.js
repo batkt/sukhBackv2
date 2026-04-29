@@ -79,11 +79,13 @@ crud(router, "liftShalgaya", LiftShalgaya, UstsanBarimt);
 
 // Emit tulburUpdated on delete of avlaga records so web clients refresh
 router.use((req, res, next) => {
-  const isAvlagaDelete =
+  const isAvlagaMutation =
     (req.method === "DELETE" ||
+      req.method === "POST" ||
+      req.method === "PUT" ||
       (req.method === "POST" && req.path?.includes("delete"))) &&
     req.path?.includes("guilgeeAvlaguud");
-  if (!isAvlagaDelete) return next();
+  if (!isAvlagaMutation) return next();
   const originalJson = res.json.bind(res);
   res.json = function (data) {
     const baiguullagiinId = req.query?.baiguullagiinId || req.body?.baiguullagiinId;

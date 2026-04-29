@@ -10,7 +10,6 @@ const {
   previewInvoice,
   manualSendInvoice,
   manualSendMassInvoices,
-  markInvoicesAsPaid,
   deleteInvoiceZardal,
   deleteInvoice,
 } = require("../controller/nekhemjlekhController");
@@ -23,7 +22,6 @@ router.post("/generateGenericExcel", tokenShalgakh, downloadExcelList);
 router.get("/preview", tokenShalgakh, previewInvoice);
 router.post("/manualSend", tokenShalgakh, manualSendInvoice);
 router.post("/manualSendMass", tokenShalgakh, manualSendMassInvoices);
-router.post("/markInvoicesAsPaid", tokenShalgakh, markInvoicesAsPaid);
 router.post("/deleteInvoice", tokenShalgakh, deleteInvoice);
 router.post("/nekhemjlekhiinTuukh/deleteZardal", tokenShalgakh, deleteInvoiceZardal);
 
