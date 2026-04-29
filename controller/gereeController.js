@@ -204,7 +204,23 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   const invoiceData = {}; // nekhemjlekhId -> { charges: 0, payments: 0, date: Date }
   let generalPayments = 0;
 
-  // Group all uninvoiced items into a single "Current" bucket
+
+  const firstRealInvoice = allItems.find((it) => it.nekhemjlekhId);
+  if (firstRealInvoice) {
+    const orphanIds = allItems
+      .filter((it) => !it.nekhemjlekhId)
+      .map((it) => it._id);
+
+    if (orphanIds.length > 0) {
+      const GuilgeeAvlaguudModel = GuilgeeAvlaguud(tukhainBaaziinKholbolt);
+      await GuilgeeAvlaguudModel.updateMany(
+        { _id: { $in: orphanIds } },
+        { $set: { nekhemjlekhId: firstRealInvoice.nekhemjlekhId } },
+      );
+      allItems = await GuilgeeAvlaguudModel.find({ gereeniiId }).sort({ ognoo: 1 });
+    }
+  }
+
   const itemsWithIds = allItems.map((item) => {
     const it = item.toObject();
     if (!it.nekhemjlekhId) {
