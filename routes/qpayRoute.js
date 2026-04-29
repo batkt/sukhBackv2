@@ -2017,7 +2017,19 @@ router.get(
               const bankGuilgee = new BankniiGuilgee(kholbolt)();
 
               bankGuilgee.tranDate = new Date();
-              bankGuilgee.amount = nekhemjlekh.niitTulbur || 0;
+              let invoicePaidAmount = nekhemjlekh.niitTulbur || 0;
+              if (invoicePaidAmount <= 0) {
+                // Fallback to ledger charge record if niitTulbur is 0
+                const chargeRecord = await GuilgeeAvlaguud(kholbolt).findOne({
+                  nekhemjlekhId: nekhemjlekh._id.toString(),
+                  dun: { $gt: 0 }
+                });
+                if (chargeRecord) {
+                  invoicePaidAmount = chargeRecord.undsenDun || chargeRecord.dun || 0;
+                }
+              }
+
+              bankGuilgee.amount = invoicePaidAmount;
               bankGuilgee.description = `QPay төлбөр (Олон нэхэмжлэх) - Гэрээ ${nekhemjlekh.gereeniiDugaar}`;
               bankGuilgee.accName = nekhemjlekh.nekhemjlekhiinDansniiNer || "";
               bankGuilgee.accNum = nekhemjlekh.nekhemjlekhiinDans || "";
@@ -2037,7 +2049,7 @@ router.get(
               bankGuilgee.bank = nekhemjlekh.nekhemjlekhiinBank || "qpay";
               bankGuilgee.baiguullagiinId = nekhemjlekh.baiguullagiinId;
               bankGuilgee.barilgiinId = nekhemjlekh.barilgiinId || "";
-              bankGuilgee.kholbosonDun = nekhemjlekh.niitTulbur || 0;
+              bankGuilgee.kholbosonDun = invoicePaidAmount;
               bankGuilgee.ebarimtAvsanEsekh = false;
               bankGuilgee.drOrCr = "Credit";
               bankGuilgee.tranCrnCode = "MNT";
@@ -2062,7 +2074,7 @@ router.get(
               orshinSuugchId: nekhemjlekh.orshinSuugchId || "",
               nekhemjlekhId: nekhemjlekh._id?.toString() || null,
               ognoo: new Date(),
-              dun: nekhemjlekh.niitTulbur || 0,
+              dun: invoicePaidAmount,
               tailbar: `QPay төлбөр (Олон нэхэмжлэх) - ${nekhemjlekh.gereeniiDugaar || ""}`,
               source: "nekhemjlekh",
             });

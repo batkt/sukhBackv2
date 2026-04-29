@@ -206,36 +206,46 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
     console.log(`ℹ️ [QPAY_SYNC] No qpayInvoiceId found on invoice record; using niitTulbur for ledger record.`);
   }
 
-  // FALLBACK: If paidAmount is still 0 (niitTulbur=0 or QPay status check failed),
-  // read the authoritative charge amount from the ledger for this invoice.
+  // FALLBACK HIERARCHY for paidAmount:
+  // If paidAmount is still 0 (due to QPay status check failure or niitTulbur=0),
+  // we try to resolve it from the local QPay record or ledger balance.
   if (paidAmount <= 0) {
-    console.warn(`⚠️ [QPAY-INVOICE CALLBACK] paidAmount is 0. Attempting ledger charge fallback for invoice: ${nekhemjlekhiinId}`);
+    console.warn(`⚠️ [QPAY-INVOICE CALLBACK] paidAmount is 0. Attempting fallback for invoice: ${nekhemjlekhiinId}`);
     try {
-      const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-      const GuilgeeAvlaguudModel = GuilgeeAvlaguud(kholbolt);
+      // 1. Try to get the amount from our local QPay record (QuickQpayObject)
+      const { QuickQpayObject } = require("quickqpaypackvSukh");
+      const QuickQpayModel = QuickQpayObject(kholbolt);
+      const qpayRecord = await QuickQpayModel.findOne({ 
+        $or: [
+          { invoice_id: nekhemjlekh.qpayInvoiceId },
+          { "sukhNekhemjlekh.nekhemjlekhiinId": nekhemjlekhiinId }
+        ]
+      }).sort({ ognoo: -1 });
 
-      // Find the charge record linked to this invoice (positive dun = charge)
-      const chargeRecord = await GuilgeeAvlaguudModel.findOne({
-        nekhemjlekhId: nekhemjlekhiinId,
-        dun: { $gt: 0 },
-      });
+      if (qpayRecord) {
+        const recordAmount = parseFloat(qpayRecord.sukhNekhemjlekh?.pay_amount || qpayRecord.amount || qpayRecord.qpay?.amount || 0);
+        if (recordAmount > 0) {
+          paidAmount = recordAmount;
+          console.log(`✅ [QPAY-INVOICE CALLBACK] Resolved amount from QPay record: ${paidAmount}`);
+        }
+      }
 
-      if (chargeRecord) {
-        paidAmount = chargeRecord.undsenDun || chargeRecord.dun || 0;
-        console.log(`✅ [QPAY-INVOICE CALLBACK] Ledger charge fallback: paidAmount=${paidAmount} (from charge record ${chargeRecord._id})`);
-      } else {
-        // Last resort: use the current outstanding balance for this invoice
+      // 2. If still 0, try current ledger balance (only as a secondary fallback)
+      if (paidAmount <= 0) {
         const currentBalance = await guilgeeService.getBalance(kholbolt, { nekhemjlekhId: nekhemjlekhiinId });
         if (currentBalance > 0) {
           paidAmount = currentBalance;
-          console.log(`✅ [QPAY-INVOICE CALLBACK] Balance fallback: paidAmount=${paidAmount}`);
-        } else {
-          console.error(`❌ [QPAY-INVOICE CALLBACK] All fallbacks exhausted. Cannot determine paidAmount for invoice: ${nekhemjlekhiinId}`);
+          console.log(`✅ [QPAY-INVOICE CALLBACK] Resolved amount from Ledger balance: ${paidAmount}`);
         }
       }
     } catch (fallbackErr) {
-      console.error(`❌ [QPAY-INVOICE CALLBACK] Ledger fallback failed:`, fallbackErr.message);
+      console.error(`❌ [QPAY-INVOICE CALLBACK] Fallback logic failed:`, fallbackErr.message);
     }
+  }
+
+  if (paidAmount <= 0) {
+    console.error(`❌ [QPAY-INVOICE CALLBACK] All amount resolution strategies failed for invoice: ${nekhemjlekhiinId}`);
+    return res.status(400).send("Could not determine payment amount");
   }
 
   // Record in Ledger (GuilgeeAvlaguud)

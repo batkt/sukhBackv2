@@ -270,7 +270,7 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   if (!hasActiveContainer) {
     const invoiceService = require("../services/invoiceService");
     await invoiceService.ensureActiveInvoice(
-      GuilgeeAvlaguudModel.db, // Use the model's DB connection
+      kholbolt, 
       gereeniiId,
       { skipCharges: true }
     ).catch(err => console.error("Error auto-creating next invoice:", err));

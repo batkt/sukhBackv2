@@ -635,6 +635,8 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
       orts: item.orts || "1",
       davkhar: item.davkhar || "",
       toot: item.toot || "",
+      turul: item.turul || "Үндсэн",
+      duusakhOgnoo: item.duusakhOgnoo ? new Date(item.duusakhOgnoo).toISOString().split("T")[0] : "",
       bairniiNer: item.bairniiNer || "",
       duureg: item.duureg || "",
       horoo:
@@ -655,6 +657,8 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
       { key: "orts", label: "Орц" },
       { key: "davkhar", label: "Давхар" },
       { key: "toot", label: "Тоот" },
+      { key: "turul", label: "Төрөл" },
+      { key: "duusakhOgnoo", label: "Гэрээ дуусах огноо" },
       { key: "bairniiNer", label: "Барилгын нэр" },
       { key: "duureg", label: "Дүүрэг" },
       { key: "horoo", label: "Хороо" },
@@ -662,7 +666,7 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
     ];
     req.body.fileName = req.body.fileName || `orshinSuugch_${Date.now()}`;
     req.body.sheetName = req.body.sheetName || "Оршин суугчид";
-    req.body.colWidths = [10, 20, 20, 15, 25, 10, 10, 10, 25, 15, 15, 20];
+    req.body.colWidths = [10, 20, 20, 15, 25, 10, 10, 10, 15, 20, 25, 15, 15, 20];
 
     // Call downloadExcelList function directly
     return exports.downloadExcelList(req, res, next);
@@ -902,6 +906,8 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
       "Орц",
       "Давхар",
       "Тоот",
+      "Төрөл",
+      "Гэрээ дуусах огноо",
       "Эхний үлдэгдэл",
       "Цахилгаан кВт (тариф ₮/кВт)",
       "Тайлбар",
@@ -913,7 +919,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     worksheet.columns = headers.map((h, i) => ({
       header: h,
       key: h,
-      width: [15, 15, 12, 25, 10, 10, 10, 15, 22, 22, 30][i] || 15,
+      width: [15, 15, 12, 25, 10, 10, 10, 15, 20, 15, 22, 22, 30][i] || 15,
     }));
 
     // Data validation for Orts (Column E) and Davkhar (Column F)
@@ -1081,6 +1087,8 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             : 0,
           tsahilgaaniiZaalt, // Тариф ₮/кВт (оршин суугч)
           initialMeterReading, // Тоолуурын эхний нийт заалт (кВт·ц) — гэрээнд
+          turul: row["Төрөл"]?.toString().trim() || "Үндсэн",
+          duusakhOgnoo: row["Гэрээ дуусах огноо"] ? new Date(row["Гэрээ дуусах огноо"]) : null,
           tailbar: row["Тайлбар"]?.toString().trim() || "",
           khonogoorBodokhEsekh:
             row["Хоногоор бодох"] === true ||
