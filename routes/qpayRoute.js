@@ -2017,9 +2017,31 @@ router.get(
               const bankGuilgee = new BankniiGuilgee(kholbolt)();
 
               bankGuilgee.tranDate = new Date();
-              let invoicePaidAmount = nekhemjlekh.niitTulbur || 0;
+              let invoicePaidAmount = 0;
+
+              // Priority 1: Try to get amount from local QPay record (the intended amount)
+              try {
+                const { QuickQpayObject } = require("quickqpaypackvSukh");
+                const QuickQpayModel = QuickQpayObject(kholbolt);
+                const qp = await QuickQpayModel.findOne({
+                  $or: [
+                    { invoice_id: nekhemjlekh.qpayInvoiceId },
+                    { "sukhNekhemjlekh.nekhemjlekhiinId": nekhemjlekh._id.toString() }
+                  ]
+                }).sort({ ognoo: -1 });
+                
+                if (qp) {
+                   invoicePaidAmount = parseFloat(qp.sukhNekhemjlekh?.pay_amount || qp.amount || qp.qpay?.amount || 0);
+                }
+              } catch (qpErr) {}
+
+              // Priority 2: Fallback to niitTulbur only if 0
               if (invoicePaidAmount <= 0) {
-                // Fallback to ledger charge record if niitTulbur is 0
+                invoicePaidAmount = nekhemjlekh.niitTulbur || 0;
+              }
+
+              // Priority 3: Fallback to ledger charge record if still 0
+              if (invoicePaidAmount <= 0) {
                 const chargeRecord = await GuilgeeAvlaguud(kholbolt).findOne({
                   nekhemjlekhId: nekhemjlekh._id.toString(),
                   dun: { $gt: 0 }

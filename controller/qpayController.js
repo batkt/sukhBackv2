@@ -186,7 +186,7 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
 
   // Try to fetch latest info from QPay if possible
   const { qpayShalgay } = require("quickqpaypackvSukh");
-  let paidAmount = nekhemjlekh.niitTulbur || 0;
+  let paidAmount = 0;
 
   if (nekhemjlekh.qpayInvoiceId) {
     try {
