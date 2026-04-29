@@ -28,6 +28,19 @@ async function cleanStart() {
     const genConn = await mongoose.createConnection(baseUri).asPromise();
     console.log("Connected to both databases.");
 
+    // 2. IMPORTANT: Populate the global db object so controllers can find connections
+    const { db: globalDb } = require("zevbackv2");
+    const kholbolt = {
+      baiguullagiinId,
+      kholbolt: orgConn,
+      databaseNer: "suhTest"
+    };
+    
+    globalDb.erunkhiiKholbolt = { kholbolt: genConn };
+    globalDb.kholboltuud = [kholbolt];
+    
+    console.log("Initialized global connection registry.");
+
     // 2. Define Models
     const kholboltOrg = { kholbolt: orgConn };
     const kholboltGen = { kholbolt: genConn };
