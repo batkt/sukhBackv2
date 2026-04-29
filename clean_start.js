@@ -48,12 +48,39 @@ async function cleanStart() {
       OrshinSuugch.deleteMany({}) // Clearing from amarSukh
     ]);
 
-    console.log(`- Ledger (suhTest): ${res1.deletedCount} deleted`);
-    console.log(`- Invoices (suhTest): ${res2.deletedCount} deleted`);
-    console.log(`- Contracts (suhTest): ${res3.deletedCount} deleted`);
-    console.log(`- Residents (amarSukh): ${res4.deletedCount} deleted`);
+    console.log("Seeding 3 test residents and contracts...");
 
-    console.log("--- CLEANUP COMPLETE ---");
+    const baiguullagiinId = "69f06870687e1fcbab74be82";
+    const barilgiinId = "69f161e3e9e5c1202ca0153d";
+
+    const residents = [];
+
+    for (let i = 1; i <= 3; i++) {
+      const residentId = new mongoose.Types.ObjectId();
+      residents.push({
+        _id: residentId,
+        ner: `Test Resident ${i}`,
+        ovog: `Test`,
+        utas: `9911000${i}`,
+        baiguullagiinId,
+        barilgiinId,
+        toots: [{
+          toot: `10${i}`,
+          baiguullagiinId,
+          barilgiinId,
+          orts: "1",
+          davkhar: String(i)
+        }]
+      });
+
+      
+    }
+
+    await OrshinSuugch.insertMany(residents);
+
+    console.log(`- Residents (amarSukh): 3 seeded`);
+
+    console.log("--- CLEANUP & SEED COMPLETE ---");
     await orgConn.close();
     await genConn.close();
     process.exit(0);
