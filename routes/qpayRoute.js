@@ -1113,16 +1113,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
           req.body.nekhemjlekhiinId.toString();
 
         if (!req.body.dun && req.body.tukhainBaaziinKholbolt) {
-              }
-              if (!req.body.dansniiDugaar && nekhemjlekh.dansniiDugaar) {
-                req.body.dansniiDugaar = nekhemjlekh.dansniiDugaar;
-              }
-              if (!req.body.gereeniiId && nekhemjlekh.gereeniiId) {
-                req.body.gereeniiId = nekhemjlekh.gereeniiId;
-              }
-            } else {
-            }
-          } catch (err) {}
+          // Trust the authoritative amount from frontend
         }
       }
 
