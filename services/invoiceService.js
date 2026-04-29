@@ -133,15 +133,16 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     { $set: { nekhemjlekhId: invoice._id.toString() } }
   );
 
-  // 3. Clear old automated charges from THIS invoice to prevent utility duplicates
+
   await GuilgeeAvlaguudModel.deleteMany({
     nekhemjlekhId: invoice._id.toString(),
     source: "nekhemjlekh"
   });
 
-  // 4. Record new charges
   for (const c of charges) {
-    // Record automated charge
+
+    if (c.isEkhniiUldegdel) continue; 
+
     await guilgeeService.recordCharge(kholbolt, {
       ...geree,
       _id: undefined,
@@ -149,10 +150,11 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
       nekhemjlekhId: invoice._id.toString(),
       dun: c.dun,
       zardliinNer: c.ner,
+      tailbar: c.ner,
       zardliinTurul: c.zardliinTurul,
       ognoo: options.billingDate || new Date(),
-      source: c.isEkhniiUldegdel ? "geree" : "nekhemjlekh",
-      ekhniiUldegdelEsekh: !!c.isEkhniiUldegdel,
+      source: "nekhemjlekh",
+      ekhniiUldegdelEsekh: false,
       guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
       guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.orshinSuugchId,
     });
