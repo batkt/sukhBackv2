@@ -55,6 +55,28 @@ async function cleanStart() {
     // OrshinSuugch lives in amarSukh
     const OrshinSuugch = require("./models/orshinSuugch")(kholboltGen);
 
+    // 2. Prepare Building Config (Ensure toots 101, 102, 103 exist in Baiguullaga)
+    console.log("Ensuring test toots exist in building configuration...");
+    const BaiguullagaModel = require("./models/baiguullaga")(kholboltGen);
+    const orgData = await BaiguullagaModel.findById(baiguullagiinId);
+    
+    if (orgData) {
+      const bIdx = orgData.barilguud.findIndex(b => String(b._id) === String(barilgiinId));
+      if (bIdx >= 0) {
+        const tokh = orgData.barilguud[bIdx].tokhirgoo || {};
+        tokh.davkhar = ["1", "2", "3"];
+        tokh.davkhariinToonuud = {
+          "1::1": ["1"],
+          "1::2": ["2"],
+          "1::3": ["3"]
+        };
+        orgData.barilguud[bIdx].tokhirgoo = tokh;
+        orgData.markModified(`barilguud.${bIdx}.tokhirgoo`);
+        await orgData.save();
+        console.log("Building configuration updated with test toots 1, 2, 3.");
+      }
+    }
+
     console.log("Cleaning records...");
 
     const [res1, res2, res3, res4] = await Promise.all([
@@ -69,14 +91,14 @@ async function cleanStart() {
     const { orshinSuugchBurtgey } = require("./controller/orshinSuugch");
 
     for (let i = 1; i <= 3; i++) {
-      console.log(`Registering Resident ${i}...`);
+      console.log(`Registering Resident ${i} (Toot: ${i})...`);
       
       const req = {
         body: {
           ner: `Test Resident ${i}`,
           ovog: `Test`,
           utas: `9911000${i}`,
-          toot: `10${i}`,
+          toot: String(i),
           davkhar: String(i),
           orts: "1",
           baiguullagiinId,
