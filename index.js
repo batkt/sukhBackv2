@@ -10,7 +10,7 @@ const io = require("socket.io")(server, {
   pingInterval: 10000,
 });
 const { createAdapter } = require("@socket.io/redis-adapter");
-const { pubClient, subClient, connectRedis } = require("./utils/redisClient");
+// const { pubClient, subClient, connectRedis } = require("./utils/redisClient");
 
 const dotenv = require("dotenv");
 const cron = require("node-cron");
@@ -62,6 +62,7 @@ process.env.UV_THREADPOOL_SIZE = 20;
   try {
     console.log("🛠️ [INIT] Starting AmarSukh server initialization...");
 
+    /*
     // 1. Connect to Redis (async)
     console.log("🛠️ [INIT] Connecting to Redis...");
     await connectRedis();
@@ -70,6 +71,7 @@ process.env.UV_THREADPOOL_SIZE = 20;
     console.log("🛠️ [INIT] Attaching Socket.IO Redis adapter...");
     io.adapter(createAdapter(pubClient, subClient));
     console.log("✅ Socket.IO Redis adapter connected");
+    */
 
     // 3. Connect to MongoDB (zevbackv2) - Moved inside to catch errors
     const MONGODB_URI =

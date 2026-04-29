@@ -132,8 +132,6 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
   // Socket updates
   const io = req.app.get("socketio");
   if (io) {
-    const { clearOrgCache } = require("../utils/redisClient");
-    clearOrgCache(baiguullagiinId).catch(() => {});
     io.emit(`qpay/${baiguullagiinId}/${qpayBarimt.zakhialgiinDugaar}`);
     io.emit(`tulburUpdated:${baiguullagiinId}`, {});
 
@@ -253,7 +251,11 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
   console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Sending to Ledger: amount=${paidAmount}, transactionId=${paymentTransactionId}`);
   const ledgerResult = await guilgeeService.recordPayment(kholbolt, {
     baiguullagiinId,
+    baiguullagiinNer: nekhemjlekh.baiguullagiinNer || "",
+    barilgiinId: nekhemjlekh.barilgiinId || "",
     gereeniiId: nekhemjlekh.gereeniiId,
+    gereeniiDugaar: nekhemjlekh.gereeniiDugaar || "",
+    orshinSuugchId: nekhemjlekh.orshinSuugchId || "",
     dun: paidAmount,
     tailbar: `QPay төлөлт (Callback: ${nekhemjlekhiinId})`,
     source: "nekhemjlekh",
@@ -349,8 +351,6 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
   // Socket updates
   const io = req.app.get("socketio");
   if (io) {
-    const { clearOrgCache } = require("../utils/redisClient");
-    clearOrgCache(baiguullagiinId).catch(() => {});
     io.emit(`tulburUpdated:${baiguullagiinId}`, {});
 
     // Targeted notification to the resident

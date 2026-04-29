@@ -13,9 +13,8 @@ const {
   db,
   khuudaslalt,
 } = require("zevbackv2");
-const cacheMiddleware = require("../middleware/cacheMiddleware");
 
-router.get("/ajiltan", tokenShalgakh, cacheMiddleware(300), async (req, res, next) => {
+router.get("/ajiltan", tokenShalgakh, async (req, res, next) => {
   try {
      const body = req.query;
      if (!!body?.query) body.query = JSON.parse(body.query);

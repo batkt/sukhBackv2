@@ -25,7 +25,6 @@ const {
   importInitialBalanceFromExcel,
 } = require("../controller/excelImportController");
 const gereeController = require("../controller/gereeController");
-const cacheMiddleware = require("../middleware/cacheMiddleware");
 
 const storage = multer.memoryStorage();
 const uploadFile = multer({ storage: storage });
@@ -92,8 +91,6 @@ router.use((req, res, next) => {
     const baiguullagiinId = req.query?.baiguullagiinId || req.body?.baiguullagiinId;
     if (baiguullagiinId && req.app) {
       try {
-        const { clearOrgCache } = require("../utils/redisClient");
-        clearOrgCache(baiguullagiinId).catch(() => {});
         req.app.get("socketio").emit(`tulburUpdated:${baiguullagiinId}`, {});
       } catch (e) {}
     }
@@ -122,7 +119,7 @@ router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
   next();
 });
 
-router.get("/guilgeeAvlaguud", tokenShalgakh, cacheMiddleware(30), async (req, res, next) => {
+router.get("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
   try {
      const body = req.query;
      if (!!body?.query) body.query = JSON.parse(body.query);
@@ -134,7 +131,7 @@ router.get("/guilgeeAvlaguud", tokenShalgakh, cacheMiddleware(30), async (req, r
 crud(router, "guilgeeAvlaguud", GuilgeeAvlaguud, UstsanBarimt);
 
 
-router.get("/geree", tokenShalgakh, cacheMiddleware(60), async (req, res, next) => {
+router.get("/geree", tokenShalgakh, async (req, res, next) => {
   try {
      const body = req.query;
      if (!!body?.query) body.query = JSON.parse(body.query);

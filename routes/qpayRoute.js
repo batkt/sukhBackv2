@@ -2500,8 +2500,6 @@ router.get(
 
       const ioMulti = req.app.get("socketio");
       if (ioMulti) {
-        const { clearOrgCache } = require("../utils/redisClient");
-        clearOrgCache(baiguullagiinId).catch(() => {});
         ioMulti.emit(`tulburUpdated:${baiguullagiinId}`, {});
       }
 

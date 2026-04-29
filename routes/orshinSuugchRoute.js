@@ -109,7 +109,7 @@ const cacheMiddleware = require("../middleware/cacheMiddleware");
 router.delete("/orshinSuugch/:id", tokenShalgakh, orshinSuugchUstgakh);
 
 // Use crud for other operations (GET, POST, PUT) but not DELETE
-router.get("/orshinSuugch", tokenShalgakh, cacheMiddleware(60), async (req, res, next) => {
+router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
   try {
     const body = req.query;
 
@@ -146,9 +146,7 @@ router.get("/orshinSuugch", tokenShalgakh, cacheMiddleware(60), async (req, res,
       ? Number(body.khuudasniiKhemjee)
       : 1000;
 
-    // Create filters for baiguullagiinId and barilgiinId
-    // We must check BOTH top-level fields AND the toots array (nested objects)
-    // This ensures we find residents even if they are primarily associated with another organization
+
 
     const filters = [];
 
