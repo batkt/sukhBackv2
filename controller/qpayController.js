@@ -105,12 +105,17 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     baiguullagiinId,
     gereeniiId: qpayBarimt.gereeniiId,
     dun: amount,
-    tailbar: `QPay төлөлт (${dugaar})`,
+    tailbar: `QPay төлөлт`,
     source: "nekhemjlekh",
     bankniiGuilgeeId: qpayBarimt.payment_id || dugaar,
     ognoo: new Date(),
     nekhemjlekhId: qpayBarimt.sukhNekhemjlekh?.nekhemjlekhiinId
   });
+
+  // Trigger ebarimt if invoice exists
+  if (qpayBarimt.sukhNekhemjlekh?.nekhemjlekhiinId) {
+    generateEbarimtForQPay(kholbolt, baiguullagiinId, qpayBarimt.sukhNekhemjlekh.nekhemjlekhiinId, amount);
+  }
 
   // Update record status
   qpayBarimt.tulsunEsekh = true;
@@ -257,12 +262,15 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
     gereeniiDugaar: nekhemjlekh.gereeniiDugaar || "",
     orshinSuugchId: nekhemjlekh.orshinSuugchId || "",
     dun: paidAmount,
-    tailbar: `QPay төлөлт (Callback: ${nekhemjlekhiinId})`,
+    tailbar: `QPay төлөлт`,
     source: "nekhemjlekh",
     bankniiGuilgeeId: paymentTransactionId || nekhemjlekh.qpayInvoiceId || "manual_sync",
     ognoo: new Date(),
     nekhemjlekhId: nekhemjlekhiinId,
   });
+
+  // Trigger ebarimt
+  generateEbarimtForQPay(kholbolt, baiguullagiinId, nekhemjlekhiinId, paidAmount);
   console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Ledger Result: ${JSON.stringify(ledgerResult)}`);
 
   // Record in Bank Statement (BankniiGuilgee) for accounting/reconciliation
@@ -416,3 +424,82 @@ exports.qpayGuilgeeUtgaAvya = asyncHandler(async (req, res, next) => {
 });
 
 
+
+/**
+ * Helper to generate ebarimt after QPay payment
+ */
+async function generateEbarimtForQPay(kholbolt, baiguullagiinId, nekhemjlekhId, paidAmount) {
+  try {
+    const Baiguullaga = require("../models/baiguullaga");
+    const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+    const BankniiGuilgeeModel = BankniiGuilgee(kholbolt);
+    const EasyRegisterUser = require("../models/easyRegisterUser");
+    const { nekhemjlekheesEbarimtShineUusgye, ebarimtDuudya } = require("../routes/ebarimtRoute");
+
+    const nekhemjlekh = await NekhemjlekhiinTuukh(kholbolt).findById(nekhemjlekhId).lean();
+    if (!nekhemjlekh) return;
+
+    const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(baiguullagiinId).lean();
+    const building = baiguullaga?.barilguud?.find(b => String(b._id) === String(nekhemjlekh.barilgiinId));
+    const tokhirgoo = building?.tokhirgoo;
+
+    if (tokhirgoo?.eBarimtShine || tokhirgoo?.eBarimtAshiglakhEsekh) {
+      if (!tokhirgoo.merchantTin) {
+        console.error("❌ [QPAY EBARIMT] merchantTin missing");
+        return;
+      }
+
+      // Try to find autoCustomerNo
+      let autoCustomerNo = "";
+      const residentId = nekhemjlekh.orshinSuugchiinId || (nekhemjlekh.medeelel && nekhemjlekh.medeelel.orshinSuugchiinId);
+      const userFilter = { baiguullagiinId, ustgasan: { $ne: true } };
+      if (residentId) userFilter.orshinSuugchiinId = residentId;
+      else if (nekhemjlekh.gereeniiId) userFilter.gereeniiId = nekhemjlekh.gereeniiId;
+
+      if (userFilter.orshinSuugchiinId || userFilter.gereeniiId) {
+        const savedUser = await EasyRegisterUser(kholbolt).findOne(userFilter).lean();
+        if (savedUser?.loginName) autoCustomerNo = savedUser.loginName;
+      }
+
+      const ebarimt = await nekhemjlekheesEbarimtShineUusgye(
+        { ...nekhemjlekh, niitTulbur: paidAmount },
+        autoCustomerNo,
+        "",
+        tokhirgoo.merchantTin,
+        tokhirgoo.districtCode,
+        kholbolt,
+        !!tokhirgoo.nuatTulukhEsekh
+      );
+
+      const onFinish = async (d) => {
+        if (d?.status === "SUCCESS" || d?.success) {
+          const EbarimtShine = require("../models/ebarimtShine");
+          const shineBarimt = new (EbarimtShine(kholbolt))(d);
+          shineBarimt.nekhemjlekhiinId = nekhemjlekhId;
+          shineBarimt.baiguullagiinId = baiguullagiinId;
+          shineBarimt.barilgiinId = nekhemjlekh.barilgiinId;
+          shineBarimt.gereeniiDugaar = nekhemjlekh.gereeniiDugaar;
+          if (d.qrData) shineBarimt.qrData = d.qrData;
+          if (d.lottery) shineBarimt.lottery = d.lottery;
+          if (d.id) shineBarimt.receiptId = d.id;
+          await shineBarimt.save().catch(e => console.error("Ebarimt save error:", e));
+          
+          // Update BankniiGuilgee
+          await BankniiGuilgeeModel.updateMany(
+            { $or: [
+                { record: nekhemjlekh.qpayInvoiceId }, 
+                { requestId: nekhemjlekh.qpayInvoiceId },
+                { tranId: nekhemjlekh.qpayInvoiceId }
+              ] 
+            },
+            { $set: { ebarimtAvsanEsekh: true } }
+          ).catch(() => {});
+        }
+      };
+
+      ebarimtDuudya(ebarimt, onFinish, null, true, baiguullagiinId);
+    }
+  } catch (err) {
+    console.error("⚠️ [QPAY EBARIMT] Generation failed:", err.message);
+  }
+}

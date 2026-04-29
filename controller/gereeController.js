@@ -186,9 +186,12 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   const GuilgeeAvlaguudModel = GuilgeeAvlaguud(kholbolt);
   const NekhemjlekhiinTuukhModel = NekhemjlekhiinTuukh(kholbolt);
 
-  const query = { baiguullagiinId };
-  if (barilgiinId) query.barilgiinId = barilgiinId;
-  if (gereeniiId) query.gereeniiId = gereeniiId;
+  let query = { baiguullagiinId };
+  if (gereeniiId) {
+    query.gereeniiId = gereeniiId;
+  } else if (barilgiinId) {
+    query.barilgiinId = barilgiinId;
+  }
 
   if (ognoo && Array.isArray(ognoo) && ognoo.length === 2) {
     query.ognoo = {
