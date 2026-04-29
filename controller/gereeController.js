@@ -204,15 +204,11 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   const invoiceData = {}; // nekhemjlekhId -> { charges: 0, payments: 0, date: Date }
   let generalPayments = 0;
 
-  // We map the items to plain objects so we can add the virtual nekhemjlekhId if missing
+  // Group all uninvoiced items into a single "Current" bucket
   const itemsWithIds = allItems.map((item) => {
     const it = item.toObject();
     if (!it.nekhemjlekhId) {
-      if (it.ekhniiUldegdelEsekh) {
-        it.nekhemjlekhId = `ekhnii_${it.gereeniiId}`;
-      } else {
-        it.nekhemjlekhId = `id_${it._id}`;
-      }
+      it.nekhemjlekhId = `current_${it.gereeniiId}`;
     }
     return it;
   });
@@ -264,6 +260,12 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     );
   });
 
+  // Fetch actual invoice documents for metadata
+  const realInvoiceIds = sortedInvoiceIds.filter((id) => !id.startsWith("current_"));
+  const realInvoices = await NekhemjlekhiinTuukhModel.find({
+    _id: { $in: realInvoiceIds },
+  }).lean();
+
   const nekhemjlekhuud = [];
   for (const invId of sortedInvoiceIds) {
     let uld = invoiceData[invId].charges - invoiceData[invId].payments;
@@ -275,13 +277,31 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
 
     uld = Number(uld.toFixed(2));
 
+    // Resolve invoice details (real or virtual)
+    let invObj = realInvoices.find((ri) => String(ri._id) === String(invId));
+    const isVirtual = invId.startsWith("current_");
+
+    if (!invObj) {
+      const firstItem = itemsWithIds.find((it) => it.nekhemjlekhId === invId);
+      invObj = {
+        _id: invId,
+        nekhemjlekhiinDugaar: "Одоогийн тооцоо",
+        ognoo: firstItem ? firstItem.ognoo : new Date(),
+        tuluv: uld <= 0 ? "Төлсөн" : "Төлөөгүй",
+        niitTulbur: invoiceData[invId].charges,
+      };
+    }
+
     nekhemjlekhuud.push({
-      nekhemjlekhId: invId,
+      _id: invObj._id,
+      nekhemjlekhiinDugaar: invObj.nekhemjlekhiinDugaar,
+      ognoo: invObj.ognoo,
+      tuluv: uld <= 0 ? "Төлсөн" : invObj.tuluv,
+      niitTulbur: invObj.niitTulbur,
       uldegdel: uld,
     });
 
     // Only update DB if it's a real invoice
-    const isVirtual = invId.startsWith("ekhnii_") || invId.startsWith("id_");
     if (!isVirtual) {
       if (uld <= 0) {
         await NekhemjlekhiinTuukhModel.updateOne(
