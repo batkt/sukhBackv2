@@ -206,6 +206,38 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
     console.log(`ℹ️ [QPAY_SYNC] No qpayInvoiceId found on invoice record; using niitTulbur for ledger record.`);
   }
 
+  // FALLBACK: If paidAmount is still 0 (niitTulbur=0 or QPay status check failed),
+  // read the authoritative charge amount from the ledger for this invoice.
+  if (paidAmount <= 0) {
+    console.warn(`⚠️ [QPAY-INVOICE CALLBACK] paidAmount is 0. Attempting ledger charge fallback for invoice: ${nekhemjlekhiinId}`);
+    try {
+      const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+      const GuilgeeAvlaguudModel = GuilgeeAvlaguud(kholbolt);
+
+      // Find the charge record linked to this invoice (positive dun = charge)
+      const chargeRecord = await GuilgeeAvlaguudModel.findOne({
+        nekhemjlekhId: nekhemjlekhiinId,
+        dun: { $gt: 0 },
+      });
+
+      if (chargeRecord) {
+        paidAmount = chargeRecord.undsenDun || chargeRecord.dun || 0;
+        console.log(`✅ [QPAY-INVOICE CALLBACK] Ledger charge fallback: paidAmount=${paidAmount} (from charge record ${chargeRecord._id})`);
+      } else {
+        // Last resort: use the current outstanding balance for this invoice
+        const currentBalance = await guilgeeService.getBalance(kholbolt, { nekhemjlekhId: nekhemjlekhiinId });
+        if (currentBalance > 0) {
+          paidAmount = currentBalance;
+          console.log(`✅ [QPAY-INVOICE CALLBACK] Balance fallback: paidAmount=${paidAmount}`);
+        } else {
+          console.error(`❌ [QPAY-INVOICE CALLBACK] All fallbacks exhausted. Cannot determine paidAmount for invoice: ${nekhemjlekhiinId}`);
+        }
+      }
+    } catch (fallbackErr) {
+      console.error(`❌ [QPAY-INVOICE CALLBACK] Ledger fallback failed:`, fallbackErr.message);
+    }
+  }
+
   // Record in Ledger (GuilgeeAvlaguud)
   console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Sending to Ledger: amount=${paidAmount}, transactionId=${paymentTransactionId}`);
   const ledgerResult = await guilgeeService.recordPayment(kholbolt, {
