@@ -13,7 +13,6 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
   
   const charges = [];
 
-  // 1. Add Starting Balance if exists in the contract document
   if (Number(geree.ekhniiUldegdel) > 0) {
     charges.push({
       ner: "Эхний үлдэгдэл",
@@ -96,11 +95,34 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     return { success: true, message: "No charges to bill", total: 0 };
   }
 
-  // 1. Get or Create the one unpaid invoice
-  let invoice = await NekhemjlekhiinTuukhModel.findOne({
+  // 1. Find all unpaid invoices for this contract
+  let unpaidInvoices = await NekhemjlekhiinTuukhModel.find({
     gereeniiId: geree._id.toString(),
     tuluv: "Төлөөгүй"
-  }).sort({ ognoo: -1 });
+  }).sort({ ognoo: -1, createdAt: -1 });
+
+  let invoice;
+  if (unpaidInvoices.length > 0) {
+    // Pick the latest one as the primary target
+    invoice = unpaidInvoices[0];
+    
+    // If there are duplicates, consolidate them
+    if (unpaidInvoices.length > 1) {
+      const targetId = invoice._id.toString();
+      const duplicateIds = unpaidInvoices.slice(1).map(inv => inv._id);
+      
+      const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
+      
+      // Move all ledger items from duplicates to the target invoice
+      await GuilgeeAvlaguudModel.updateMany(
+        { nekhemjlekhId: { $in: duplicateIds.map(id => id.toString()) } },
+        { $set: { nekhemjlekhId: targetId } }
+      );
+      
+      // Delete the duplicate invoice documents
+      await NekhemjlekhiinTuukhModel.deleteMany({ _id: { $in: duplicateIds } });
+    }
+  }
 
   if (!invoice) {
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -124,7 +146,7 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
 
   const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
 
-  
+  // 2. Adopt any unlinked ledger items (orphans)
   await GuilgeeAvlaguudModel.updateMany(
     { 
       gereeniiId: geree._id.toString(), 
@@ -134,7 +156,7 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     { $set: { nekhemjlekhId: invoice._id.toString() } }
   );
 
-  // 3. Clear old automated charges to prevent duplicates
+  // 3. Clear old automated charges from THIS invoice to prevent utility duplicates
   await GuilgeeAvlaguudModel.deleteMany({
     nekhemjlekhId: invoice._id.toString(),
     source: "nekhemjlekh"
