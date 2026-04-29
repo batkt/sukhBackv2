@@ -11,17 +11,7 @@ async function manualSendInvoice(gereeId, baiguullagiinId, override = false, opt
     const kholbolt = getKholboltByBaiguullagiinId(baiguullagiinId);
     if (!kholbolt) throw new Error("Connection not found");
 
-    // 1. Handle Overwrite logic
-    if (override) {
-      // Find existing unpaid invoice for this contract/month (Simplified)
-      const existing = await NekhemjlekhiinTuukh(kholbolt).findOne({ 
-        gereeniiId: gereeId, 
-        tuluv: { $ne: "Төлсөн" } 
-      });
-      if (existing) {
-        await deleteInvoice(existing._id, baiguullagiinId);
-      }
-    }
+    // 1. Logic moved to createInvoiceForContract (Upsert pattern)
 
     // 2. Create the invoice
     const result = await createInvoiceForContract(kholbolt, gereeId, options);

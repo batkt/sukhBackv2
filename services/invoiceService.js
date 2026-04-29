@@ -114,22 +114,42 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     return { success: false, message: "No charges to bill" };
   }
 
-  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const count = await NekhemjlekhiinTuukhModel.countDocuments({ 
-    nekhemjlekhiinDugaar: { $regex: `^НЭХ-${stamp}-` } 
-  });
-  const invoiceNumber = `НЭХ-${stamp}-${String(count + 1).padStart(4, "0")}`;
-
-  const invoice = new NekhemjlekhiinTuukhModel({
-    ...geree,
-    _id: undefined,
+  // 1. Check for existing unpaid invoice for this contract
+  let invoice = await NekhemjlekhiinTuukhModel.findOne({
     gereeniiId: geree._id.toString(),
-    nekhemjlekhiinDugaar: invoiceNumber,
-    ognoo: options.billingDate || new Date(),
-    niitTulbur: total,
-    tuluv: "Төлөөгүй",
-    medeelel: { zardluud: charges },
-  });
+    tuluv: "Төлөөгүй"
+  }).sort({ ognoo: -1, createdAt: -1 });
+
+  if (invoice) {
+    // UPDATE EXISTING
+    invoice.niitTulbur = total;
+    invoice.medeelel = { zardluud: charges };
+    
+    // Clean up old ledger utility charges for this invoice (ONLY source: "nekhemjlekh")
+    const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
+    await GuilgeeAvlaguudModel.deleteMany({
+        nekhemjlekhId: invoice._id.toString(),
+        source: "nekhemjlekh"
+    });
+  } else {
+    // CREATE NEW
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const count = await NekhemjlekhiinTuukhModel.countDocuments({ 
+      nekhemjlekhiinDugaar: { $regex: `^НЭХ-${stamp}-` } 
+    });
+    const invoiceNumber = `НЭХ-${stamp}-${String(count + 1).padStart(4, "0")}`;
+
+    invoice = new NekhemjlekhiinTuukhModel({
+      ...geree,
+      _id: undefined,
+      gereeniiId: geree._id.toString(),
+      nekhemjlekhiinDugaar: invoiceNumber,
+      ognoo: options.billingDate || new Date(),
+      niitTulbur: total,
+      tuluv: "Төлөөгүй",
+      medeelel: { zardluud: charges },
+    });
+  }
   await invoice.save();
 
   let hasEkhniiUldegdel = false;
