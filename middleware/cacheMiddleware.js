@@ -19,11 +19,22 @@ const cacheMiddleware = (ttl = 300) => {
 
     try {
       // Create a unique cache key based on URL, query params, and body
-      const bodyString = req.body ? JSON.stringify(req.body) : "";
+      // We must remove circular objects like database connections before stringifying
+      let sanitizedBody = "";
+      if (req.body) {
+        try {
+          const { tukhainBaaziinKholbolt, erunkhiiKholbolt, nevtersenAjiltniiToken, ...rest } = req.body;
+          sanitizedBody = JSON.stringify(rest);
+        } catch (e) {
+          // If stringification fails, use a fallback or skip body part
+          sanitizedBody = "complex-body-hash";
+        }
+      }
+      
       const queryString = req.url;
       const baiguullagiinId = req.params.baiguullagiinId || req.query.baiguullagiinId || req.body.baiguullagiinId || "global";
       
-      const rawKey = `${baiguullagiinId}:${queryString}:${bodyString}`;
+      const rawKey = `${baiguullagiinId}:${queryString}:${sanitizedBody}`;
       const hash = crypto.createHash("md5").update(rawKey).digest("hex");
       const cacheKey = `api_cache:${hash}`;
 
