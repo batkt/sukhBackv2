@@ -204,37 +204,57 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   const invoiceData = {}; // nekhemjlekhId -> { charges: 0, payments: 0, date: Date }
   let generalPayments = 0;
 
-  allItems.forEach((it) => {
+  // We map the items to plain objects so we can add the virtual nekhemjlekhId if missing
+  const itemsWithIds = allItems.map((item) => {
+    const it = item.toObject();
+    if (!it.nekhemjlekhId) {
+      if (it.ekhniiUldegdelEsekh) {
+        it.nekhemjlekhId = `ekhnii_${it.gereeniiId}`;
+      } else {
+        it.nekhemjlekhId = `id_${it._id}`;
+      }
+    }
+    return it;
+  });
+
+  itemsWithIds.forEach((it) => {
     const dun = Number(it.dun || 0);
+    const invId = it.nekhemjlekhId;
+
     if (dun > 0) {
       totalTulbur += dun;
-      if (it.nekhemjlekhId) {
-        if (!invoiceData[it.nekhemjlekhId]) {
-          invoiceData[it.nekhemjlekhId] = {
-            charges: 0,
-            payments: 0,
-            date: it.ognoo,
-          };
-        }
-        invoiceData[it.nekhemjlekhId].charges += dun;
+      if (!invoiceData[invId]) {
+        invoiceData[invId] = {
+          charges: 0,
+          payments: 0,
+          date: it.ognoo,
+        };
       }
+      invoiceData[invId].charges += dun;
     } else {
       const amt = Math.abs(dun);
       totalTulsun += amt;
-      if (it.nekhemjlekhId) {
-        if (!invoiceData[it.nekhemjlekhId]) {
-          invoiceData[it.nekhemjlekhId] = {
+      const wasMissing = !itemWithOriginalId(allItems, it._id).nekhemjlekhId;
+
+      if (wasMissing) {
+        generalPayments += amt;
+      } else {
+        if (!invoiceData[invId]) {
+          invoiceData[invId] = {
             charges: 0,
             payments: 0,
             date: it.ognoo,
           };
         }
-        invoiceData[it.nekhemjlekhId].payments += amt;
-      } else {
-        generalPayments += amt;
+        invoiceData[invId].payments += amt;
       }
     }
   });
+
+  // Helper function to check original state
+  function itemWithOriginalId(arr, id) {
+    return arr.find((a) => String(a._id) === String(id)) || {};
+  }
 
   // Sort invoices by date (FIFO)
   const sortedInvoiceIds = Object.keys(invoiceData).sort((a, b) => {
@@ -275,11 +295,11 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   }
 
   // Filter items for response if date range is provided
-  let filteredItems = allItems;
+  let filteredItems = itemsWithIds;
   if (ognoo && Array.isArray(ognoo) && ognoo.length === 2) {
     const start = ognoo[0] ? new Date(ognoo[0]) : null;
     const end = ognoo[1] ? new Date(ognoo[1] + "T23:59:59") : null;
-    filteredItems = allItems.filter((it) => {
+    filteredItems = itemsWithIds.filter((it) => {
       const d = new Date(it.ognoo);
       if (start && d < start) return false;
       if (end && d > end) return false;
