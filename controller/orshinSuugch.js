@@ -1615,9 +1615,6 @@ exports.validateOwnOrgToot = asyncHandler(async (req, res, next) => {
             : [],
       });
     }
-
-    // Check if toot is already assigned to a user
-    // Check both new toots array and old toot field for backward compatibility
     const existingUserWithToot = await OrshinSuugch(
       db.erunkhiiKholbolt,
     ).findOne({
@@ -1627,13 +1624,14 @@ exports.validateOwnOrgToot = asyncHandler(async (req, res, next) => {
             $elemMatch: {
               toot: tootToValidate,
               barilgiinId: String(barilgiinId),
+              orts: foundOrts || ortsToValidate
             },
           },
         },
         {
-          // Check old toot field for backward compatibility
           toot: tootToValidate,
           barilgiinId: String(barilgiinId),
+          orts: foundOrts || ortsToValidate
         },
       ],
     });
@@ -1670,7 +1668,7 @@ exports.validateOwnOrgToot = asyncHandler(async (req, res, next) => {
 exports.tootShalgaya = asyncHandler(async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
-    const { toot, baiguullagiinId, utas } = req.body;
+    const { toot, orts, baiguullagiinId, utas } = req.body;
 
     if (!toot) {
       return res.status(400).json({
@@ -1698,14 +1696,30 @@ exports.tootShalgaya = asyncHandler(async (req, res, next) => {
       });
     }
 
-    // Check if provided toot matches registered toot
-    if (orshinSuugch.toot && orshinSuugch.toot.trim() === toot.trim()) {
+    const inputToot = String(toot).trim();
+    const inputOrts = orts ? String(orts).trim() : null;
+
+    // 1. Check primary address
+    const primaryMatch = 
+      String(orshinSuugch.toot || "").trim() === inputToot &&
+      (!inputOrts || String(orshinSuugch.orts || "").trim() === inputOrts);
+
+    // 2. Check toots array
+    const secondaryMatch = 
+      Array.isArray(orshinSuugch.toots) && 
+      orshinSuugch.toots.some(t => 
+        String(t.toot || "").trim() === inputToot &&
+        (!inputOrts || String(t.orts || "").trim() === inputOrts)
+      );
+
+    if (primaryMatch || secondaryMatch) {
       return res.json({
         success: true,
         message: "Тоот зөв байна",
         result: {
           validated: true,
-          toot: orshinSuugch.toot,
+          toot: inputToot,
+          orts: inputOrts,
         },
       });
     } else {
