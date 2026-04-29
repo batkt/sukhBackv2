@@ -53,6 +53,8 @@ const gereeSchema = new Schema(
     temdeglel: String,
     tailbar: String, // Additional description/notes field
     orts: String, // Web only field
+    khonogoorBodokhEsekh: { type: Boolean, default: false }, // Ирээдүйд ашигласан тооцох
+    bodokhKhonog: Number, // Хэдэн хоногоор бодох
     umnukhZaalt: Number, // Previous reading (Өмнө)
     suuliinZaalt: Number, // Current total reading (Нийт одоо)
     zaaltTog: Number, // Day reading (Өдөр)

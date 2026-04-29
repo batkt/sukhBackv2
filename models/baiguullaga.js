@@ -189,7 +189,20 @@ const baiguullagaSchema = new Schema(
         zochinTailbar: String,
         davtamjiinTurul: String,
         davtamjUtga: Number,
-        orshinSuugchMashiniiLimit: Number
+        orshinSuugchMashiniiLimit: Number,
+      },
+      bodokhArgaEnabled: {
+        type: Boolean,
+        default: false,
+      },
+      bodokhArga: {
+        type: String,
+        enum: ["Хуанли", "Тогтмол"],
+        default: "Хуанли",
+      },
+      bodokhKhonog: {
+        type: Number,
+        default: 30,
       },
     },
     erkhuud: [

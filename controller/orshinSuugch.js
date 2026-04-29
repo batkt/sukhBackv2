@@ -1197,6 +1197,8 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
             zardluud: zardluudArray,
             niitTulbur: niitTulbur,
             ashiglaltiinZardal: 0,
+            khonogoorBodokhEsekh: req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true",
+            bodokhKhonog: Number(req.body.bodokhKhonog) || 0,
             ovog: req.body.ovog || existingCancelledGeree.ovog,
             ner: req.body.ner || existingCancelledGeree.ner,
             register: req.body.register || existingCancelledGeree.register,
@@ -1362,6 +1364,8 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
               zaaltTog: 0,
               zaaltUs: 0,
               zardluud: zardluudArray,
+              khonogoorBodokhEsekh: req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true",
+              bodokhKhonog: Number(req.body.bodokhKhonog) || 0,
               segmentuud: [],
               khungulultuud: [],
             };

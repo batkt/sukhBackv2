@@ -318,6 +318,11 @@ exports.gereeniiExcelAvya = asyncHandler(async (req, res, next) => {
       key: "Эхний сарын ашиглах хоног",
       width: 20,
     },
+    {
+      header: "Ирээдүйд ашигласан тооцох",
+      key: "Ирээдүйд ашигласан тооцох",
+      width: 25,
+    },
   ];
 
   var baganiiToo = baganuud.length;
@@ -512,6 +517,10 @@ exports.gereeniiExcelTatya = asyncHandler(async (req, res, next) => {
           )
             tolgoinObject.ekhniiSariinKhonog = cellAsString[0];
           else if (
+            worksheet[cellAsString].v.includes("Ирээдүйд ашигласан тооцох")
+          )
+            tolgoinObject.khonogoorBodokhEsekh = cellAsString[0];
+          else if (
             (segmentuud && segmentuud.length > 0) ||
             (zardluud && zardluud.length > 0)
           ) {
@@ -583,6 +592,10 @@ exports.gereeniiExcelTatya = asyncHandler(async (req, res, next) => {
             worksheet30[cellAsString].v.includes("Эхний сарын ашиглах хоног")
           )
             tolgoinObject30.ekhniiSariinKhonog = cellAsString[0];
+          else if (
+            worksheet30[cellAsString].v.includes("Ирээдүйд ашигласан тооцох")
+          )
+            tolgoinObject30.khonogoorBodokhEsekh = cellAsString[0];
           else if (
             (segmentuud && segmentuud.length > 0) ||
             (zardluud && zardluud.length > 0)
@@ -659,10 +672,11 @@ exports.gereeniiExcelTatya = asyncHandler(async (req, res, next) => {
           ];
         object.uldegdel = mur[usegTooruuKhurvuulekh(tolgoinObject.avlaga)];
         object.dans = mur[usegTooruuKhurvuulekh(tolgoinObject.dans)];
-        object.ekhniiSariinKhonog =
-          mur[usegTooruuKhurvuulekh(tolgoinObject.ekhniiSariinKhonog)];
+        object.bodokhKhonog = Number(mur[usegTooruuKhurvuulekh(tolgoinObject.ekhniiSariinKhonog)]) || 0;
+        const khonogToggle = mur[usegTooruuKhurvuulekh(tolgoinObject.khonogoorBodokhEsekh)];
+        object.khonogoorBodokhEsekh = khonogToggle === "Тийм" || khonogToggle === "true" || khonogToggle === true;
+        
         object.guchKhonogOruulakhEsekh = false;
-        object.garaasKhonogOruulakhEsekh = !!object.ekhniiSariinKhonog;
         object.daraagiinTulukhOgnoo = moment(ognoo)
           .add(1, "month")
           .set("date", object.tulukhUdur);
@@ -790,10 +804,11 @@ exports.gereeniiExcelTatya = asyncHandler(async (req, res, next) => {
           ];
         object.uldegdel = mur[usegTooruuKhurvuulekh(tolgoinObject30.avlaga)];
         object.dans = mur[usegTooruuKhurvuulekh(tolgoinObject30.dans)];
-        object.ekhniiSariinKhonog =
-          mur[usegTooruuKhurvuulekh(tolgoinObject30.ekhniiSariinKhonog)];
+        object.bodokhKhonog = Number(mur[usegTooruuKhurvuulekh(tolgoinObject30.ekhniiSariinKhonog)]) || 0;
+        const khonogToggle30 = mur[usegTooruuKhurvuulekh(tolgoinObject30.khonogoorBodokhEsekh)];
+        object.khonogoorBodokhEsekh = khonogToggle30 === "Тийм" || khonogToggle30 === "true" || khonogToggle30 === true;
+
         object.guchKhonogOruulakhEsekh = true;
-        object.garaasKhonogOruulakhEsekh = !!object.ekhniiSariinKhonog;
         object.daraagiinTulukhOgnoo = moment(ognoo)
           .add(1, "month")
           .set("date", object.tulukhUdur);

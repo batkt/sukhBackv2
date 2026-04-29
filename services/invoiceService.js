@@ -12,6 +12,15 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
   const barilga = baiguullaga?.barilguud?.find(b => String(b._id) === String(geree.barilgiinId));
   
   const charges = [];
+  const totalDaysInMonth = getDaysInMonth(options.billingDate || new Date());
+  const denominator = barilga?.tokhirgoo?.bodokhArga === "Тогтмол" 
+    ? (barilga.tokhirgoo.bodokhKhonog || 30)
+    : totalDaysInMonth;
+
+  const isProratingEnabled = !!barilga?.tokhirgoo?.bodokhArgaEnabled;
+  const prorateFactor = (isProratingEnabled && geree.khonogoorBodokhEsekh && geree.bodokhKhonog > 0)
+    ? (geree.bodokhKhonog / denominator)
+    : 1;
 
   if (Number(geree.ekhniiUldegdel) > 0) {
     charges.push({
@@ -30,9 +39,14 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
       continue; 
     }
 
+    let dun = z.dun || z.tariff || 0;
+    if (prorateFactor !== 1) {
+      dun = Math.round(dun * prorateFactor);
+    }
+
     charges.push({
       ner: z.ner,
-      dun: z.dun || z.tariff || 0,
+      dun: dun,
       turul: normalizeTurul(z.turul),
       zardliinTurul: z.zardliinTurul || "Бусад",
     });
@@ -57,6 +71,10 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
       }
 
       if (zaaltDun > 0) {
+        if (prorateFactor !== 1) {
+          zaaltDun = Math.round(zaaltDun * prorateFactor);
+        }
+
         const rawRecName = z.ner;
         const rawRecNameLc = (rawRecName || "").toLowerCase();
         const displayRecName =
@@ -79,6 +97,10 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
 
   const total = charges.reduce((sum, c) => sum + c.dun, 0);
   return { charges, total };
+}
+
+function getDaysInMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 }
 
 async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
