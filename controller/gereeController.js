@@ -199,66 +199,41 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
 
   let totalTulbur = 0;
   let totalTulsun = 0;
-
-  // Calculate per-invoice balance
-  const invoiceData = {}; // nekhemjlekhId -> { charges: 0, payments: 0, date: Date }
   let generalPayments = 0;
 
-  // Revert to simple virtual ID grouping as requested
- 
-
-  itemsWithIds.forEach((it) => {
+  const invoiceData = {}; // Group charges and payments by nekhemjlekhId using raw database items
+  allItems.forEach((it) => {
     const dun = Number(it.dun || 0);
-    const invId = it.nekhemjlekhId;
+    // If nekhemjlekhId is missing, it's an uninvoiced item
+    const invId = it.nekhemjlekhId || "uninvoiced";
 
     if (dun > 0) {
       totalTulbur += dun;
       if (!invoiceData[invId]) {
-        invoiceData[invId] = {
-          charges: 0,
-          payments: 0,
-          date: it.ognoo,
-        };
+        invoiceData[invId] = { charges: 0, payments: 0, date: it.ognoo };
       }
       invoiceData[invId].charges += dun;
     } else {
       const amt = Math.abs(dun);
       totalTulsun += amt;
-      const wasMissing = !itemWithOriginalId(allItems, it._id).nekhemjlekhId;
-
-      if (wasMissing) {
-        generalPayments += amt;
-      } else {
-        if (!invoiceData[invId]) {
-          invoiceData[invId] = {
-            charges: 0,
-            payments: 0,
-            date: it.ognoo,
-          };
-        }
+      
+      // If payment is linked to an invoice, subtract from it, otherwise it's a general payment
+      if (it.nekhemjlekhId && invoiceData[invId]) {
         invoiceData[invId].payments += amt;
+      } else {
+        generalPayments += amt;
       }
     }
   });
 
-  // Helper function to check original state
-  function itemWithOriginalId(arr, id) {
-    return arr.find((a) => String(a._id) === String(id)) || {};
-  }
-
   // Sort invoices by date (FIFO)
   const sortedInvoiceIds = Object.keys(invoiceData).sort((a, b) => {
-    return (
-      new Date(invoiceData[a].date).getTime() -
-      new Date(invoiceData[b].date).getTime()
-    );
+    return new Date(invoiceData[a].date) - new Date(invoiceData[b].date);
   });
 
   // Fetch actual invoice documents for metadata
-  const realInvoiceIds = sortedInvoiceIds.filter((id) => !id.startsWith("current_"));
-  const realInvoices = await NekhemjlekhiinTuukhModel.find({
-    _id: { $in: realInvoiceIds },
-  }).lean();
+  const realInvoiceIds = sortedInvoiceIds.filter(id => id !== "uninvoiced");
+  const realInvoices = await NekhemjlekhiinTuukhModel.find({ _id: { $in: realInvoiceIds } }).lean();
 
   const nekhemjlekhuud = [];
   for (const invId of sortedInvoiceIds) {
@@ -271,57 +246,29 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
 
     uld = Number(uld.toFixed(2));
 
-    // Resolve invoice details (real or virtual)
-    let invObj = realInvoices.find((ri) => String(ri._id) === String(invId));
-    const isVirtual = invId.startsWith("current_");
-
+    let invObj = realInvoices.find(ri => String(ri._id) === String(invId));
     if (!invObj) {
-      const firstItem = itemsWithIds.find((it) => it.nekhemjlekhId === invId);
       invObj = {
         _id: invId,
-        nekhemjlekhiinDugaar: "Одоогийн тооцоо",
-        ognoo: firstItem ? firstItem.ognoo : new Date(),
-        tuluv: uld <= 0 ? "Төлсөн" : "Төлөөгүй",
+        nekhemjlekhiinDugaar: invId === "uninvoiced" ? "Нэхэмжлээгүй" : "Бусад",
+        ognoo: invoiceData[invId].date,
         niitTulbur: invoiceData[invId].charges,
+        tuluv: uld <= 0 ? "Төлсөн" : "Төлөөгүй"
       };
     }
 
     nekhemjlekhuud.push({
-      _id: invObj._id,
-      nekhemjlekhiinDugaar: invObj.nekhemjlekhiinDugaar,
-      ognoo: invObj.ognoo,
-      tuluv: uld <= 0 ? "Төлсөн" : invObj.tuluv,
-      niitTulbur: invObj.niitTulbur,
-      uldegdel: uld,
+      ...invObj,
+      uldegdel: uld
     });
 
-    // Only update DB if it's a real invoice
-    if (!isVirtual) {
-      if (uld <= 0) {
-        await NekhemjlekhiinTuukhModel.updateOne(
-          { _id: invId, tuluv: { $ne: "Төлсөн" } },
-          { $set: { tuluv: "Төлсөн", tulsunOgnoo: new Date() } },
-        );
-      } else {
-        await NekhemjlekhiinTuukhModel.updateOne(
-          { _id: invId, tuluv: "Төлсөн" },
-          { $set: { tuluv: "Төлөөгүй" } },
-        );
-      }
+    // Auto-update real invoice status
+    if (invId !== "uninvoiced") {
+      await NekhemjlekhiinTuukhModel.updateOne(
+        { _id: invId },
+        { $set: { tuluv: uld <= 0 ? "Төлсөн" : "Төлөөгүй" } }
+      );
     }
-  }
-
-  // Filter items for response if date range is provided
-  let filteredItems = itemsWithIds;
-  if (ognoo && Array.isArray(ognoo) && ognoo.length === 2) {
-    const start = ognoo[0] ? new Date(ognoo[0]) : null;
-    const end = ognoo[1] ? new Date(ognoo[1] + "T23:59:59") : null;
-    filteredItems = itemsWithIds.filter((it) => {
-      const d = new Date(it.ognoo);
-      if (start && d < start) return false;
-      if (end && d > end) return false;
-      return true;
-    });
   }
 
   res.json({
@@ -330,12 +277,11 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
       totalTulbur: Number(totalTulbur.toFixed(2)),
       totalTulsun: Number(totalTulsun.toFixed(2)),
       uldegdel: Number((totalTulbur - totalTulsun).toFixed(2)),
-      gereeniiId: gereeniiId || itemsWithIds[0]?.gereeniiId,
-      gereeniiDugaar: gereeniiDugaar || itemsWithIds[0]?.gereeniiDugaar,
-      orshinSuugchId: itemsWithIds[0]?.orshinSuugchId,
+      gereeniiId,
+      gereeniiDugaar,
       nekhemjlekhuud,
     },
-    items: filteredItems,
+    items: allItems,
   });
 });
 
