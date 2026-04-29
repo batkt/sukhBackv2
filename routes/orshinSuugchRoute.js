@@ -752,6 +752,13 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             syncData.ekhniiUldegdel = parseFloat(req.body.ekhniiUldegdel) || 0;
           }
 
+          if (req.body.khonogoorBodokhEsekh !== undefined) {
+            syncData.khonogoorBodokhEsekh = req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true";
+          }
+          if (req.body.bodokhKhonog !== undefined) {
+            syncData.bodokhKhonog = Number(req.body.bodokhKhonog) || 0;
+          }
+
           // 1. Update Contracts (Geree)
           if (Object.keys(syncData).length > 0) {
             await GereeModel.updateMany(

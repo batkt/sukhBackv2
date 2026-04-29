@@ -854,6 +854,8 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
           orshinSuugch.ekhniiUldegdel = req.body.ekhniiUldegdel
             ? parseFloat(req.body.ekhniiUldegdel) || 0
             : 0;
+          orshinSuugch.khonogoorBodokhEsekh = req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true";
+          orshinSuugch.bodokhKhonog = Number(req.body.bodokhKhonog) || 0;
           orshinSuugch.baritsaaniiUldegdel = 0;
         }
       }

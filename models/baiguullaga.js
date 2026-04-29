@@ -102,7 +102,6 @@ const baiguullagaSchema = new Schema(
             default: 30,
           },
 
-          /** Лифт шалгая - хөлөгдсөн давхрууд */
           liftShalgaya: {
             choloolugdokhDavkhar: [String],
           },

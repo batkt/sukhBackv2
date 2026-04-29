@@ -72,6 +72,14 @@ const orshinSuugchSchema = new Schema(
     shonoZaalt: Number,
     suuliinZaalt: Number,
     ekhniiUldegdel: Number,
+    khonogoorBodokhEsekh: {
+      type: Boolean,
+      default: false,
+    },
+    bodokhKhonog: {
+      type: Number,
+      default: 0,
+    },
     baritsaaniiUldegdel: Number,
     billNicknames: [
       {

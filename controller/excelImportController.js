@@ -1082,6 +1082,11 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           tsahilgaaniiZaalt, // Тариф ₮/кВт (оршин суугч)
           initialMeterReading, // Тоолуурын эхний нийт заалт (кВт·ц) — гэрээнд
           tailbar: row["Тайлбар"]?.toString().trim() || "",
+          khonogoorBodokhEsekh:
+            row["Хоногоор бодох"] === true ||
+            String(row["Хоногоор бодох"]).toLowerCase() === "true" ||
+            String(row["Хоногоор бодох"]).toLowerCase() === "тийм",
+          bodokhKhonog: parseInt(row["Ашиглах хоног"]) || 0,
         };
 
         // Check if this is an update-only row (only toot, davkhar, ekhniiUldegdel, and possibly tsahilgaaniiZaalt)
@@ -1607,6 +1612,13 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
         if (userData.ekhniiUldegdel) {
           orshinSuugch.ekhniiUldegdel = Number(userData.ekhniiUldegdel) || 0;
         }
+
+        if (userData.khonogoorBodokhEsekh !== undefined) {
+          orshinSuugch.khonogoorBodokhEsekh = userData.khonogoorBodokhEsekh;
+        }
+        if (userData.bodokhKhonog !== undefined) {
+          orshinSuugch.bodokhKhonog = userData.bodokhKhonog;
+        }
         await orshinSuugch.save();
 
         // --- AUTO CREATE GUEST SETTINGS (OrshinSuugchMashin) ---
@@ -1791,6 +1803,8 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                 temdeglel: `${userData.tailbar || "Excel файлаас автоматаар үүссэн гэрээ"} (Тоот: ${tootEntry.toot})`,
                 tailbar: userData.tailbar || tailbarFromZardluud || "",
                 actOgnoo: new Date(),
+                khonogoorBodokhEsekh: userData.khonogoorBodokhEsekh || false,
+                bodokhKhonog: userData.bodokhKhonog || 0,
                 // ekhniiUldegdel removed
                 umnukhZaalt: userData.initialMeterReading || 0,
                 suuliinZaalt: userData.initialMeterReading || 0,
@@ -1916,6 +1930,8 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
               userData.tailbar || "Excel файлаас автоматаар үүссэн гэрээ",
             tailbar: userData.tailbar || tailbarFromZardluud || "",
             actOgnoo: new Date(),
+            khonogoorBodokhEsekh: userData.khonogoorBodokhEsekh || false,
+            bodokhKhonog: userData.bodokhKhonog || 0,
             ekhniiUldegdel: Number(userData.ekhniiUldegdel) || 0,
             umnukhZaalt: userData.initialMeterReading || 0,
             suuliinZaalt: userData.initialMeterReading || 0,
