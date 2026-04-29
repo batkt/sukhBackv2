@@ -17,6 +17,27 @@ const {
   findOrCreateBarilgaFromWallet,
   CENTRALIZED_ORG_ID,
 } = require("./negdsenSan");
+const NekhemjlekhCron = require("../models/cronSchedule");
+const { calculateNextDueDate } = require("../utils/dateUtils");
+
+/**
+ * Helper to get the correct due date based on billing cycle
+ */
+const getDueOgnooHelper = async (kholbolt, baiguullagiinId, barilgiinId) => {
+  try {
+    const cronSchedule = await NekhemjlekhCron(kholbolt).findOne({
+      baiguullagiinId: String(baiguullagiinId),
+      $or: [{ barilgiinId: barilgiinId ? String(barilgiinId) : null }, { barilgiinId: null }]
+    }).sort({ barilgiinId: -1 });
+
+    if (cronSchedule && cronSchedule.nekhemjlekhUusgekhOgnoo) {
+      return calculateNextDueDate(cronSchedule.nekhemjlekhUusgekhOgnoo);
+    }
+  } catch (err) {
+    console.error("Error in getDueOgnooHelper:", err);
+  }
+  return new Date();
+};
 
 // ... existing code ...
 
@@ -1328,7 +1349,7 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
               baiguullagiinId: baiguullaga._id,
               baiguullagiinNer: baiguullaga.ner,
               barilgiinId: tootEntry.barilgiinId || barilgiinId || "",
-              tulukhOgnoo: new Date(),
+              tulukhOgnoo: await getDueOgnooHelper(tukhainBaaziinKholbolt, baiguullaga._id, tootEntry.barilgiinId || barilgiinId),
               ashiglaltiinZardal: 0,
               niitTulbur: niitTulbur,
               toot: tootEntry.toot,
@@ -2673,7 +2694,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
               baiguullagiinId: baiguullaga._id,
               baiguullagiinNer: baiguullaga.ner,
               barilgiinId: tootEntry.barilgiinId,
-              tulukhOgnoo: new Date(),
+              tulukhOgnoo: await getDueOgnooHelper(kholbolt, baiguullaga._id, tootEntry.barilgiinId),
               ashiglaltiinZardal: 0,
               niitTulbur: niitTulbur,
               toot: tootEntry.toot,
@@ -2837,7 +2858,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
                       baiguullagiinId: baiguullaga._id,
                       baiguullagiinNer: baiguullaga.ner,
                       barilgiinId: orshinSuugch.barilgiinId,
-                      tulukhOgnoo: new Date(),
+                      tulukhOgnoo: await getDueOgnooHelper(kholbolt, baiguullaga._id, orshinSuugch.barilgiinId),
                       ashiglaltiinZardal: 0,
                       niitTulbur: niitTulbur,
                       toot: orshinSuugch.toot || "",
@@ -3560,7 +3581,7 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
               baiguullagiinId: baiguullaga._id,
               baiguullagiinNer: baiguullaga.ner,
               barilgiinId: tootEntry.barilgiinId,
-              tulukhOgnoo: new Date(),
+              tulukhOgnoo: await getDueOgnooHelper(kholbolt, baiguullaga._id, tootEntry.barilgiinId),
               ashiglaltiinZardal: 0,
               niitTulbur: niitTulbur,
               toot: tootEntry.toot,
@@ -3709,7 +3730,7 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
                   baiguullagiinId: baiguullaga._id,
                   baiguullagiinNer: baiguullaga.ner,
                   barilgiinId: orshinSuugch.barilgiinId,
-                  tulukhOgnoo: new Date(),
+                  tulukhOgnoo: await getDueOgnooHelper(kholbolt, baiguullaga._id, orshinSuugch.barilgiinId),
                   ashiglaltiinZardal: 0,
                   niitTulbur: niitTulbur,
                   toot: orshinSuugch.toot || "",

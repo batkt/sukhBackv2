@@ -61,6 +61,8 @@ async function tokenAvya(
  */
 exports.qpayTulye = asyncHandler(async (req, res) => {
   const { baiguullagiinId, barilgiinId, dugaar } = req.params;
+  console.log(`ℹ️ [QPAY CALLBACK] Received callback: baiguullagiinId=${baiguullagiinId}, dugaar=${dugaar}, query=${JSON.stringify(req.query)}`);
+  
   const kholbolt = db.kholboltuud.find((k) => String(k.baiguullagiinId) === String(baiguullagiinId));
   
   if (!kholbolt) return res.status(404).send("Connection not found");
@@ -80,8 +82,15 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     });
   }
 
-  if (!qpayBarimt) return res.status(404).send("QPay record not found");
-  if (qpayBarimt.tulsunEsekh) return res.sendStatus(200);
+  if (!qpayBarimt) {
+    console.warn(`⚠️ [QPAY CALLBACK] Record not found for dugaar=${dugaar}, baiguullagiinId=${baiguullagiinId}`);
+    return res.status(404).send("QPay record not found");
+  }
+  
+  if (qpayBarimt.tulsunEsekh) {
+    console.log(`ℹ️ [QPAY CALLBACK] Already paid: dugaar=${dugaar}`);
+    return res.sendStatus(200);
+  }
 
   const amount = parseFloat(qpayBarimt.qpay?.amount || qpayBarimt.amount || 0);
   if (amount <= 0) return res.status(400).send("Invalid amount");
@@ -103,6 +112,7 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
   qpayBarimt.status = "paid";
   if (req.query?.qpay_payment_id) qpayBarimt.payment_id = req.query.qpay_payment_id;
   await qpayBarimt.save();
+  console.log(`✅ [QPAY CALLBACK] Payment successful and recorded for dugaar=${dugaar}, amount=${amount}`);
 
   // Sync Invoice status
   if (qpayBarimt.sukhNekhemjlekh?.nekhemjlekhiinId) {
@@ -131,6 +141,8 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
  */
 exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
   const { baiguullagiinId, nekhemjlekhiinId } = req.params;
+  console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Received: baiguullagiinId=${baiguullagiinId}, nekhemjlekhiinId=${nekhemjlekhiinId}`);
+  
   const kholbolt = db.kholboltuud.find((a) => String(a.baiguullagiinId) === String(baiguullagiinId));
 
   if (!kholbolt) return res.status(404).send("Organization not found");

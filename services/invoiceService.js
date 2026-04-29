@@ -6,6 +6,8 @@ const OrshinSuugch = require("../models/orshinSuugch");
 const ZaaltUnshlalt = require("../models/zaaltUnshlalt");
 const guilgeeService = require("./guilgeeService");
 const { normalizeTurul } = require("../utils/zardalUtils");
+const NekhemjlekhCron = require("../models/cronSchedule");
+const { calculateNextDueDate } = require("../utils/dateUtils");
 
 async function calculateGereeCharges(kholbolt, geree, options = {}) {
   const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(geree.baiguullagiinId).lean();
@@ -130,12 +132,33 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     });
     const invoiceNumber = `НЭХ-${stamp}-${String(count + 1).padStart(4, "0")}`;
 
+    const billingDate = options.billingDate || new Date();
+    let tulukhOgnoo = billingDate;
+
+    // Fetch cron schedule to determine due date based on billing cycle
+    try {
+      const cronSchedule = await NekhemjlekhCron(kholbolt).findOne({
+        baiguullagiinId: geree.baiguullagiinId,
+        $or: [
+          { barilgiinId: geree.barilgiinId },
+          { barilgiinId: null }
+        ]
+      }).sort({ barilgiinId: -1 }); // Prioritize building-specific schedule
+
+      if (cronSchedule && cronSchedule.nekhemjlekhUusgekhOgnoo) {
+        tulukhOgnoo = calculateNextDueDate(cronSchedule.nekhemjlekhUusgekhOgnoo, billingDate);
+      }
+    } catch (err) {
+      console.error("Error fetching cron schedule for due date:", err);
+    }
+
     invoice = new NekhemjlekhiinTuukhModel({
       ...geree,
       _id: undefined,
       gereeniiId: geree._id.toString(),
       nekhemjlekhiinDugaar: invoiceNumber,
-      ognoo: options.billingDate || new Date(),
+      ognoo: billingDate,
+      tulukhOgnoo: tulukhOgnoo,
       niitTulbur: 0,
       tuluv: "Төлөөгүй",
       medeelel: { zardluud: [] },

@@ -1245,6 +1245,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
 
       let khariu;
       try {
+        console.log(`📡 [QPAY] Requesting QPay invoice creation. callback_url: ${callback_url}`);
         khariu = await qpayGargaya(
           req.body,
           callback_url,
@@ -1517,6 +1518,7 @@ router.post("/qpayShalgay", tokenShalgakh, async (req, res, next) => {
 
     const khariu = await qpayShalgay(req.body, tukhainBaaziinKholbolt);
     console.log(`✅ [QPAY-SHALGAY] Success: status=${khariu.invoice_status || khariu.tuluv || "UNKNOWN"}`);
+    console.log(`📊 [QPAY-SHALGAY] Full Response: ${JSON.stringify(khariu)}`);
     res.send(khariu);
   } catch (err) {
     // If QPay API itself returns 500, try to fall back to DB invoice status

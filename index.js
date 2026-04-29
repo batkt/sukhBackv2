@@ -90,6 +90,7 @@ process.env.UV_THREADPOOL_SIZE = 20;
     console.log(`🚀 [INIT] Opening server on port ${PORT}...`);
     server.listen(PORT, () => {
       console.log(`✅ SUCCESS: AmarSukh server listening on port ${PORT}`);
+      console.log(`🌐 [CONFIG] UNDSEN_SERVER: ${process.env.UNDSEN_SERVER || "NOT SET"}`);
     });
   } catch (err) {
     console.error("❌ CRITICAL: Failed to initialize server:", err);
