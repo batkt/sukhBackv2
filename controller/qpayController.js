@@ -8,6 +8,7 @@ const { QuickQpayObject } = require("quickqpaypackvSukh");
 const { URL } = require("url");
 const guilgeeService = require("../services/guilgeeService");
 const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+const BankniiGuilgee = require("../models/bankniiGuilgee");
 
 const instance = got.extend({
   hooks: {
@@ -261,6 +262,48 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
     nekhemjlekhId: nekhemjlekhiinId,
   });
   console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Ledger Result: ${JSON.stringify(ledgerResult)}`);
+
+  // Record in Bank Statement (BankniiGuilgee) for accounting/reconciliation
+  try {
+    const GereeModel = Geree(kholbolt);
+    const geree = await GereeModel.findById(nekhemjlekh.gereeniiId).lean();
+    
+    if (geree) {
+      const BankniiGuilgeeModel = BankniiGuilgee(kholbolt);
+      const bankGuilgee = new BankniiGuilgeeModel();
+
+      bankGuilgee.tranDate = new Date();
+      bankGuilgee.amount = paidAmount;
+      bankGuilgee.description = `QPay төлбөр - Гэрээ ${nekhemjlekh.gereeniiDugaar || ""}`;
+      bankGuilgee.accName = nekhemjlekh.nekhemjlekhiinDansniiNer || "";
+      bankGuilgee.accNum = nekhemjlekh.nekhemjlekhiinDans || "";
+
+      bankGuilgee.record = paymentTransactionId || nekhemjlekh.qpayInvoiceId || "manual_sync";
+      bankGuilgee.tranId = paymentTransactionId || nekhemjlekh.qpayInvoiceId || "manual_sync";
+      bankGuilgee.balance = 0;
+      bankGuilgee.requestId = nekhemjlekh.qpayInvoiceId || "";
+
+      bankGuilgee.kholbosonGereeniiId = [nekhemjlekh.gereeniiId];
+      bankGuilgee.kholbosonTalbainId = geree?.talbainDugaar ? [geree.talbainDugaar] : [];
+      bankGuilgee.dansniiDugaar = nekhemjlekh.nekhemjlekhiinDans || "";
+      bankGuilgee.bank = "qpay";
+      bankGuilgee.baiguullagiinId = baiguullagiinId;
+      bankGuilgee.barilgiinId = nekhemjlekh.barilgiinId || "";
+      bankGuilgee.kholbosonDun = paidAmount;
+      bankGuilgee.ebarimtAvsanEsekh = false;
+      bankGuilgee.drOrCr = "Credit";
+      bankGuilgee.tranCrnCode = "MNT";
+      bankGuilgee.exchRate = 1;
+      bankGuilgee.postDate = new Date();
+
+      bankGuilgee.indexTalbar = `${bankGuilgee.barilgiinId}${bankGuilgee.bank}${bankGuilgee.dansniiDugaar}${bankGuilgee.record}${bankGuilgee.amount}`;
+
+      await bankGuilgee.save();
+      console.log(`✅ [QPAY-INVOICE CALLBACK] BankniiGuilgee created: amount=${paidAmount}`);
+    }
+  } catch (bankErr) {
+    console.error("❌ [QPAY-INVOICE CALLBACK] BankniiGuilgee creation failed:", bankErr.message);
+  }
 
   // Update Invoice state
   const balance = await guilgeeService.getBalance(kholbolt, { nekhemjlekhId: nekhemjlekhiinId });
