@@ -201,3 +201,46 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
   res.sendStatus(200);
 });
 
+
+exports.qpayGuilgeeUtgaAvya = asyncHandler(async (req, res, next) => {
+  const { baiguullagiinId, tukhainBaaziinKholbolt } = req.body;
+  
+  const guilgeenuud = await QuickQpayObject(tukhainBaaziinKholbolt).find({
+    tulsunEsekh: true,
+    ognoo: { $gt: new Date("2023-12-01") },
+    baiguullagiinId
+  });
+
+  let tokenObject = await Token(tukhainBaaziinKholbolt).findOne({
+    turul: "qpay",
+    baiguullagiinId,
+    ognoo: { $gte: new Date(new Date().getTime() - 25 * 60000) },
+  });
+
+  if (!tokenObject) {
+    return res.status(400).send("Active QPay token not found. Please generate an invoice first.");
+  }
+
+  const token = tokenObject.token;
+  const { qpayShalgay } = require("quickqpaypackvSukh");
+
+  for (const guilgee of guilgeenuud) {
+    if (guilgee.legacy_id) continue;
+
+    try {
+      const khariu = await qpayShalgay({ invoice_id: guilgee.qpay?.invoice_id || guilgee.invoice_id }, tukhainBaaziinKholbolt);
+      if (khariu?.payments?.[0]?.transactions?.[0]?.id) {
+        await QuickQpayObject(tukhainBaaziinKholbolt).updateOne(
+          { _id: guilgee._id },
+          { legacy_id: khariu.payments[0].transactions[0].id }
+        );
+      }
+    } catch (err) {
+      console.error(`Failed to sync qpay ${guilgee._id}:`, err.message);
+    }
+  }
+
+  res.send("Amjilttai");
+});
+
+
