@@ -48,37 +48,45 @@ async function cleanStart() {
       OrshinSuugch.deleteMany({}) // Clearing from amarSukh
     ]);
 
-    console.log("Seeding 3 test residents and contracts...");
+    console.log("Seeding 3 test residents using orshinSuugchBurtgey...");
+
+    const { orshinSuugchBurtgey } = require("./controller/orshinSuugch");
 
     const baiguullagiinId = "69f06870687e1fcbab74be82";
     const barilgiinId = "69f161e3e9e5c1202ca0153d";
 
-    const residents = [];
-
     for (let i = 1; i <= 3; i++) {
-      const residentId = new mongoose.Types.ObjectId();
-      residents.push({
-        _id: residentId,
-        ner: `Test Resident ${i}`,
-        ovog: `Test`,
-        utas: `9911000${i}`,
-        baiguullagiinId,
-        barilgiinId,
-        toots: [{
+      console.log(`Registering Resident ${i}...`);
+      
+      const req = {
+        body: {
+          ner: `Test Resident ${i}`,
+          ovog: `Test`,
+          utas: `9911000${i}`,
           toot: `10${i}`,
+          davkhar: String(i),
+          orts: "1",
           baiguullagiinId,
           barilgiinId,
-          orts: "1",
-          davkhar: String(i)
-        }]
+          nevtrekhNer: `testuser${i}`,
+          nuutsUg: "1234",
+          ekhniiUldegdel: 9000
+        }
+      };
+
+      const res = {
+        status: () => res,
+        json: (data) => {
+          // console.log(`Result for ${i}:`, data.success ? "Success" : data.message);
+        }
+      };
+
+      // Call the controller (it's wrapped in express-async-handler, so it returns a promise internally)
+      // We manually await the logic
+      await orshinSuugchBurtgey(req, res, (err) => {
+        if (err) console.error(`Error seeding resident ${i}:`, err.message);
       });
-
-      
     }
-
-    await OrshinSuugch.insertMany(residents);
-
-    console.log(`- Residents (amarSukh): 3 seeded`);
 
     console.log("--- CLEANUP & SEED COMPLETE ---");
     await orgConn.close();
