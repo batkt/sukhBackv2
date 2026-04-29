@@ -752,33 +752,14 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
       orshinSuugch = new OrshinSuugch(db.erunkhiiKholbolt)(userData);
     }
 
-    // Validate: User can only register with ONE building
-    // If user already has a barilgiinId, they cannot register with a different one
+   
     if (orshinSuugch.barilgiinId && barilgiinId) {
       const existingBarilgiinId = String(orshinSuugch.barilgiinId);
       const newBarilgiinId = String(barilgiinId);
 
       if (existingBarilgiinId !== newBarilgiinId) {
-        // Get building names for better error message
-        let existingBuildingName = "";
-        let newBuildingName = "";
-
-        if (baiguullaga) {
-          const existingBarilga = baiguullaga.barilguud?.find(
-            (b) => String(b._id) === existingBarilgiinId,
-          );
-          const newBarilga = baiguullaga.barilguud?.find(
-            (b) => String(b._id) === newBarilgiinId,
-          );
-
-          existingBuildingName = existingBarilga?.ner || existingBarilgiinId;
-          newBuildingName = newBarilga?.ner || newBarilgiinId;
-        }
-
-        return res.status(400).json({
-          success: false,
-          message: `Та аль хэдийн "${existingBuildingName}" барилгад бүртгэгдсэн байна. Өөр барилгад бүртгүүлэх боломжгүй.`,
-        });
+        console.log(`ℹ️ [BURTGEY] Resident ${phoneNumber} is registering in a new building: ${newBarilgiinId} (Primary: ${existingBarilgiinId})`);
+        // We allow this now to support multi-building residents
       }
     }
 
@@ -805,58 +786,66 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
         }
         const sohNer = targetBarilga.tokhirgoo?.sohNer || req.body.soh || "";
 
-        // Use toot from request body, not from orshinSuugch (which might be old toot for existing users)
-        const newToot = req.body.toot || "";
-        const newDavkhar = determinedDavkhar || req.body.davkhar || "";
-        const newOrts = req.body.orts || "1";
+     
+        const unitsToProcess = Array.isArray(req.body.units) && req.body.units.length > 0 
+          ? req.body.units 
+          : [{
+              toot: req.body.toot,
+              davkhar: determinedDavkhar || req.body.davkhar,
+              orts: req.body.orts || "1",
+              ekhniiUldegdel: req.body.ekhniiUldegdel,
+              tsahilgaaniiZaalt: req.body.tsahilgaaniiZaalt
+            }];
 
-        const tootEntry = {
-          toot: newToot,
-          source: "OWN_ORG",
-          baiguullagiinId: baiguullaga._id.toString(),
-          barilgiinId: barilgiinId,
-          davkhar: newDavkhar,
-          orts: newOrts,
-          duureg: duuregNer,
-          horoo: horooData,
-          soh: sohNer,
-          bairniiNer: targetBarilga.ner || "",
-          walletUserId: walletUserId || orshinSuugch.walletUserId || "",
-          createdAt: new Date(),
-        };
+        for (const unit of unitsToProcess) {
+          if (!unit.toot) continue;
 
-        const existingTootIndex = orshinSuugch.toots.findIndex(
-          (t) =>
-            t.toot === tootEntry.toot &&
-            t.barilgiinId === tootEntry.barilgiinId,
-        );
+          const unitToot = String(unit.toot).trim();
+          const unitDavkhar = unit.davkhar ? String(unit.davkhar).trim() : "";
+          const unitOrts = unit.orts ? String(unit.orts).trim() : "1";
 
-        if (existingTootIndex >= 0) {
-          // Update existing toot entry if same toot and barilgiinId
-          orshinSuugch.toots[existingTootIndex] = tootEntry;
-        } else {
-          // Add new toot to array - don't update primary toot fields for existing users
-          orshinSuugch.toots.push(tootEntry);
-        }
+          const tootEntry = {
+            toot: unitToot,
+            source: "OWN_ORG",
+            baiguullagiinId: baiguullaga._id.toString(),
+            barilgiinId: barilgiinId,
+            davkhar: unitDavkhar,
+            orts: unitOrts,
+            duureg: duuregNer,
+            horoo: horooData,
+            soh: sohNer,
+            bairniiNer: targetBarilga.ner || "",
+            walletUserId: walletUserId || orshinSuugch.walletUserId || "",
+            ekhniiUldegdel: parseFloat(unit.ekhniiUldegdel) || 0,
+            tsahilgaaniiZaalt: parseFloat(unit.tsahilgaaniiZaalt) || 0,
+            createdAt: new Date(),
+          };
 
-        // Only update primary toot fields (toot, davkhar, barilgiinId, bairniiNer) if this is a NEW user
-        // For existing users, keep their primary toot and just add new toot to toots array
-        if (!existingUser && newToot) {
-          orshinSuugch.toot = newToot;
-          orshinSuugch.davkhar = newDavkhar;
-          orshinSuugch.orts = newOrts;
-          orshinSuugch.barilgiinId = barilgiinId;
-          orshinSuugch.baiguullagiinId = baiguullaga._id;
-          orshinSuugch.baiguullagiinNer = baiguullaga.ner;
-        
-          orshinSuugch.bairniiNer = targetBarilga.ner || "";
-        
-          orshinSuugch.ekhniiUldegdel = req.body.ekhniiUldegdel
-            ? parseFloat(req.body.ekhniiUldegdel) || 0
-            : 0;
-          orshinSuugch.khonogoorBodokhEsekh = req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true";
-          orshinSuugch.bodokhKhonog = Number(req.body.bodokhKhonog) || 0;
-          orshinSuugch.baritsaaniiUldegdel = 0;
+          const existingTootIndex = orshinSuugch.toots.findIndex(
+            (t) =>
+              t.toot === tootEntry.toot &&
+              t.barilgiinId === tootEntry.barilgiinId &&
+              (!t.orts || t.orts === tootEntry.orts),
+          );
+
+          if (existingTootIndex >= 0) {
+            orshinSuugch.toots[existingTootIndex] = tootEntry;
+          } else {
+            orshinSuugch.toots.push(tootEntry);
+          }
+
+          // Set primary fields if this is the first unit of a new user
+          if (!existingUser && !orshinSuugch.toot) {
+            orshinSuugch.toot = unitToot;
+            orshinSuugch.davkhar = unitDavkhar;
+            orshinSuugch.orts = unitOrts;
+            orshinSuugch.barilgiinId = barilgiinId;
+            orshinSuugch.baiguullagiinId = baiguullaga._id;
+            orshinSuugch.baiguullagiinNer = baiguullaga.ner;
+            orshinSuugch.bairniiNer = targetBarilga.ner || "";
+            orshinSuugch.ekhniiUldegdel = parseFloat(unit.ekhniiUldegdel) || 0;
+            orshinSuugch.tsahilgaaniiZaalt = parseFloat(unit.tsahilgaaniiZaalt) || 0;
+          }
         }
       }
     } else if (
@@ -1358,11 +1347,17 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
               tailbar: req.body.tailbar || tailbarFromZardluud || "",
               actOgnoo: new Date(),
               baritsaaniiUldegdel: 0,
-              ekhniiUldegdel: req.body.ekhniiUldegdel
-                ? parseFloat(req.body.ekhniiUldegdel) || 0
-                : 0,
-              umnukhZaalt: tsahilgaaniiZaalt,
-              suuliinZaalt: tsahilgaaniiZaalt,
+              ekhniiUldegdel: tootEntry.ekhniiUldegdel !== undefined
+                ? tootEntry.ekhniiUldegdel
+                : req.body.ekhniiUldegdel
+                  ? parseFloat(req.body.ekhniiUldegdel) || 0
+                  : 0,
+              umnukhZaalt: tootEntry.tsahilgaaniiZaalt !== undefined
+                ? tootEntry.tsahilgaaniiZaalt
+                : tsahilgaaniiZaalt,
+              suuliinZaalt: tootEntry.tsahilgaaniiZaalt !== undefined
+                ? tootEntry.tsahilgaaniiZaalt
+                : tsahilgaaniiZaalt,
               zaaltTog: 0,
               zaaltUs: 0,
               zardluud: zardluudArray,
