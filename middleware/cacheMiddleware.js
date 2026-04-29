@@ -51,7 +51,25 @@ const cacheMiddleware = (ttl = 300) => {
         }
       }
       
-      const baiguullagiinId = req.params.baiguullagiinId || req.query.baiguullagiinId || req.body.baiguullagiinId || "global";
+      let baiguullagiinId = req.params.baiguullagiinId || req.query.baiguullagiinId || req.body.baiguullagiinId;
+      
+      // If not found in standard places, look inside parsed query/body
+      if (!baiguullagiinId) {
+        try {
+          if (req.query?.query) {
+            const q = typeof req.query.query === "string" ? JSON.parse(req.query.query) : req.query.query;
+            baiguullagiinId = q.baiguullagiinId;
+          }
+          if (!baiguullagiinId && req.body?.query) {
+            const q = typeof req.body.query === "string" ? JSON.parse(req.body.query) : req.body.query;
+            baiguullagiinId = q.baiguullagiinId;
+          }
+        } catch (e) {
+          // Ignore parsing errors
+        }
+      }
+
+      baiguullagiinId = baiguullagiinId || "global";
       
       const rawKey = `${baiguullagiinId}:${sanitizedUrl}:${sanitizedBody}`;
       const hash = crypto.createHash("md5").update(rawKey).digest("hex");

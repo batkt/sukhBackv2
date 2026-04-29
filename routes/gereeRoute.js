@@ -122,7 +122,7 @@ router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
   next();
 });
 
-router.get("/guilgeeAvlaguud", tokenShalgakh, cacheMiddleware(300), async (req, res, next) => {
+router.get("/guilgeeAvlaguud", tokenShalgakh, cacheMiddleware(30), async (req, res, next) => {
   try {
      const body = req.query;
      if (!!body?.query) body.query = JSON.parse(body.query);
@@ -134,7 +134,7 @@ router.get("/guilgeeAvlaguud", tokenShalgakh, cacheMiddleware(300), async (req, 
 crud(router, "guilgeeAvlaguud", GuilgeeAvlaguud, UstsanBarimt);
 
 
-router.get("/geree", tokenShalgakh, cacheMiddleware(300), async (req, res, next) => {
+router.get("/geree", tokenShalgakh, cacheMiddleware(60), async (req, res, next) => {
   try {
      const body = req.query;
      if (!!body?.query) body.query = JSON.parse(body.query);

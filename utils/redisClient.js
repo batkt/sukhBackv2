@@ -23,10 +23,26 @@ async function clearOrgCache(baiguullagiinId) {
   if (!baiguullagiinId) return;
   try {
     const pattern = `api_cache:${baiguullagiinId}:*`;
-    const keys = await client.keys(pattern);
-    if (keys.length > 0) {
-      await client.del(keys);
-      console.log(`[CACHE CLEAR] Cleared ${keys.length} keys for org: ${baiguullagiinId}`);
+    let cursor = 0;
+    let count = 0;
+    
+    do {
+      const result = await client.scan(cursor, {
+        MATCH: pattern,
+        COUNT: 100
+      });
+      
+      cursor = result.cursor;
+      const keys = result.keys;
+      
+      if (keys.length > 0) {
+        await client.del(keys);
+        count += keys.length;
+      }
+    } while (cursor !== 0);
+
+    if (count > 0) {
+      console.log(`[CACHE CLEAR] Cleared ${count} keys for org: ${baiguullagiinId}`);
     }
   } catch (err) {
     console.error("Redis Cache Clear Error:", err);
