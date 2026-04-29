@@ -25,6 +25,7 @@ const {
   importInitialBalanceFromExcel,
 } = require("../controller/excelImportController");
 const gereeController = require("../controller/gereeController");
+const cacheMiddleware = require("../middleware/cacheMiddleware");
 
 const storage = multer.memoryStorage();
 const uploadFile = multer({ storage: storage });
@@ -130,7 +131,7 @@ router.get("/guilgeeAvlaguud", tokenShalgakh, cacheMiddleware(300), async (req, 
 // Main GuilgeeAvlaguud CRUD
 crud(router, "guilgeeAvlaguud", GuilgeeAvlaguud, UstsanBarimt);
 
-const cacheMiddleware = require("../middleware/cacheMiddleware");
+
 router.get("/geree", tokenShalgakh, cacheMiddleware(300), async (req, res, next) => {
   try {
      const body = req.query;
