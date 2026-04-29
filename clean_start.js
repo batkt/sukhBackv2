@@ -1,51 +1,40 @@
 const mongoose = require("mongoose");
-const { db } = require("zevbackv2");
+const dotenv = require("dotenv");
+
+// Load env for the base URI
+dotenv.config({ path: "./tokhirgoo/tokhirgoo.env" });
 
 /**
- * CLEAN START SCRIPT
- * DANGER: This script deletes ALL data from:
- * - guilgeeAvlaguud (Ledger)
- * - nekhemjlekhiinTuukh (Invoices)
- * - geree (Contracts)
- * - orshinSuugch (Residents)
- * 
- * Usage: node clean_start.js <baiguullagiinId>
+ * DIRECT CLEAN START SCRIPT
+ * DANGER: This script deletes ALL data from suhTest database:
+ * - guilgeeAvlaguud
+ * - nekhemjlekhiinTuukh
+ * - geree
+ * - orshinSuugch
  */
 
-async function cleanStart(baiguullagiinId) {
-  if (!baiguullagiinId) {
-    console.error("Please provide a Baiguullaga ID: node clean_start.js <ID>");
-    process.exit(1);
-  }
+async function cleanStart() {
+  const baseUri = process.env.MONGODB_URI || "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSukh?authSource=admin";
+  
+  // Replace the database name with suhTest
+  const targetUri = baseUri.replace("/amarSukh", "/suhTest");
+
+  console.log(`--- DIRECT CLEAN START ---`);
+  console.log(`Target URI: ${targetUri}`);
+  console.log(`--------------------------`);
 
   try {
-    // 1. Find the connection for this organization (tukhain)
-    const kholbolt = db.kholboltuud.find(k => String(k.baiguullagiinId) === String(baiguullagiinId));
-    
-    if (!kholbolt) {
-      console.error(`Could not find database connection for organization: ${baiguullagiinId}`);
-      process.exit(1);
-    }
+    const conn = await mongoose.createConnection(targetUri).asPromise();
+    console.log("Connected to suhTest successfully.");
 
-    const dbName = kholbolt.kholbolt.name; // Get the actual connected DB name
-    console.log(`--- CLEAN START ---`);
-    console.log(`Target Organization: ${baiguullagiinId}`);
-    console.log(`Target Database: ${dbName}`);
-    console.log(`General Database (Reference): amarSukh`);
-    console.log(`-------------------`);
-
-    if (dbName !== "suhTest") {
-      console.warn(`WARNING: Target DB is ${dbName}, not suhTest. Proceed? (Ctrl+C to abort)`);
-    }
-
-    // 2. Define Models on this specific organizational connection
+    // Define Models
+    const kholbolt = { kholbolt: conn }; // Mock kholbolt object for schemas
     const Geree = require("./models/geree")(kholbolt);
     const OrshinSuugch = require("./models/orshinSuugch")(kholbolt);
     const Invoice = require("./models/nekhemjlekhiinTuukh")(kholbolt);
     const Ledger = require("./models/guilgeeAvlaguud")(kholbolt);
 
-    // 3. Delete Data from the Organization DB
-    console.log("Cleaning organizational database records...");
+    console.log("Cleaning records...");
 
     const [res1, res2, res3, res4] = await Promise.all([
       Ledger.deleteMany({}),
@@ -60,6 +49,7 @@ async function cleanStart(baiguullagiinId) {
     console.log(`- Residents: ${res4.deletedCount} deleted`);
 
     console.log("--- CLEANUP COMPLETE ---");
+    await conn.close();
     process.exit(0);
 
   } catch (err) {
@@ -68,6 +58,4 @@ async function cleanStart(baiguullagiinId) {
   }
 }
 
-// Run if called directly
-const orgId = process.argv[2];
-cleanStart(orgId);
+cleanStart();
