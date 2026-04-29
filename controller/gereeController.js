@@ -228,9 +228,11 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
           charges: 0,
           payments: 0,
           date: it.ognoo,
+          items: [],
         };
       }
       invoiceData[invId].charges += dun;
+      invoiceData[invId].items.push(it);
     } else {
       const amt = Math.abs(dun);
       totalTulsun += amt;
@@ -244,9 +246,11 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
             charges: 0,
             payments: 0,
             date: it.ognoo,
+            items: [],
           };
         }
         invoiceData[invId].payments += amt;
+        invoiceData[invId].items.push(it);
       }
     }
   });
@@ -277,6 +281,7 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     nekhemjlekhuud.push({
       nekhemjlekhId: invId,
       uldegdel: uld,
+      items: invoiceData[invId].items || [],
     });
 
     // Only update DB if it's a real invoice (valid ObjectId)
