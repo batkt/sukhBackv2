@@ -264,14 +264,6 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     );
   });
 
-  // Fetch actual invoice documents
-  const realInvoiceIds = sortedInvoiceIds.filter(
-    (id) => !id.startsWith("ekhnii_") && !id.startsWith("id_"),
-  );
-  const realInvoices = await NekhemjlekhiinTuukhModel.find({
-    _id: { $in: realInvoiceIds },
-  }).lean();
-
   const nekhemjlekhuud = [];
   for (const invId of sortedInvoiceIds) {
     let uld = invoiceData[invId].charges - invoiceData[invId].payments;
@@ -283,36 +275,13 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
 
     uld = Number(uld.toFixed(2));
 
-    // Get the base invoice object
-    let invObj = realInvoices.find((ri) => String(ri._id) === String(invId));
-    const isVirtual = invId.startsWith("ekhnii_") || invId.startsWith("id_");
-
-    if (!invObj) {
-      // Create a mock object for virtual invoices (like Starting Balance)
-      const firstItem = itemsWithIds.find((it) => it.nekhemjlekhId === invId);
-      invObj = {
-        _id: invId,
-        nekhemjlekhiinDugaar: invId.startsWith("ekhnii_")
-          ? "Эхний үлдэгдэл"
-          : "Бусад",
-        ognoo: firstItem ? firstItem.ognoo : new Date(),
-        tuluv: uld <= 0 ? "Төлсөн" : "Төлөөгүй",
-        medeelel: { zardluud: [] },
-        niitTulbur: invoiceData[invId].charges,
-        isVirtual: true,
-      };
-    }
-
-    // Note: The model hooks in nekhemjlekhiinTuukh.js will now automatically
-    // handle the population of medeelel.zardluud from the ledger when we query them.
-    // However, for the objects we just fetched or mocked, we ensure they have the balance.
-
     nekhemjlekhuud.push({
-      ...invObj,
+      nekhemjlekhId: invId,
       uldegdel: uld,
     });
 
     // Only update DB if it's a real invoice
+    const isVirtual = invId.startsWith("ekhnii_") || invId.startsWith("id_");
     if (!isVirtual) {
       if (uld <= 0) {
         await NekhemjlekhiinTuukhModel.updateOne(
