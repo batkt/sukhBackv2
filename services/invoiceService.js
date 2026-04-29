@@ -92,7 +92,8 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
   const { charges, total } = await calculateGereeCharges(kholbolt, geree, options);
 
   if (total === 0 && !options.forceEmpty) {
-    return { success: false, message: "No charges to bill" };
+    // Just return success even if empty, as requested
+    return { success: true, message: "No charges to bill", total: 0 };
   }
 
   // 1. Get or Create the one unpaid invoice
@@ -133,20 +134,21 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
   for (const c of charges) {
     if (c.isEkhniiUldegdel) hasEkhniiUldegdel = true;
 
-    // Record automated charge
-    await guilgeeService.recordCharge(kholbolt, {
-      ...geree,
-      _id: undefined,
-      gereeniiId: geree._id.toString(),
-      nekhemjlekhId: invoice._id.toString(),
-      dun: c.dun,
-      zardliinNer: c.ner,
-      zardliinTurul: c.zardliinTurul,
-      source: c.isEkhniiUldegdel ? "geree" : "nekhemjlekh",
-      ekhniiUldegdelEsekh: !!c.isEkhniiUldegdel,
-      guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
-      guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.orshinSuugchId,
-    });
+      // Record automated charge
+      await guilgeeService.recordCharge(kholbolt, {
+        ...geree,
+        _id: undefined,
+        gereeniiId: geree._id.toString(),
+        nekhemjlekhId: invoice._id.toString(),
+        dun: c.dun,
+        zardliinNer: c.ner,
+        zardliinTurul: c.zardliinTurul,
+        ognoo: options.billingDate || new Date(),
+        source: c.isEkhniiUldegdel ? "geree" : "nekhemjlekh",
+        ekhniiUldegdelEsekh: !!c.isEkhniiUldegdel,
+        guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
+        guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.orshinSuugchId,
+      });
   }
 
   // 4. Update invoice with live total and snapshot from ledger

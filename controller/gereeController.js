@@ -189,35 +189,28 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   const query = { baiguullagiinId };
   if (barilgiinId) query.barilgiinId = barilgiinId;
   if (gereeniiId) query.gereeniiId = gereeniiId;
-  if (gereeniiDugaar) query.gereeniiDugaar = gereeniiDugaar;
 
-  // Get all transactions for summary and breakdown calculation
-  const allItems = await GuilgeeAvlaguudModel.find(query).sort({
-    ognoo: 1,
-    createdAt: 1,
-  });
+  const allItems = await GuilgeeAvlaguudModel.find(query).sort({ ognoo: 1, createdAt: 1 }).lean();
 
   let totalTulbur = 0;
   let totalTulsun = 0;
   let generalPayments = 0;
 
-  const invoiceData = {}; // Group charges and payments by nekhemjlekhId using raw database items
+  const invoiceData = {}; 
+  
   allItems.forEach((it) => {
     const dun = Number(it.dun || 0);
-    // If nekhemjlekhId is missing, it's an uninvoiced item
-    const invId = it.nekhemjlekhId || "uninvoiced";
+    const invId = String(it.nekhemjlekhId || "uninvoiced");
 
     if (dun > 0) {
       totalTulbur += dun;
       if (!invoiceData[invId]) {
-        invoiceData[invId] = { charges: 0, payments: 0, date: it.ognoo };
+        invoiceData[invId] = { charges: 0, payments: 0, date: it.ognoo, id: invId };
       }
       invoiceData[invId].charges += dun;
     } else {
       const amt = Math.abs(dun);
       totalTulsun += amt;
-      
-      // If payment is linked to an invoice, subtract from it, otherwise it's a general payment
       if (it.nekhemjlekhId && invoiceData[invId]) {
         invoiceData[invId].payments += amt;
       } else {
@@ -226,48 +219,30 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     }
   });
 
-  // Sort invoices by date (FIFO)
-  const sortedInvoiceIds = Object.keys(invoiceData).sort((a, b) => {
-    return new Date(invoiceData[a].date) - new Date(invoiceData[b].date);
-  });
-
-  // Fetch actual invoice documents for metadata
-  const realInvoiceIds = sortedInvoiceIds.filter(id => id !== "uninvoiced");
-  const realInvoices = await NekhemjlekhiinTuukhModel.find({ _id: { $in: realInvoiceIds } }).lean();
-
+  const sortedInvoices = Object.values(invoiceData).sort((a, b) => new Date(a.date) - new Date(b.date));
   const nekhemjlekhuud = [];
-  for (const invId of sortedInvoiceIds) {
-    let uld = invoiceData[invId].charges - invoiceData[invId].payments;
+
+  for (const inv of sortedInvoices) {
+    let uld = inv.charges - inv.payments;
     if (uld > 0 && generalPayments > 0) {
       const deduct = Math.min(uld, generalPayments);
       uld -= deduct;
       generalPayments -= deduct;
     }
 
-    uld = Number(uld.toFixed(2));
-
-    let invObj = realInvoices.find(ri => String(ri._id) === String(invId));
-    if (!invObj) {
-      invObj = {
-        _id: invId,
-        nekhemjlekhiinDugaar: invId === "uninvoiced" ? "Нэхэмжлээгүй" : "Бусад",
-        ognoo: invoiceData[invId].date,
-        niitTulbur: invoiceData[invId].charges,
-        tuluv: uld <= 0 ? "Төлсөн" : "Төлөөгүй"
-      };
-    }
-
     nekhemjlekhuud.push({
-      nekhemjlekhId: invId,
-      uldegdel: uld
+      nekhemjlekhId: inv.id,
+      niitTulbur: inv.charges,
+      uldegdel: Number(uld.toFixed(2)),
+      tuluv: uld <= 0 ? "Төлсөн" : "Төлөөгүй"
     });
 
-    // Auto-update real invoice status
-    if (invId !== "uninvoiced") {
+    // Sync real invoice status if it exists
+    if (inv.id !== "uninvoiced") {
       await NekhemjlekhiinTuukhModel.updateOne(
-        { _id: invId },
+        { _id: inv.id },
         { $set: { tuluv: uld <= 0 ? "Төлсөн" : "Төлөөгүй" } }
-      );
+      ).catch(() => {});
     }
   }
 
@@ -278,7 +253,6 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
       totalTulsun: Number(totalTulsun.toFixed(2)),
       uldegdel: Number((totalTulbur - totalTulsun).toFixed(2)),
       gereeniiId,
-      gereeniiDugaar,
       nekhemjlekhuud,
     },
     items: allItems,
