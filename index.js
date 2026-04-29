@@ -119,7 +119,7 @@ app.use((req, res, next) => {
   );
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, x-real-ip, Origin, Accept, X-Requested-With, Cache-Control",
+    "Content-Type, Authorization, x-real-ip, Origin, Accept, X-Requested-With, Cache-Control, X-Org-Only",
   );
   res.setHeader("Access-Control-Allow-Credentials", "true");
 
