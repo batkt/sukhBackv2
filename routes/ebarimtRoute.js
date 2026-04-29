@@ -140,20 +140,37 @@ async function ebarimtDuudya(ugugdul, onFinish, next, shine = false, baiguullagi
         url,
       });
       
+      const cleanObject = (obj) => {
+        if (Array.isArray(obj)) return obj.map(cleanObject);
+        if (obj && typeof obj === 'object' && !(obj instanceof Date)) {
+          const newObj = {};
+          for (const key in obj) {
+            if (key === '_id' || key === '__v' || key === 'createdAt' || key === 'updatedAt') continue;
+            newObj[key] = cleanObject(obj[key]);
+          }
+          return newObj;
+        }
+        return obj;
+      };
+
       const plainUgugdul = typeof ugugdul.toObject === 'function' ? ugugdul.toObject() : JSON.parse(JSON.stringify(ugugdul));
+      const cleanedUgugdul = cleanObject(plainUgugdul);
       
-      // Ensure 'type' is present (sometimes Mongoose toObject() can skip it if misconfigured)
-      if (!plainUgugdul.type && ugugdul.type) plainUgugdul.type = ugugdul.type;
-      
-      // Remove Mongoose/DB internal fields that might confuse PosAPI
-      delete plainUgugdul._id;
-      delete plainUgugdul.__v;
-      delete plainUgugdul.createdAt;
-      delete plainUgugdul.updatedAt;
-      
-      const requestBody = { receipt: plainUgugdul };
+      // Ensure 'type' is present at the root of the receipt object
+      if (!cleanedUgugdul.type && ugugdul.type) cleanedUgugdul.type = ugugdul.type;
+
+      // Final districtCode check - must be numeric 4 digits
+      // If it's a string like "Баянгол...", this will try to extract digits or fallback to "0001"
+      let finalDistrictCode = String(cleanedUgugdul.districtCode || "").replace(/[^0-9]/g, "");
+      if (finalDistrictCode.length < 4) finalDistrictCode = finalDistrictCode.padStart(4, "0");
+      if (finalDistrictCode.length > 4) finalDistrictCode = finalDistrictCode.substring(0, 4);
+      if (finalDistrictCode === "0000") finalDistrictCode = "0001"; // Generic fallback
+      cleanedUgugdul.districtCode = finalDistrictCode;
+
+      const requestBody = { receipt: cleanedUgugdul };
       
       console.log("[EBARIMT] Request Body Type:", requestBody.receipt?.type);
+      console.log("[EBARIMT] Final District Code:", cleanedUgugdul.districtCode);
       console.log("[EBARIMT] Request Body:", JSON.stringify(requestBody, null, 2));
       
       request.post(url, { json: true, body: requestBody }, (err, res1, body) => {
