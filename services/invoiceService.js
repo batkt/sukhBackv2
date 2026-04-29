@@ -95,34 +95,11 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     return { success: true, message: "No charges to bill", total: 0 };
   }
 
-  // 1. Find all unpaid invoices for this contract
-  let unpaidInvoices = await NekhemjlekhiinTuukhModel.find({
+  // 1. Get or Create the one unpaid invoice
+  let invoice = await NekhemjlekhiinTuukhModel.findOne({
     gereeniiId: geree._id.toString(),
     tuluv: "Төлөөгүй"
-  }).sort({ ognoo: -1, createdAt: -1 });
-
-  let invoice;
-  if (unpaidInvoices.length > 0) {
-    // Pick the latest one as the primary target
-    invoice = unpaidInvoices[0];
-    
-    // If there are duplicates, consolidate them
-    if (unpaidInvoices.length > 1) {
-      const targetId = invoice._id.toString();
-      const duplicateIds = unpaidInvoices.slice(1).map(inv => inv._id);
-      
-      const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
-      
-      // Move all ledger items from duplicates to the target invoice
-      await GuilgeeAvlaguudModel.updateMany(
-        { nekhemjlekhId: { $in: duplicateIds.map(id => id.toString()) } },
-        { $set: { nekhemjlekhId: targetId } }
-      );
-      
-      // Delete the duplicate invoice documents
-      await NekhemjlekhiinTuukhModel.deleteMany({ _id: { $in: duplicateIds } });
-    }
-  }
+  }).sort({ ognoo: -1 });
 
   if (!invoice) {
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
