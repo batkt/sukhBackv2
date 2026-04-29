@@ -341,7 +341,7 @@ router.post("/baiguullagaBurtgekh", async (req, res, next) => {
           await db.kholboltNemye(
             baiguullaga._id,
             req.body.baaziinNer,
-            false,              // cloudMongoDBEsekh - false for local MongoDB
+            true,               // cloudMongoDBEsekh - true to enforce auth credentials
             "127.0.0.1:27017",  // clusterUrl
             "Br1stelback1",     // password
             "admin",            // userName
