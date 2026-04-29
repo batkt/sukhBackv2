@@ -122,9 +122,14 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     });
   }
 
- 
+  await ensureEkhniiUldegdel(kholbolt, geree, options);
+
+  return { success: true, invoiceId: invoice._id, total };
+}
+
+async function ensureEkhniiUldegdel(kholbolt, geree, options = {}) {
   let ekhniiUldegdel = Number(geree.ekhniiUldegdel) || 0;
-  
+
   if (ekhniiUldegdel === 0) {
     const OrshinSuugchModel = require("../models/orshinSuugch")(kholbolt);
     const resident = await OrshinSuugchModel.findById(geree.orshinSuugchId);
@@ -158,13 +163,14 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
         guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.burtgesenAjiltan,
         guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
       });
+      return true;
     }
   }
-
-  return { success: true, invoiceId: invoice._id, total };
+  return false;
 }
 
 module.exports = {
   calculateGereeCharges,
   createInvoiceForContract,
+  ensureEkhniiUldegdel,
 };

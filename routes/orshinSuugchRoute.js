@@ -761,6 +761,25 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
               },
               { $set: syncData },
             );
+
+            // Sync to ledger if ekhniiUldegdel was updated
+            if (req.body.ekhniiUldegdel !== undefined) {
+              const activeGerees = await GereeModel.find({
+                orshinSuugchId: result._id.toString(),
+                tuluv: "Идэвхтэй",
+              });
+              const invoiceService = require("../services/invoiceService");
+              for (const g of activeGerees) {
+                await invoiceService.ensureEkhniiUldegdel(
+                  tukhainBaaziinKholbolt,
+                  g,
+                  {
+                    ajiltanId: req.ajiltan?._id,
+                    ajiltanNer: req.ajiltan?.ner,
+                  },
+                );
+              }
+            }
           }
 
 
