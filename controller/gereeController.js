@@ -264,6 +264,14 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     );
   });
 
+  // Fetch actual invoice documents
+  const realInvoiceIds = sortedInvoiceIds.filter(
+    (id) => !id.startsWith("ekhnii_") && !id.startsWith("id_"),
+  );
+  const realInvoices = await NekhemjlekhiinTuukhModel.find({
+    _id: { $in: realInvoiceIds },
+  }).lean();
+
   const nekhemjlekhuud = [];
   for (const invId of sortedInvoiceIds) {
     let uld = invoiceData[invId].charges - invoiceData[invId].payments;
@@ -274,23 +282,49 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     }
 
     uld = Number(uld.toFixed(2));
+
+    // Get the base invoice object
+    let invObj = realInvoices.find((ri) => String(ri._id) === String(invId));
+    const isVirtual = invId.startsWith("ekhnii_") || invId.startsWith("id_");
+
+    if (!invObj) {
+      // Create a mock object for virtual invoices (like Starting Balance)
+      const firstItem = itemsWithIds.find((it) => it.nekhemjlekhId === invId);
+      invObj = {
+        _id: invId,
+        nekhemjlekhiinDugaar: invId.startsWith("ekhnii_")
+          ? "Эхний үлдэгдэл"
+          : "Бусад",
+        ognoo: firstItem ? firstItem.ognoo : new Date(),
+        tuluv: uld <= 0 ? "Төлсөн" : "Төлөөгүй",
+        medeelel: { zardluud: [] },
+        niitTulbur: invoiceData[invId].charges,
+        isVirtual: true,
+      };
+    }
+
+    // Note: The model hooks in nekhemjlekhiinTuukh.js will now automatically
+    // handle the population of medeelel.zardluud from the ledger when we query them.
+    // However, for the objects we just fetched or mocked, we ensure they have the balance.
+
     nekhemjlekhuud.push({
-      nekhemjlekhId: invId,
+      ...invObj,
       uldegdel: uld,
     });
 
-    // Update invoice status if paid in the ledger
-    if (uld <= 0) {
-      await NekhemjlekhiinTuukhModel.updateOne(
-        { _id: invId, tuluv: { $ne: "Төлсөн" } },
-        { $set: { tuluv: "Төлсөн", tulsunOgnoo: new Date() } },
-      );
-    } else {
-      // Revert if balance exists but marked paid
-      await NekhemjlekhiinTuukhModel.updateOne(
-        { _id: invId, tuluv: "Төлсөн" },
-        { $set: { tuluv: "Төлөөгүй" } },
-      );
+    // Only update DB if it's a real invoice
+    if (!isVirtual) {
+      if (uld <= 0) {
+        await NekhemjlekhiinTuukhModel.updateOne(
+          { _id: invId, tuluv: { $ne: "Төлсөн" } },
+          { $set: { tuluv: "Төлсөн", tulsunOgnoo: new Date() } },
+        );
+      } else {
+        await NekhemjlekhiinTuukhModel.updateOne(
+          { _id: invId, tuluv: "Төлсөн" },
+          { $set: { tuluv: "Төлөөгүй" } },
+        );
+      }
     }
   }
 
@@ -313,9 +347,9 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
       totalTulbur: Number(totalTulbur.toFixed(2)),
       totalTulsun: Number(totalTulsun.toFixed(2)),
       uldegdel: Number((totalTulbur - totalTulsun).toFixed(2)),
-      gereeniiId: gereeniiId || allItems[0]?.gereeniiId,
-      gereeniiDugaar: gereeniiDugaar || allItems[0]?.gereeniiDugaar,
-      orshinSuugchId: allItems[0]?.orshinSuugchId,
+      gereeniiId: gereeniiId || itemsWithIds[0]?.gereeniiId,
+      gereeniiDugaar: gereeniiDugaar || itemsWithIds[0]?.gereeniiDugaar,
+      orshinSuugchId: itemsWithIds[0]?.orshinSuugchId,
       nekhemjlekhuud,
     },
     items: filteredItems,
