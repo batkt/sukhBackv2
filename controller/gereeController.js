@@ -171,95 +171,131 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
       message: "baiguullagiinId is required",
     });
   }
-
-  const tukhainBaaziinKholbolt = db.kholboltuud.find(
+  const kholbolt = db.kholboltuud.find(
     (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
   );
+  if (!kholbolt) {
+    return res
+      .status(404)
+      .json({ success: false, message: "Байгууллага олдсонгүй" });
+  }
 
-  if (!tukhainBaaziinKholbolt) {
-    return res.status(404).json({
-      success: false,
-      message: "Байгууллагын холболт олдсонгүй",
+  const GuilgeeAvlaguudModel = GuilgeeAvlaguud(kholbolt);
+  const NekhemjlekhiinTuukhModel = NekhemjlekhiinTuukh(kholbolt);
+
+  const query = { baiguullagiinId };
+  if (barilgiinId) query.barilgiinId = barilgiinId;
+  if (gereeniiId) query.gereeniiId = gereeniiId;
+  if (gereeniiDugaar) query.gereeniiDugaar = gereeniiDugaar;
+
+  // Get all transactions for summary and breakdown calculation
+  const allItems = await GuilgeeAvlaguudModel.find(query).sort({
+    ognoo: 1,
+    createdAt: 1,
+  });
+
+  let totalTulbur = 0;
+  let totalTulsun = 0;
+
+  // Calculate per-invoice balance
+  const invoiceData = {}; // nekhemjlekhId -> { charges: 0, payments: 0, date: Date }
+  let generalPayments = 0;
+
+  allItems.forEach((it) => {
+    const dun = Number(it.dun || 0);
+    if (dun > 0) {
+      totalTulbur += dun;
+      if (it.nekhemjlekhId) {
+        if (!invoiceData[it.nekhemjlekhId]) {
+          invoiceData[it.nekhemjlekhId] = {
+            charges: 0,
+            payments: 0,
+            date: it.ognoo,
+          };
+        }
+        invoiceData[it.nekhemjlekhId].charges += dun;
+      }
+    } else {
+      const amt = Math.abs(dun);
+      totalTulsun += amt;
+      if (it.nekhemjlekhId) {
+        if (!invoiceData[it.nekhemjlekhId]) {
+          invoiceData[it.nekhemjlekhId] = {
+            charges: 0,
+            payments: 0,
+            date: it.ognoo,
+          };
+        }
+        invoiceData[it.nekhemjlekhId].payments += amt;
+      } else {
+        generalPayments += amt;
+      }
+    }
+  });
+
+  // Sort invoices by date (FIFO)
+  const sortedInvoiceIds = Object.keys(invoiceData).sort((a, b) => {
+    return (
+      new Date(invoiceData[a].date).getTime() -
+      new Date(invoiceData[b].date).getTime()
+    );
+  });
+
+  const nekhemjlekhuud = [];
+  for (const invId of sortedInvoiceIds) {
+    let uld = invoiceData[invId].charges - invoiceData[invId].payments;
+    if (uld > 0 && generalPayments > 0) {
+      const deduct = Math.min(uld, generalPayments);
+      uld -= deduct;
+      generalPayments -= deduct;
+    }
+
+    uld = Number(uld.toFixed(2));
+    nekhemjlekhuud.push({
+      nekhemjlekhId: invId,
+      uldegdel: uld,
     });
-  }
 
-  const GuilgeeAvlaguudModel = GuilgeeAvlaguud(tukhainBaaziinKholbolt);
-
-  const query = {
-    baiguullagiinId,
-    ...(barilgiinId && { barilgiinId }),
-  };
-
-  if (gereeniiId) {
-    query.gereeniiId = gereeniiId;
-  } else if (gereeniiDugaar) {
-    query.gereeniiDugaar = gereeniiDugaar;
-  }
-
-  if (ognoo && Array.isArray(ognoo) && ognoo.length === 2) {
-    const start = ognoo[0] ? new Date(ognoo[0]) : null;
-    const end = ognoo[1] ? new Date(ognoo[1] + "T23:59:59") : null;
-
-    if (start || end) {
-      query.ognoo = {};
-      if (start) query.ognoo.$gte = start;
-      if (end) query.ognoo.$lte = end;
+    // Update invoice status if paid in the ledger
+    if (uld <= 0) {
+      await NekhemjlekhiinTuukhModel.updateOne(
+        { _id: invId, tuluv: { $ne: "Төлсөн" } },
+        { $set: { tuluv: "Төлсөн", tulsunOgnoo: new Date() } },
+      );
+    } else {
+      // Revert if balance exists but marked paid
+      await NekhemjlekhiinTuukhModel.updateOne(
+        { _id: invId, tuluv: "Төлсөн" },
+        { $set: { tuluv: "Төлөөгүй" } },
+      );
     }
   }
 
-  // Aggregate for summary
-  const aggregationPipeline = [
-    { $match: query },
-    {
-      $group: {
-        _id: "$gereeniiId",
-        gereeniiDugaar: { $first: "$gereeniiDugaar" },
-        orshinSuugchId: { $first: "$orshinSuugchId" },
-        totalTulbur: { $sum: { $cond: [{ $gt: ["$dun", 0] }, "$dun", 0] } },
-        totalTulsun: {
-          $sum: { $cond: [{ $lt: ["$dun", 0] }, { $abs: "$dun" }, 0] },
-        },
-        uldegdel: { $sum: "$dun" },
-      },
-    },
-  ];
-
-  const summaryResult = await GuilgeeAvlaguudModel.aggregate(aggregationPipeline);
-
-  // If specific contract requested, return single summary + items
-  if (gereeniiId || gereeniiDugaar) {
-    const items = await GuilgeeAvlaguudModel.find(query).select("-uldegdel").sort({ ognoo: 1 });
-    const summary = summaryResult[0] || {
-      totalTulbur: 0,
-      totalTulsun: 0,
-      uldegdel: 0,
-    };
-
-    return res.json({
-      success: true,
-      summary: {
-        totalTulbur: Number(summary.totalTulbur.toFixed(2)),
-        totalTulsun: Number(summary.totalTulsun.toFixed(2)),
-        uldegdel: Number(summary.uldegdel.toFixed(2)),
-        gereeniiId: summary._id,
-        gereeniiDugaar: summary.gereeniiDugaar,
-        orshinSuugchId: summary.orshinSuugchId,
-      },
-      items,
+  // Filter items for response if date range is provided
+  let filteredItems = allItems;
+  if (ognoo && Array.isArray(ognoo) && ognoo.length === 2) {
+    const start = ognoo[0] ? new Date(ognoo[0]) : null;
+    const end = ognoo[1] ? new Date(ognoo[1] + "T23:59:59") : null;
+    filteredItems = allItems.filter((it) => {
+      const d = new Date(it.ognoo);
+      if (start && d < start) return false;
+      if (end && d > end) return false;
+      return true;
     });
   }
 
-  // Bulk request: return map-like results
   res.json({
     success: true,
-    summaries: summaryResult.map((s) => ({
-      gereeniiId: s._id,
-      gereeniiDugaar: s.gereeniiDugaar,
-      orshinSuugchId: s.orshinSuugchId,
-      totalTulbur: Number(s.totalTulbur.toFixed(2)),
-      totalTulsun: Number(s.totalTulsun.toFixed(2)),
-      uldegdel: Number(s.uldegdel.toFixed(2)),
-    })),
+    summary: {
+      totalTulbur: Number(totalTulbur.toFixed(2)),
+      totalTulsun: Number(totalTulsun.toFixed(2)),
+      uldegdel: Number((totalTulbur - totalTulsun).toFixed(2)),
+      gereeniiId: gereeniiId || allItems[0]?.gereeniiId,
+      gereeniiDugaar: gereeniiDugaar || allItems[0]?.gereeniiDugaar,
+      orshinSuugchId: allItems[0]?.orshinSuugchId,
+      nekhemjlekhuud,
+    },
+    items: filteredItems,
   });
 });
 
