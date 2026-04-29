@@ -212,7 +212,9 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     { $match: query },
     {
       $group: {
-        _id: gereeniiId ? "$gereeniiId" : (gereeniiDugaar ? "$gereeniiDugaar" : { gereeniiId: "$gereeniiId", gereeniiDugaar: "$gereeniiDugaar" }),
+        _id: "$gereeniiId",
+        gereeniiDugaar: { $first: "$gereeniiDugaar" },
+        orshinSuugchId: { $first: "$orshinSuugchId" },
         totalTulbur: { $sum: { $cond: [{ $gt: ["$dun", 0] }, "$dun", 0] } },
         totalTulsun: {
           $sum: { $cond: [{ $lt: ["$dun", 0] }, { $abs: "$dun" }, 0] },
@@ -239,6 +241,9 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
         totalTulbur: Number(summary.totalTulbur.toFixed(2)),
         totalTulsun: Number(summary.totalTulsun.toFixed(2)),
         totalUldegdel: Number(summary.totalUldegdel.toFixed(2)),
+        gereeniiId: summary._id,
+        gereeniiDugaar: summary.gereeniiDugaar,
+        orshinSuugchId: summary.orshinSuugchId,
       },
       items,
     });
@@ -247,13 +252,14 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   // Bulk request: return map-like results
   res.json({
     success: true,
-    summaries: summaryResult.map(s => ({
-      gereeniiId: s._id.gereeniiId,
-      gereeniiDugaar: s._id.gereeniiDugaar,
+    summaries: summaryResult.map((s) => ({
+      gereeniiId: s._id,
+      gereeniiDugaar: s.gereeniiDugaar,
+      orshinSuugchId: s.orshinSuugchId,
       totalTulbur: Number(s.totalTulbur.toFixed(2)),
       totalTulsun: Number(s.totalTulsun.toFixed(2)),
       totalUldegdel: Number(s.totalUldegdel.toFixed(2)),
-    }))
+    })),
   });
 });
 
