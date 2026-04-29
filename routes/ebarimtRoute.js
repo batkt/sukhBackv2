@@ -66,7 +66,7 @@ async function nekhemjlekheesEbarimtShineUusgye(
     ebarimt.totalVAT = !!nuatTulukhEsekh ? nuatBodyo(dun) : 0;
     ebarimt.totalCityTax = "0.00";
     ebarimt.branchNo = "001";
-    ebarimt.districtCode = districtCode;
+    ebarimt.districtCode = String(districtCode || "").padStart(4, "0");
     ebarimt.posNo = "0001";
     ebarimt.merchantTin = merchantTin;
     ebarimt.customerNo = customerNo || "";

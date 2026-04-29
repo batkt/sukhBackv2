@@ -234,12 +234,12 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
         }
       }
 
-      // 2. If still 0, try current ledger balance (only as a secondary fallback)
+      // 2. If still 0, try current contract balance (more authoritative than invoice-only balance)
       if (paidAmount <= 0) {
-        const currentBalance = await guilgeeService.getBalance(kholbolt, { nekhemjlekhId: nekhemjlekhiinId });
+        const currentBalance = await guilgeeService.getBalance(kholbolt, { gereeniiId: nekhemjlekh.gereeniiId });
         if (currentBalance > 0) {
           paidAmount = currentBalance;
-          console.log(`✅ [QPAY-INVOICE CALLBACK] Resolved amount from Ledger balance: ${paidAmount}`);
+          console.log(`✅ [QPAY-INVOICE CALLBACK] Resolved amount from Contract balance: ${paidAmount}`);
         }
       }
     } catch (fallbackErr) {

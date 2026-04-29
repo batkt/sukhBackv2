@@ -1396,8 +1396,8 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
                 gereeniiDugaar: nekhemjlekh.gereeniiDugaar || "",
                 utas: nekhemjlekh.utas?.[0] || "",
                 pay_amount: (
-                  nekhemjlekh.niitTulbur ||
                   req.body.dun ||
+                  nekhemjlekh.niitTulbur ||
                   ""
                 ).toString(),
               };
