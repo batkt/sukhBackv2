@@ -24,25 +24,6 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     });
   }
 
-  // 2. Add any unlinked ledger items (Manual Receivables, etc.)
-  const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-  const orphans = await GuilgeeAvlaguud(kholbolt).find({
-    gereeniiId: geree._id.toString(),
-    nekhemjlekhId: { $exists: false },
-    dun: { $gt: 0 }
-  }).lean();
-
-  for (const orphan of orphans) {
-    charges.push({
-      ner: orphan.zardliinNer || "Бусад",
-      dun: orphan.dun,
-      turul: orphan.zardliinTurul || "Авлага",
-      zardliinTurul: orphan.zardliinTurul || "Бусад",
-      isOrphan: true,
-      orphanId: orphan._id
-    });
-  }
-
   const fixedZardluud = (geree.zardluud || []).filter(z => !z.zaalt);
   for (const z of fixedZardluud) {
     const isLift = (z.ner || "").toLowerCase().includes("лифт") || (z.zardliinTurul || "").toLowerCase() === "лифт";
@@ -114,25 +95,13 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     return { success: false, message: "No charges to bill" };
   }
 
-  // 1. Check for existing unpaid invoice for this contract
+  // 1. Get or Create the one unpaid invoice
   let invoice = await NekhemjlekhiinTuukhModel.findOne({
     gereeniiId: geree._id.toString(),
     tuluv: "Төлөөгүй"
-  }).sort({ ognoo: -1, createdAt: -1 });
+  }).sort({ ognoo: -1 });
 
-  if (invoice) {
-    // UPDATE EXISTING
-    invoice.niitTulbur = total;
-    invoice.medeelel = { zardluud: charges };
-    
-    // Clean up old ledger utility charges for this invoice (ONLY source: "nekhemjlekh")
-    const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
-    await GuilgeeAvlaguudModel.deleteMany({
-        nekhemjlekhId: invoice._id.toString(),
-        source: "nekhemjlekh"
-    });
-  } else {
-    // CREATE NEW
+  if (!invoice) {
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const count = await NekhemjlekhiinTuukhModel.countDocuments({ 
       nekhemjlekhiinDugaar: { $regex: `^НЭХ-${stamp}-` } 
@@ -145,45 +114,56 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
       gereeniiId: geree._id.toString(),
       nekhemjlekhiinDugaar: invoiceNumber,
       ognoo: options.billingDate || new Date(),
-      niitTulbur: total,
+      niitTulbur: 0,
       tuluv: "Төлөөгүй",
-      medeelel: { zardluud: charges },
+      medeelel: { zardluud: [] },
     });
+    await invoice.save();
   }
-  await invoice.save();
 
+  // 2. Clear old automated charges to prevent duplicates
+  const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
+  await GuilgeeAvlaguudModel.deleteMany({
+    nekhemjlekhId: invoice._id.toString(),
+    source: "nekhemjlekh"
+  });
+
+  // 3. Record new charges and update invoice snapshot
   let hasEkhniiUldegdel = false;
   for (const c of charges) {
     if (c.isEkhniiUldegdel) hasEkhniiUldegdel = true;
 
-    if (c.isOrphan) {
-      // Update existing orphan to point to this invoice
-      const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
-      await GuilgeeAvlaguudModel.updateOne(
-        { _id: c.orphanId },
-        { $set: { nekhemjlekhId: invoice._id.toString() } },
-      );
-    } else {
-      await guilgeeService.recordCharge(kholbolt, {
-        baiguullagiinId: geree.baiguullagiinId,
-        baiguullagiinNer: geree.baiguullagiinNer,
-        barilgiinId: geree.barilgiinId,
-        gereeniiId: geree._id.toString(),
-        gereeniiDugaar: geree.gereeniiDugaar,
-        orshinSuugchId: geree.orshinSuugchId,
-        nekhemjlekhId: invoice._id.toString(),
-        dun: c.dun,
-        zardliinNer: c.ner,
-        zardliinTurul: c.zardliinTurul,
-        tailbar: c.ner,
-        ognoo: options.billingDate || new Date(),
-        source: c.isEkhniiUldegdel ? "geree" : "nekhemjlekh",
-        ekhniiUldegdelEsekh: !!c.isEkhniiUldegdel,
-        guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.burtgesenAjiltan,
-        guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
-      });
-    }
+    // Record automated charge
+    await guilgeeService.recordCharge(kholbolt, {
+      ...geree,
+      _id: undefined,
+      gereeniiId: geree._id.toString(),
+      nekhemjlekhId: invoice._id.toString(),
+      dun: c.dun,
+      zardliinNer: c.ner,
+      zardliinTurul: c.zardliinTurul,
+      source: c.isEkhniiUldegdel ? "geree" : "nekhemjlekh",
+      ekhniiUldegdelEsekh: !!c.isEkhniiUldegdel,
+      guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
+      guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.orshinSuugchId,
+    });
   }
+
+  // 4. Update invoice with live total and snapshot from ledger
+  const allLedgerItems = await GuilgeeAvlaguudModel.find({ 
+    nekhemjlekhId: invoice._id.toString() 
+  }).lean();
+  
+  invoice.niitTulbur = allLedgerItems.reduce((sum, it) => sum + (it.dun || 0), 0);
+  invoice.medeelel = { 
+    zardluud: allLedgerItems.map(it => ({
+      ner: it.zardliinNer,
+      dun: it.dun,
+      turul: it.zardliinTurul,
+      isEkhniiUldegdel: it.ekhniiUldegdelEsekh
+    }))
+  };
+  await invoice.save();
 
   // If Starting Balance was billed, clear it from the contract so it doesn't repeat
   if (hasEkhniiUldegdel) {
