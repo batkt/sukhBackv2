@@ -1,13 +1,14 @@
 const asyncHandler = require("express-async-handler");
 const aldaa = require("../components/aldaa");
-const Baiguullaga = require("../models/baiguullaga");
-//const Dugaarlalt = require("../models/dugaarlalt");
 const { Dugaarlalt, Token, Dans, db } = require("zevbackv2");
 const QpayObject = require("../models/qpayObject");
 const Geree = require("../models/geree");
 const got = require("got");
 const { QuickQpayObject } = require("quickqpaypackvSukh");
 const { URL } = require("url");
+const guilgeeService = require("../services/guilgeeService");
+const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+
 const instance = got.extend({
   hooks: {
     beforeRequest: [
@@ -21,6 +22,9 @@ const instance = got.extend({
   },
 });
 
+/**
+ * Common QPay Token Fetcher
+ */
 async function tokenAvya(
   username,
   password,
@@ -33,314 +37,34 @@ async function tokenAvya(
     url.username = username;
     url.password = password;
     const stringBody = JSON.stringify({ terminal_id: "95000059" });
-    const response = await instance
-      .post(url, { body: stringBody })
-      .catch((err) => {
-        throw err;
-      });
+    const response = await instance.post(url, { body: stringBody });
     const khariu = JSON.parse(response.body);
-    Token(tukhainBaaziinKholbolt)
-      .updateOne(
-        { turul: "qpay", baiguullagiinId: baiguullagiinId },
-        {
-          ognoo: new Date(),
-          token: khariu.access_token,
-          refreshToken: khariu.refresh_token,
-        },
-        { upsert: true }
-      )
-      .then((x) => {})
-      .catch((e) => {});
-    return khariu;
-  } catch (error) {
-    next(error);
-  }
-}
 
-async function tokenAvyaKhuuchin(
-  username,
-  password,
-  next,
-  baiguullagiinId,
-  tukhainBaaziinKholbolt
-) {
-  try {
-    var url = new URL(process.env.QPAY_SERVER + "v2/auth/token/");
-    url.username = username;
-    url.password = password;
-    const response = await instance.post(url).catch((err) => {
-      throw err;
-    });
-    var khariu = JSON.parse(response.body);
-    Token(tukhainBaaziinKholbolt)
-      .updateOne(
-        { turul: "qpay", baiguullagiinId: baiguullagiinId },
-        {
-          ognoo: new Date(),
-          token: khariu.access_token,
-          refreshToken: khariu.refresh_token,
-        },
-        { upsert: true }
-      )
-      .then((x) => {})
-      .catch((e) => {
-        throw e;
-      });
-    return khariu;
-  } catch (error) {
-    next(error);
-  }
-}
-
-async function qpayMedeelelAvya(token, qpayObject, next) {
-  try {
-    var url = process.env.QPAY_MERCHANT_SERVER + "v2/payment/check/";
-    url = new URL(url);
-    const context = {
-      token: "Bearer " + token,
-    };
-    const qpayObjectString = JSON.stringify(qpayObject);
-    const response = await instance
-      .post(url, {
-        context,
-        body: qpayObjectString,
-      })
-      .catch((err) => {
-        throw err;
-      });
-    if (!response.body) {
-      if (next) {
-        next(new aldaa("Алдаа гарлаа!"));
-      } else return null;
-    }
-    return JSON.parse(response.body);
-  } catch (error) {
-    next(error);
-  }
-}
-
-async function tokenSungaya(token, next) {
-  try {
-    var url = process.env.QPAY_SERVER + "v2/auth/refresh";
-    url = new URL(url);
-    const context = {
-      token: "Bearer " + token,
-    };
-    const response = await instance.post(url, { context }).catch((err) => {
-      throw err;
-    });
-    if (!response.body) {
-      if (next) {
-        next(new aldaa("Алдаа гарлаа!"));
-      } else return null;
-    }
-    return JSON.parse(response.body);
-  } catch (error) {
-    if (next) next(error);
-  }
-}
-
-async function qpayShivye(token, qpayObject, next) {
-  try {
-    var url = process.env.QPAY_SERVER + "v2/invoice";
-    url = new URL(url);
-    const context = {
-      token: "Bearer " + token,
-    };
-    const qpayObjectString = JSON.stringify(qpayObject);
-    const response = await instance
-      .post(url, {
-        context,
-        body: qpayObjectString,
-      })
-      .catch((err) => {
-        throw err;
-      });
-    if (!response.body) {
-      if (next) {
-        next(new aldaa("Алдаа гарлаа!"));
-      } else return null;
-    }
-    return JSON.parse(response.body);
-  } catch (error) {
-    if (next) next(error);
-  }
-}
-
-async function qpayObjectUusgeye(
-  body,
-  invoiceCode,
-  next,
-  tukhainBaaziinKholbolt
-) {
-  try {
-    var maxDugaar = 1;
-    await Dugaarlalt(tukhainBaaziinKholbolt)
-      .find({
-        baiguullagiinId: body.baiguullagiinId,
-        barilgiinId: body.barilgiinId,
-        turul: "qpay",
-      })
-      .sort({
-        dugaar: -1,
-      })
-      .limit(1)
-      .then((result) => {
-        if (result != 0) maxDugaar = result[0].dugaar + 1;
-      });
-    var object = {
-      invoice_code: invoiceCode,
-      sender_invoice_no: maxDugaar.toString(),
-      invoice_receiver_code: body.burtgeliinDugaar,
-      invoice_description: "Төлбөр", //xuuchnaar n zuwxun master yawj baigaa uchir...
-      allow_partial: false,
-      minimum_amount: null,
-      allow_exceed: false,
-      maximum_amount: null,
-      amount: body.dun,
-      callback_url:
-        process.env.UNDSEN_SERVER +
-        "/qpayTulye/" +
-        body.baiguullagiinId.toString() +
-        "/" +
-        body.barilgiinId.toString() +
-        "/" +
-        maxDugaar.toString(),
-    };
-    return object;
-  } catch (error) {
-    if (next) next(error);
-  }
-}
-
-exports.qpayGargayaKhuuchin = asyncHandler(async (req, res, next) => {
-  var dans = await Dans(req.body.tukhainBaaziinKholbolt).findOne({
-    dugaar: req.body.dansniiDugaar,
-  });
-  if (!dans) throw new aldaa("Дансны тохиргоо хийгдээгүй байна!");
-  if (
-    !dans.qpayAshiglakhEsekh ||
-    !dans.qpayUsername ||
-    !dans.qpayPassword ||
-    !dans.qpayInvoiceCode
-  )
-    throw new aldaa("Qpay тохиргоо хийгдээгүй байна!");
-
-  var tokenObject = await Token(req.body.tukhainBaaziinKholbolt).findOne({
-    turul: "qpay",
-    baiguullagiinId: req.body.baiguullagiinId,
-    ognoo: { $gte: new Date(new Date().getTime() - 29 * 60000) },
-  });
-  var token;
-  if (!tokenObject) {
-    tokenObject = await tokenAvyaKhuuchin(
-      dans.qpayUsername,
-      dans.qpayPassword,
-      next,
-      req.body.baiguullagiinId,
-      req.body.tukhainBaaziinKholbolt
+    await Token(tukhainBaaziinKholbolt).updateOne(
+      { turul: "qpay", baiguullagiinId: baiguullagiinId },
+      {
+        ognoo: new Date(),
+        token: khariu.access_token,
+        refreshToken: khariu.refresh_token,
+      },
+      { upsert: true }
     );
-    token = tokenObject.access_token;
-  } else {
-    var tokenO = await tokenSungaya(tokenObject.refreshToken, next);
-    token = tokenO.access_token;
+    return khariu;
+  } catch (error) {
+    if (next) next(error);
+    throw error;
   }
-  var qpayObject = await qpayObjectUusgeye(
-    req.body,
-    dans.qpayInvoiceCode,
-    next,
-    req.body.tukhainBaaziinKholbolt
-  );
-  var khariu = await qpayShivye(token, qpayObject, next);
-  if (khariu && khariu.invoice_id) qpayObject.invoice_id = khariu.invoice_id;
-  var dugaarlalt = new Dugaarlalt(req.body.tukhainBaaziinKholbolt)();
-  dugaarlalt.baiguullagiinId = req.body.baiguullagiinId;
-  dugaarlalt.barilgiinId = req.body.barilgiinId;
-  dugaarlalt.ognoo = new Date();
-  dugaarlalt.turul = "qpay";
-  dugaarlalt.dugaar = Number(qpayObject.sender_invoice_no) + 1;
-  dugaarlalt.save();
-  var khadgalakhQpay = new QpayObject(req.body.tukhainBaaziinKholbolt)();
-  khadgalakhQpay.zakhialgiinDugaar = req.body.zakhialgiinDugaar;
-  khadgalakhQpay.qpay = qpayObject;
-  khadgalakhQpay.baiguullagiinId = req.body.baiguullagiinId;
-  khadgalakhQpay.barilgiinId = req.body.barilgiinId;
-  khadgalakhQpay.ognoo = new Date();
-  khadgalakhQpay.gereeniiId = req.body.gereeniiId;
-  khadgalakhQpay.tulsunEsekh = false;
-  khadgalakhQpay.save();
-  res.send(khariu);
-});
+}
 
-exports.qpayGuilgeeUtgaAvya = asyncHandler(async (req, res, next) => {
-  try {
-    var dans = await Dans(req.body.tukhainBaaziinKholbolt).findOne({
-      dugaar: req.body.dansniiDugaar,
-    });
-    var guilgeenuud = await QuickQpayObject(
-      req.body.tukhainBaaziinKholbolt
-    ).find({
-      tulsunEsekh: true,
-      ognoo: { $gt: new Date("2023-12-02") },
-    });
-    var tokenObject = await Token(req.body.tukhainBaaziinKholbolt).findOne({
-      turul: "quickQpay",
-      baiguullagiinId: req.body.baiguullagiinId,
-      ognoo: { $gte: new Date(new Date().getTime() - 29 * 60000) },
-    });
-    var token;
-    if (!tokenObject) {
-      tokenObject = await tokenAvya(
-        "ZEV_TABS1",
-        "PB5RcI2g",
-        next,
-        req.body.baiguullagiinId,
-        req.body.tukhainBaaziinKholbolt
-      );
-      token = tokenObject.access_token;
-    } else {
-      var tokenO = await tokenSungaya(tokenObject.refreshToken, next);
-      token = tokenO.access_token;
-    }
-    for await (const guilgee of guilgeenuud) {
-      var khariu = await qpayMedeelelAvya(
-        token,
-        { invoice_id: guilgee.invoice_id },
-        next
-      );
-      if (
-        !!khariu &&
-        !!khariu.payments &&
-        !!khariu.payments[0].transactions &&
-        !!khariu.payments[0].transactions[0].id
-      ) {
-        await QuickQpayObject(req.body.tukhainBaaziinKholbolt).updateOne(
-          {
-            invoice_id: guilgee.invoice_id,
-          },
-          {
-            legacy_id: khariu.payments[0].transactions[0].id,
-          }
-        );
-      }
-    }
-    res.send("Amjilttai");
-  } catch (err) {
-    next(err);
-  }
-});
-
-const guilgeeService = require("../services/guilgeeService");
-const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
-
+/**
+ * Standard QPay Callback (Original /qpayTulye)
+ */
 exports.qpayTulye = asyncHandler(async (req, res) => {
   const { baiguullagiinId, barilgiinId, dugaar } = req.params;
-  const { db } = require("zevbackv2");
-
   const kholbolt = db.kholboltuud.find((k) => String(k.baiguullagiinId) === String(baiguullagiinId));
+  
   if (!kholbolt) return res.status(404).send("Connection not found");
 
-  // Support both legacy QpayObject and new QuickQpayObject
   const QpayModel = QpayObject(kholbolt);
   const QuickQpayModel = QuickQpayObject(kholbolt);
 
@@ -357,13 +81,13 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
   }
 
   if (!qpayBarimt) return res.status(404).send("QPay record not found");
-  if (qpayBarimt.tulsunEsekh) return res.sendStatus(200); // Idempotent
+  if (qpayBarimt.tulsunEsekh) return res.sendStatus(200);
 
   const amount = parseFloat(qpayBarimt.qpay?.amount || qpayBarimt.amount || 0);
   if (amount <= 0) return res.status(400).send("Invalid amount");
 
-  // Record payment in Ledger
-  const paymentResult = await guilgeeService.recordPayment(kholbolt, {
+  // Record payment in Ledger (Authoritative)
+  await guilgeeService.recordPayment(kholbolt, {
     baiguullagiinId,
     gereeniiId: qpayBarimt.gereeniiId,
     dun: amount,
@@ -375,13 +99,13 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
       : {}
   });
 
-  // Update QPay record status
+  // Update record status
   qpayBarimt.tulsunEsekh = true;
   qpayBarimt.status = "paid";
   if (req.query?.qpay_payment_id) qpayBarimt.payment_id = req.query.qpay_payment_id;
   await qpayBarimt.save();
 
-  // Sync Invoice status (Binary: Paid/Unpaid)
+  // Sync Invoice status
   if (qpayBarimt.sukhNekhemjlekh?.nekhemjlekhiinId) {
     const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
     const invId = qpayBarimt.sukhNekhemjlekh.nekhemjlekhiinId;
@@ -391,15 +115,89 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     });
   }
 
-  // Emit socket updates and clear cache
+  // Socket updates
   const io = req.app.get("socketio");
   if (io) {
     const { clearOrgCache } = require("../utils/redisClient");
     clearOrgCache(baiguullagiinId).catch(() => {});
-    
     io.emit(`qpay/${baiguullagiinId}/${qpayBarimt.zakhialgiinDugaar}`);
     io.emit(`tulburUpdated:${baiguullagiinId}`, {});
   }
 
   res.sendStatus(200);
 });
+
+/**
+ * Invoice-specific QPay Callback
+ */
+exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
+  const { baiguullagiinId, nekhemjlekhiinId } = req.params;
+  const kholbolt = db.kholboltuud.find((a) => String(a.baiguullagiinId) === String(baiguullagiinId));
+
+  if (!kholbolt) return res.status(404).send("Organization not found");
+
+  const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
+  const nekhemjlekh = await NekhemjlekhModel.findById(nekhemjlekhiinId);
+
+  if (!nekhemjlekh) return res.status(404).send("Invoice not found");
+
+  // Allow re-processing to ensure ledger sync (recordPayment handles idempotency)
+  let paymentTransactionId = req.query.qpay_payment_id || nekhemjlekh.qpayPaymentId;
+
+  // Try to fetch latest info from QPay if possible
+  const { qpayShalgay } = require("quickqpaypackvSukh");
+  let paidAmount = nekhemjlekh.niitTulbur || 0;
+
+  if (nekhemjlekh.qpayInvoiceId) {
+    try {
+      const khariu = await qpayShalgay({ invoice_id: nekhemjlekh.qpayInvoiceId }, kholbolt);
+      if (khariu?.payments?.[0]?.transactions?.[0]?.id) {
+        paymentTransactionId = khariu.payments[0].transactions[0].id;
+        if (khariu.payments[0].amount) {
+          paidAmount = parseFloat(khariu.payments[0].amount);
+        }
+      }
+    } catch (err) {
+      console.error("⚠️ [QPAY_SYNC] Failed to fetch QPay status:", err.message);
+    }
+  }
+
+  // Record in Ledger (GuilgeeAvlaguud)
+  await guilgeeService.recordPayment(kholbolt, {
+    baiguullagiinId,
+    gereeniiId: nekhemjlekh.gereeniiId,
+    dun: paidAmount,
+    tailbar: `QPay төлөлт (Callback: ${nekhemjlekhiinId})`,
+    source: "nekhemjlekh",
+    bankniiGuilgeeId: paymentTransactionId || nekhemjlekh.qpayInvoiceId || "manual_sync",
+    allocationFilter: { nekhemjlekhId: nekhemjlekhiinId },
+  });
+
+  // Update Invoice state
+  const balance = await guilgeeService.getBalance(kholbolt, { nekhemjlekhId: nekhemjlekhiinId });
+  nekhemjlekh.tuluv = balance <= 0.01 ? "Төлсөн" : "Төлөөгүй";
+  nekhemjlekh.tulsunOgnoo = new Date();
+  nekhemjlekh.qpayPaymentId = paymentTransactionId;
+  
+  nekhemjlekh.paymentHistory = nekhemjlekh.paymentHistory || [];
+  nekhemjlekh.paymentHistory.push({
+    ognoo: new Date(),
+    dun: paidAmount,
+    turul: "төлөлт",
+    guilgeeniiId: paymentTransactionId || "manual_sync",
+    tailbar: "QPay төлбөр амжилттай синхрончлогдлоо",
+  });
+
+  await nekhemjlekh.save();
+
+  // Socket updates
+  const io = req.app.get("socketio");
+  if (io) {
+    const { clearOrgCache } = require("../utils/redisClient");
+    clearOrgCache(baiguullagiinId).catch(() => {});
+    io.emit(`tulburUpdated:${baiguullagiinId}`, {});
+  }
+
+  res.sendStatus(200);
+});
+
