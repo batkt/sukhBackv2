@@ -34,17 +34,10 @@ router.get("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
         (b) => String(b._id) === String(barilgiinId),
       );
 
-      if (!filteredBarilga) {
-        return res.status(404).json({
-          success: false,
-          message: "Барилгын мэдээлэл олдсонгүй",
-        });
-      }
-
-      // Return baiguullaga with only the filtered barilga
+      // Return baiguullaga with only the filtered barilga (or empty array if not found)
       return res.json({
         ...baiguullaga,
-        barilguud: [filteredBarilga],
+        barilguud: filteredBarilga ? [filteredBarilga] : [],
       });
     }
 
@@ -349,7 +342,6 @@ router.post("/baiguullagaBurtgekh", async (req, res, next) => {
           console.log(
             `✅ Database connection created for: ${req.body.baaziinNer}`,
           );
-
           // Verify connection was created and log connection details
           const createdConnection = db.kholboltuud?.find(
             (k) => String(k.baiguullagiinId) === String(baiguullaga._id),
