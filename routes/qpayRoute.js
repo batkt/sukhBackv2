@@ -1139,6 +1139,26 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
           req.body.baiguullagiinId.toString() +
           "/" +
           invoiceIdsString;
+
+        // Prevent overpayment if manual payments happened recently (Multi-invoice)
+        try {
+          const { db } = require("zevbackv2");
+          const kholbolt = db.kholboltuud.find(k => String(k.baiguullagiinId) === String(req.body.baiguullagiinId));
+          if (kholbolt) {
+             const guilgeeService = require("../services/guilgeeService");
+             let totalActualBalance = 0;
+             for (const invId of invoiceIds) {
+               const invBalance = await guilgeeService.getBalance(kholbolt, { nekhemjlekhId: invId });
+               if (invBalance > 0) totalActualBalance += invBalance;
+             }
+             
+             const requestedDun = parseFloat(req.body.dun || 0);
+             if (totalActualBalance < requestedDun && totalActualBalance >= 0) {
+                console.log(`⚖️ [QPAY-GARGAYA-MULTI] Overpayment prevention: Overriding ${requestedDun} with ${totalActualBalance}`);
+                req.body.dun = totalActualBalance;
+             }
+          }
+        } catch (multiVerifyErr) {}
       } else if (req.body.nekhemjlekhiinId) {
         // Single invoice payment (existing logic)
         callback_url =
@@ -1147,6 +1167,25 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
           req.body.baiguullagiinId.toString() +
           "/" +
           req.body.nekhemjlekhiinId.toString();
+
+        // Prevent overpayment if manual payments happened recently
+        try {
+          const { db } = require("zevbackv2");
+          const kholbolt = db.kholboltuud.find(k => String(k.baiguullagiinId) === String(req.body.baiguullagiinId));
+          if (kholbolt) {
+            const NekhemjlekhModel = require("../models/nekhemjlekhiinTuukh")(kholbolt);
+            const inv = await NekhemjlekhModel.findById(req.body.nekhemjlekhiinId).lean();
+            if (inv && inv.gereeniiId) {
+              const guilgeeService = require("../services/guilgeeService");
+              const currentBalance = await guilgeeService.getBalance(kholbolt, { gereeniiId: inv.gereeniiId });
+              const requestedDun = parseFloat(req.body.dun || 0);
+              if (currentBalance < requestedDun && currentBalance >= 0) {
+                console.log(`⚖️ [QPAY-GARGAYA] Overpayment prevention: Overriding ${requestedDun} with ${currentBalance}`);
+                req.body.dun = currentBalance;
+              }
+            }
+          }
+        } catch (verifyErr) {}
 
         if (!req.body.dun && req.body.tukhainBaaziinKholbolt) {
           // Trust the authoritative amount from frontend

@@ -261,7 +261,9 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
 
     // Sync real invoice status and totals if it exists
     if (inv.id !== "uninvoiced") {
-      const status = uld <= 0 ? "Төлсөн" : "Төлөөгүй";
+      // An empty invoice (charges = 0) should remain "Төлөөгүй" (Active) 
+      // so it doesn't trigger the creation of a new empty one.
+      const status = (uld <= 0 && inv.charges > 0) ? "Төлсөн" : "Төлөөгүй";
       await NekhemjlekhiinTuukhModel.updateOne(
         { _id: inv.id },
         { 
@@ -284,7 +286,8 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     if (existingEmpty) hasActiveContainer = true;
   }
 
-  if (!hasActiveContainer) {
+  // Only auto-create a new invoice if there's no active container AND there is actual debt/charges
+  if (!hasActiveContainer && totalTulbur > 0) {
     const invoiceService = require("../services/invoiceService");
     await invoiceService.ensureActiveInvoice(
       kholbolt, 
