@@ -67,6 +67,25 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     }
   }
 
+  // Include orphan balances (like Starting Balance or manual receivables) that aren't tied to an invoice yet
+  const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+  const orphans = await GuilgeeAvlaguud(kholbolt).find({
+    gereeniiId: geree._id.toString(),
+    nekhemjlekhId: { $exists: false },
+    dun: { $gt: 0 }
+  }).lean();
+
+  for (const orphan of orphans) {
+    charges.push({
+      ner: orphan.zardliinNer,
+      dun: orphan.dun,
+      turul: orphan.zardliinTurul || "Авлага",
+      zardliinTurul: orphan.zardliinTurul || "Бусад",
+      isOrphan: true,
+      orphanId: orphan._id
+    });
+  }
+
   const total = charges.reduce((sum, c) => sum + c.dun, 0);
   return { charges, total };
 }
@@ -103,23 +122,33 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
   await invoice.save();
 
   for (const c of charges) {
-    await guilgeeService.recordCharge(kholbolt, {
-      baiguullagiinId: geree.baiguullagiinId,
-      baiguullagiinNer: geree.baiguullagiinNer,
-      barilgiinId: geree.barilgiinId,
-      gereeniiId: geree._id.toString(),
-      gereeniiDugaar: geree.gereeniiDugaar,
-      orshinSuugchId: geree.orshinSuugchId,
-      nekhemjlekhId: invoice._id.toString(),
-      dun: c.dun,
-      zardliinNer: c.ner,
-      zardliinTurul: c.zardliinTurul,
-      tailbar: c.ner, // The user wants the charge name in tailbar (e.g. "Бохир ус")
-      ognoo: options.billingDate || new Date(),
-      source: "nekhemjlekh",
-      guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.burtgesenAjiltan,
-      guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
-    });
+    if (c.isOrphan) {
+      // Update existing orphan to point to this invoice
+      const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
+      await GuilgeeAvlaguudModel.updateOne(
+        { _id: c.orphanId },
+        { $set: { nekhemjlekhId: invoice._id.toString() } },
+      );
+    } else {
+      // Create new charge record
+      await guilgeeService.recordCharge(kholbolt, {
+        baiguullagiinId: geree.baiguullagiinId,
+        baiguullagiinNer: geree.baiguullagiinNer,
+        barilgiinId: geree.barilgiinId,
+        gereeniiId: geree._id.toString(),
+        gereeniiDugaar: geree.gereeniiDugaar,
+        orshinSuugchId: geree.orshinSuugchId,
+        nekhemjlekhId: invoice._id.toString(),
+        dun: c.dun,
+        zardliinNer: c.ner,
+        zardliinTurul: c.zardliinTurul,
+        tailbar: c.ner,
+        ognoo: options.billingDate || new Date(),
+        source: "nekhemjlekh",
+        guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.burtgesenAjiltan,
+        guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
+      });
+    }
   }
 
   await ensureEkhniiUldegdel(kholbolt, geree, options);
