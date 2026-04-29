@@ -165,6 +165,9 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   const { baiguullagiinId, barilgiinId, gereeniiId, gereeniiDugaar, ognoo } =
     req.body;
 
+  const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+  const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+
   if (!baiguullagiinId) {
     return res.status(400).json({
       success: false,
