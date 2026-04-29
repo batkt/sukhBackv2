@@ -259,17 +259,31 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
       tuluv: uld <= 0 ? "Төлсөн" : "Төлөөгүй"
     });
 
-    // Sync real invoice status if it exists
+    // Sync real invoice status and totals if it exists
     if (inv.id !== "uninvoiced") {
       const status = uld <= 0 ? "Төлсөн" : "Төлөөгүй";
       await NekhemjlekhiinTuukhModel.updateOne(
         { _id: inv.id },
-        { $set: { tuluv: status } }
+        { 
+          $set: { 
+            tuluv: status,
+            niitTulbur: inv.charges // Sync total from ledger
+          } 
+        }
       ).catch(() => {});
     }
   }
 
-  const hasActiveContainer = nekhemjlekhuud.some(inv => inv.tuluv === "Төлөөгүй" || inv.niitTulbur === 0);
+  // Check if we already have an active (unpaid or empty) invoice container
+  let hasActiveContainer = nekhemjlekhuud.some(inv => inv.tuluv === "Төлөөгүй" || inv.niitTulbur === 0);
+  if (!hasActiveContainer) {
+    const existingEmpty = await NekhemjlekhiinTuukhModel.findOne({
+      gereeniiId,
+      tuluv: "Төлөөгүй"
+    }).lean();
+    if (existingEmpty) hasActiveContainer = true;
+  }
+
   if (!hasActiveContainer) {
     const invoiceService = require("../services/invoiceService");
     await invoiceService.ensureActiveInvoice(

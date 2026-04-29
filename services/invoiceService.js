@@ -1,4 +1,4 @@
-const { db } = require("zevbackv2");
+const { db, Dugaarlalt } = require("zevbackv2");
 const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
 const Geree = require("../models/geree");
 const Baiguullaga = require("../models/baiguullaga");
@@ -127,10 +127,15 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
 
   if (!invoice) {
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const count = await NekhemjlekhiinTuukhModel.countDocuments({ 
-      nekhemjlekhiinDugaar: { $regex: `^НЭХ-${stamp}-` } 
-    });
-    const invoiceNumber = `НЭХ-${stamp}-${String(count + 1).padStart(4, "0")}`;
+    
+    // Use atomic Dugaarlalt for unique invoice numbers
+    const dugaarModel = Dugaarlalt(db.erunkhiiKholbolt);
+    const dugaarObj = await dugaarModel.findOneAndUpdate(
+      { turul: `НЭХ-${stamp}`, baiguullagiinId: geree.baiguullagiinId },
+      { $inc: { dugaar: 1 } },
+      { upsert: true, new: true }
+    );
+    const invoiceNumber = `НЭХ-${stamp}-${String(dugaarObj.dugaar).padStart(4, "0")}`;
 
     const billingDate = options.billingDate || new Date();
     let tulukhOgnoo = billingDate;
