@@ -140,7 +140,21 @@ async function ebarimtDuudya(ugugdul, onFinish, next, shine = false, baiguullagi
         url,
       });
       
-      const requestBody = { receipt: typeof ugugdul.toObject === 'function' ? ugugdul.toObject() : ugugdul };
+      const plainUgugdul = typeof ugugdul.toObject === 'function' ? ugugdul.toObject() : JSON.parse(JSON.stringify(ugugdul));
+      
+      // Ensure 'type' is present (sometimes Mongoose toObject() can skip it if misconfigured)
+      if (!plainUgugdul.type && ugugdul.type) plainUgugdul.type = ugugdul.type;
+      
+      // Remove Mongoose/DB internal fields that might confuse PosAPI
+      delete plainUgugdul._id;
+      delete plainUgugdul.__v;
+      delete plainUgugdul.createdAt;
+      delete plainUgugdul.updatedAt;
+      
+      const requestBody = { receipt: plainUgugdul };
+      
+      console.log("[EBARIMT] Request Body Type:", requestBody.receipt?.type);
+      console.log("[EBARIMT] Request Body:", JSON.stringify(requestBody, null, 2));
       
       request.post(url, { json: true, body: requestBody }, (err, res1, body) => {
         if (err) {
