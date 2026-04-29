@@ -5,7 +5,7 @@ const ashiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
 const uilchilgeeniiZardluud = require("../models/uilchilgeeniiZardluud");
 const LiftShalgaya = require("../models/liftShalgaya");
 const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-const { crud, tokenShalgakh, UstsanBarimt } = require("zevbackv2");
+const { crud, tokenShalgakh, UstsanBarimt, khuudaslalt, db } = require("zevbackv2");
 const multer = require("multer");
 const {
   shalguurFieldValidate,
