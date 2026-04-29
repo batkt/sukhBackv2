@@ -1373,6 +1373,8 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
                 {
                   billingDate: new Date(),
                   forceEmpty: false,
+                  ajiltanId: req.ajiltan?._id,
+                  ajiltanNer: req.ajiltan?.ner,
                 },
               );
             } catch (invErr) {

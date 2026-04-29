@@ -47,11 +47,20 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
       }
 
       if (zaaltDun > 0) {
+        const rawRecName = z.ner;
+        const rawRecNameLc = (rawRecName || "").toLowerCase();
+        const displayRecName =
+          rawRecNameLc === "ашиглалт" || rawRecNameLc === "ashiglalt"
+            ? "Цахилгаан"
+            : rawRecName || "Авлага";
+        let rowTailbar =
+          z.tailbar || z.zardliinNer || z.ner || "Гараар нэмсэн авлага";
         charges.push({
-          ner: z.ner || "Цахилгаан",
+          ner: displayRecName,
           dun: zaaltDun,
           turul: normalizeTurul(z.turul),
           zardliinTurul: z.zardliinTurul || "Эрчим хүч",
+          tailbar: rowTailbar,
           isZaalt: true,
         });
       }
@@ -96,14 +105,51 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
   for (const c of charges) {
     await guilgeeService.recordCharge(kholbolt, {
       baiguullagiinId: geree.baiguullagiinId,
+      baiguullagiinNer: geree.baiguullagiinNer,
+      barilgiinId: geree.barilgiinId,
       gereeniiId: geree._id.toString(),
+      gereeniiDugaar: geree.gereeniiDugaar,
+      orshinSuugchId: geree.orshinSuugchId,
       nekhemjlekhId: invoice._id.toString(),
       dun: c.dun,
       zardliinNer: c.ner,
       zardliinTurul: c.zardliinTurul,
+      tailbar: c.ner, // The user wants the charge name in tailbar (e.g. "Бохир ус")
       ognoo: options.billingDate || new Date(),
       source: "nekhemjlekh",
+      guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.burtgesenAjiltan,
+      guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
     });
+  }
+
+  // Handle Opening Balance (Ekhnii Uldegdel)
+  const ekhniiUldegdel = Number(geree.ekhniiUldegdel) || 0;
+  if (ekhniiUldegdel !== 0) {
+    const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
+    const existingEkhnii = await GuilgeeAvlaguudModel.findOne({
+      gereeniiId: geree._id.toString(),
+      ekhniiUldegdelEsekh: true,
+    });
+
+    if (!existingEkhnii) {
+      await guilgeeService.recordCharge(kholbolt, {
+        baiguullagiinId: geree.baiguullagiinId,
+        baiguullagiinNer: geree.baiguullagiinNer,
+        barilgiinId: geree.barilgiinId,
+        gereeniiId: geree._id.toString(),
+        gereeniiDugaar: geree.gereeniiDugaar,
+        orshinSuugchId: geree.orshinSuugchId,
+        dun: ekhniiUldegdel,
+        zardliinNer: "Эхний үлдэгдэл",
+        zardliinTurul: "Авлага",
+        tailbar: "Эхний үлдэгдэл",
+        ognoo: geree.createdAt || new Date(),
+        source: "geree",
+        ekhniiUldegdelEsekh: true,
+        guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.burtgesenAjiltan,
+        guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
+      });
+    }
   }
 
   return { success: true, invoiceId: invoice._id, total };

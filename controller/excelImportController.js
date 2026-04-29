@@ -1775,6 +1775,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                 niitTulbur: niitTulbur,
                 toot: tootEntry.toot,
                 davkhar: tootEntry.davkhar || "",
+                ekhniiUldegdel: Number(userData.ekhniiUldegdel) || 0,
                 bairNer: targetBarilgaForToot.ner || "",
                 sukhBairshil: `${duuregNer}, ${horooNer}, ${sohNer}`,
                 duureg: duuregNer,
@@ -1818,7 +1819,9 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                   geree._id,
                   {
                     billingDate: new Date(),
-                    forceEmpty: false
+                    forceEmpty: false,
+                    ajiltanId: req.ajiltan?._id,
+                    ajiltanNer: req.ajiltan?.ner,
                   }
                 );
 
@@ -1909,7 +1912,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
               userData.tailbar || "Excel файлаас автоматаар үүссэн гэрээ",
             tailbar: userData.tailbar || tailbarFromZardluud || "",
             actOgnoo: new Date(),
-            // ekhniiUldegdel removed
+            ekhniiUldegdel: Number(userData.ekhniiUldegdel) || 0,
             umnukhZaalt: userData.initialMeterReading || 0,
             suuliinZaalt: userData.initialMeterReading || 0,
             zaaltTog: 0, // Day reading (will be updated later)
@@ -1940,7 +1943,9 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                 geree._id,
                 {
                   billingDate: new Date(),
-                  forceEmpty: false
+                  forceEmpty: false,
+                  ajiltanId: req.ajiltan?._id,
+                  ajiltanNer: req.ajiltan?.ner,
                 }
               );
 
