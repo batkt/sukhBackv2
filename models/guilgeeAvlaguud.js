@@ -76,18 +76,17 @@ const guilgeeAvlaguudSchema = new Schema(
 );
 
 guilgeeAvlaguudSchema.pre("save", function (next) {
-  // If the new 'dun' field is set, synchronize it with undsenDun/tulsunDun
   if (typeof this.dun === "number" && this.dun !== 0) {
     if (this.dun > 0) {
-      // Charge (receivable)
       this.undsenDun = this.dun;
       this.tulukhDun = this.dun;
       this.tulsunDun = 0;
+      this.tulsunAldangi = 0;
     } else {
-      // Payment (credit)
       this.tulsunDun = Math.abs(this.dun);
       this.undsenDun = 0;
       this.tulukhDun = 0;
+      this.tulukhAldangi = 0;
     }
   }
 

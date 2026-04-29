@@ -228,7 +228,7 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
 
   // If specific contract requested, return single summary + items
   if (gereeniiId || gereeniiDugaar) {
-    const items = await GuilgeeAvlaguudModel.find(query).sort({ ognoo: 1 });
+    const items = await GuilgeeAvlaguudModel.find(query).select("-uldegdel").sort({ ognoo: 1 });
     const summary = summaryResult[0] || {
       totalTulbur: 0,
       totalTulsun: 0,
