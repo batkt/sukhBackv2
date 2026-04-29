@@ -323,15 +323,11 @@ router.post("/baiguullagaBurtgekh", async (req, res, next) => {
     const baiguullaga = new BaiguullagaModel(req.body);
     console.log("------------->" + JSON.stringify(baiguullaga));
     baiguullaga.isNew = !baiguullaga.zasakhEsekh;
-    // Don't create default barilga - only create when explicitly requested from frontend
-    // If barilguud is provided in req.body, it will be used, otherwise it will be empty
     baiguullaga
       .save()
       .then(async (result) => {
         try {
-          // Create separate database for the organization
-          // Note: kholboltNemye should include authSource=admin in connection string
-          // Function signature: kholboltNemye(baiguullagiinId, baaziinNer, cloudMongoDBEsekh, clusterUrl, password, userName)
+          
           await db.kholboltNemye(
             baiguullaga._id,
             req.body.baaziinNer,
@@ -459,6 +455,7 @@ router.post("/baiguullagaAvya", (req, res, next) => {
       next(err);
     });
 });
+
 router.get("/baiguullagaBairshilaarAvya", cacheMiddleware(600), (req, res, next) => {
   const { db } = require("zevbackv2");
 

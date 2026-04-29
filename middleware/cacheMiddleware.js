@@ -55,7 +55,7 @@ const cacheMiddleware = (ttl = 300) => {
       
       const rawKey = `${baiguullagiinId}:${sanitizedUrl}:${sanitizedBody}`;
       const hash = crypto.createHash("md5").update(rawKey).digest("hex");
-      const cacheKey = `api_cache:${hash}`;
+      const cacheKey = `api_cache:${baiguullagiinId}:${hash}`;
 
       // Check if data exists in Redis
       const cachedData = await client.get(cacheKey);

@@ -2419,8 +2419,11 @@ router.get(
         tulsunOgnoo: nekhemjlekh.tulsunOgnoo,
         paymentId: nekhemjlekh.qpayPaymentId,
       });
-      io.emit(`tulburUpdated:${baiguullagiinId}`, {});
-
+      if (io) {
+        const { clearOrgCache } = require("../utils/redisClient");
+        clearOrgCache(baiguullagiinId).catch(() => {});
+        io.emit(`tulburUpdated:${baiguullagiinId}`, {});
+      }
       res.sendStatus(200);
     } catch (err) {
       next(err);
@@ -3101,6 +3104,8 @@ router.get(
 
       const ioMulti = req.app.get("socketio");
       if (ioMulti) {
+        const { clearOrgCache } = require("../utils/redisClient");
+        clearOrgCache(baiguullagiinId).catch(() => {});
         ioMulti.emit(`tulburUpdated:${baiguullagiinId}`, {});
       }
 

@@ -391,9 +391,12 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     });
   }
 
-  // Emit socket updates
+  // Emit socket updates and clear cache
   const io = req.app.get("socketio");
   if (io) {
+    const { clearOrgCache } = require("../utils/redisClient");
+    clearOrgCache(baiguullagiinId).catch(() => {});
+    
     io.emit(`qpay/${baiguullagiinId}/${qpayBarimt.zakhialgiinDugaar}`);
     io.emit(`tulburUpdated:${baiguullagiinId}`, {});
   }

@@ -92,6 +92,8 @@ router.use((req, res, next) => {
     const baiguullagiinId = req.query?.baiguullagiinId || req.body?.baiguullagiinId;
     if (baiguullagiinId && req.app) {
       try {
+        const { clearOrgCache } = require("../utils/redisClient");
+        clearOrgCache(baiguullagiinId).catch(() => {});
         req.app.get("socketio").emit(`tulburUpdated:${baiguullagiinId}`, {});
       } catch (e) {}
     }

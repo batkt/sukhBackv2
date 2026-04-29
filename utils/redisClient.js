@@ -19,9 +19,24 @@ pubClient.on("error", (err) => console.error("Redis Pub Error:", err));
 subClient.on("error", (err) => console.error("Redis Sub Error:", err));
 client.on("error", (err) => console.error("Redis Cache Error:", err));
 
+async function clearOrgCache(baiguullagiinId) {
+  if (!baiguullagiinId) return;
+  try {
+    const pattern = `api_cache:${baiguullagiinId}:*`;
+    const keys = await client.keys(pattern);
+    if (keys.length > 0) {
+      await client.del(keys);
+      console.log(`[CACHE CLEAR] Cleared ${keys.length} keys for org: ${baiguullagiinId}`);
+    }
+  } catch (err) {
+    console.error("Redis Cache Clear Error:", err);
+  }
+}
+
 module.exports = {
   pubClient,
   subClient,
   client,
-  connectRedis
+  connectRedis,
+  clearOrgCache
 };
