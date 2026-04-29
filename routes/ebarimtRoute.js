@@ -126,7 +126,7 @@ async function ebarimtDuudya(ugugdul, onFinish, next, shine = false, baiguullagi
       // baiguullagiinId "69159a06dd2ba5c30308b90f" uses TEST, others use IP
       // Get baiguullagiinId from parameter or from ugugdul if not provided
       const orgId = baiguullagiinId || ugugdul?.baiguullagiinId;
-      const shouldUseTest = orgId && String(orgId) === "697723dc3e77b46e52ccf577";
+      const shouldUseTest = orgId && String(orgId) === "69f06870687e1fcbab74be82";
       
       const baseUrl = shouldUseTest 
         ? process.env.EBARIMTSHINE_TEST 
