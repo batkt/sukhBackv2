@@ -848,8 +848,13 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
           orshinSuugch.barilgiinId = barilgiinId;
           orshinSuugch.baiguullagiinId = baiguullaga._id;
           orshinSuugch.baiguullagiinNer = baiguullaga.ner;
-          // Set bairniiNer on main document (like Excel import does)
+        
           orshinSuugch.bairniiNer = targetBarilga.ner || "";
+        
+          orshinSuugch.ekhniiUldegdel = req.body.ekhniiUldegdel
+            ? parseFloat(req.body.ekhniiUldegdel) || 0
+            : 0;
+          orshinSuugch.baritsaaniiUldegdel = 0;
         }
       }
     } else if (

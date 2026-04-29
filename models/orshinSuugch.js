@@ -67,10 +67,12 @@ const orshinSuugchSchema = new Schema(
     soh: String, // Keep for backward compatibility
     orts: String, // Web only field, keep for backward compatibility
     tailbar: String,
-    tsahilgaaniiZaalt: Number, // Initial electricity reading (кВт) - defaults to 200 if not provided
-    odorZaalt: Number, // Latest Day reading for electricity
-    shonoZaalt: Number, // Latest Night reading for electricity
-    suuliinZaalt: Number, // Latest Total reading for electricity
+    tsahilgaaniiZaalt: Number,
+    odorZaalt: Number,
+    shonoZaalt: Number,
+    suuliinZaalt: Number,
+    ekhniiUldegdel: Number,
+    baritsaaniiUldegdel: Number,
     billNicknames: [
       {
         billingId: String,
@@ -157,10 +159,6 @@ orshinSuugchSchema.pre("save", async function (next) {
     const salt = await bcrypt.genSalt(12);
     this.nuutsUg = await bcrypt.hash(this.nuutsUg, salt);
   }
-
-  // Prevent duplicate: one toot (optionally + davkhar) can have only one resident per building
-  // Skip check when updating existing document (e.g. during login) - routes do their own check
-  // for create/update; login uses save() and would wrongly block if another resident has same address
   if (!this.isNew) return next();
 
   const OrshinSuugchModel = this.constructor;

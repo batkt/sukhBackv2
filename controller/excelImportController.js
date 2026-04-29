@@ -1603,6 +1603,10 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           }
         }
 
+        // Save opening balance to resident (standardized)
+        if (userData.ekhniiUldegdel) {
+          orshinSuugch.ekhniiUldegdel = Number(userData.ekhniiUldegdel) || 0;
+        }
         await orshinSuugch.save();
 
         // --- AUTO CREATE GUEST SETTINGS (OrshinSuugchMashin) ---

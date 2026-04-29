@@ -122,8 +122,17 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     });
   }
 
-  // Handle Opening Balance (Ekhnii Uldegdel)
-  const ekhniiUldegdel = Number(geree.ekhniiUldegdel) || 0;
+ 
+  let ekhniiUldegdel = Number(geree.ekhniiUldegdel) || 0;
+  
+  if (ekhniiUldegdel === 0) {
+    const OrshinSuugchModel = require("../models/orshinSuugch")(kholbolt);
+    const resident = await OrshinSuugchModel.findById(geree.orshinSuugchId);
+    if (resident && resident.ekhniiUldegdel) {
+      ekhniiUldegdel = Number(resident.ekhniiUldegdel) || 0;
+    }
+  }
+
   if (ekhniiUldegdel !== 0) {
     const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
     const existingEkhnii = await GuilgeeAvlaguudModel.findOne({
