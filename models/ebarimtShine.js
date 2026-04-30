@@ -18,6 +18,7 @@ const ebarimtSchema = new Schema(
     gereeniiDugaar: String,
     utas: String,
     mashiniiDugaar: String,
+    toot: String,
     togloomNer: String,
     togloomUtas: [String],
 

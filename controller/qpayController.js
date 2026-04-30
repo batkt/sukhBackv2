@@ -483,6 +483,7 @@ async function generateEbarimtForQPay(kholbolt, baiguullagiinId, nekhemjlekhId, 
           shineBarimt.baiguullagiinId = baiguullagiinId;
           shineBarimt.barilgiinId = nekhemjlekh.barilgiinId;
           shineBarimt.gereeniiDugaar = nekhemjlekh.gereeniiDugaar;
+          shineBarimt.toot = nekhemjlekh.toot;
           if (d.qrData) shineBarimt.qrData = d.qrData;
           if (d.lottery) shineBarimt.lottery = d.lottery;
           if (d.id) shineBarimt.receiptId = d.id;

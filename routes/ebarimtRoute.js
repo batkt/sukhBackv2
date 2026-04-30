@@ -498,7 +498,12 @@ router.get("/ebarimtJagsaaltAvya", tokenShalgakh, async (req, res, next) => {
     if (!!body?.khuudasniiKhemjee)
       body.khuudasniiKhemjee = Number(body.khuudasniiKhemjee);
     if (!!body?.search) body.search = String(body.search);
-    body.query && (body.query["baiguullagiinId"] = req.body.baiguullagiinId);
+    if (!body.query) body.query = {};
+    if (req.body.baiguullagiinId) body.query["baiguullagiinId"] = req.body.baiguullagiinId;
+    if (req.query.baiguullagiinId) body.query["baiguullagiinId"] = req.query.baiguullagiinId;
+    if (req.query.barilgiinId) body.query["barilgiinId"] = req.query.barilgiinId;
+    if (req.query.merchantTin) body.query["merchantTin"] = req.query.merchantTin;
+    if (req.query.districtCode) body.query["districtCode"] = req.query.districtCode;
 
     const shine = true;
 
@@ -698,6 +703,7 @@ router.post(
           shineBarimt.barilgiinId = khariuObject.barilgiinId;
           shineBarimt.gereeniiDugaar = khariuObject.gereeniiDugaar;
           shineBarimt.utas = khariuObject.utas;
+          shineBarimt.toot = khariuObject.toot;
 
           if (d.qrData) shineBarimt.qrData = d.qrData;
           if (d.lottery) shineBarimt.lottery = d.lottery;
