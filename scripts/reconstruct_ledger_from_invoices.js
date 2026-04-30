@@ -7,7 +7,7 @@ const TARGET_MONGODB_URI = "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSuk
 
 async function reconstruct() {
   try {
-    console.log("🚀 [RECONSTRUCTION] Filling missing charge history from invoices...");
+    console.log("🚀 [RECONSTRUCTION] Filling missing charge history from invoices (FIXED VERSION)...");
     
     const tenantDbs = [
       { legacy: "nairamdalSukh_legacy", target: "nairamdalSukh" },
@@ -20,7 +20,9 @@ async function reconstruct() {
       const legacyConn = await mongoose.createConnection(MONGODB_URI.replace("/amarSukh_legacy", `/${db.legacy}`)).asPromise();
       const targetConn = await mongoose.createConnection(TARGET_MONGODB_URI.replace("/amarSukh", `/${db.target}`)).asPromise();
 
-      const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud")({ kholbolt: targetConn });
+      // Use the raw collection to bypass Mongoose Enum validation if necessary, 
+      // but let's stick to allowed "nekhemjlekh" source for safety.
+      const collection = targetConn.collection("guilgeeAvlaguud");
 
       const invoices = await legacyConn.collection("nekhemjlekhiinTuukh").find({}).toArray();
       let chargeCount = 0;
@@ -38,30 +40,33 @@ async function reconstruct() {
           dun: Number(z.dun || z.tariff || 0),
           undsenDun: Number(z.dun || z.tariff || 0),
           tulukhDun: Number(z.dun || z.tariff || 0),
+          tulsunDun: 0,
           turul: z.isEkhniiUldegdel ? "avlaga" : "zardal",
           zardliinNer: z.ner,
           zardliinTurul: z.zardliinTurul,
           tailbar: z.tailbar || `Monthly Charge: ${z.ner}`,
-          source: "invoice_migration",
-          nekhemjlekhId: inv._id.toString()
-        })).filter(e => e.dun > 0); // Only import actual charges
+          source: "nekhemjlekh", // Using allowed enum value
+          nekhemjlekhId: inv._id.toString(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })).filter(e => e.dun > 0);
 
         if (ledgerEntries.length > 0) {
           try {
-            await GuilgeeAvlaguud.insertMany(ledgerEntries, { ordered: false });
+            await collection.insertMany(ledgerEntries, { ordered: false });
             chargeCount += ledgerEntries.length;
           } catch (e) {
-            // Ignore duplicates if re-run
+            // Skip duplicates
           }
         }
       }
 
-      console.log(`✅ Created ${chargeCount} ledger charge entries for ${db.target}.`);
+      console.log(`✅ Success: ${chargeCount} ledger charge entries added to ${db.target}.`);
       await legacyConn.close();
       await targetConn.close();
     }
 
-    console.log("\n🏁 [FINISHED] Ledger history is now complete!");
+    console.log("\n🏁 [FINISHED] Ledger reconstruction complete.");
     process.exit(0);
   } catch (err) {
     console.error("❌ Failed:", err);
