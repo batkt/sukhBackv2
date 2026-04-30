@@ -291,9 +291,11 @@ function validateDavkhariinToonuud(barilguud) {
         continue;
       }
 
+      let orts = "1";
       let davkhar = "";
       if (floorKey.includes("::")) {
         const parts = floorKey.split("::");
+        orts = parts[0] || "1";
         davkhar = parts[1] || parts[0];
       } else {
         davkhar = floorKey;
@@ -306,16 +308,15 @@ function validateDavkhariinToonuud(barilguud) {
         tootList = tootArray.map((t) => String(t).trim()).filter((t) => t);
       }
       for (const toot of tootList) {
-        if (tootMap.has(toot)) {
-          const existingDavkhar = tootMap.get(toot);
-          console.error(`❌ [VALIDATION FUNCTION] Duplicate toot found: "${toot}" in davkhar ${existingDavkhar} and ${davkhar}`);
-          console.error(`❌ [VALIDATION FUNCTION] Floor keys processed so far:`, Array.from(tootMap.entries()));
-          console.error(`❌ [VALIDATION FUNCTION] Current floorKey: ${floorKey}, davkhar: ${davkhar}, tootList:`, tootList);
+        const compositeKey = `${orts}::${toot}`;
+        if (tootMap.has(compositeKey)) {
+          const existingDavkhar = tootMap.get(compositeKey);
+          console.error(`❌ [VALIDATION FUNCTION] Duplicate toot found in same orts: "${toot}" in orts ${orts}, davkhar ${existingDavkhar} and ${davkhar}`);
           return new Error(
-            `Тоот "${toot}" аль хэдийн ${existingDavkhar}-р давхарт байна. ${davkhar}-р давхарт давхардсан тоот байж болохгүй!`
+            `Тоот "${toot}" аль хэдийн ${orts}-р орцны ${existingDavkhar}-р давхарт байна. ${orts}-р орцны ${davkhar}-р давхарт давхардсан тоот байж болохгүй!`
           );
         }
-        tootMap.set(toot, davkhar);
+        tootMap.set(compositeKey, davkhar);
       }
     }
   }
