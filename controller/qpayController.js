@@ -9,6 +9,7 @@ const { URL } = require("url");
 const guilgeeService = require("../services/guilgeeService");
 const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
 const BankniiGuilgee = require("../models/bankniiGuilgee");
+const { resolveDistrictCode } = require("../lib/districtMapping");
 
 const instance = got.extend({
   hooks: {
@@ -461,12 +462,15 @@ async function generateEbarimtForQPay(kholbolt, baiguullagiinId, nekhemjlekhId, 
         if (savedUser?.loginName) autoCustomerNo = savedUser.loginName;
       }
 
+      const ebarimtDistrictCode = await resolveDistrictCode(tokhirgoo, kholbolt);
+      console.log(`ℹ️ [QPAY EBARIMT] Resolved district code: ${ebarimtDistrictCode} for building: ${nekhemjlekh.barilgiinId}`);
+
       const ebarimt = await nekhemjlekheesEbarimtShineUusgye(
         { ...nekhemjlekh, niitTulbur: paidAmount },
         autoCustomerNo,
         "",
         tokhirgoo.merchantTin,
-        tokhirgoo.districtCode,
+        ebarimtDistrictCode,
         kholbolt,
         !!tokhirgoo.nuatTulukhEsekh
       );

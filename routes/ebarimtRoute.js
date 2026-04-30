@@ -16,7 +16,8 @@ const EasyRegisterUser = require("../models/easyRegisterUser");
 // Short-term cache for Easy Register API responses (government APIs are slow)
 const easyRegisterCache = new Map();
 const EASY_REGISTER_CACHE_TTL = 600000; // 10 minutes cache
-const nekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+const { resolveDistrictCode } = require("../lib/districtMapping");
 const { downloadEbarimtExcel } = require("../controller/excelImportController");
 const copyQueryToBody = (req, res, next) => {
   if (req.method === "GET" && Object.keys(req.query).length > 0) {
@@ -628,7 +629,7 @@ router.post(
   async (req, res, next) => {
     try {
       console.log("Энэ рүү орлоо: nekhemjlekhEbarimtShivye");
-      const nekhemjlekh = await nekhemjlekhiinTuukh(
+      const nekhemjlekh = await NekhemjlekhiinTuukh(
         req.body.tukhainBaaziinKholbolt
       ).findById(req.body.nekhemjlekhiinId);
 
@@ -672,12 +673,15 @@ router.post(
         }
       }
 
+      const ebarimtDistrictCode = await resolveDistrictCode(tuxainSalbar, req.body.tukhainBaaziinKholbolt);
+      console.log(`ℹ️ [EBARIMT SHIVYE] Resolved district code: ${ebarimtDistrictCode} for building: ${nekhemjlekh.barilgiinId}`);
+
       const ebarimt = await nekhemjlekheesEbarimtShineUusgye(
         nekhemjlekh,
         autoCustomerNo,
         req.body.customerTin || "",
         tuxainSalbar.merchantTin,
-        tuxainSalbar.districtCode,
+        ebarimtDistrictCode,
         req.body.tukhainBaaziinKholbolt,
         nuatTulukhEsekh
       );
