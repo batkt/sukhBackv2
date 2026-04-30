@@ -154,13 +154,14 @@ function duusakhOgnooAvya(ugugdul, onFinish, next) {
 }
 
 // Helper function to update davkhar with toot in baiguullaga
-// Structure: davkhar: ["1", "2", "3"], davkhariinToonuud: {1: ["103,104,105"], 2: ["201,202"]}
+// Structure: davkhar: ["1", "2", "3"], davkhariinToonuud: {"1::1": ["103,104,105"], "1::2": ["201,202"]}
 exports.updateDavkharWithToot = async function updateDavkharWithToot(
   baiguullaga,
   barilgiinId,
   davkhar,
   toot,
   tukhainBaaziinKholbolt,
+  orts = "1",
 ) {
   try {
     const { db } = require("zevbackv2");
@@ -176,14 +177,17 @@ exports.updateDavkharWithToot = async function updateDavkharWithToot(
     const davkharArray = targetBarilga.tokhirgoo?.davkhar || [];
     const davkhariinToonuud = targetBarilga.tokhirgoo?.davkhariinToonuud || {};
 
-    // Validate that davkhar already exists - do not allow creating new davkhar when assigning toot
-    const davkharStr = String(davkhar);
+    const davkharStr = String(davkhar || "").trim();
+    const ortsStr = String(orts || "1").trim();
+    
+    // Ensure davkhar exists in davkharArray (format should match what's in the array)
     if (!davkharArray.includes(davkharStr)) {
-      return; // Exit early - do not create new davkhar or assign toot
+      return;
     }
 
-    // Get or create toot array for this floor
-    const floorKey = parseInt(davkharStr); // Use number as key
+    // Build the floor key: 'orts::davkhar'
+    const floorKey = `${ortsStr}::${davkharStr}`;
+    
     if (!davkhariinToonuud[floorKey]) {
       davkhariinToonuud[floorKey] = [];
     }
@@ -1416,6 +1420,7 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
                 tootEntry.davkhar,
                 tootEntry.toot,
                 tukhainBaaziinKholbolt,
+                tootEntry.orts || req.body.orts || "1",
               );
             }
           }
@@ -2728,6 +2733,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
                 tootEntry.davkhar,
                 tootEntry.toot,
                 tukhainBaaziinKholbolt,
+                tootEntry.orts || req.body.orts || "1",
               );
             }
           }
@@ -2907,6 +2913,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
                         orshinSuugch.davkhar,
                         orshinSuugch.toot,
                         tukhainBaaziinKholbolt,
+                        orshinSuugch.orts || req.body.orts || "1",
                       );
                     }
                   }
@@ -3614,6 +3621,7 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
                 tootEntry.davkhar,
                 tootEntry.toot,
                 tukhainBaaziinKholbolt,
+                tootEntry.orts || req.body.orts || "1",
               );
             }
           } else {
@@ -3762,6 +3770,7 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
                     orshinSuugch.davkhar,
                     orshinSuugch.toot,
                     tukhainBaaziinKholbolt,
+                    orshinSuugch.orts || req.body.orts || "1",
                   );
                 }
               }
