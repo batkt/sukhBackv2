@@ -83,6 +83,14 @@ process.env.UV_THREADPOOL_SIZE = 20;
     db.kholboltUusgey(app, MONGODB_URI);
     console.log("✅ MongoDB initialization started");
 
+    // --- DISABLE BROWSER CACHING ---
+    app.use((req, res, next) => {
+      res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");
+      res.set("Pragma", "no-cache");
+      res.set("Expires", "0");
+      next();
+    });
+
     // 4. Final settings
     process.env.TZ = "Asia/Ulaanbaatar";
     app.set("socketio", io);
