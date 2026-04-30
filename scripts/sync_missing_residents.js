@@ -7,28 +7,29 @@ const TARGET_MONGODB_URI = "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSuk
 
 async function sync() {
   try {
-    console.log("🚀 [SYNC] Recovering missing resident profiles...");
+    console.log("🚀 [SYNC] Recovering missing resident profiles from Central Legacy DB...");
     
-    const tenantDbs = [
-      { legacy: "nairamdalSukh_legacy", target: "nairamdalSukh" },
-      { legacy: "kharKhorumSukh_legacy", target: "kharKhorumSukh" }
+    // 1. Connect to Central Legacy DB
+    const centralLegacyConn = await mongoose.createConnection(MONGODB_URI).asPromise();
+    const allLegacyResidents = await centralLegacyConn.collection("orshinSuugch").find({}).toArray();
+    console.log(`🔍 Found ${allLegacyResidents.length} total residents in central legacy.`);
+
+    const tenantMappings = [
+      { id: "697c70e81e782d8110d3b064", target: "nairamdalSukh" },
+      { id: "697b0a797858c8959d2a2345", target: "kharKhorumSukh" }
     ];
 
-    for (const db of tenantDbs) {
-      console.log(`\n📂 Processing: ${db.target}`);
-      
-      const legacyConn = await mongoose.createConnection(MONGODB_URI.replace("/amarSukh_legacy", `/${db.legacy}`)).asPromise();
-      const targetConn = await mongoose.createConnection(TARGET_MONGODB_URI.replace("/amarSukh", `/${db.target}`)).asPromise();
-
-      const legacyResidents = await legacyConn.collection("orshinSuugch").find({}).toArray();
+    for (const tenant of tenantMappings) {
+      console.log(`\n📂 Processing: ${tenant.target}`);
+      const targetConn = await mongoose.createConnection(TARGET_MONGODB_URI.replace("/amarSukh", `/${tenant.target}`)).asPromise();
       const targetCollection = targetConn.collection("orshinSuugch");
 
-      console.log(`🔍 Found ${legacyResidents.length} residents in legacy.`);
+      const tenantResidents = allLegacyResidents.filter(r => r.baiguullagiinId === tenant.id);
+      console.log(`   Found ${tenantResidents.length} residents belonging to this tenant.`);
 
       let newCount = 0;
-      for (const res of legacyResidents) {
+      for (const res of tenantResidents) {
         try {
-          // Use upsert to avoid duplicates but ensure all data is there
           await targetCollection.updateOne(
             { _id: res._id },
             { $set: res },
@@ -36,15 +37,15 @@ async function sync() {
           );
           newCount++;
         } catch (e) {
-          // Skip errors
+          // Skip
         }
       }
 
-      console.log(`✅ Synced ${newCount} resident profiles to ${db.target}.`);
-      await legacyConn.close();
+      console.log(`✅ Synced ${newCount} profiles to ${tenant.target}.`);
       await targetConn.close();
     }
 
+    await centralLegacyConn.close();
     console.log("\n🏁 [FINISHED] Resident sync complete!");
     process.exit(0);
   } catch (err) {
