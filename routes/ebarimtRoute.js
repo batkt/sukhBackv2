@@ -704,6 +704,8 @@ router.post(
           shineBarimt.gereeniiDugaar = khariuObject.gereeniiDugaar;
           shineBarimt.utas = khariuObject.utas;
           shineBarimt.toot = khariuObject.toot;
+          shineBarimt.status = d.status;
+          shineBarimt.success = d.success;
 
           if (d.qrData) shineBarimt.qrData = d.qrData;
           if (d.lottery) shineBarimt.lottery = d.lottery;

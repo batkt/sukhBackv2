@@ -19,6 +19,8 @@ const ebarimtSchema = new Schema(
     utas: String,
     mashiniiDugaar: String,
     toot: String,
+    status: String,
+    success: Boolean,
     togloomNer: String,
     togloomUtas: [String],
 

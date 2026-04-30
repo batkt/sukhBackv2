@@ -2369,6 +2369,8 @@ router.get(
                           ebarimtObject.gereeniiDugaar;
                         shineBarimt.utas = ebarimtObject.utas;
                         shineBarimt.toot = ebarimtObject.toot;
+                        shineBarimt.status = d.status;
+                        shineBarimt.success = d.success;
 
                         if (d.qrData) shineBarimt.qrData = d.qrData;
                         if (d.lottery) shineBarimt.lottery = d.lottery;
