@@ -194,9 +194,13 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   }
 
   if (ognoo && Array.isArray(ognoo) && ognoo.length === 2) {
+    const start = new Date(ognoo[0]);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(ognoo[1]);
+    end.setHours(23, 59, 59, 999);
     query.ognoo = {
-      $gte: new Date(ognoo[0]),
-      $lte: new Date(ognoo[1]),
+      $gte: start,
+      $lte: end,
     };
   }
 

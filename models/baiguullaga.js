@@ -243,6 +243,17 @@ baiguullagaSchema.index({ id: 1 });
 
  baiguullagaSchema.pre("save", function (next) {
   try {
+    console.log(`🔍 [TRACE-SAVE] Baiguullaga saving: ${this.ner} (${this._id})`);
+    if (this.barilguud) {
+      this.barilguud.forEach((b, idx) => {
+        if (b.tokhirgoo && b.tokhirgoo.davkhariinToonuud) {
+          console.log(`   - Barilga[${idx}] "${b.ner}" has ${Object.keys(b.tokhirgoo.davkhariinToonuud).length} floors configured.`);
+        } else {
+          console.log(`   - Barilga[${idx}] "${b.ner}" HAS NO TOOTS CONFIGURED!`);
+        }
+      });
+    }
+
     const error = validateDavkhariinToonuud(this.barilguud);
     if (error) {
       console.error(`❌ [VALIDATION PRE-SAVE] Validation failed:`, error.message);
@@ -354,6 +365,9 @@ baiguullagaSchema.pre("findOneAndUpdate", async function (next) {
         key.includes('tokhirgoo.davkhariinToonuud') || key.includes('barilguud')
       );
       if (isDavkhariinToonuudUpdate) {
+        console.log(`🔍 [TRACE-UPDATE] Triggered for Baiguullaga. Query:`, JSON.stringify(this.getQuery()));
+        console.log(`🔍 [TRACE-UPDATE] Update set:`, JSON.stringify(this._update.$set));
+        
         const doc = await this.model.findOne(this.getQuery()).lean();
         if (doc && doc.barilguud) {
           const mergedBarilguud = JSON.parse(JSON.stringify(doc.barilguud));
