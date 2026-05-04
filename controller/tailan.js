@@ -2947,7 +2947,7 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
     };
     if (barilgiinId) match.barilgiinId = String(barilgiinId);
 
-    const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+  
     const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
 
     // Fetch invoices and standalone ledger entries
