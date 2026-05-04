@@ -3029,8 +3029,19 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
       if (s.ekhniiUldegdelEsekh) {
         resData.startingBalance += Number(s.undsenDun || s.tulukhDun || 0);
       } else {
-        const billed = Number(s.tulukhDun || s.undsenDun || 0);
-        const paid = Number(s.tulsunDun || 0);
+        const rawDun = Number(s.dun ?? 0);
+        const tulsunDun = Number(s.tulsunDun ?? 0);
+        
+        let billed = 0;
+        let paid = 0;
+
+        if (rawDun > 0) {
+          billed = rawDun;
+          paid = tulsunDun;
+        } else if (rawDun < 0) {
+          paid = Math.abs(rawDun);
+          billed = 0;
+        }
 
         resData.months[monthKey].billed += billed;
         resData.months[monthKey].paid += paid;
