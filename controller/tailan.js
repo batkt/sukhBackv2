@@ -3038,10 +3038,8 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
       }
 
       const billed = Number(inv.niitTulburOriginal != null ? inv.niitTulburOriginal : inv.niitTulbur) || 0;
-      // Look up actual payments from ledger (nekhemjlekhId-linked GuilgeeAvlaguud entries)
-      const paidFromLedger = invoicePaymentMap.get(String(inv._id)) || 0;
-      // Also fall back to inv.tulsunDun if the invoice itself tracks it
-      const paid = paidFromLedger || Number(inv.tulsunDun || 0);
+      // ONLY use ledger-based payments — inv.tulsunDun can be stale/double-counted
+      const paid = invoicePaymentMap.get(String(inv._id)) || 0;
 
       resData.months[monthKey].billed += billed;
       resData.months[monthKey].paid += paid;
