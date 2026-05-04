@@ -2947,6 +2947,9 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
     };
     if (barilgiinId) match.barilgiinId = String(barilgiinId);
 
+    const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+    const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+
     // Fetch invoices and standalone ledger entries
     const [invoices, standaloneEntries] = await Promise.all([
       NekhemjlekhiinTuukh(kholbolt).find(match).sort({ createdAt: 1 }).lean(),
