@@ -294,6 +294,17 @@ router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
       ? String(req.body.baiguullagiinId)
       : "";
 
+    // Sync top-level fields from toots array if they are missing
+    if (Array.isArray(req.body.toots) && req.body.toots.length > 0) {
+      const firstToot = req.body.toots[0];
+      if (req.body.ekhniiUldegdel === undefined && firstToot.ekhniiUldegdel !== undefined) {
+        req.body.ekhniiUldegdel = firstToot.ekhniiUldegdel;
+      }
+      if (req.body.tsahilgaaniiZaalt === undefined && firstToot.tsahilgaaniiZaalt !== undefined) {
+        req.body.tsahilgaaniiZaalt = firstToot.tsahilgaaniiZaalt;
+      }
+    }
+
     // Prevent duplicate: one toot (optionally + davkhar) can have only one resident per building
     if (toot && (barilgiinId || baiguullagiinId)) {
       const orConditions = [];

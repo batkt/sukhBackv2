@@ -256,8 +256,47 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
 }
 
 async function ensureEkhniiUldegdel(kholbolt, geree, options = {}) {
-  // This logic is now handled during first invoice generation
-  return false;
+  const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
+  const guilgeeService = require("./guilgeeService");
+
+  // 1. Calculate current ledger-based initial balance total
+  const rows = await GuilgeeAvlaguudModel.find({
+    gereeniiId: geree._id.toString(),
+    ekhniiUldegdelEsekh: true,
+  }).lean();
+
+  const currentTotal = rows.reduce((sum, r) => sum + (Number(r.undsenDun) || 0), 0);
+  const targetEkhnii = Number(geree.ekhniiUldegdel || 0);
+  const delta = Math.round((targetEkhnii - currentTotal) * 100) / 100;
+
+  if (Math.abs(delta) < 0.01) return true; // Already synced
+
+  // 2. Adjust ledger
+  if (rows.length > 0) {
+    // Update the first existing record with the delta
+    await GuilgeeAvlaguudModel.updateOne(
+      { _id: rows[0]._id },
+      { $inc: { undsenDun: delta, tulukhDun: delta } }
+    );
+  } else {
+    // Create a new record
+    await guilgeeService.recordCharge(kholbolt, {
+      ...geree,
+      _id: undefined,
+      gereeniiId: geree._id.toString(),
+      dun: delta,
+      zardliinNer: "Эхний үлдэгдэл",
+      tailbar: "Системээс үүсгэсэн эхний үлдэгдэл",
+      zardliinTurul: "Энгийн",
+      ognoo: geree.gereeniiOgnoo || new Date(),
+      source: "geree",
+      ekhniiUldegdelEsekh: true,
+      guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
+      guilgeeKhiisenAjiltniiId: options.ajiltanId || "System",
+    });
+  }
+
+  return true;
 }
 
 async function ensureActiveInvoice(kholbolt, gereeId, options = {}) {
