@@ -465,11 +465,11 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
 
       if (d.tuluv === "Төлсөн") {
         paid.push(row);
-        paidSum += d.niitTulbur || 0;
       } else {
         unpaid.push(row);
-        unpaidSum += d.niitTulbur || 0;
+        unpaidSum += (d.niitTulbur || 0) - (d.tulsunDun || 0);
       }
+      paidSum += d.tulsunDun || 0;
     }
 
     // Process Standalone Receivables (e.g., Initial Balance)
@@ -514,6 +514,9 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
       const g = gereeMap[String(p.gereeniiId)];
       if (!g) continue;
 
+      const amountPaid = Number(p.tulsunDun || Math.abs(p.dun || 0));
+      if (amountPaid === 0) continue;
+
       const row = {
         gereeniiDugaar: p.gereeniiDugaar || g.gereeniiDugaar || "",
         ovog: g.ovog || "",
@@ -525,7 +528,7 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
         orts: g.orts || "1",
         ognoo: p.ognoo || p.tulsunOgnoo || p.createdAt || null,
         tulukhOgnoo: p.ognoo || null,
-        niitTulbur: p.tulsunDun || 0,
+        niitTulbur: amountPaid,
         tuluv: "Төлсөн",
         gereeniiId: String(p.gereeniiId),
         nememjlekh: {
@@ -533,14 +536,14 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
           guilgeenuud: [
             {
               tailbar: p.tailbar || "Төлөлт (Нэхэмжлэхгүй)",
-              tulsunDun: p.tulsunDun || 0,
+              tulsunDun: amountPaid,
               ognoo: p.ognoo || p.createdAt,
             },
           ],
         },
       };
       paid.push(row);
-      paidSum += row.niitTulbur;
+      paidSum += amountPaid;
     }
 
     res.json({
@@ -3079,9 +3082,22 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
     const size = Number(khuudasniiKhemjee);
     const paginated = list.slice((page - 1) * size, page * size);
 
+    // Calculate summary across the entire list (not just paginated page)
+    const summary = {};
+    sortedPeriods.forEach(p => { summary[p] = { billed: 0, paid: 0 }; });
+    list.forEach(res => {
+      Object.entries(res.months).forEach(([p, val]) => {
+        if (summary[p]) {
+          summary[p].billed += (val.billed || 0);
+          summary[p].paid += (val.paid || 0);
+        }
+      });
+    });
+
     res.json({
       success: true,
       periods: sortedPeriods,
+      summary,
       totalCount,
       khuudasniiDugaar: page,
       list: paginated,
