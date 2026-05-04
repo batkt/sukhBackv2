@@ -3010,13 +3010,14 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
 
     // Build payment lookup map: invoiceId -> total paid amount from ledger entries
     // Payments are stored as GuilgeeAvlaguud records with nekhemjlekhId pointing to the invoice
-    const invoicePaymentMap = new Map(); // invoiceId -> { totalPaid, gereeniiId, monthKey }
+    // IMPORTANT: only dun < 0 entries are actual payments; dun > 0 are invoice charge line items
+    const invoicePaymentMap = new Map();
     for (const entry of standaloneEntries) {
-      if (!entry.nekhemjlekhId) continue; // standalone, not invoice-linked
+      if (!entry.nekhemjlekhId) continue;
+      if (Number(entry.dun || 0) >= 0) continue; // Skip charge line items, only count payments
       const invId = String(entry.nekhemjlekhId);
-      const paidAmt = Math.abs(Number(entry.dun || 0)); // payments have negative dun
-      if (!invoicePaymentMap.has(invId)) invoicePaymentMap.set(invId, 0);
-      invoicePaymentMap.set(invId, invoicePaymentMap.get(invId) + paidAmt);
+      const paidAmt = Math.abs(Number(entry.dun));
+      invoicePaymentMap.set(invId, (invoicePaymentMap.get(invId) || 0) + paidAmt);
     }
 
     // 1. Process Invoices
@@ -3100,6 +3101,23 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
         re.test(r.ner) || re.test(r.ovog) || re.test(r.toot) || re.test(r.gereeniiDugaar)
       );
     }
+
+    // Finalize status for each resident month based on total billed vs total paid (ledger + initial)
+    list.forEach(res => {
+      let cumulativeBalance = res.startingBalance || 0;
+      sortedPeriods.forEach(p => {
+        const m = res.months[p];
+        if (m) {
+          cumulativeBalance += (m.billed || 0) - (m.paid || 0);
+          // If balance for this month (and previous) is 0 or less, mark as Paid
+          if (cumulativeBalance <= 0) {
+            m.status = "Төлсөн";
+          } else {
+            m.status = "Төлөөгүй";
+          }
+        }
+      });
+    });
 
     // Sorting by toot
     list.sort((a, b) => {
