@@ -477,13 +477,20 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
         nememjlekh: nememjlekh,
       };
 
-      if (d.tuluv === "Төлсөн") {
+      // Determine status based on actual balance
+      const balance = (d.niitTulbur || 0) - (d.tulsunDun || 0);
+      const isActuallyPaid = balance <= 0 || d.tuluv === "Төлсөн";
+
+      if (isActuallyPaid) {
+        row.tuluv = "Төлсөн";
         paid.push(row);
       } else {
+        row.tuluv = "Төлөөгүй";
         unpaid.push(row);
-        unpaidSum += (d.niitTulbur || 0) - (d.tulsunDun || 0);
+        unpaidSum += balance;
       }
-      paidSum += d.tulsunDun || 0;
+      // NOTE: do NOT add d.tulsunDun to paidSum here.
+      // tulsunDun is all-time cumulative — income must come only from allPayments (dun < 0) below.
     }
 
     // Process Standalone Receivables (e.g., Initial Balance)
@@ -517,8 +524,15 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
           ],
         },
       };
-      unpaid.push(row);
-      unpaidSum += (row.niitTulbur - row.tulsunDun);
+      const balance = row.niitTulbur - row.tulsunDun;
+      if (balance <= 0) {
+        row.tuluv = "Төлсөн";
+        paid.push(row);
+      } else {
+        unpaid.push(row);
+        unpaidSum += balance;
+      }
+      paidSum += row.tulsunDun || 0;
     }
 
     // Process All Payments (Income)
