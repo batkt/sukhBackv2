@@ -13,6 +13,14 @@ const previewInvoice = async (gereeId, baiguullagiinId, barilgiinId, options = {
     const geree = await Geree(kholbolt).findById(gereeId).lean();
     if (!geree) throw new Error("Contract not found");
 
+    if (options.targetMonth && options.targetYear) {
+      options.billingDate = new Date(
+        Number(options.targetYear),
+        Number(options.targetMonth) - 1,
+        15
+      );
+    }
+
     const { charges, total } = await calculateGereeCharges(kholbolt, geree, options);
 
     return {

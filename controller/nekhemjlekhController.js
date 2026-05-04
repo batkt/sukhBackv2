@@ -73,16 +73,32 @@ async function gereeNeesNekhemjlekhUusgekh(
 }
 
 const previewInvoice = asyncHandler(async (req, res) => {
-  const { gereeId, baiguullagiinId, barilgiinId, targetMonth, targetYear } = req.query;
-  const result = await previewService.previewInvoice(gereeId, baiguullagiinId, barilgiinId, {
-    targetMonth, targetYear
-  });
+  const first = (v) => (Array.isArray(v) ? v[0] : v);
+  const gereeId = first(req.query.gereeId);
+  const baiguullagiinId = first(req.query.baiguullagiinId);
+  const barilgiinId = first(req.query.barilgiinId);
+  const targetMonth = first(req.query.targetMonth);
+  const targetYear = first(req.query.targetYear);
+
+  const result = await previewService.previewInvoice(
+    gereeId,
+    baiguullagiinId,
+    barilgiinId,
+    { targetMonth, targetYear },
+  );
   res.status(result.success ? 200 : 400).json(result);
 });
 
 const manualSendInvoice = asyncHandler(async (req, res) => {
-  const { gereeId, gereeIds, baiguullagiinId, override, targetMonth, targetYear } = req.body;
-  const ids = gereeIds || (gereeId ? [gereeId] : []);
+  const first = (v) => (Array.isArray(v) ? v[0] : v);
+  const baiguullagiinId = first(req.body.baiguullagiinId);
+  const gereeId = first(req.body.gereeId);
+  const gereeIds = req.body.gereeniiIds || req.body.gereeIds;
+  const override = req.body.override;
+  const targetMonth = first(req.body.targetMonth);
+  const targetYear = first(req.body.targetYear);
+
+  const ids = Array.isArray(gereeIds) ? gereeIds : (gereeId ? [gereeId] : []);
   
   if (ids.length === 0) {
     return res.status(400).json({ success: false, error: "gereeId or gereeIds is required" });
