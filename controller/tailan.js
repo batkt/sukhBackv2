@@ -3195,32 +3195,32 @@ exports.tailanTulburDugnelt = asyncHandler(async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Connection not found" });
     }
 
-    // Base match: only payment records (tulsunDun > 0 means dun was negative = payment)
+    // Base match: dun < 0 means payment (money received)
+    // This is the authoritative indicator — matches the user's verified DB aggregate
     const baseMatch = {
       baiguullagiinId: String(baiguullagiinId),
-      tulsunDun: { $gt: 0 },
+      dun: { $lt: 0 },
     };
     if (barilgiinId) baseMatch.barilgiinId = String(barilgiinId);
 
     // Monthly match: same but with date range on ognoo
     const monthlyMatch = { ...baseMatch };
     if (ekhlekhOgnoo && duusakhOgnoo) {
-      const start = new Date(ekhlekhOgnoo);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(duusakhOgnoo);
-      end.setHours(23, 59, 59, 999);
-      monthlyMatch.ognoo = { $gte: start, $lte: end };
+      monthlyMatch.ognoo = {
+        $gte: new Date(ekhlekhOgnoo),
+        $lte: new Date(duusakhOgnoo),
+      };
     }
 
     // Run both aggregations in parallel
     const [allTimeResult, monthlyResult] = await Promise.all([
       GuilgeeAvlaguud(kholbolt).aggregate([
         { $match: baseMatch },
-        { $group: { _id: null, sum: { $sum: "$tulsunDun" }, count: { $sum: 1 } } },
+        { $group: { _id: null, sum: { $sum: { $abs: "$dun" } }, count: { $sum: 1 } } },
       ]),
       GuilgeeAvlaguud(kholbolt).aggregate([
         { $match: monthlyMatch },
-        { $group: { _id: null, sum: { $sum: "$tulsunDun" }, count: { $sum: 1 } } },
+        { $group: { _id: null, sum: { $sum: { $abs: "$dun" } }, count: { $sum: 1 } } },
       ]),
     ]);
 
