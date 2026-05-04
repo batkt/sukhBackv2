@@ -17,6 +17,8 @@ const guilgeeAvlaguudSchema = new Schema(
     gereeniiDugaar: String,
     orshinSuugchId: String,
     nekhemjlekhId: String,
+    toot: String,
+    toots: Array,
 
     // Date
     ognoo: { type: Date, required: true },

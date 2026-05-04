@@ -279,6 +279,12 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
 router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
   try {
     const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
+    
+    // Map frontend 'units' to backend 'toots'
+    if (req.body.units && Array.isArray(req.body.units)) {
+      req.body.toots = req.body.units;
+    }
+
     const toot = req.body.toot ? String(req.body.toot).trim() : "";
     const davkhar = req.body.davkhar ? String(req.body.davkhar).trim() : "";
     const barilgiinId = req.body.barilgiinId
@@ -567,6 +573,11 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
     delete req.body.erunkhiiKholbolt;
     delete req.body.tukhainBaaziinKholbolt;
 
+    // Map frontend 'units' to backend 'toots'
+    if (req.body.units && Array.isArray(req.body.units)) {
+      req.body.toots = req.body.units;
+    }
+
     // Protection: Residents should NOT be able to change their own baiguullagiinId, barilgiinId, or linked toots array
     // This often happens when the frontend doesn't send them and a middleware injects 'null'.
     if (requesterRole === "OrshinSuugch" || (requesterId && String(requesterId) === String(req.params.id))) {
@@ -752,6 +763,14 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
 
           if (req.body.ekhniiUldegdel !== undefined) {
             syncData.ekhniiUldegdel = parseFloat(req.body.ekhniiUldegdel) || 0;
+          }
+          
+          // Check if this org context has a specific balance in the toots array
+          if (Array.isArray(result.toots)) {
+            const matchingToot = result.toots.find(t => String(t.baiguullagiinId) === String(orgId));
+            if (matchingToot && matchingToot.ekhniiUldegdel !== undefined) {
+               syncData.ekhniiUldegdel = parseFloat(matchingToot.ekhniiUldegdel) || 0;
+            }
           }
 
           if (req.body.khonogoorBodokhEsekh !== undefined) {
