@@ -22,6 +22,7 @@ exports.getZasakhTuukh = asyncHandler(async (req, res, next) => {
     documentId,
     ajiltniiId,
     baiguullagiinId,
+    barilgiinId,
     ekhlekhOgnoo,
     duusakhOgnoo,
     khuudasniiDugaar = 1,
@@ -46,6 +47,10 @@ exports.getZasakhTuukh = asyncHandler(async (req, res, next) => {
   if (baiguullagiinId) {
     matchLegacy.baiguullagiinId = baiguullagiinId.toString();
     matchNew.baiguullagiinId = baiguullagiinId.toString();
+  }
+  if (barilgiinId) {
+    matchLegacy.barilgiinId = barilgiinId.toString();
+    matchNew.barilgiinId = barilgiinId.toString();
   }
 
   // Date range filter
@@ -101,6 +106,7 @@ exports.getUstgakhTuukh = asyncHandler(async (req, res, next) => {
     documentId,
     ajiltniiId,
     baiguullagiinId,
+    barilgiinId,
     deletionType,
     ekhlekhOgnoo,
     duusakhOgnoo,
@@ -114,6 +120,7 @@ exports.getUstgakhTuukh = asyncHandler(async (req, res, next) => {
   if (documentId) match.documentId = documentId.toString();
   if (ajiltniiId) match.ajiltniiId = ajiltniiId.toString();
   if (baiguullagiinId) match.baiguullagiinId = baiguullagiinId.toString();
+  if (barilgiinId) match.barilgiinId = barilgiinId.toString();
   if (deletionType) match.deletionType = deletionType;
 
   // Date range filter
