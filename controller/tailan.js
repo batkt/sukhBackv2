@@ -401,17 +401,17 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
       };
     }
 
-    const [invoices, standaloneTulukh, standaloneTulsun] = await Promise.all([
+    const [invoices, standaloneTulukh, allPayments] = await Promise.all([
       NekhemjlekhiinTuukh(kholbolt).find(invoiceMatch).lean().sort({ ognoo: -1 }),
       GuilgeeAvlaguud(kholbolt).find(tulukhMatch).lean(),
-      GuilgeeAvlaguud(kholbolt).find(tulsunMatch).lean(),
+      GuilgeeAvlaguud(kholbolt).find({ ...tulsunMatch, dun: { $lt: 0 } }).lean(),
     ]);
 
     // Gather all gereeIds from both invoices and standalone records to fetch their metadata
     const allGereeniiIds = new Set([
       ...invoices.map((i) => String(i.gereeniiId)),
       ...standaloneTulukh.map((s) => String(s.gereeniiId)),
-      ...standaloneTulsun.map((s) => String(s.gereeniiId)),
+      ...allPayments.map((p) => String(p.gereeniiId)),
     ]);
 
     // Fetch contracts for all records to ensure we have property metadata (toot/toots)
@@ -457,6 +457,7 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
         ognoo: d.ognoo || null,
         tulukhOgnoo: d.tulukhOgnoo || null,
         niitTulbur: d.niitTulbur || 0,
+        tulsunDun: d.tulsunDun || 0,
         tuluv: d.tuluv || "Төлөөгүй",
         dugaalaltDugaar: d.dugaalaltDugaar || null,
         gereeniiId: d.gereeniiId || "",
@@ -475,7 +476,7 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
     // Process Standalone Receivables (e.g., Initial Balance)
     for (const s of standaloneTulukh) {
       const g = gereeMap[String(s.gereeniiId)];
-      if (!g) continue; // Filtered out by metadataMatch
+      if (!g) continue;
 
       const row = {
         gereeniiDugaar: s.gereeniiDugaar || g.gereeniiDugaar || "",
@@ -489,6 +490,7 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
         ognoo: s.ognoo || s.createdAt || null,
         tulukhOgnoo: s.ognoo || s.createdAt || null,
         niitTulbur: s.tulukhDun || s.undsenDun || 0,
+        tulsunDun: s.tulsunDun || 0,
         uldegdel: s.uldegdel || 0,
         tuluv: "Төлөөгүй",
         gereeniiId: String(s.gereeniiId),
@@ -498,19 +500,16 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
               ner: s.zardliinNer || "Авлага",
               dun: s.undsenDun || 0,
               tulukhDun: s.tulukhDun || 0,
-              tailbar: s.tailbar || "",
-              isEkhniiUldegdel: s.ekhniiUldegdelEsekh,
             },
           ],
-          guilgeenuud: [],
         },
       };
       unpaid.push(row);
-      unpaidSum += row.niitTulbur;
+      unpaidSum += (row.niitTulbur - row.tulsunDun);
     }
 
-    // Process Standalone Payments (Income)
-    for (const p of standaloneTulsun) {
+    // Process All Payments (Income)
+    for (const p of allPayments) {
       const g = gereeMap[String(p.gereeniiId)];
       if (!g) continue;
 
