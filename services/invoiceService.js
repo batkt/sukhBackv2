@@ -20,7 +20,9 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     : totalDaysInMonth;
 
   const isProratingEnabled = !!barilga?.tokhirgoo?.bodokhArgaEnabled;
-  const prorateFactor = (isProratingEnabled && geree.khonogoorBodokhEsekh && geree.bodokhKhonog > 0)
+  
+  const shouldProrate = (isProratingEnabled || geree.khonogoorBodokhEsekh) && geree.khonogoorBodokhEsekh && geree.bodokhKhonog > 0;
+  const prorateFactor = shouldProrate
     ? (geree.bodokhKhonog / denominator)
     : 1;
 

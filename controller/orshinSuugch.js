@@ -5266,7 +5266,25 @@ exports.syncResidentContracts = async function syncResidentContracts(
         .filter((tailbar) => tailbar && tailbar.trim())
         .join("; ") || "";
 
-    const niitTulbur = ashiglaltiinZardluudData.reduce((total, zardal) => {
+    const isProratingEnabled = !!targetBarilgaForToot?.tokhirgoo?.bodokhArgaEnabled;
+    const isUnitProrating = tootEntry.khonogoorBodokhEsekh !== undefined
+      ? tootEntry.khonogoorBodokhEsekh
+      : (req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true");
+    const unitProrateDays = tootEntry.bodokhKhonog !== undefined
+      ? Number(tootEntry.bodokhKhonog)
+      : (Number(req.body.bodokhKhonog) || 0);
+
+    const shouldProrate = (isProratingEnabled || isUnitProrating) && isUnitProrating && unitProrateDays > 0;
+    
+    const currentDate = new Date();
+    const totalDaysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+    const denominator = targetBarilgaForToot?.tokhirgoo?.bodokhArga === "Тогтмол"
+      ? (targetBarilgaForToot?.tokhirgoo?.bodokhKhonog || 30)
+      : totalDaysInMonth;
+
+    const prorateFactor = shouldProrate ? (unitProrateDays / denominator) : 1;
+
+    let niitTulbur = ashiglaltiinZardluudData.reduce((total, zardal) => {
       const tariff = zardal.tariff || 0;
       const isLiftItem = zardal.zardliinTurul === "Лифт";
       if (
@@ -5278,6 +5296,10 @@ exports.syncResidentContracts = async function syncResidentContracts(
       }
       return total + tariff;
     }, 0);
+
+    if (prorateFactor !== 1) {
+      niitTulbur = Math.round(niitTulbur * prorateFactor);
+    }
 
     // Check for CANCELLED contract to reactivate
     const existingCancelledGeree = await GereeModel.findOne({
