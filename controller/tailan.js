@@ -387,10 +387,9 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
       };
     }
 
-    // 3. Get Standalone Tulsun (Payments/Income)
+    // 3. Get All Payments (Income)
     const tulsunMatch = {
       baiguullagiinId: String(baiguullagiinId),
-      nekhemjlekhId: { $in: [null, ""] },
     };
     if (barilgiinId) tulsunMatch.barilgiinId = String(barilgiinId);
     if (dateFilter.$gte) tulsunMatch.ognoo = dateFilter;
