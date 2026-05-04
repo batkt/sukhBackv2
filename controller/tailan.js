@@ -3171,11 +3171,6 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
     next(error);
   }
 });
-
-
-// ===== ТУЛБУРИЙН ДҮГНЭЛТ =====
-// Орлого болон сарын гүйцэтгэлийг шууд GuilgeeAvlaguud-с MongoDB aggregate-аар тооцох
-// invoice-ийн tulsunDun-г ашиглахгүй — зөвхөн бодит тулбурийн бичлэгүүд (dun < 0)
 exports.tailanTulburDugnelt = asyncHandler(async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
@@ -3194,9 +3189,6 @@ exports.tailanTulburDugnelt = asyncHandler(async (req, res, next) => {
     if (!kholbolt) {
       return res.status(404).json({ success: false, message: "Connection not found" });
     }
-
-    // Base match: dun < 0 means payment (money received)
-    // This is the authoritative indicator — matches the user's verified DB aggregate
     const baseMatch = {
       baiguullagiinId: String(baiguullagiinId),
       dun: { $lt: 0 },
