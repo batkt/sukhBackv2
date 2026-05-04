@@ -2355,25 +2355,29 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
               davkhariinToonuud[floorKey] = [];
             }
 
-            // Get existing toot string for this floor::entrance
-            const existingToonuud = davkhariinToonuud[floorKey][0] || "";
-            let existingTootList = existingToonuud
-              ? existingToonuud
+            const currentTootArray = davkhariinToonuud[floorKey];
+            let existingTootList = [];
+            
+            if (Array.isArray(currentTootArray) && currentTootArray.length > 0) {
+              if (typeof currentTootArray[0] === "string" && currentTootArray[0].includes(",")) {
+                existingTootList = currentTootArray[0]
                   .split(",")
                   .map((t) => t.trim())
-                  .filter((t) => t)
-              : [];
+                  .filter((t) => t);
+              } else {
+                existingTootList = currentTootArray
+                  .map((t) => String(t).trim())
+                  .filter((t) => t);
+              }
+            }
 
-            // Add all toots from the list if not already present
             for (const toot of tootList) {
               if (!existingTootList.includes(toot)) {
                 existingTootList.push(toot);
               }
             }
 
-            // Sort toots
             existingTootList.sort((a, b) => {
-              // Sort numerically if possible, otherwise alphabetically
               const numA = parseInt(a);
               const numB = parseInt(b);
               if (!isNaN(numA) && !isNaN(numB)) {
@@ -2382,7 +2386,6 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
               return a.localeCompare(b);
             });
 
-            // Update davkhariinToonuud - store as array with comma-separated string
             davkhariinToonuud[floorKey] = [existingTootList.join(",")];
           }
 

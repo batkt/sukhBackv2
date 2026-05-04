@@ -172,15 +172,29 @@ exports.updateDavkharWithToot = async function updateDavkharWithToot(
     if (!targetBarilga) {
       return;
     }
+    const BaiguullagaModel = Baiguullaga(db.erunkhiiKholbolt);
+    const freshBaiguullaga = await BaiguullagaModel.findById(baiguullaga._id);
+    
+    if (!freshBaiguullaga) {
+      console.error(`❌ [BURTGEY] Could not find baiguullaga ${baiguullaga._id} to update davkhar.`);
+      return;
+    }
 
-    // Get or create davkhar array and davkhariinToonuud object
-    const davkharArray = targetBarilga.tokhirgoo?.davkhar || [];
-    const davkhariinToonuud = targetBarilga.tokhirgoo?.davkhariinToonuud || {};
+    const latestBarilga = freshBaiguullaga.barilguud?.find(
+      (b) => String(b._id) === String(barilgiinId),
+    );
+
+    if (!latestBarilga) {
+      return;
+    }
+
+    const davkharArray = latestBarilga.tokhirgoo?.davkhar || [];
+    const davkhariinToonuud = latestBarilga.tokhirgoo?.davkhariinToonuud || {};
 
     const davkharStr = String(davkhar || "").trim();
     const ortsStr = String(orts || "1").trim();
     
-    // Ensure davkhar exists in davkharArray (format should match what's in the array)
+    // Ensure davkhar exists in davkharArray
     if (!davkharArray.includes(davkharStr)) {
       return;
     }
@@ -192,36 +206,54 @@ exports.updateDavkharWithToot = async function updateDavkharWithToot(
       davkhariinToonuud[floorKey] = [];
     }
 
-    // Get existing toot string for this floor
-    const existingToonuud = davkhariinToonuud[floorKey][0] || "";
-    let tootList = existingToonuud
-      ? existingToonuud
+    // Get existing toot list - handle both formats: ["101,102"] and ["101", "102"]
+    const currentTootArray = davkhariinToonuud[floorKey];
+    let tootList = [];
+    
+    if (Array.isArray(currentTootArray) && currentTootArray.length > 0) {
+      if (typeof currentTootArray[0] === "string" && currentTootArray[0].includes(",")) {
+        // Comma-separated format
+        tootList = currentTootArray[0]
           .split(",")
           .map((t) => t.trim())
-          .filter((t) => t)
-      : [];
-
-    // Add toot if not already present
-    if (toot && !tootList.includes(toot)) {
-      tootList.push(toot);
-      tootList.sort((a, b) => parseInt(a) - parseInt(b)); // Sort numerically
+          .filter((t) => t);
+      } else {
+        // Array of individual strings format
+        tootList = currentTootArray
+          .map((t) => String(t).trim())
+          .filter((t) => t);
+      }
     }
 
-    // Update davkhariinToonuud - store as array with comma-separated string
+    // Add new toot if not already present
+    if (toot && !tootList.includes(String(toot).trim())) {
+      tootList.push(String(toot).trim());
+      // Sort numerically if possible, otherwise alphabetically
+      tootList.sort((a, b) => {
+        const numA = parseInt(a);
+        const numB = parseInt(b);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return a.localeCompare(b);
+      });
+    }
+
+    // Update davkhariinToonuud - standardize back to the comma-separated format
+    // This maintains consistency across the application
     davkhariinToonuud[floorKey] = [tootList.join(",")];
 
-    // Update baiguullaga - find the building index first
-    const barilgaIndex = baiguullaga.barilguud.findIndex(
+    // Update baiguullaga - find the building index in the fresh object
+    const barilgaIndex = freshBaiguullaga.barilguud.findIndex(
       (b) => String(b._id) === String(barilgiinId),
     );
 
     if (barilgaIndex >= 0) {
-      // Use Mongoose's positional operator for safer nested updates
       const davkharPath = `barilguud.${barilgaIndex}.tokhirgoo.davkhar`;
       const toonuudPath = `barilguud.${barilgaIndex}.tokhirgoo.davkhariinToonuud`;
 
-      await Baiguullaga(db.erunkhiiKholbolt).findByIdAndUpdate(
-        baiguullaga._id,
+      console.log(`🔍 [TRACE-UPDATE] Updating Baiguullaga ${freshBaiguullaga._id} for floor ${floorKey}. New list: ${tootList.join(",")}`);
+
+      await BaiguullagaModel.findByIdAndUpdate(
+        freshBaiguullaga._id,
         {
           $set: {
             [davkharPath]: davkharArray,
@@ -4951,7 +4983,7 @@ exports.orshinSuugchOorooUstgakh = asyncHandler(async (req, res, next) => {
     // Don't delete nevtreltiinTuukh - keep login history
     // Don't delete ebarimt - keep all receipts
 
-    // Log deletion to audit before actually updating
+    // Log deletion to audit before actually deleting
     try {
       const { logDelete } = require("../services/auditService");
       const deletedDoc = orshinSuugch.toObject
@@ -4963,7 +4995,7 @@ exports.orshinSuugchOorooUstgakh = asyncHandler(async (req, res, next) => {
         "orshinSuugch",
         userId.toString(),
         deletedDoc,
-        "soft",
+        "hard",
         "Self-delete by user",
         {
           baiguullagiinId: orshinSuugch.baiguullagiinId,
@@ -4974,19 +5006,9 @@ exports.orshinSuugchOorooUstgakh = asyncHandler(async (req, res, next) => {
       // Don't block deletion if audit logging fails
     }
 
-    // Perform soft delete - preserve data but free up phone number and clear tokens
-    const deletedTimestamp = new Date().getTime();
-    await OrshinSuugchModel.findByIdAndUpdate(userId, {
-      $set: {
-        tuluv: "Cancelled",
-        nevtrekhNer: `deleted_${userId}_${deletedTimestamp}_${orshinSuugch.nevtrekhNer || orshinSuugch.utas}`,
-        utas: `deleted_${userId}_${deletedTimestamp}_${orshinSuugch.utas}`,
-        firebaseToken: null,
-        currentSessionId: null,
-        // Scramble password to prevent any further logins
-        nuutsUg: await require("bcrypt").hash(`DELETED_${deletedTimestamp}`, 10)
-      }
-    });
+    // Actually delete the orshinSuugch user account
+    // The gerees are marked as "Цуцалсан" and can be restored when they register again with the same utas
+    await OrshinSuugchModel.findByIdAndDelete(userId);
 
     res.status(200).json({
       success: true,
@@ -5049,7 +5071,7 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
     // Don't delete nevtreltiinTuukh - keep login history
     // Don't delete ebarimt - keep all receipts
 
-    // Log deletion to audit before actually updating
+    // Log deletion to audit before actually deleting
     try {
       const { logDelete } = require("../services/auditService");
       const deletedDoc = orshinSuugch.toObject
@@ -5061,7 +5083,7 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
         "orshinSuugch",
         userId.toString(),
         deletedDoc,
-        "soft",
+        "hard",
         "Admin delete",
         {
           baiguullagiinId: orshinSuugch.baiguullagiinId,
@@ -5072,21 +5094,12 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
       // Don't block deletion if audit logging fails
     }
 
-    // Perform soft delete - preserve data but free up phone number and clear tokens
-    console.log(`🗑️ [TRACE-DELETE-RESIDENT] Performing soft delete for resident: ${userId}.`);
-    const deletedTimestamp = new Date().getTime();
-    await OrshinSuugchModel.findByIdAndUpdate(userId, {
-      $set: {
-        tuluv: "Cancelled",
-        nevtrekhNer: `deleted_${userId}_${deletedTimestamp}_${orshinSuugch.nevtrekhNer || orshinSuugch.utas}`,
-        utas: `deleted_${userId}_${deletedTimestamp}_${orshinSuugch.utas}`,
-        firebaseToken: null,
-        currentSessionId: null,
-        // Scramble password to prevent login
-        nuutsUg: await require("bcrypt").hash(`DELETED_${deletedTimestamp}`, 10)
-      }
-    });
-    console.log(`✅ [TRACE-DELETE-RESIDENT] Resident ${userId} soft-deleted successfully.`);
+    // Actually delete the orshinSuugch user account
+    // The gerees are marked as "Цуцалсан" and can be restored when they register again with the same utas
+    console.log(`🗑️ [TRACE-DELETE-RESIDENT] Attempting to delete resident: ${userId}.`);
+    // Note: This operation should NOT affect Baiguullaga.
+    await OrshinSuugchModel.findByIdAndDelete(userId);
+    console.log(`✅ [TRACE-DELETE-RESIDENT] Resident ${userId} deleted successfully.`);
 
     res.status(200).json({
       success: true,
