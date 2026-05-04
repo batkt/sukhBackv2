@@ -1150,230 +1150,183 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
           throw new Error("Байгууллагын холболтын мэдээлэл олдсонгүй");
         }
 
-        const targetBarilgaForZardluud = baiguullaga.barilguud?.find(
-          (b) => String(b._id) === String(barilgiinId),
-        );
-
-        const AshiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
-        const ashiglaltiinZardluudData = await AshiglaltiinZardluud(
-          tukhainBaaziinKholbolt,
-        ).find({
-          baiguullagiinId: baiguullagiinId,
-          barilgiinId: barilgiinId,
-        });
-
-        // Get liftShalgaya from baiguullaga.barilguud[].tokhirgoo
-        const liftShalgayaData =
-          targetBarilgaForZardluud?.tokhirgoo?.liftShalgaya;
-        const choloolugdokhDavkhar =
-          liftShalgayaData?.choloolugdokhDavkhar || [];
-
-        const zardluudArray = ashiglaltiinZardluudData.map((zardal) => ({
-          ner: zardal.ner,
-          turul: zardal.turul,
-          zardliinTurul: zardal.zardliinTurul,
-          tariff: zardal.tariff,
-          tariffUsgeer: zardal.tariffUsgeer || "",
-          tulukhDun: 0, // Default value
-          dun: zardal.dun || 0,
-          bodokhArga: zardal.bodokhArga || "",
-          tseverUsDun: zardal.tseverUsDun || 0,
-          bokhirUsDun: zardal.bokhirUsDun || 0,
-          usKhalaasniiDun: zardal.usKhalaasniiDun || 0,
-          tsakhilgaanUrjver: zardal.tsakhilgaanUrjver || 1,
-          tsakhilgaanChadal: zardal.tsakhilgaanChadal || 0,
-          tsakhilgaanDemjikh: zardal.tsakhilgaanDemjikh || 0,
-          suuriKhuraamj: zardal.suuriKhuraamj || 0,
-          nuatNemekhEsekh: zardal.nuatNemekhEsekh || false,
-          ognoonuud: zardal.ognoonuud || [],
-        }));
-
-        // Extract tailbar from ashiglaltiinZardluud (combine all tailbar values if multiple exist)
-        const tailbarFromZardluud =
-          ashiglaltiinZardluudData
-            .map((zardal) => zardal.tailbar)
-            .filter((tailbar) => tailbar && tailbar.trim())
-            .join("; ") || "";
-
-        const niitTulbur = ashiglaltiinZardluudData.reduce((total, zardal) => {
-          const tariff = zardal.tariff || 0;
-
-          const isLiftItem =
-            zardal.zardliinTurul && zardal.zardliinTurul === "Лифт";
-
-          if (
-            isLiftItem &&
-            orshinSuugch.davkhar &&
-            choloolugdokhDavkhar.includes(orshinSuugch.davkhar)
-          ) {
-            return total;
-          }
-
-          return total + tariff;
-        }, 0);
-
-        // Validate: One toot occupancy check
-        // Check if this toot already has an active contract with a different orshinSuugchId
         const GereeModel = Geree(tukhainBaaziinKholbolt);
-        if (orshinSuugch.toot && barilgiinId) {
-          const conflictingGeree = await GereeModel.findOne({
-            barilgiinId: barilgiinId,
-            toot: orshinSuugch.toot,
+        const AshiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
+        const invoiceService = require("../services/invoiceService");
+
+        const tootsToProcess =
+          orshinSuugch.toots && orshinSuugch.toots.length > 0
+            ? orshinSuugch.toots
+            : orshinSuugch.toot
+              ? [
+                  {
+                    toot: orshinSuugch.toot,
+                    barilgiinId: barilgiinId,
+                    davkhar: orshinSuugch.davkhar || "",
+                    orts: orshinSuugch.orts || "1",
+                    duureg: req.body.duureg || "",
+                    horoo: req.body.horoo || {},
+                    soh: req.body.soh || "",
+                    bairniiNer: orshinSuugch.bairniiNer || req.body.bairniiNer || "",
+                  },
+                ]
+              : [];
+
+        for (const tootEntry of tootsToProcess) {
+          const currentBarilgiinId = tootEntry.barilgiinId || barilgiinId;
+          if (!currentBarilgiinId) continue;
+
+          // Check if ACTIVE contract already exists for this unit
+          const existingActiveGeree = await GereeModel.findOne({
+            toot: tootEntry.toot,
+            barilgiinId: currentBarilgiinId,
             tuluv: "Идэвхтэй",
-            orshinSuugchId: { $ne: orshinSuugch._id.toString() },
-          });
-
-          if (conflictingGeree) {
-            // Log warning instead of throwing error to allow roommates/multi-family registration
-          }
-        }
-        const existingCancelledGeree = await GereeModel.findOne({
-          toot: orshinSuugch.toot || "",
-          barilgiinId: barilgiinId || "",
-          davkhar: orshinSuugch.davkhar || "",
-          orts: orshinSuugch.orts || "",
-          tuluv: "Цуцалсан",
-        });
-
-        if (existingCancelledGeree && tukhainBaaziinKholbolt) {
-          isReactivating = true;
-
-          const updateData = {
-            tuluv: "Идэвхтэй",
-            gereeniiOgnoo: new Date(),
             orshinSuugchId: orshinSuugch._id.toString(),
-            zardluud: zardluudArray,
-            niitTulbur: niitTulbur,
-            ashiglaltiinZardal: 0,
-            khonogoorBodokhEsekh: req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true",
-            bodokhKhonog: Number(req.body.bodokhKhonog) || 0,
-            ovog: req.body.ovog || existingCancelledGeree.ovog,
-            ner: req.body.ner || existingCancelledGeree.ner,
-            register: req.body.register || existingCancelledGeree.register,
-            utas: [req.body.utas],
-            mail: req.body.mail || existingCancelledGeree.mail,
-            toot: orshinSuugch.toot || existingCancelledGeree.toot,
-            davkhar: orshinSuugch.davkhar || existingCancelledGeree.davkhar,
-            bairNer:
-              targetBarilgaForZardluud?.ner ||
-              existingCancelledGeree.bairNer ||
-              "",
-            duureg: req.body.duureg || existingCancelledGeree.duureg,
-            horoo: req.body.horoo || existingCancelledGeree.horoo,
-            sohNer: req.body.soh || existingCancelledGeree.sohNer,
-            umnukhZaalt: tsahilgaaniiZaalt,
-            suuliinZaalt: tsahilgaaniiZaalt,
-            zaaltTog: 0,
-            zaaltUs: 0,
-          };
-
-          if (req.body.tailbar) {
-            updateData.temdeglel = req.body.tailbar;
-            updateData.tailbar = req.body.tailbar;
-          }
-          if (req.body.ekhniiUldegdel !== undefined) {
-            updateData.ekhniiUldegdel =
-              parseFloat(req.body.ekhniiUldegdel) || 0;
-          }
-
-          await GereeModel.findByIdAndUpdate(existingCancelledGeree._id, {
-            $set: updateData,
           });
-        }
 
-        const targetBarilga = barilgiinId
-          ? baiguullaga.barilguud?.find(
-              (b) => String(b._id) === String(barilgiinId),
-            )
-          : null;
+          if (existingActiveGeree) {
+            // Already has an active contract, skip
+            continue;
+          }
 
-        const duuregNer =
-          targetBarilga?.tokhirgoo?.duuregNer || req.body.duureg || "";
-        // Normalize horoo to always be an object format
-        let horooData = targetBarilga?.tokhirgoo?.horoo || req.body.horoo || {};
-        if (typeof horooData === "string") {
-          horooData = { ner: horooData, kod: horooData };
-        } else if (!horooData || typeof horooData !== "object") {
-          horooData = {};
-        }
-        const sohNer = targetBarilga?.tokhirgoo?.sohNer || req.body.soh || "";
+          // Fetch building-specific tariffs
+          const ashiglaltiinZardluudData = await AshiglaltiinZardluud(
+            tukhainBaaziinKholbolt,
+          ).find({
+            baiguullagiinId: baiguullagiinId,
+            barilgiinId: currentBarilgiinId,
+          });
 
-        // Only create new geree if not reactivating (no cancelled geree found)
-        if (!isReactivating) {
-          // Create geree for each toot in toots array
-          // If toots array exists and has entries, create geree for each toot
-          // Otherwise, create geree for primary toot (backward compatibility)
-          const tootsToProcess =
-            orshinSuugch.toots && orshinSuugch.toots.length > 0
-              ? orshinSuugch.toots
-              : orshinSuugch.toot
-                ? [
-                    {
-                      toot: orshinSuugch.toot,
-                      barilgiinId: barilgiinId,
-                      davkhar: orshinSuugch.davkhar || "",
-                      orts: orshinSuugch.orts || "1",
-                      duureg: duuregNer,
-                      horoo: horooData,
-                      soh: sohNer,
-                      bairniiNer: req.body.bairniiNer || "",
-                    },
-                  ]
-                : [];
+          const targetBarilgaForToot = baiguullaga.barilguud?.find(
+            (b) => String(b._id) === String(currentBarilgiinId),
+          );
 
-          for (const tootEntry of tootsToProcess) {
-            // Check if geree already exists for this toot
-            const existingGereeForToot = await GereeModel.findOne({
-              toot: tootEntry.toot,
-              barilgiinId: tootEntry.barilgiinId || barilgiinId,
-              tuluv: "Идэвхтэй",
-              orshinSuugchId: orshinSuugch._id.toString(),
-            });
+          const liftShalgayaData = targetBarilgaForToot?.tokhirgoo?.liftShalgaya;
+          const choloolugdokhDavkhar =
+            liftShalgayaData?.choloolugdokhDavkhar || [];
 
-            if (existingGereeForToot) {
-              continue; // Skip if geree already exists for this toot
-            }
+          const zardluudArray = ashiglaltiinZardluudData.map((zardal) => ({
+            ner: zardal.ner,
+            turul: zardal.turul,
+            zardliinTurul: zardal.zardliinTurul,
+            tariff: zardal.tariff,
+            tariffUsgeer: zardal.tariffUsgeer || "",
+            tulukhDun: 0,
+            dun: zardal.dun || 0,
+            bodokhArga: zardal.bodokhArga || "",
+            tseverUsDun: zardal.tseverUsDun || 0,
+            bokhirUsDun: zardal.bokhirUsDun || 0,
+            usKhalaasniiDun: zardal.usKhalaasniiDun || 0,
+            tsakhilgaanUrjver: zardal.tsakhilgaanUrjver || 1,
+            tsakhilgaanChadal: zardal.tsakhilgaanChadal || 0,
+            tsakhilgaanDemjikh: zardal.tsakhilgaanDemjikh || 0,
+            suuriKhuraamj: zardal.suuriKhuraamj || 0,
+            nuatNemekhEsekh: zardal.nuatNemekhEsekh || false,
+            ognoonuud: zardal.ognoonuud || [],
+          }));
 
-            // Get target barilga for this toot
-            const targetBarilgaForToot = baiguullaga.barilguud?.find(
-              (b) =>
-                String(b._id) === String(tootEntry.barilgiinId || barilgiinId),
-            );
+          const tailbarFromZardluud =
+            ashiglaltiinZardluudData
+              .map((zardal) => zardal.tailbar)
+              .filter((tailbar) => tailbar && tailbar.trim())
+              .join("; ") || "";
 
-            if (!targetBarilgaForToot) {
-              continue; // Skip if barilga not found
-            }
-
-            const duuregNerForToot =
-              targetBarilgaForToot.tokhirgoo?.duuregNer ||
-              tootEntry.duureg ||
-              duuregNer ||
-              "";
-            // Normalize horoo to always be an object format
-            let horooDataForToot =
-              targetBarilgaForToot.tokhirgoo?.horoo ||
-              tootEntry.horoo ||
-              horooData ||
-              {};
-            if (typeof horooDataForToot === "string") {
-              horooDataForToot = {
-                ner: horooDataForToot,
-                kod: horooDataForToot,
-              };
-            } else if (
-              !horooDataForToot ||
-              typeof horooDataForToot !== "object"
+          const niitTulbur = ashiglaltiinZardluudData.reduce((total, zardal) => {
+            const tariff = zardal.tariff || 0;
+            const isLiftItem = zardal.zardliinTurul === "Лифт";
+            if (
+              isLiftItem &&
+              tootEntry.davkhar &&
+              choloolugdokhDavkhar.includes(tootEntry.davkhar)
             ) {
-              horooDataForToot = {};
+              return total;
             }
-            const sohNerForToot =
-              targetBarilgaForToot.tokhirgoo?.sohNer ||
-              tootEntry.soh ||
-              sohNer ||
+            return total + tariff;
+          }, 0);
+
+          // Check for CANCELLED contract to reactivate
+          const existingCancelledGeree = await GereeModel.findOne({
+            toot: tootEntry.toot,
+            barilgiinId: currentBarilgiinId,
+            tuluv: "Цуцалсан",
+          });
+
+          let finalGereeId;
+
+          if (existingCancelledGeree) {
+            isReactivating = true;
+            const updateData = {
+              tuluv: "Идэвхтэй",
+              gereeniiOgnoo: new Date(),
+              orshinSuugchId: orshinSuugch._id.toString(),
+              zardluud: zardluudArray,
+              niitTulbur: niitTulbur,
+              ashiglaltiinZardal: 0,
+              khonogoorBodokhEsekh:
+                req.body.khonogoorBodokhEsekh === true ||
+                req.body.khonogoorBodokhEsekh === "true",
+              bodokhKhonog: Number(req.body.bodokhKhonog) || 0,
+              ovog: req.body.ovog || existingCancelledGeree.ovog,
+              ner: req.body.ner || existingCancelledGeree.ner,
+              register: req.body.register || existingCancelledGeree.register,
+              utas: [req.body.utas],
+              mail: req.body.mail || existingCancelledGeree.mail,
+              toot: tootEntry.toot,
+              davkhar: tootEntry.davkhar || "",
+              orts: tootEntry.orts || "",
+              bairNer:
+                targetBarilgaForToot?.ner ||
+                existingCancelledGeree.bairNer ||
+                "",
+              duureg: tootEntry.duureg || existingCancelledGeree.duureg,
+              horoo: tootEntry.horoo || existingCancelledGeree.horoo,
+              sohNer: tootEntry.soh || existingCancelledGeree.sohNer,
+              umnukhZaalt:
+                tootEntry.tsahilgaaniiZaalt !== undefined
+                  ? tootEntry.tsahilgaaniiZaalt
+                  : tsahilgaaniiZaalt,
+              suuliinZaalt:
+                tootEntry.tsahilgaaniiZaalt !== undefined
+                  ? tootEntry.tsahilgaaniiZaalt
+                  : tsahilgaaniiZaalt,
+              zaaltTog: 0,
+              zaaltUs: 0,
+            };
+
+            if (req.body.tailbar) {
+              updateData.temdeglel = req.body.tailbar;
+              updateData.tailbar = req.body.tailbar;
+            }
+
+            if (tootEntry.ekhniiUldegdel !== undefined) {
+              updateData.ekhniiUldegdel =
+                parseFloat(tootEntry.ekhniiUldegdel) || 0;
+            } else if (req.body.ekhniiUldegdel !== undefined) {
+              updateData.ekhniiUldegdel =
+                parseFloat(req.body.ekhniiUldegdel) || 0;
+            }
+
+            const updatedGeree = await GereeModel.findByIdAndUpdate(
+              existingCancelledGeree._id,
+              { $set: updateData },
+              { new: true },
+            );
+            finalGereeId = updatedGeree._id;
+          } else {
+            // Create NEW contract
+            const duuregToot =
+              targetBarilgaForToot?.tokhirgoo?.duuregNer ||
+              tootEntry.duureg ||
               "";
+            let horooToot =
+              targetBarilgaForToot?.tokhirgoo?.horoo || tootEntry.horoo || {};
+            if (typeof horooToot === "string")
+              horooToot = { ner: horooToot, kod: horooToot };
+            const sohToot =
+              targetBarilgaForToot?.tokhirgoo?.sohNer || tootEntry.soh || "";
 
             const contractData = {
-              gereeniiDugaar: `ГД-${Date.now().toString().slice(-8)}`,
+              gereeniiDugaar: `ГД-${Date.now().toString().slice(-8)}-${Math.floor(Math.random() * 100)}`,
               gereeniiOgnoo: new Date(),
               turul: "Үндсэн",
               tuluv: "Идэвхтэй",
@@ -1384,18 +1337,22 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
               mail: req.body.mail || "",
               baiguullagiinId: baiguullaga._id,
               baiguullagiinNer: baiguullaga.ner,
-              barilgiinId: tootEntry.barilgiinId || barilgiinId || "",
-              tulukhOgnoo: await getDueOgnooHelper(tukhainBaaziinKholbolt, baiguullaga._id, tootEntry.barilgiinId || barilgiinId),
+              barilgiinId: currentBarilgiinId,
+              tulukhOgnoo: await getDueOgnooHelper(
+                tukhainBaaziinKholbolt,
+                baiguullaga._id,
+                currentBarilgiinId,
+              ),
               ashiglaltiinZardal: 0,
               niitTulbur: niitTulbur,
               toot: tootEntry.toot,
               davkhar: tootEntry.davkhar || "",
-              orts: tootEntry.orts || req.body.orts || "",
-              bairNer: tootEntry.bairniiNer || targetBarilgaForToot.ner || "",
-              sukhBairshil: `${duuregNerForToot}, ${horooDataForToot.ner || ""}, ${sohNerForToot}`,
-              duureg: duuregNerForToot,
-              horoo: horooDataForToot,
-              sohNer: sohNerForToot,
+              orts: tootEntry.orts || "",
+              bairNer: targetBarilgaForToot?.ner || "",
+              sukhBairshil: `${duuregToot}, ${horooToot?.ner || ""}, ${sohToot}`,
+              duureg: duuregToot,
+              horoo: horooToot,
+              sohNer: sohToot,
               burtgesenAjiltan: orshinSuugch._id,
               orshinSuugchId: orshinSuugch._id.toString(),
               temdeglel:
@@ -1404,35 +1361,40 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
               tailbar: req.body.tailbar || tailbarFromZardluud || "",
               actOgnoo: new Date(),
               baritsaaniiUldegdel: 0,
-              ekhniiUldegdel: tootEntry.ekhniiUldegdel !== undefined
-                ? tootEntry.ekhniiUldegdel
-                : req.body.ekhniiUldegdel
-                  ? parseFloat(req.body.ekhniiUldegdel) || 0
-                  : 0,
-              umnukhZaalt: tootEntry.tsahilgaaniiZaalt !== undefined
-                ? tootEntry.tsahilgaaniiZaalt
-                : tsahilgaaniiZaalt,
-              suuliinZaalt: tootEntry.tsahilgaaniiZaalt !== undefined
-                ? tootEntry.tsahilgaaniiZaalt
-                : tsahilgaaniiZaalt,
+              ekhniiUldegdel:
+                tootEntry.ekhniiUldegdel !== undefined
+                  ? parseFloat(tootEntry.ekhniiUldegdel)
+                  : parseFloat(req.body.ekhniiUldegdel) || 0,
+              umnukhZaalt:
+                tootEntry.tsahilgaaniiZaalt !== undefined
+                  ? parseFloat(tootEntry.tsahilgaaniiZaalt)
+                  : tsahilgaaniiZaalt,
+              suuliinZaalt:
+                tootEntry.tsahilgaaniiZaalt !== undefined
+                  ? parseFloat(tootEntry.tsahilgaaniiZaalt)
+                  : tsahilgaaniiZaalt,
               zaaltTog: 0,
               zaaltUs: 0,
               zardluud: zardluudArray,
-              khonogoorBodokhEsekh: req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true",
+              khonogoorBodokhEsekh:
+                req.body.khonogoorBodokhEsekh === true ||
+                req.body.khonogoorBodokhEsekh === "true",
               bodokhKhonog: Number(req.body.bodokhKhonog) || 0,
               segmentuud: [],
               khungulultuud: [],
             };
 
-            const geree = new Geree(tukhainBaaziinKholbolt)(contractData);
-            await geree.save();
+            const newGeree = new Geree(tukhainBaaziinKholbolt)(contractData);
+            await newGeree.save();
+            finalGereeId = newGeree._id;
+          }
 
-            // Create invoice immediately (Standardized Service)
+          // Create initial invoice
+          if (finalGereeId) {
             try {
-              const invoiceService = require("../services/invoiceService");
               await invoiceService.createInvoiceForContract(
                 tukhainBaaziinKholbolt,
-                geree._id,
+                finalGereeId,
                 {
                   billingDate: new Date(),
                   forceEmpty: false,
@@ -1441,44 +1403,23 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
                 },
               );
             } catch (invErr) {
-              console.error("Error creating initial invoice during registration:", invErr);
-            }
-
-            // Update davkhar with toot if provided
-            if (tootEntry.toot && tootEntry.davkhar) {
-              await exports.updateDavkharWithToot(
-                baiguullaga,
-                tootEntry.barilgiinId || barilgiinId,
-                tootEntry.davkhar,
-                tootEntry.toot,
-                tukhainBaaziinKholbolt,
-                tootEntry.orts || req.body.orts || "1",
-              );
+              console.error("Error creating initial invoice:", invErr);
             }
           }
-        } else {
-          // If reactivating, we should also try to create/ensure invoice exists
-          if (existingCancelledGeree && tukhainBaaziinKholbolt) {
-            const GereeModel = Geree(tukhainBaaziinKholbolt);
-            const reactivatedGeree = await GereeModel.findById(
-              existingCancelledGeree._id,
+
+          // Update building config (if needed)
+          if (tootEntry.toot && tootEntry.davkhar) {
+            await exports.updateDavkharWithToot(
+              baiguullaga,
+              tootEntry.davkhar,
+              tootEntry.toot,
+              currentBarilgiinId,
+              tootEntry.orts || "1",
             );
-            if (reactivatedGeree) {
-              try {
-                const {
-                  gereeNeesNekhemjlekhUusgekh,
-                } = require("./nekhemjlekhController");
-                await gereeNeesNekhemjlekhUusgekh(
-                  reactivatedGeree,
-                  baiguullaga,
-                  tukhainBaaziinKholbolt,
-                  "automataar",
-                  true,
-                );
-              } catch (invErr) {}
-            }
           }
         }
+
+
       }
     } catch (contractError) {
       // Don't fail registration if contract creation fails - user is already saved

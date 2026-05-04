@@ -2947,30 +2947,29 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
     };
     if (barilgiinId) match.barilgiinId = String(barilgiinId);
 
-    // Fetch invoices (sorted by createdAt ascending so latest ones overwrite earlier ones in same month)
-    const invoices = await NekhemjlekhiinTuukh(kholbolt).find(match).sort({ createdAt: 1 }).lean();
+    // Fetch invoices and standalone ledger entries
+    const [invoices, standaloneEntries] = await Promise.all([
+      NekhemjlekhiinTuukh(kholbolt).find(match).sort({ createdAt: 1 }).lean(),
+      GuilgeeAvlaguud(kholbolt).find(match).lean(),
+    ]);
 
     // Pivot data
     const residentMap = new Map();
     const periods = new Set();
 
-    for (const inv of invoices) {
-      const gid = inv.gereeniiId || inv.gereeniiDugaar || "unknown";
-      const invDate = inv.ognoo ? new Date(inv.ognoo) : null;
-      const monthKey = invDate ? `${invDate.getFullYear()}-${String(invDate.getMonth() + 1).padStart(2, "0")}` : "unknown";
-      periods.add(monthKey);
-
+    // Helper to get or create resident entry
+    const getOrCreateRes = (gid, item) => {
       if (!residentMap.has(gid)) {
         residentMap.set(gid, {
-          gereeniiId: inv.gereeniiId || "",
-          gereeniiDugaar: inv.gereeniiDugaar || "",
-          ovog: inv.ovog || "",
-          ner: inv.ner || "",
-          toot: inv.toot || inv.medeelel?.toot || "",
-          davkhar: inv.davkhar || "",
-          bairNer: inv.bairNer || "",
-          orts: inv.orts || "",
-          utas: Array.isArray(inv.utas) ? inv.utas : inv.utas ? [inv.utas] : [],
+          gereeniiId: item.gereeniiId || "",
+          gereeniiDugaar: item.gereeniiDugaar || "",
+          ovog: item.ovog || "",
+          ner: item.ner || "",
+          toot: item.toot || item.medeelel?.toot || "",
+          davkhar: item.davkhar || "",
+          bairNer: item.bairNer || "",
+          orts: item.orts || "",
+          utas: Array.isArray(item.utas) ? item.utas : item.utas ? [item.utas] : [],
           months: {},
           niitTulukh: 0,
           niitTulsun: 0,
@@ -2978,33 +2977,67 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
           earliestOgnoo: null,
         });
       }
+      return residentMap.get(gid);
+    };
 
-      const resData = residentMap.get(gid);
+    // 1. Process Invoices
+    for (const inv of invoices) {
+      const gid = String(inv.gereeniiId || inv.gereeniiDugaar || "unknown");
+      const invDate = inv.ognoo ? new Date(inv.ognoo) : null;
+      const monthKey = invDate ? `${invDate.getFullYear()}-${String(invDate.getMonth() + 1).padStart(2, "0")}` : "unknown";
+      if (monthKey !== "unknown") periods.add(monthKey);
+
+      const resData = getOrCreateRes(gid, inv);
       
-      // Track starting balance (ekhnii uldegdel from the earliest invoice in range)
+      // Track starting balance from earliest invoice
       if (invDate && (!resData.earliestOgnoo || invDate < resData.earliestOgnoo)) {
         resData.earliestOgnoo = invDate;
         resData.startingBalance = Number(inv.ekhniiUldegdel) || 0;
       }
 
-      // If we have an existing entry for this month, subtract its old values first (deduplication)
-      if (resData.months[monthKey]) {
-        resData.niitTulukh -= resData.months[monthKey].billed;
-        resData.niitTulsun -= resData.months[monthKey].paid;
+      if (!resData.months[monthKey]) {
+        resData.months[monthKey] = { billed: 0, paid: 0, status: "Төлөөгүй" };
       }
 
       const billed = Number(inv.niitTulburOriginal != null ? inv.niitTulburOriginal : inv.niitTulbur) || 0;
       const paid = (inv.paymentHistory || []).reduce((s, p) => s + (Number(p.dun) || 0), 0);
 
-      // Set current month to the latest invoice values (overwriting previous ones)
-      resData.months[monthKey] = {
-        billed: billed,
-        paid: paid,
-        status: inv.tuluv || "Төлөөгүй",
-      };
+      resData.months[monthKey].billed += billed;
+      resData.months[monthKey].paid += paid;
+      if (inv.tuluv === "Төлсөн") resData.months[monthKey].status = "Төлсөн";
 
       resData.niitTulukh += billed;
       resData.niitTulsun += paid;
+    }
+
+    // 2. Process Standalone Ledger Entries (including Initial Balance)
+    for (const s of standaloneEntries) {
+      if (s.nekhemjlekhId) continue; // Already counted in invoices
+
+      const gid = String(s.gereeniiId || s.gereeniiDugaar || "unknown");
+      const sDate = s.ognoo || s.createdAt ? new Date(s.ognoo || s.createdAt) : null;
+      const monthKey = sDate ? `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, "0")}` : "unknown";
+      if (monthKey !== "unknown") periods.add(monthKey);
+
+      const resData = getOrCreateRes(gid, s);
+
+      if (!resData.months[monthKey]) {
+        resData.months[monthKey] = { billed: 0, paid: 0, status: "Төлөөгүй" };
+      }
+
+      // If it's an initial balance ledger item, it contributes to startingBalance
+      if (s.ekhniiUldegdelEsekh) {
+        resData.startingBalance += Number(s.undsenDun || s.tulukhDun || 0);
+      } else {
+        const billed = Number(s.tulukhDun || s.undsenDun || 0);
+        const paid = Number(s.tulsunDun || 0);
+
+        resData.months[monthKey].billed += billed;
+        resData.months[monthKey].paid += paid;
+        
+        resData.niitTulukh += billed;
+        resData.niitTulsun += paid;
+      }
     }
 
     let list = Array.from(residentMap.values());
