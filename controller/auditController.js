@@ -1,5 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const ZasakhTuukh = require("../models/zasakhTuukh");
+const ZassanBarimt = require("../models/zassanBarimt");
 const UstgakhTuukh = require("../models/ustgakhTuukh");
 
 /**
@@ -27,41 +28,60 @@ exports.getZasakhTuukh = asyncHandler(async (req, res, next) => {
     khuudasniiKhemjee = 50,
   } = req.query;
 
-  const match = {};
+  const matchLegacy = {};
+  const matchNew = {};
 
-  if (modelName) match.modelName = modelName;
-  if (documentId) match.documentId = documentId.toString();
-  if (ajiltniiId) match.ajiltniiId = ajiltniiId.toString();
-  if (baiguullagiinId) match.baiguullagiinId = baiguullagiinId.toString();
+  if (modelName) {
+    matchLegacy.modelName = modelName;
+    matchNew.classType = modelName;
+  }
+  if (documentId) {
+    matchLegacy.documentId = documentId.toString();
+    matchNew.classId = documentId.toString();
+  }
+  if (ajiltniiId) {
+    matchLegacy.ajiltniiId = ajiltniiId.toString();
+    matchNew.ajiltniiId = ajiltniiId.toString();
+  }
+  if (baiguullagiinId) {
+    matchLegacy.baiguullagiinId = baiguullagiinId.toString();
+    matchNew.baiguullagiinId = baiguullagiinId.toString();
+  }
 
   // Date range filter
   if (ekhlekhOgnoo || duusakhOgnoo) {
-    const start = ekhlekhOgnoo
-      ? new Date(ekhlekhOgnoo)
-      : new Date("1970-01-01");
-    const end = duusakhOgnoo
-      ? new Date(duusakhOgnoo)
-      : new Date("2999-12-31");
-    match.ognoo = { $gte: start, $lte: end };
+    const start = ekhlekhOgnoo ? new Date(ekhlekhOgnoo) : new Date("1970-01-01");
+    const end = duusakhOgnoo ? new Date(duusakhOgnoo) : new Date("2999-12-31");
+    matchLegacy.ognoo = { $gte: start, $lte: end };
+    matchNew.createdAt = { $gte: start, $lte: end };
   }
 
   const skip = (Number(khuudasniiDugaar) - 1) * Number(khuudasniiKhemjee);
 
-  const [list, niitMur] = await Promise.all([
-    ZasakhTuukh(db.erunkhiiKholbolt)
-      .find(match)
-      .sort({ ognoo: -1 })
-      .skip(skip)
-      .limit(Number(khuudasniiKhemjee))
-      .lean(),
-    ZasakhTuukh(db.erunkhiiKholbolt).countDocuments(match),
+  // Fetch from both collections
+  const [legacyList, newList, legacyCount, newCount] = await Promise.all([
+    ZasakhTuukh(db.erunkhiiKholbolt).find(matchLegacy).sort({ ognoo: -1 }).lean(),
+    ZassanBarimt(db.erunkhiiKholbolt).find(matchNew).sort({ createdAt: -1 }).lean(),
+    ZasakhTuukh(db.erunkhiiKholbolt).countDocuments(matchLegacy),
+    ZassanBarimt(db.erunkhiiKholbolt).countDocuments(matchNew),
   ]);
 
+  // Combine and sort by date
+  // For ZassanBarimt, we'll map 'createdAt' to 'ognoo' for consistent sorting if needed, 
+  // but the frontend normalization handles multiple date fields.
+  const combined = [...legacyList, ...newList].sort((a, b) => {
+    const dateA = new Date(a.ognoo || a.createdAt);
+    const dateB = new Date(b.ognoo || b.createdAt);
+    return dateB - dateA;
+  });
+
+  const niitMur = legacyCount + newCount;
+  const paginated = combined.slice(skip, skip + Number(khuudasniiKhemjee));
   const niitKhuudas = Math.ceil(niitMur / Number(khuudasniiKhemjee));
 
   res.json({
     success: true,
-    data: list,
+    data: paginated,
     pagination: {
       khuudasniiDugaar: Number(khuudasniiDugaar),
       khuudasniiKhemjee: Number(khuudasniiKhemjee),
@@ -73,8 +93,6 @@ exports.getZasakhTuukh = asyncHandler(async (req, res, next) => {
 
 /**
  * Get delete history
- * Query params: same as zasakhTuukh, plus:
- * - deletionType: "hard" or "soft"
  */
 exports.getUstgakhTuukh = asyncHandler(async (req, res, next) => {
   const { db } = require("zevbackv2");
@@ -100,12 +118,8 @@ exports.getUstgakhTuukh = asyncHandler(async (req, res, next) => {
 
   // Date range filter
   if (ekhlekhOgnoo || duusakhOgnoo) {
-    const start = ekhlekhOgnoo
-      ? new Date(ekhlekhOgnoo)
-      : new Date("1970-01-01");
-    const end = duusakhOgnoo
-      ? new Date(duusakhOgnoo)
-      : new Date("2999-12-31");
+    const start = ekhlekhOgnoo ? new Date(ekhlekhOgnoo) : new Date("1970-01-01");
+    const end = duusakhOgnoo ? new Date(duusakhOgnoo) : new Date("2999-12-31");
     match.ognoo = { $gte: start, $lte: end };
   }
 
@@ -142,13 +156,20 @@ exports.getDocumentHistory = asyncHandler(async (req, res, next) => {
   const { db } = require("zevbackv2");
   const { modelName, documentId } = req.params;
 
-  const [edits, deletes] = await Promise.all([
+  const [legacyEdits, newEdits, deletes] = await Promise.all([
     ZasakhTuukh(db.erunkhiiKholbolt)
       .find({
         modelName: modelName,
         documentId: documentId.toString(),
       })
       .sort({ ognoo: -1 })
+      .lean(),
+    ZassanBarimt(db.erunkhiiKholbolt)
+      .find({
+        classType: modelName,
+        classId: documentId.toString(),
+      })
+      .sort({ createdAt: -1 })
       .lean(),
     UstgakhTuukh(db.erunkhiiKholbolt)
       .find({
@@ -160,15 +181,15 @@ exports.getDocumentHistory = asyncHandler(async (req, res, next) => {
   ]);
 
   // Combine and sort by date
-  const allHistory = [...edits, ...deletes].sort(
-    (a, b) => new Date(b.ognoo) - new Date(a.ognoo)
+  const allHistory = [...legacyEdits, ...newEdits, ...deletes].sort(
+    (a, b) => new Date(b.ognoo || b.createdAt) - new Date(a.ognoo || a.createdAt)
   );
 
   res.json({
     success: true,
     data: allHistory,
     summary: {
-      totalEdits: edits.length,
+      totalEdits: legacyEdits.length + newEdits.length,
       totalDeletes: deletes.length,
       totalHistory: allHistory.length,
     },
@@ -188,46 +209,47 @@ exports.getAjiltanHistory = asyncHandler(async (req, res, next) => {
     khuudasniiKhemjee = 50,
   } = req.query;
 
-  const match = { ajiltniiId: ajiltniiId.toString() };
+  const matchLegacy = { ajiltniiId: ajiltniiId.toString() };
+  const matchNew = { ajiltniiId: ajiltniiId.toString() };
 
   // Date range filter
   if (ekhlekhOgnoo || duusakhOgnoo) {
-    const start = ekhlekhOgnoo
-      ? new Date(ekhlekhOgnoo)
-      : new Date("1970-01-01");
-    const end = duusakhOgnoo
-      ? new Date(duusakhOgnoo)
-      : new Date("2999-12-31");
-    match.ognoo = { $gte: start, $lte: end };
+    const start = ekhlekhOgnoo ? new Date(ekhlekhOgnoo) : new Date("1970-01-01");
+    const end = duusakhOgnoo ? new Date(duusakhOgnoo) : new Date("2999-12-31");
+    matchLegacy.ognoo = { $gte: start, $lte: end };
+    matchNew.createdAt = { $gte: start, $lte: end };
   }
 
   const skip = (Number(khuudasniiDugaar) - 1) * Number(khuudasniiKhemjee);
 
-  const [edits, deletes] = await Promise.all([
+  const [legacyEdits, newEdits, deletes] = await Promise.all([
     ZasakhTuukh(db.erunkhiiKholbolt)
-      .find(match)
+      .find(matchLegacy)
       .sort({ ognoo: -1 })
-      .skip(skip)
-      .limit(Number(khuudasniiKhemjee))
+      .lean(),
+    ZassanBarimt(db.erunkhiiKholbolt)
+      .find(matchNew)
+      .sort({ createdAt: -1 })
       .lean(),
     UstgakhTuukh(db.erunkhiiKholbolt)
-      .find(match)
+      .find(matchLegacy)
       .sort({ ognoo: -1 })
-      .skip(skip)
-      .limit(Number(khuudasniiKhemjee))
       .lean(),
   ]);
 
-  const allHistory = [...edits, ...deletes].sort(
-    (a, b) => new Date(b.ognoo) - new Date(a.ognoo)
+  const allHistory = [...legacyEdits, ...newEdits, ...deletes].sort(
+    (a, b) => new Date(b.ognoo || b.createdAt) - new Date(a.ognoo || a.createdAt)
   );
+
+  const paginated = allHistory.slice(skip, skip + Number(khuudasniiKhemjee));
 
   res.json({
     success: true,
-    data: allHistory,
+    data: paginated,
     summary: {
-      totalEdits: edits.length,
+      totalEdits: legacyEdits.length + newEdits.length,
       totalDeletes: deletes.length,
     },
   });
 });
+
