@@ -13,6 +13,7 @@ const {
   tailanZogsool,
   tailanNegtgelTailan,
   tailanOrshinSuugchSariinMatrix,
+  tailanTulburDugnelt,
 } = require("../controller/tailan");
 
 
@@ -48,5 +49,8 @@ router.all("/tailan/negtgel", tokenShalgakh, tailanNegtgelTailan);
 
 // Урвуу хүснэгтэн тайлан - Сарын төлбөрийг сар сараар харуулах
 router.all("/tailan/resident-monthly-matrix", tokenShalgakh, tailanOrshinSuugchSariinMatrix);
+
+// Тулбурийн дүгнэлт - Орлого болон сарын гүйцэтгэл (MongoDB aggregate, шууд GuilgeeAvlaguud-с)
+router.all("/tailan/tulbur-dugnelt", tokenShalgakh, tailanTulburDugnelt);
 
 module.exports = router;

@@ -3172,3 +3172,71 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
   }
 });
 
+
+// ===== ТУЛБУРИЙН ДҮГНЭЛТ =====
+// Орлого болон сарын гүйцэтгэлийг шууд GuilgeeAvlaguud-с MongoDB aggregate-аар тооцох
+// invoice-ийн tulsunDun-г ашиглахгүй — зөвхөн бодит тулбурийн бичлэгүүд (dun < 0)
+exports.tailanTulburDugnelt = asyncHandler(async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+
+    const source = req.method === "GET" ? req.query : req.body;
+    const { baiguullagiinId, barilgiinId, ekhlekhOgnoo, duusakhOgnoo } = source || {};
+
+    if (!baiguullagiinId) {
+      return res.status(400).json({ success: false, message: "baiguullagiinId is required" });
+    }
+
+    const kholbolt = db.kholboltuud.find(
+      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
+    );
+    if (!kholbolt) {
+      return res.status(404).json({ success: false, message: "Connection not found" });
+    }
+
+    // Base match: only payment records (tulsunDun > 0 means dun was negative = payment)
+    const baseMatch = {
+      baiguullagiinId: String(baiguullagiinId),
+      tulsunDun: { $gt: 0 },
+    };
+    if (barilgiinId) baseMatch.barilgiinId = String(barilgiinId);
+
+    // Monthly match: same but with date range on ognoo
+    const monthlyMatch = { ...baseMatch };
+    if (ekhlekhOgnoo && duusakhOgnoo) {
+      const start = new Date(ekhlekhOgnoo);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(duusakhOgnoo);
+      end.setHours(23, 59, 59, 999);
+      monthlyMatch.ognoo = { $gte: start, $lte: end };
+    }
+
+    // Run both aggregations in parallel
+    const [allTimeResult, monthlyResult] = await Promise.all([
+      GuilgeeAvlaguud(kholbolt).aggregate([
+        { $match: baseMatch },
+        { $group: { _id: null, sum: { $sum: "$tulsunDun" }, count: { $sum: 1 } } },
+      ]),
+      GuilgeeAvlaguud(kholbolt).aggregate([
+        { $match: monthlyMatch },
+        { $group: { _id: null, sum: { $sum: "$tulsunDun" }, count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    res.json({
+      success: true,
+      allTime: {
+        sum: allTimeResult[0]?.sum ?? 0,
+        count: allTimeResult[0]?.count ?? 0,
+      },
+      monthly: {
+        sum: monthlyResult[0]?.sum ?? 0,
+        count: monthlyResult[0]?.count ?? 0,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
