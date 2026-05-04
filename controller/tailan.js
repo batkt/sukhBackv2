@@ -373,17 +373,22 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
     const invoiceMatch = { ...metadataMatch };
     if (dateFilter.$gte) invoiceMatch.ognoo = dateFilter;
 
-    // 2. Get Standalone Tulukh (Receivables)
-    const tulukhMatch = {
+    // 2. Get Standalone Tulukh (Receivables — charges without invoice link)
+    let tulukhMatch = {
       baiguullagiinId: String(baiguullagiinId),
       nekhemjlekhId: { $in: [null, ""] },
     };
+
+    // 3. Get All Payments (dun < 0 in ledger)
+    let tulsunMatch = {
+      baiguullagiinId: String(baiguullagiinId),
+    };
+
     // If filtering by building, get all contract IDs for that building to ensure we capture all associated ledger entries
-    let buildingGereeIds = [];
     if (barilgiinId) {
       const GereeModel = require("../models/geree");
       const gerees = await GereeModel(kholbolt).find({ barilgiinId: String(barilgiinId) }, { _id: 1 }).lean();
-      buildingGereeIds = gerees.map(g => String(g._id));
+      const buildingGereeIds = gerees.map(g => String(g._id));
       
       const bMatch = {
         $or: [
@@ -393,7 +398,7 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
       };
       tulukhMatch = { ...tulukhMatch, ...bMatch };
       tulsunMatch = { ...tulsunMatch, ...bMatch };
-      invoiceMatch = { ...invoiceMatch, barilgiinId: String(barilgiinId) };
+      invoiceMatch.barilgiinId = String(barilgiinId);
     }
 
     if (dateFilter.$gte) {
@@ -3003,6 +3008,17 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
       return residentMap.get(gid);
     };
 
+    // Build payment lookup map: invoiceId -> total paid amount from ledger entries
+    // Payments are stored as GuilgeeAvlaguud records with nekhemjlekhId pointing to the invoice
+    const invoicePaymentMap = new Map(); // invoiceId -> { totalPaid, gereeniiId, monthKey }
+    for (const entry of standaloneEntries) {
+      if (!entry.nekhemjlekhId) continue; // standalone, not invoice-linked
+      const invId = String(entry.nekhemjlekhId);
+      const paidAmt = Math.abs(Number(entry.dun || 0)); // payments have negative dun
+      if (!invoicePaymentMap.has(invId)) invoicePaymentMap.set(invId, 0);
+      invoicePaymentMap.set(invId, invoicePaymentMap.get(invId) + paidAmt);
+    }
+
     // 1. Process Invoices
     for (const inv of invoices) {
       const gid = String(inv.gereeniiId || inv.gereeniiDugaar || "unknown");
@@ -3011,8 +3027,7 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
       if (monthKey !== "unknown") periods.add(monthKey);
 
       const resData = getOrCreateRes(gid, inv);
-      
-      // Track starting balance from earliest invoice
+
       if (invDate && (!resData.earliestOgnoo || invDate < resData.earliestOgnoo)) {
         resData.earliestOgnoo = invDate;
         resData.startingBalance = Number(inv.ekhniiUldegdel) || 0;
@@ -3023,7 +3038,10 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
       }
 
       const billed = Number(inv.niitTulburOriginal != null ? inv.niitTulburOriginal : inv.niitTulbur) || 0;
-      const paid = (inv.paymentHistory || []).reduce((s, p) => s + (Number(p.dun) || 0), 0);
+      // Look up actual payments from ledger (nekhemjlekhId-linked GuilgeeAvlaguud entries)
+      const paidFromLedger = invoicePaymentMap.get(String(inv._id)) || 0;
+      // Also fall back to inv.tulsunDun if the invoice itself tracks it
+      const paid = paidFromLedger || Number(inv.tulsunDun || 0);
 
       resData.months[monthKey].billed += billed;
       resData.months[monthKey].paid += paid;
@@ -3035,7 +3053,7 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
 
     // 2. Process Standalone Ledger Entries (including Initial Balance)
     for (const s of standaloneEntries) {
-      if (s.nekhemjlekhId) continue; // Already counted in invoices
+      if (s.nekhemjlekhId) continue; // Invoice-linked payments already counted above via invoicePaymentMap
 
       const gid = String(s.gereeniiId || s.gereeniiDugaar || "unknown");
       const sDate = s.ognoo || s.createdAt ? new Date(s.ognoo || s.createdAt) : null;
