@@ -4641,7 +4641,7 @@ exports.orshinSuugchOorooUstgakh = asyncHandler(async (req, res, next) => {
       if (conn) {
         await Geree(conn).updateMany(
           { orshinSuugchId: userIdString },
-          { $set: { tuluv: "Цуцалсан" } }
+          { $set: { tuluv: "Цуцалсан", tsutsalsanOgnoo: new Date() } }
         );
       }
     }
@@ -4729,7 +4729,7 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
       if (conn) {
         await Geree(conn).updateMany(
           { orshinSuugchId: userIdString },
-          { $set: { tuluv: "Цуцалсан" } }
+          { $set: { tuluv: "Цуцалсан", tsutsalsanOgnoo: new Date() } }
         );
       }
     }
@@ -5154,7 +5154,7 @@ exports.orshinSuugchTootUstgakh = asyncHandler(async (req, res, next) => {
           toot: String(toot).trim(),
           ...(barilgiinId ? { barilgiinId: String(barilgiinId) } : {}),
         },
-        { $set: { tuluv: "Цуцалсан" } },
+        { $set: { tuluv: "Цуцалсан", tsutsalsanOgnoo: new Date() } },
       );
     }
 

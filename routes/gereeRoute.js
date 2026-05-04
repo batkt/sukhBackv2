@@ -136,7 +136,37 @@ router.get("/geree", tokenShalgakh, async (req, res, next) => {
      const body = req.query;
      if (!!body?.query) body.query = JSON.parse(body.query);
      if (!!body?.order) body.order = JSON.parse(body.order);
-     khuudaslalt(Geree(req.body.tukhainBaaziinKholbolt), body).then(res.send.bind(res)).catch(next);
+     
+     const result = await khuudaslalt(Geree(req.body.tukhainBaaziinKholbolt), body);
+     
+     // Calculate uldegdel for each returned geree based on ledger
+     if (result.jagsaalt && result.jagsaalt.length > 0) {
+       const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud")(req.body.tukhainBaaziinKholbolt);
+       const gereeIds = result.jagsaalt.map(g => String(g._id));
+       
+       const ledgerStats = await GuilgeeAvlaguud.aggregate([
+         { $match: { gereeniiId: { $in: gereeIds } } },
+         {
+           $group: {
+             _id: "$gereeniiId",
+             totalBalance: { $sum: "$dun" },
+           }
+         }
+       ]);
+       
+       const balanceMap = {};
+       ledgerStats.forEach(s => {
+         balanceMap[String(s._id)] = s.totalBalance || 0;
+       });
+       
+       result.jagsaalt = result.jagsaalt.map(g => {
+         const gObj = g.toObject ? g.toObject() : g;
+         gObj.uldegdel = balanceMap[String(g._id)] || 0;
+         return gObj;
+       });
+     }
+     
+     res.send(result);
   } catch (e) { next(e); }
 });
 router.post("/geree", tokenShalgakh, gereeController.createGeree);
