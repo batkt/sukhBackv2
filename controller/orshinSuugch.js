@@ -851,7 +851,9 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
               davkhar: determinedDavkhar || req.body.davkhar,
               orts: req.body.orts || "1",
               ekhniiUldegdel: req.body.ekhniiUldegdel,
-              tsahilgaaniiZaalt: req.body.tsahilgaaniiZaalt
+              tsahilgaaniiZaalt: req.body.tsahilgaaniiZaalt,
+              khonogoorBodokhEsekh: req.body.khonogoorBodokhEsekh,
+              bodokhKhonog: req.body.bodokhKhonog,
             }];
 
         for (const unit of unitsToProcess) {
@@ -875,6 +877,8 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
             walletUserId: walletUserId || orshinSuugch.walletUserId || "",
             ekhniiUldegdel: parseFloat(unit.ekhniiUldegdel) || 0,
             tsahilgaaniiZaalt: parseFloat(unit.tsahilgaaniiZaalt) || 0,
+            khonogoorBodokhEsekh: unit.khonogoorBodokhEsekh === true || unit.khonogoorBodokhEsekh === "true",
+            bodokhKhonog: Number(unit.bodokhKhonog) || 0,
             createdAt: new Date(),
           };
 
@@ -902,6 +906,8 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
             orshinSuugch.bairniiNer = targetBarilga.ner || "";
             orshinSuugch.ekhniiUldegdel = parseFloat(unit.ekhniiUldegdel) || 0;
             orshinSuugch.tsahilgaaniiZaalt = parseFloat(unit.tsahilgaaniiZaalt) || 0;
+            orshinSuugch.khonogoorBodokhEsekh = unit.khonogoorBodokhEsekh === true || unit.khonogoorBodokhEsekh === "true";
+            orshinSuugch.bodokhKhonog = Number(unit.bodokhKhonog) || 0;
           }
         }
       }
@@ -5292,9 +5298,14 @@ exports.syncResidentContracts = async function syncResidentContracts(
         niitTulbur: niitTulbur,
         ashiglaltiinZardal: 0,
         khonogoorBodokhEsekh:
-          req.body.khonogoorBodokhEsekh === true ||
-          req.body.khonogoorBodokhEsekh === "true",
-        bodokhKhonog: Number(req.body.bodokhKhonog) || 0,
+          tootEntry.khonogoorBodokhEsekh !== undefined
+            ? tootEntry.khonogoorBodokhEsekh
+            : req.body.khonogoorBodokhEsekh === true ||
+              req.body.khonogoorBodokhEsekh === "true",
+        bodokhKhonog:
+          tootEntry.bodokhKhonog !== undefined
+            ? Number(tootEntry.bodokhKhonog)
+            : Number(req.body.bodokhKhonog) || 0,
         ovog: req.body.ovog || orshinSuugch.ovog || existingCancelledGeree.ovog,
         ner: req.body.ner || orshinSuugch.ner || existingCancelledGeree.ner,
         register:
@@ -5414,9 +5425,14 @@ exports.syncResidentContracts = async function syncResidentContracts(
         zaaltUs: 0,
         zardluud: zardluudArray,
         khonogoorBodokhEsekh:
-          req.body.khonogoorBodokhEsekh === true ||
-          req.body.khonogoorBodokhEsekh === "true",
-        bodokhKhonog: Number(req.body.bodokhKhonog) || 0,
+          tootEntry.khonogoorBodokhEsekh !== undefined
+            ? tootEntry.khonogoorBodokhEsekh
+            : req.body.khonogoorBodokhEsekh === true ||
+              req.body.khonogoorBodokhEsekh === "true",
+        bodokhKhonog:
+          tootEntry.bodokhKhonog !== undefined
+            ? Number(tootEntry.bodokhKhonog)
+            : Number(req.body.bodokhKhonog) || 0,
         segmentuud: [],
         khungulultuud: [],
       };
