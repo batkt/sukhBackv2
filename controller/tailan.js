@@ -2374,62 +2374,99 @@ exports.tailanUdsanAvlaga = asyncHandler(async (req, res, next) => {
         .json({ success: false, message: "Холболтын мэдээлэл олдсонгүй" });
     }
 
-    const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+    const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+    const Geree = require("../models/geree");
 
-    // Calculate date 2 months ago
+    // 1. Get all active contracts for this building
+    const gereeMatch = {
+      baiguullagiinId: String(baiguullagiinId),
+      tuluv: { $nin: ["Цуцалсан", "цуцалсан", "tsutlsasan"] },
+    };
+    if (barilgiinId) gereeMatch.barilgiinId = String(barilgiinId);
+
+    const gerees = await Geree(kholbolt).find(gereeMatch).lean();
+
+    // 2. Calculate date 2 months ago
     const today = new Date();
     const twoMonthsAgo = new Date(today);
     twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
     twoMonthsAgo.setHours(0, 0, 0, 0);
 
-    // Find unpaid invoices where payment due date (tulukhOgnoo) is more than 2 months ago
-    const match = {
-      baiguullagiinId: String(baiguullagiinId),
-      tuluv: { $ne: "Төлсөн" }, // Not paid
-      tulukhOgnoo: { $lt: twoMonthsAgo }, // Due date is more than 2 months ago
-    };
+    // 3. For each contract, check ledger: has outstanding balance AND no payment in 2 months
+    const ledgerMatch = { baiguullagiinId: String(baiguullagiinId) };
+    if (barilgiinId) ledgerMatch.barilgiinId = String(barilgiinId);
 
-    if (barilgiinId) match.barilgiinId = String(barilgiinId);
+    // Get all ledger entries grouped by gereeniiId
+    const balancePipeline = [
+      { $match: ledgerMatch },
+      {
+        $group: {
+          _id: "$gereeniiId",
+          totalBalance: { $sum: "$dun" }, // dun > 0 charges, dun < 0 payments, sum = outstanding
+          lastPaymentDate: {
+            $max: {
+              $cond: [{ $lt: ["$dun", 0] }, "$ognoo", null],
+            },
+          },
+        },
+      },
+    ];
 
-    const docs = await NekhemjlekhiinTuukh(kholbolt)
-      .find(match)
-      .lean()
-      .sort({ tulukhOgnoo: 1 }); // Sort by due date, oldest first
+    const ledgerStats = await GuilgeeAvlaguud(kholbolt).aggregate(balancePipeline);
+
+    // Build lookup map: gereeniiId -> { totalBalance, lastPaymentDate }
+    const ledgerMap = {};
+    ledgerStats.forEach((s) => {
+      if (s._id) ledgerMap[String(s._id)] = s;
+    });
 
     const result = [];
     let totalSum = 0;
 
-    for (const d of docs) {
-      // Calculate months overdue
-      const dueDate = new Date(d.tulukhOgnoo);
-      const monthsOverdue = Math.floor(
-        (today - dueDate) / (1000 * 60 * 60 * 24 * 30)
-      );
+    for (const g of gerees) {
+      const gid = String(g._id);
+      const stats = ledgerMap[gid];
+
+      if (!stats) continue; // No ledger entries at all — skip
+
+      const balance = stats.totalBalance || 0;
+      if (balance <= 0) continue; // Fully paid or overpaid — skip
+
+      const lastPaid = stats.lastPaymentDate ? new Date(stats.lastPaymentDate) : null;
+
+      // If they never paid, or last payment was before 2 months ago → overdue
+      if (lastPaid && lastPaid >= twoMonthsAgo) continue; // Paid recently — skip
+
+      const monthsOverdue = lastPaid
+        ? Math.floor((today - lastPaid) / (1000 * 60 * 60 * 24 * 30))
+        : 99; // Never paid
 
       const row = {
-        gereeniiDugaar: d.gereeniiDugaar || "",
-        ovog: d.ovog || "",
-        ner: d.ner || "",
-        utas: Array.isArray(d.utas) ? d.utas.join(", ") : d.utas || "",
-        toot: d.toot || "",
-        davkhar: d.davkhar || "",
-        bairNer: d.bairNer || "",
-        ognoo: d.ognoo || null,
-        tulukhOgnoo: d.tulukhOgnoo || null,
-        niitTulbur: d.niitTulbur || 0,
-        tuluv: d.tuluv || "Төлөөгүй",
+        gereeniiDugaar: g.gereeniiDugaar || "",
+        ovog: g.ovog || "",
+        ner: g.ner || "",
+        utas: Array.isArray(g.utas) ? g.utas.join(", ") : g.utas || "",
+        toot: g.toot || "",
+        davkhar: g.davkhar || "",
+        bairNer: g.bairNer || "",
+        ognoo: g.gereeniiOgnoo || null,
+        niitTulbur: Math.round(balance * 100) / 100,
+        tuluv: "Төлөөгүй",
         monthsOverdue: monthsOverdue,
-        dugaalaltDugaar: d.dugaalaltDugaar || null,
+        lastPaymentDate: lastPaid || null,
       };
 
       result.push(row);
-      totalSum += d.niitTulbur || 0;
+      totalSum += balance;
     }
+
+    // Sort by months overdue descending (worst first)
+    result.sort((a, b) => b.monthsOverdue - a.monthsOverdue);
 
     res.json({
       success: true,
       total: result.length,
-      sum: totalSum,
+      sum: Math.round(totalSum * 100) / 100,
       list: result,
       filterDate: twoMonthsAgo,
       currentDate: today,
