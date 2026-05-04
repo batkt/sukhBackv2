@@ -4951,7 +4951,7 @@ exports.orshinSuugchOorooUstgakh = asyncHandler(async (req, res, next) => {
     // Don't delete nevtreltiinTuukh - keep login history
     // Don't delete ebarimt - keep all receipts
 
-    // Log deletion to audit before actually deleting
+    // Log deletion to audit before actually updating
     try {
       const { logDelete } = require("../services/auditService");
       const deletedDoc = orshinSuugch.toObject
@@ -4963,7 +4963,7 @@ exports.orshinSuugchOorooUstgakh = asyncHandler(async (req, res, next) => {
         "orshinSuugch",
         userId.toString(),
         deletedDoc,
-        "hard",
+        "soft",
         "Self-delete by user",
         {
           baiguullagiinId: orshinSuugch.baiguullagiinId,
@@ -4974,9 +4974,19 @@ exports.orshinSuugchOorooUstgakh = asyncHandler(async (req, res, next) => {
       // Don't block deletion if audit logging fails
     }
 
-    // Actually delete the orshinSuugch user account
-    // The gerees are marked as "Цуцалсан" and can be restored when they register again with the same utas
-    await OrshinSuugchModel.findByIdAndDelete(userId);
+    // Perform soft delete - preserve data but free up phone number and clear tokens
+    const deletedTimestamp = new Date().getTime();
+    await OrshinSuugchModel.findByIdAndUpdate(userId, {
+      $set: {
+        tuluv: "Cancelled",
+        nevtrekhNer: `deleted_${userId}_${deletedTimestamp}_${orshinSuugch.nevtrekhNer || orshinSuugch.utas}`,
+        utas: `deleted_${userId}_${deletedTimestamp}_${orshinSuugch.utas}`,
+        firebaseToken: null,
+        currentSessionId: null,
+        // Scramble password to prevent any further logins
+        nuutsUg: await require("bcrypt").hash(`DELETED_${deletedTimestamp}`, 10)
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -5039,7 +5049,7 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
     // Don't delete nevtreltiinTuukh - keep login history
     // Don't delete ebarimt - keep all receipts
 
-    // Log deletion to audit before actually deleting
+    // Log deletion to audit before actually updating
     try {
       const { logDelete } = require("../services/auditService");
       const deletedDoc = orshinSuugch.toObject
@@ -5051,7 +5061,7 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
         "orshinSuugch",
         userId.toString(),
         deletedDoc,
-        "hard",
+        "soft",
         "Admin delete",
         {
           baiguullagiinId: orshinSuugch.baiguullagiinId,
@@ -5062,12 +5072,21 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
       // Don't block deletion if audit logging fails
     }
 
-    // Actually delete the orshinSuugch user account
-    // The gerees are marked as "Цуцалсан" and can be restored when they register again with the same utas
-    console.log(`🗑️ [TRACE-DELETE-RESIDENT] Attempting to delete resident: ${userId}.`);
-    // Note: This operation should NOT affect Baiguullaga.
-    await OrshinSuugchModel.findByIdAndDelete(userId);
-    console.log(`✅ [TRACE-DELETE-RESIDENT] Resident ${userId} deleted successfully.`);
+    // Perform soft delete - preserve data but free up phone number and clear tokens
+    console.log(`🗑️ [TRACE-DELETE-RESIDENT] Performing soft delete for resident: ${userId}.`);
+    const deletedTimestamp = new Date().getTime();
+    await OrshinSuugchModel.findByIdAndUpdate(userId, {
+      $set: {
+        tuluv: "Cancelled",
+        nevtrekhNer: `deleted_${userId}_${deletedTimestamp}_${orshinSuugch.nevtrekhNer || orshinSuugch.utas}`,
+        utas: `deleted_${userId}_${deletedTimestamp}_${orshinSuugch.utas}`,
+        firebaseToken: null,
+        currentSessionId: null,
+        // Scramble password to prevent login
+        nuutsUg: await require("bcrypt").hash(`DELETED_${deletedTimestamp}`, 10)
+      }
+    });
+    console.log(`✅ [TRACE-DELETE-RESIDENT] Resident ${userId} soft-deleted successfully.`);
 
     res.status(200).json({
       success: true,

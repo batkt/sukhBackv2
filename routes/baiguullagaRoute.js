@@ -41,14 +41,12 @@ router.get("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
       });
     }
 
-    // If no barilgiinId provided, return full baiguullaga (default behavior)
     res.json(baiguullaga);
   } catch (error) {
     next(error);
   }
 });
 
-// Custom POST handler for updating baiguullaga (before crud to take precedence)
 router.post("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
