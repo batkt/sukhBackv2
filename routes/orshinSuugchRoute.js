@@ -40,6 +40,7 @@ const {
   getBuildingToots,
   getBuildingOrts,
   getProfileByPhoneOrCustomer,
+  orshinSuugchTootUstgakh,
 } = require("../controller/orshinSuugch");
 const aldaa = require("../components/aldaa");
 const session = require("../models/session");
@@ -105,19 +106,16 @@ router.use(orshinSuugchSessionShalgaya);
 
 const cacheMiddleware = require("../middleware/cacheMiddleware");
 
-// Custom DELETE handler for orshinSuugch - marks gerees as "Цуцалсан" before deleting
 router.delete("/orshinSuugch/:id", tokenShalgakh, orshinSuugchUstgakh);
 
-// Use crud for other operations (GET, POST, PUT) but not DELETE
+router.post("/orshinSuugch/remove-toot", tokenShalgakh, orshinSuugchTootUstgakh);
+
 router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
   try {
     const body = req.query;
-
-    // Extract baiguullagiinId and barilgiinId from query params
     const baiguullagiinId = body.baiguullagiinId;
     const barilgiinId = body.barilgiinId;
 
-    // baiguullagiinId is required for filtering
     if (!baiguullagiinId) {
       return res.status(400).json({
         success: false,
@@ -125,8 +123,6 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
         aldaa: "Байгууллагын ID заавал бөглөх шаардлагатай!",
       });
     }
-
-    // Initialize body.query if it doesn't exist
     if (!body.query) {
       body.query = {};
     } else if (typeof body.query === "string") {

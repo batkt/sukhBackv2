@@ -5400,3 +5400,101 @@ exports.getProfileByPhoneOrCustomer = asyncHandler(async (req, res, next) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+/**
+ * Remove a specific property (toot) from a resident's associations
+ */
+exports.orshinSuugchTootUstgakh = asyncHandler(async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const { residentId, baiguullagiinId, barilgiinId, toot } = req.body;
+
+    if (!residentId || !baiguullagiinId || !toot) {
+      throw new aldaa("residentId, baiguullagiinId, болон toot мэдээлэл заавал шаардлагатай!");
+    }
+
+    const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
+    const orshinSuugch = await OrshinSuugchModel.findById(residentId);
+
+    if (!orshinSuugch) {
+      throw new aldaa("Оршин суугч олдсонгүй!");
+    }
+
+    if (!Array.isArray(orshinSuugch.toots) || orshinSuugch.toots.length === 0) {
+      throw new aldaa("Устгах тоот олдсонгүй!");
+    }
+
+    // 1. Filter out the target toot
+    const originalLength = orshinSuugch.toots.length;
+    const updatedToots = orshinSuugch.toots.filter((t) => {
+      const match =
+        String(t.baiguullagiinId) === String(baiguullagiinId) &&
+        String(t.toot).trim() === String(toot).trim() &&
+        (!barilgiinId || String(t.barilgiinId) === String(barilgiinId));
+      return !match;
+    });
+
+    if (updatedToots.length === originalLength) {
+      throw new aldaa("Устгах тоот жагсаалтанд олдсонгүй!");
+    }
+
+    // 2. Update top-level fields if the primary property was removed
+    const primaryMatch =
+      String(orshinSuugch.baiguullagiinId) === String(baiguullagiinId) &&
+      String(orshinSuugch.toot).trim() === String(toot).trim() &&
+      (!barilgiinId || String(orshinSuugch.barilgiinId) === String(barilgiinId));
+
+    if (primaryMatch) {
+      if (updatedToots.length > 0) {
+        // Shift to the next available property
+        const nextToot = updatedToots[0];
+        orshinSuugch.baiguullagiinId = nextToot.baiguullagiinId;
+        orshinSuugch.baiguullagiinNer = nextToot.baiguullagiinNer;
+        orshinSuugch.barilgiinId = nextToot.barilgiinId;
+        orshinSuugch.bairniiNer = nextToot.bairniiNer;
+        orshinSuugch.toot = nextToot.toot;
+        orshinSuugch.davkhar = nextToot.davkhar;
+        orshinSuugch.orts = nextToot.orts;
+        orshinSuugch.duureg = nextToot.duureg;
+        orshinSuugch.horoo = nextToot.horoo;
+        orshinSuugch.soh = nextToot.soh;
+      } else {
+        // This was the last property - clear the fields but keep the user record
+        orshinSuugch.baiguullagiinId = undefined;
+        orshinSuugch.baiguullagiinNer = undefined;
+        orshinSuugch.barilgiinId = undefined;
+        orshinSuugch.bairniiNer = undefined;
+        orshinSuugch.toot = undefined;
+        orshinSuugch.davkhar = undefined;
+        orshinSuugch.orts = undefined;
+      }
+    }
+
+    orshinSuugch.toots = updatedToots;
+    await orshinSuugch.save();
+
+    // 3. Mark the corresponding contract as "Цуцалсан" (Cancelled)
+    const conn = db.kholboltuud.find(
+      (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+    );
+    if (conn) {
+      const Geree = require("../models/geree");
+      await Geree(conn).updateMany(
+        {
+          orshinSuugchId: String(residentId),
+          toot: String(toot).trim(),
+          ...(barilgiinId ? { barilgiinId: String(barilgiinId) } : {}),
+        },
+        { $set: { tuluv: "Цуцалсан" } },
+      );
+    }
+
+    res.json({
+      success: true,
+      message: "Тоот амжилттай устгагдлаа.",
+      data: orshinSuugch,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
