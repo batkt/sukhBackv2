@@ -5367,7 +5367,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
         targetBarilgaForToot?.tokhirgoo?.sohNer || tootEntry.soh || "";
 
       const contractData = {
-        gereeniiDugaar: `ГД-${Date.now().toString().slice(-8)}-${Math.floor(Math.random() * 100)}`,
+        gereeniiDugaar: `ГД-${Date.now().toString().slice(-8)}`,
         gereeniiOgnoo: new Date(),
         turul: "Үндсэн",
         tuluv: "Идэвхтэй",
