@@ -302,6 +302,9 @@ router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
       });
 
       const firstToot = req.body.toots[0];
+      if (!req.body.toot && firstToot.toot) {
+        req.body.toot = firstToot.toot;
+      }
       if (req.body.ekhniiUldegdel === undefined && firstToot.ekhniiUldegdel !== undefined) {
         req.body.ekhniiUldegdel = firstToot.ekhniiUldegdel;
       }

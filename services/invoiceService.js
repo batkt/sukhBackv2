@@ -280,10 +280,13 @@ async function ensureEkhniiUldegdel(kholbolt, geree, options = {}) {
     );
   } else {
     // Create a new record
+    const gereeObj = typeof geree.toObject === "function" ? geree.toObject() : geree;
     await guilgeeService.recordCharge(kholbolt, {
-      ...geree,
+      ...gereeObj,
       _id: undefined,
-      gereeniiId: geree._id.toString(),
+      gereeniiId: String(geree._id),
+      baiguullagiinId: String(geree.baiguullagiinId || ""),
+      barilgiinId: String(geree.barilgiinId || ""),
       dun: delta,
       zardliinNer: "Эхний үлдэгдэл",
       tailbar: "Системээс үүсгэсэн эхний үлдэгдэл",
