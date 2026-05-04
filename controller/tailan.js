@@ -378,26 +378,35 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
       baiguullagiinId: String(baiguullagiinId),
       nekhemjlekhId: { $in: [null, ""] },
     };
-    if (barilgiinId) tulukhMatch.barilgiinId = String(barilgiinId);
-    if (dateFilter.$gte) tulukhMatch.ognoo = dateFilter;
-    if (gereeniiDugaar) {
-      tulukhMatch.gereeniiDugaar = {
-        $regex: escapeRegex(gereeniiDugaar),
-        $options: "i",
+    // If filtering by building, get all contract IDs for that building to ensure we capture all associated ledger entries
+    let buildingGereeIds = [];
+    if (barilgiinId) {
+      const GereeModel = require("../models/geree");
+      const gerees = await GereeModel(kholbolt).find({ barilgiinId: String(barilgiinId) }, { _id: 1 }).lean();
+      buildingGereeIds = gerees.map(g => String(g._id));
+      
+      const bMatch = {
+        $or: [
+          { barilgiinId: String(barilgiinId) },
+          { gereeniiId: { $in: buildingGereeIds } }
+        ]
       };
+      tulukhMatch = { ...tulukhMatch, ...bMatch };
+      tulsunMatch = { ...tulsunMatch, ...bMatch };
+      invoiceMatch = { ...invoiceMatch, barilgiinId: String(barilgiinId) };
     }
 
-    // 3. Get All Payments (Income)
-    const tulsunMatch = {
-      baiguullagiinId: String(baiguullagiinId),
-    };
-    if (barilgiinId) tulsunMatch.barilgiinId = String(barilgiinId);
-    if (dateFilter.$gte) tulsunMatch.ognoo = dateFilter;
+    if (dateFilter.$gte) {
+      tulukhMatch.ognoo = dateFilter;
+      tulsunMatch.ognoo = dateFilter;
+      invoiceMatch.ognoo = dateFilter;
+    }
+    
     if (gereeniiDugaar) {
-      tulsunMatch.gereeniiDugaar = {
-        $regex: escapeRegex(gereeniiDugaar),
-        $options: "i",
-      };
+      const regMatch = { $regex: escapeRegex(gereeniiDugaar), $options: "i" };
+      tulukhMatch.gereeniiDugaar = regMatch;
+      tulsunMatch.gereeniiDugaar = regMatch;
+      invoiceMatch.gereeniiDugaar = regMatch;
     }
 
     const [invoices, standaloneTulukh, allPayments] = await Promise.all([
@@ -2944,9 +2953,19 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
     const match = {
       baiguullagiinId: String(baiguullagiinId),
       ognoo: { $gte: startDate, $lte: endDate },
-      tuluv: { $ne: "Цуцлагдсан" }, // Filter out cancelled invoices
+      tuluv: { $ne: "Цуцлагдсан" },
     };
-    if (barilgiinId) match.barilgiinId = String(barilgiinId);
+
+    if (barilgiinId) {
+      const GereeModel = require("../models/geree");
+      const gerees = await GereeModel(kholbolt).find({ barilgiinId: String(barilgiinId) }, { _id: 1 }).lean();
+      const buildingGereeIds = gerees.map(g => String(g._id));
+      
+      match.$or = [
+        { barilgiinId: String(barilgiinId) },
+        { gereeniiId: { $in: buildingGereeIds } }
+      ];
+    }
 
   
     const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");

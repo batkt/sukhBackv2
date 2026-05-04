@@ -799,17 +799,20 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             syncData.bodokhKhonog = Number(req.body.bodokhKhonog) || 0;
           }
 
-          // 1. Update Contracts (Geree)
-          if (Object.keys(syncData).length > 0) {
-            await GereeModel.updateMany(
-              {
-                orshinSuugchId: result._id.toString(),
-                tuluv: "Идэвхтэй",
-              },
-              { $set: syncData },
+          // Use shared service to sync contracts for all units (create/reactivate/update)
+          const syncService = require("../controller/orshinSuugch");
+          const baiguullaga = await require("../models/baiguullaga")(db.erunkhiiKholbolt).findById(orgId);
+          
+          if (baiguullaga) {
+            await syncService.syncResidentContracts(
+              result,
+              baiguullaga,
+              tukhainBaaziinKholbolt,
+              req
             );
+          }
 
-            // Sync to ledger if ekhniiUldegdel was updated
+          // Sync to ledger if ekhniiUldegdel was updated
             if (req.body.ekhniiUldegdel !== undefined || req.body.toots !== undefined) {
               const activeGerees = await GereeModel.find({
                 orshinSuugchId: result._id.toString(),
@@ -827,7 +830,6 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
                 );
               }
             }
-          }
 
 
           // 2. Update Invoices (nekhemjlekhiinTuukh) - update all associated records for consistency
