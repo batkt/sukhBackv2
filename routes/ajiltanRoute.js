@@ -19,6 +19,10 @@ router.get("/ajiltan", tokenShalgakh, async (req, res, next) => {
      const body = req.query;
      if (!!body?.query) body.query = JSON.parse(body.query);
      if (!!body?.order) body.order = JSON.parse(body.order);
+     if (body.barilgiinId) {
+       if (!body.query) body.query = {};
+       body.query["barilguud"] = body.barilgiinId;
+     }
      khuudaslalt(Ajiltan(db.erunkhiiKholbolt), body).then(res.send.bind(res)).catch(next);
   } catch (e) { next(e); }
 });
