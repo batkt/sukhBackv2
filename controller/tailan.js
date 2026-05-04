@@ -3191,11 +3191,10 @@ exports.tailanTulburDugnelt = asyncHandler(async (req, res, next) => {
     }
     const baseMatch = {
       baiguullagiinId: String(baiguullagiinId),
-      dun: { $lt: 0 },
     };
     if (barilgiinId) baseMatch.barilgiinId = String(barilgiinId);
 
-    // Monthly match: same but with date range on ognoo
+    // Monthly match: date range on ognoo
     const monthlyMatch = { ...baseMatch };
     if (ekhlekhOgnoo && duusakhOgnoo) {
       monthlyMatch.ognoo = {
@@ -3204,26 +3203,34 @@ exports.tailanTulburDugnelt = asyncHandler(async (req, res, next) => {
       };
     }
 
+    // Grouping logic: split dun > 0 (billed) and dun < 0 (paid)
+    const groupStage = {
+      $group: {
+        _id: null,
+        paidSum: { $sum: { $cond: [{ $lt: ["$dun", 0] }, { $abs: "$dun" }, 0] } },
+        billedSum: { $sum: { $cond: [{ $gt: ["$dun", 0] }, "$dun", 0] } },
+        count: { $sum: 1 },
+      },
+    };
+
     // Run both aggregations in parallel
     const [allTimeResult, monthlyResult] = await Promise.all([
-      GuilgeeAvlaguud(kholbolt).aggregate([
-        { $match: baseMatch },
-        { $group: { _id: null, sum: { $sum: { $abs: "$dun" } }, count: { $sum: 1 } } },
-      ]),
-      GuilgeeAvlaguud(kholbolt).aggregate([
-        { $match: monthlyMatch },
-        { $group: { _id: null, sum: { $sum: { $abs: "$dun" } }, count: { $sum: 1 } } },
-      ]),
+      GuilgeeAvlaguud(kholbolt).aggregate([{ $match: baseMatch }, groupStage]),
+      GuilgeeAvlaguud(kholbolt).aggregate([{ $match: monthlyMatch }, groupStage]),
     ]);
 
     res.json({
       success: true,
       allTime: {
-        sum: allTimeResult[0]?.sum ?? 0,
+        sum: allTimeResult[0]?.paidSum ?? 0, // Legacy support
+        paidSum: allTimeResult[0]?.paidSum ?? 0,
+        billedSum: allTimeResult[0]?.billedSum ?? 0,
         count: allTimeResult[0]?.count ?? 0,
       },
       monthly: {
-        sum: monthlyResult[0]?.sum ?? 0,
+        sum: monthlyResult[0]?.paidSum ?? 0, // Legacy support
+        paidSum: monthlyResult[0]?.paidSum ?? 0,
+        billedSum: monthlyResult[0]?.billedSum ?? 0,
         count: monthlyResult[0]?.count ?? 0,
       },
     });
