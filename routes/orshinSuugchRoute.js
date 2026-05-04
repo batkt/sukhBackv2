@@ -296,6 +296,11 @@ router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
 
     // Sync top-level fields from toots array if they are missing
     if (Array.isArray(req.body.toots) && req.body.toots.length > 0) {
+      req.body.toots.forEach(t => {
+        if (!t.baiguullagiinId && baiguullagiinId) t.baiguullagiinId = baiguullagiinId;
+        if (!t.barilgiinId && barilgiinId) t.barilgiinId = barilgiinId;
+      });
+
       const firstToot = req.body.toots[0];
       if (req.body.ekhniiUldegdel === undefined && firstToot.ekhniiUldegdel !== undefined) {
         req.body.ekhniiUldegdel = firstToot.ekhniiUldegdel;
@@ -587,6 +592,10 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
     // Map frontend 'units' to backend 'toots'
     if (req.body.units && Array.isArray(req.body.units)) {
       req.body.toots = req.body.units;
+      req.body.toots.forEach(t => {
+        if (!t.baiguullagiinId && req.body.baiguullagiinId) t.baiguullagiinId = req.body.baiguullagiinId;
+        if (!t.barilgiinId && req.body.barilgiinId) t.barilgiinId = req.body.barilgiinId;
+      });
     }
 
     // Protection: Residents should NOT be able to change their own baiguullagiinId, barilgiinId, or linked toots array
@@ -802,7 +811,7 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             );
 
             // Sync to ledger if ekhniiUldegdel was updated
-            if (req.body.ekhniiUldegdel !== undefined) {
+            if (req.body.ekhniiUldegdel !== undefined || req.body.toots !== undefined) {
               const activeGerees = await GereeModel.find({
                 orshinSuugchId: result._id.toString(),
                 tuluv: "Идэвхтэй",

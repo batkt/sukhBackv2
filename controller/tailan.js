@@ -407,22 +407,23 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
       GuilgeeAvlaguud(kholbolt).find(tulsunMatch).lean(),
     ]);
 
-    // Gather all gereeIds from standalone records to fetch their metadata if metadata filters are used
-    const standaloneGereeniiIds = new Set([
+    // Gather all gereeIds from both invoices and standalone records to fetch their metadata
+    const allGereeniiIds = new Set([
+      ...invoices.map((i) => String(i.gereeniiId)),
       ...standaloneTulukh.map((s) => String(s.gereeniiId)),
       ...standaloneTulsun.map((s) => String(s.gereeniiId)),
     ]);
 
-    // Fetch contracts for standalone records to filter and get metadata
-    const standaloneGereeMetadata = await Geree(kholbolt)
+    // Fetch contracts for all records to ensure we have property metadata (toot/toots)
+    const gereeMetadata = await Geree(kholbolt)
       .find({
-        _id: { $in: Array.from(standaloneGereeniiIds) },
+        _id: { $in: Array.from(allGereeniiIds) },
         ...metadataMatch,
       })
       .lean();
 
     const gereeMap = {};
-    standaloneGereeMetadata.forEach((g) => {
+    gereeMetadata.forEach((g) => {
       gereeMap[String(g._id)] = g;
     });
 
@@ -449,7 +450,7 @@ exports.tailanOrlogoAvlaga = asyncHandler(async (req, res, next) => {
         ovog: d.ovog || "",
         ner: d.ner || "",
         utas: Array.isArray(d.utas) ? d.utas : d.utas || [],
-        toot: d.medeelel?.toot || d.toot || (Array.isArray(d.toots) ? d.toots.map(t => t.toot).filter(Boolean).join(",") : ""),
+        toot: d.medeelel?.toot || d.toot || (Array.isArray(d.toots) ? d.toots.map(t => t.toot).filter(Boolean).join(",") : "") || (gereeMap[String(d.gereeniiId)]?.toot) || (Array.isArray(gereeMap[String(d.gereeniiId)]?.toots) ? gereeMap[String(d.gereeniiId)].toots.map(t => t.toot).filter(Boolean).join(",") : ""),
         davkhar: d.davkhar || "",
         bairNer: d.bairNer || "",
         orts: d.orts || "",
