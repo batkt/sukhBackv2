@@ -20,7 +20,10 @@ const {
   walletPaymentGet,
   walletPaymentUpdateQPay,
   walletUserEdit,
-  walletBillingSetNickname,
+  walletChatCreate,
+  walletChatGet,
+  walletChatGetByObject,
+  walletChatSendMessage,
 } = require("../controller/walletController");
 
 router.get("/billers", tokenShalgakh, walletBillers);
@@ -46,6 +49,12 @@ router.get("/payment/:paymentId", tokenShalgakh, walletPaymentGet);
 router.put("/payment/qpay/:paymentId", tokenShalgakh, walletPaymentUpdateQPay);
 
 router.put("/user", tokenShalgakh, walletUserEdit);
+
+// Chat routes
+router.post("/chat", tokenShalgakh, walletChatCreate);
+router.get("/chat/:chatId", tokenShalgakh, walletChatGet);
+router.get("/chat/object/:objectId", tokenShalgakh, walletChatGetByObject);
+router.put("/chat/:chatId", tokenShalgakh, walletChatSendMessage);
 
 module.exports = router;
 

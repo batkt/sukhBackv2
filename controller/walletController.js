@@ -1125,3 +1125,79 @@ exports.walletUserEdit = asyncHandler(async (req, res, next) => {
     next(err);
   }
 });
+exports.walletChatCreate = asyncHandler(async (req, res, next) => {
+  try {
+    const { userId } = await getUserIdFromToken(req);
+    const { paymentId, reason } = req.body;
+
+    if (!paymentId || !reason) {
+      throw new aldaa("Төлбөрийн ID болон шалтгаан заавал бөглөх шаардлагатай!");
+    }
+
+    const result = await walletApiService.createChat(userId, paymentId, reason);
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+exports.walletChatGet = asyncHandler(async (req, res, next) => {
+  try {
+    const { userId } = await getUserIdFromToken(req);
+    const { chatId } = req.params;
+
+    if (!chatId) {
+      throw new aldaa("Чатын ID заавал бөглөх шаардлагатай!");
+    }
+
+    const result = await walletApiService.getChat(userId, chatId);
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+exports.walletChatGetByObject = asyncHandler(async (req, res, next) => {
+  try {
+    const { userId } = await getUserIdFromToken(req);
+    const { objectId } = req.params;
+
+    if (!objectId) {
+      throw new aldaa("Объектын ID заавал бөглөх шаардлагатай!");
+    }
+
+    const result = await walletApiService.getChatByObject(userId, objectId);
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+exports.walletChatSendMessage = asyncHandler(async (req, res, next) => {
+  try {
+    const { userId } = await getUserIdFromToken(req);
+    const { chatId } = req.params;
+    const { message } = req.body;
+
+    if (!chatId || !message) {
+      throw new aldaa("Чатын ID болон мессеж заавал бөглөх шаардлагатай!");
+    }
+
+    const result = await walletApiService.sendMessage(userId, chatId, message);
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});

@@ -1288,6 +1288,101 @@ async function loginUser(phone, password) {
   }
 }
 
+async function createChat(userId, paymentId, reason) {
+  try {
+    const token = await getWalletServiceToken();
+    const response = await axios.post(
+      `${WALLET_API_BASE_URL}/api/chat`,
+      { paymentId, reason },
+      {
+        headers: {
+          userId: userId,
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (response.data && response.data.responseCode) {
+      return sanitizeNullValues(response.data.data);
+    }
+    throw new Error(response.data?.responseMsg || "Chat creation failed");
+  } catch (error) {
+    console.error("❌ [WALLET API] createChat error:", error.message);
+    throw error;
+  }
+}
+
+async function getChat(userId, chatId) {
+  try {
+    const token = await getWalletServiceToken();
+    const response = await axios.get(
+      `${WALLET_API_BASE_URL}/api/chat/${chatId}`,
+      {
+        headers: {
+          userId: userId,
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (response.data && response.data.responseCode) {
+      return sanitizeNullValues(response.data.data);
+    }
+    throw new Error(response.data?.responseMsg || "Failed to fetch chat");
+  } catch (error) {
+    console.error("❌ [WALLET API] getChat error:", error.message);
+    throw error;
+  }
+}
+
+async function getChatByObject(userId, objectId) {
+  try {
+    const token = await getWalletServiceToken();
+    const response = await axios.get(
+      `${WALLET_API_BASE_URL}/api/chat/object/${objectId}`,
+      {
+        headers: {
+          userId: userId,
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (response.data && response.data.responseCode) {
+      return sanitizeNullValues(response.data.data);
+    }
+    return null;
+  } catch (error) {
+    if (error.response && error.response.status === 404) return null;
+    console.error("❌ [WALLET API] getChatByObject error:", error.message);
+    throw error;
+  }
+}
+
+async function sendMessage(userId, chatId, message) {
+  try {
+    const token = await getWalletServiceToken();
+    const response = await axios.put(
+      `${WALLET_API_BASE_URL}/api/chat/${chatId}`,
+      { message },
+      {
+        headers: {
+          userId: userId,
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (response.data && response.data.responseCode) {
+      return sanitizeNullValues(response.data.data);
+    }
+    throw new Error(response.data?.responseMsg || "Message send failed");
+  } catch (error) {
+    console.error("❌ [WALLET API] sendMessage error:", error.message);
+    throw error;
+  }
+}
+
 module.exports = {
   getUserInfo,
   getBillingByAddress,
@@ -1317,5 +1412,9 @@ module.exports = {
   editUser,
   loginUser,
   clearBillingListCache,
+  createChat,
+  getChat,
+  getChatByObject,
+  sendMessage,
 };
 
