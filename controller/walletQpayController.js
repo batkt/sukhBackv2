@@ -249,8 +249,8 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
   const qpayBody = {
     baiguullagiinId,
     barilgiinId: barilgiinId || "",
-    dun: paymentAmount.toString(),
-    tailbar: walletPaymentResult.transactionDescrion || walletPaymentResult.transactionDescription || `Wallet QPay - ${walletPaymentId}`,
+    dun: paymentAmount,
+    tailbar: walletPaymentResult.transactionDescription || `Wallet QPay - ${walletPaymentId}`,
     zakhialgiinDugaar,
     // Generic Mode: Pass Wallet API bank details directly
     merchant_id: "c6e38076-1791-4efc-b80c-0f8142d26d77",
