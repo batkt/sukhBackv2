@@ -1760,15 +1760,25 @@ router.post("/qpayKhariltsagchAvay", tokenShalgakh, async (req, res, next) => {
     var baiguullaga1 = await Baiguullaga(db.erunkhiiKholbolt).findOne({
       register: req.body.register,
     });
-    var kholbolt = db.kholboltuud.find(
-      (a) => a.baiguullagiinId == baiguullaga1._id,
-    );
-    var qpayKhariltsagch = new QpayKhariltsagch(kholbolt);
 
-    req.body.baiguullagiinId = baiguullaga1._id;
-    const baiguullaga = await qpayKhariltsagch.findOne({
-      baiguullagiinId: req.body.baiguullagiinId,
+    if (!baiguullaga1) {
+      return res.status(404).send({ success: false, message: "Organization not found" });
+    }
+
+    var kholbolt = db.kholboltuud.find(
+      (a) => String(a.baiguullagiinId) === String(baiguullaga1._id),
+    );
+
+    if (!kholbolt) {
+      return res.status(404).send({ success: false, message: "Organization connection not found" });
+    }
+
+    var qpayKhariltsagchModel = QpayKhariltsagch(kholbolt);
+
+    const baiguullaga = await qpayKhariltsagchModel.findOne({
+      baiguullagiinId: baiguullaga1._id,
     });
+
     if (baiguullaga) res.send(baiguullaga);
     else res.send(undefined);
   } catch (err) {
