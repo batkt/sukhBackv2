@@ -6,10 +6,6 @@ const {
   QuickQpayObject,
   qpayShalgay,
 } = require("quickqpaypackvSukh");
-
-// Ensure critical environment variables have fallbacks
-process.env.QPAY_MERCHANT_SERVER = process.env.QPAY_MERCHANT_SERVER || "https://merchant.qpay.mn/";
-process.env.UNDSEN_SERVER = process.env.UNDSEN_SERVER || "http://103.236.194.106:8084";
 const OrshinSuugch = require("../models/orshinSuugch");
 const WalletInvoice = require("../models/walletInvoice");
 const EbarimtShine = require("../models/ebarimtShine");
@@ -249,12 +245,12 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
   const qpayBody = {
     baiguullagiinId,
     barilgiinId: barilgiinId || "",
-    dun: paymentAmount,
-    tailbar: walletPaymentResult.transactionDescription || `Wallet QPay - ${walletPaymentId}`,
+    dun: paymentAmount.toString(),
+    tailbar: walletPaymentResult.transactionDescrion || walletPaymentResult.transactionDescription || `Wallet QPay - ${walletPaymentId}`,
     zakhialgiinDugaar,
     // Generic Mode: Pass Wallet API bank details directly
     merchant_id: "635d1ec1-7110-4b91-8569-93633e9a0d43",
-    merchant_name: walletPaymentResult.receiverAccountName || "Токи ББСБ",
+    merchant_name: walletPaymentResult.receiverAccountName,
     custom_bank_accounts: [
       {
         account_bank_code: walletPaymentResult.receiverBankCode,
@@ -291,12 +287,6 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
     console.log(`✅ [WALLET QPAY] QPay invoice created: ${resultId}`);
   } catch (qpayError) {
     console.error("❌ [WALLET QPAY] QPay invoice creation failed:", qpayError.message);
-    if (qpayError.stack) console.error("❌ [WALLET QPAY] Stack trace:", qpayError.stack);
-    // Log full error object if it's a QPay/got error
-    if (qpayError.response) {
-      console.error("❌ [WALLET QPAY] QPay Response status:", qpayError.response.statusCode);
-      console.error("❌ [WALLET QPAY] QPay Response body:", qpayError.response.body);
-    }
     throw new aldaa(`QPay нэхэмжлэх үүсгэхэд алдаа: ${qpayError.message}`);
   }
 
