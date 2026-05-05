@@ -8,7 +8,7 @@ const {
 } = require("quickqpaypackvSukh");
 
 // Ensure critical environment variables have fallbacks
-process.env.QPAY_MERCHANT_SERVER = process.env.QPAY_MERCHANT_SERVER || "https://quickqr.qpay.mn/";
+process.env.QPAY_MERCHANT_SERVER = process.env.QPAY_MERCHANT_SERVER || "https://merchant.qpay.mn/";
 process.env.UNDSEN_SERVER = process.env.UNDSEN_SERVER || "http://103.236.194.106:8084";
 const OrshinSuugch = require("../models/orshinSuugch");
 const WalletInvoice = require("../models/walletInvoice");
@@ -291,6 +291,12 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
     console.log(`✅ [WALLET QPAY] QPay invoice created: ${resultId}`);
   } catch (qpayError) {
     console.error("❌ [WALLET QPAY] QPay invoice creation failed:", qpayError.message);
+    if (qpayError.stack) console.error("❌ [WALLET QPAY] Stack trace:", qpayError.stack);
+    // Log full error object if it's a QPay/got error
+    if (qpayError.response) {
+      console.error("❌ [WALLET QPAY] QPay Response status:", qpayError.response.statusCode);
+      console.error("❌ [WALLET QPAY] QPay Response body:", qpayError.response.body);
+    }
     throw new aldaa(`QPay нэхэмжлэх үүсгэхэд алдаа: ${qpayError.message}`);
   }
 
