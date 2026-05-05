@@ -87,7 +87,7 @@ exports.ajiltanNevtrey = asyncHandler(async (req, res, next) => {
     result: ajiltan,
     success: true,
   };
-  if (ajiltan.nevtrekhNer !== "CAdmin1") {
+  if (ajiltan.nevtrekhNer !== "6688845") {
     io.emit(`ajiltan${ajiltan._id}`, {
       ip: req.headers["x-real-ip"],
       type: "logout",
