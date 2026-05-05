@@ -20,6 +20,7 @@ const {
   walletPaymentGet,
   walletPaymentUpdateQPay,
   walletUserEdit,
+  walletBillingSetNickname,
   walletChatCreate,
   walletChatGet,
   walletChatGetByObject,
