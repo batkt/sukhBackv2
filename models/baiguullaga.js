@@ -245,6 +245,7 @@ baiguullagaSchema.index({ id: 1 });
   try {
     console.log(`🔍 [TRACE-SAVE] Baiguullaga saving: ${this.ner} (${this._id})`);
     if (this.barilguud) {
+      normalizeBarilguud(this.barilguud);
       this.barilguud.forEach((b, idx) => {
         if (b.tokhirgoo && b.tokhirgoo.davkhariinToonuud) {
           console.log(`   - Barilga[${idx}] "${b.ner}" has ${Object.keys(b.tokhirgoo.davkhariinToonuud).length} floors configured.`);
@@ -284,6 +285,56 @@ baiguullagaSchema.post("save", async function (doc) {
 
 });
 
+function normalizeDavkhariinToonuudObject(obj) {
+  if (!obj || typeof obj !== "object") return obj;
+  const normalized = {};
+  for (const [floorKey, tootArray] of Object.entries(obj)) {
+    if (!tootArray) continue;
+    let orts = "1";
+    let davkhar = "";
+    if (String(floorKey).includes("::")) {
+      const parts = String(floorKey).split("::");
+      orts = parts[0] || "1";
+      davkhar = parts[1] || parts[0];
+    } else {
+      davkhar = floorKey;
+    }
+    const canonicalKey = `${orts}::${davkhar}`;
+    let tootList = [];
+    if (Array.isArray(tootArray)) {
+      if (typeof tootArray[0] === "string" && tootArray[0].includes(",")) {
+        tootList = tootArray[0]
+          .split(",")
+          .map((t) => String(t).trim())
+          .filter((t) => t);
+      } else {
+        tootList = tootArray.map((t) => String(t).trim()).filter((t) => t);
+      }
+    } else if (typeof tootArray === "string") {
+      tootList = tootArray
+        .split(",")
+        .map((t) => String(t).trim())
+        .filter((t) => t);
+    }
+    if (!normalized[canonicalKey]) normalized[canonicalKey] = [];
+    const currentSet = new Set(normalized[canonicalKey]);
+    tootList.forEach((t) => currentSet.add(t));
+    normalized[canonicalKey] = Array.from(currentSet);
+  }
+  return normalized;
+}
+
+function normalizeBarilguud(barilguud) {
+  if (!barilguud || !Array.isArray(barilguud)) return;
+  barilguud.forEach((barilga) => {
+    if (barilga.tokhirgoo && barilga.tokhirgoo.davkhariinToonuud) {
+      barilga.tokhirgoo.davkhariinToonuud = normalizeDavkhariinToonuudObject(
+        barilga.tokhirgoo.davkhariinToonuud
+      );
+    }
+  });
+}
+
 function validateDavkhariinToonuud(barilguud) {
   if (!barilguud || !Array.isArray(barilguud)) {
     return null; // No error
@@ -296,7 +347,7 @@ function validateDavkhariinToonuud(barilguud) {
     }
 
     const davkhariinToonuud = barilga.tokhirgoo.davkhariinToonuud;
-    const tootMap = new Map(); 
+    const tootMap = new Map();
     for (const [floorKey, tootArray] of Object.entries(davkhariinToonuud)) {
       if (!tootArray || !Array.isArray(tootArray)) {
         continue;
@@ -304,8 +355,8 @@ function validateDavkhariinToonuud(barilguud) {
 
       let orts = "1";
       let davkhar = "";
-      if (floorKey.includes("::")) {
-        const parts = floorKey.split("::");
+      if (String(floorKey).includes("::")) {
+        const parts = String(floorKey).split("::");
         orts = parts[0] || "1";
         davkhar = parts[1] || parts[0];
       } else {
@@ -314,18 +365,30 @@ function validateDavkhariinToonuud(barilguud) {
 
       let tootList = [];
       if (typeof tootArray[0] === "string" && tootArray[0].includes(",")) {
-        tootList = tootArray[0].split(",").map((t) => t.trim()).filter((t) => t);
+        tootList = tootArray[0]
+          .split(",")
+          .map((t) => t.trim())
+          .filter((t) => t);
       } else {
         tootList = tootArray.map((t) => String(t).trim()).filter((t) => t);
       }
+
       for (const toot of tootList) {
         const compositeKey = `${orts}::${toot}`;
         if (tootMap.has(compositeKey)) {
-          const existingDavkhar = tootMap.get(compositeKey);
-          console.error(`❌ [VALIDATION FUNCTION] Duplicate toot found in same orts: "${toot}" in orts ${orts}, davkhar ${existingDavkhar} and ${davkhar}`);
-          return new Error(
-            `Тоот "${toot}" аль хэдийн ${orts}-р орцны ${existingDavkhar}-р давхарт байна. ${orts}-р орцны ${davkhar}-р давхарт давхардсан тоот байж болохгүй!`
-          );
+          const existingDavkhar = String(tootMap.get(compositeKey)).trim();
+          const currentDavkhar = String(davkhar).trim();
+
+          // Only error if it's a DIFFERENT floor. If it's the same floor, it's just a duplicate entry/format.
+          if (existingDavkhar !== currentDavkhar) {
+            console.error(
+              `❌ [VALIDATION FUNCTION] Duplicate toot found in same orts: "${toot}" in orts ${orts}, davkhar ${existingDavkhar} and ${currentDavkhar}`
+            );
+            return new Error(
+              `Тоот "${toot}" аль хэдийн ${orts}-р орцны ${existingDavkhar}-р давхарт байна. ${orts}-р орцны ${currentDavkhar}-р давхарт давхардсан тоот байж болохгүй!`
+            );
+          }
+          continue;
         }
         tootMap.set(compositeKey, davkhar);
       }
@@ -353,49 +416,69 @@ baiguullagaSchema.pre("findOneAndUpdate", async function (next) {
   try {
     let barilguudToValidate = null;
     
-    if (this._update && this._update.barilguud && !this._update.$set) {
-      barilguudToValidate = this._update.barilguud;
-    }
-    else if (this._update && this._update.$set && this._update.$set.barilguud) {
-      barilguudToValidate = this._update.$set.barilguud;
-    }
-    else if (this._update && this._update.$set) {
+    if (this._update && this._update.$set) {
       const setKeys = Object.keys(this._update.$set);
-      const isDavkhariinToonuudUpdate = setKeys.some(key => 
-        key.includes('tokhirgoo.davkhariinToonuud') || key.includes('barilguud')
+      const isDavkhariinToonuudUpdate = setKeys.some(
+        (key) =>
+          key.includes("tokhirgoo.davkhariinToonuud") || key.includes("barilguud")
       );
       if (isDavkhariinToonuudUpdate) {
-        console.log(`🔍 [TRACE-UPDATE] Triggered for Baiguullaga. Query:`, JSON.stringify(this.getQuery()));
-        console.log(`🔍 [TRACE-UPDATE] Update set:`, JSON.stringify(this._update.$set));
-        
+        console.log(
+          `🔍 [TRACE-UPDATE] Triggered for Baiguullaga. Query:`,
+          JSON.stringify(this.getQuery())
+        );
+        console.log(
+          `🔍 [TRACE-UPDATE] Update set:`,
+          JSON.stringify(this._update.$set)
+        );
+
         const doc = await this.model.findOne(this.getQuery()).lean();
         if (doc && doc.barilguud) {
           const mergedBarilguud = JSON.parse(JSON.stringify(doc.barilguud));
-          
+
           for (const [path, value] of Object.entries(this._update.$set)) {
-            if (path === 'barilguud') {
+            if (path === "barilguud") {
+              normalizeBarilguud(value);
               barilguudToValidate = value;
               break;
-            } else if (path.startsWith('barilguud.')) {
-              const pathParts = path.split('.');
+            } else if (path.startsWith("barilguud.")) {
+              const pathParts = path.split(".");
               const barilgaIndex = parseInt(pathParts[1]);
-              
+
               if (!isNaN(barilgaIndex) && mergedBarilguud[barilgaIndex]) {
-                if (pathParts[2] === 'tokhirgoo' && pathParts[3] === 'davkhariinToonuud') {
-                  mergedBarilguud[barilgaIndex].tokhirgoo = mergedBarilguud[barilgaIndex].tokhirgoo || {};
-                  mergedBarilguud[barilgaIndex].tokhirgoo.davkhariinToonuud = value;
+                if (
+                  pathParts[2] === "tokhirgoo" &&
+                  pathParts[3] === "davkhariinToonuud"
+                ) {
+                  const normalizedValue = normalizeDavkhariinToonuudObject(value);
+                  mergedBarilguud[barilgaIndex].tokhirgoo =
+                    mergedBarilguud[barilgaIndex].tokhirgoo || {};
+                  mergedBarilguud[barilgaIndex].tokhirgoo.davkhariinToonuud =
+                    normalizedValue;
+                  // Update the actual $set value so it is saved in normalized form
+                  this._update.$set[path] = normalizedValue;
                 }
               }
             }
           }
-          
+
           if (!barilguudToValidate) {
             barilguudToValidate = mergedBarilguud;
           }
         }
       }
+    } else if (this._update && this._update.barilguud && !this._update.$set) {
+      normalizeBarilguud(this._update.barilguud);
+      barilguudToValidate = this._update.barilguud;
+    } else if (
+      this._update &&
+      this._update.$set &&
+      this._update.$set.barilguud
+    ) {
+      normalizeBarilguud(this._update.$set.barilguud);
+      barilguudToValidate = this._update.$set.barilguud;
     }
-    
+
     if (barilguudToValidate) {
       const error = validateDavkhariinToonuud(barilguudToValidate);
       if (error) {
