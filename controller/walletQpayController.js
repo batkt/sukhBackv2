@@ -253,7 +253,7 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
     tailbar: walletPaymentResult.transactionDescription || `Wallet QPay - ${walletPaymentId}`,
     zakhialgiinDugaar,
     // Generic Mode: Pass Wallet API bank details directly
-    merchant_id: "c6e38076-1791-4efc-b80c-0f8142d26d77",
+    merchant_id: "635d1ec1-7110-4b91-8569-93633e9a0d43",
     merchant_name: walletPaymentResult.receiverAccountName || "Токи ББСБ",
     custom_bank_accounts: [
       {
