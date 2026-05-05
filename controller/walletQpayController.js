@@ -6,6 +6,10 @@ const {
   QuickQpayObject,
   qpayShalgay,
 } = require("quickqpaypackvSukh");
+
+// Ensure critical environment variables have fallbacks
+process.env.QPAY_MERCHANT_SERVER = process.env.QPAY_MERCHANT_SERVER || "https://quickqr.qpay.mn/";
+process.env.UNDSEN_SERVER = process.env.UNDSEN_SERVER || "http://103.236.194.106:8084";
 const OrshinSuugch = require("../models/orshinSuugch");
 const WalletInvoice = require("../models/walletInvoice");
 const EbarimtShine = require("../models/ebarimtShine");
