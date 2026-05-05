@@ -95,7 +95,7 @@ exports.ajiltanNevtrey = asyncHandler(async (req, res, next) => {
   }
 
   duusakhOgnooAvya(
-    { register: baiguullaga.register, system: process.env.SYSTEM_NAME },
+    { register: baiguullaga.register, system: "sukh" },
     async (khariu) => {
       try {
         if (khariu.success) {
