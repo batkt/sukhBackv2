@@ -381,7 +381,9 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
     // Now supports using Wallet QPay even if user also has baiguullagiinId
     let useWalletQPay = false;
     let userPhoneNumber = null;
+    let walletUserIdToUse = null;
     let detectedSource = "CUSTOM"; // CUSTOM or WALLET_API
+
 
     // Optional explicit override from frontend:
     // - addressSource: "WALLET_API" -> force Wallet QPay
@@ -409,11 +411,18 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
               .lean();
             if (orshinSuugch) {
               userPhoneNumber = orshinSuugch.utas;
+              
+              // Determine correct Wallet API userId (UUID or phone)
+              const walletToot = orshinSuugch.toots && 
+                orshinSuugch.toots.find(t => t.source === "WALLET_API" && t.walletUserId);
+              walletUserIdToUse = walletToot ? walletToot.walletUserId : orshinSuugch.walletUserId;
+              if (!walletUserIdToUse) walletUserIdToUse = userPhoneNumber;
 
               const hasWalletData =
-                orshinSuugch.walletUserId ||
+                walletUserIdToUse !== userPhoneNumber ||
                 (orshinSuugch.toots &&
                   orshinSuugch.toots.some((t) => t.source === "WALLET_API"));
+
 
               // 1) If frontend explicitly asks for Wallet QPay and wallet data exists, prefer WALLET_API
               if (addressSourceOverride === "WALLET_API" && hasWalletData) {
@@ -498,7 +507,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
 
           try {
             const invoiceResult = await walletApiService.createInvoice(
-              userPhoneNumber,
+              walletUserIdToUse,
               invoiceData,
             );
 
@@ -519,7 +528,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
                   .lean();
 
                 await WalletInvoiceModel.create({
-                  userId: userPhoneNumber,
+                  userId: walletUserIdToUse,
                   orshinSuugchId: orshinSuugchDoc?._id?.toString() || null,
                   walletInvoiceId: invoiceResult.invoiceId,
                   billingId: invoiceData.billingId,
@@ -562,7 +571,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
                 // Try to get existing payments for this billing
                 const existingPayments =
                   await walletApiService.getBillingPayments(
-                    userPhoneNumber,
+                    walletUserIdToUse,
                     req.body.billingId,
                   );
 
@@ -582,7 +591,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
                     try {
                       const fullPaymentDetails =
                         await walletApiService.getPayment(
-                          userPhoneNumber,
+                          walletUserIdToUse,
                           paymentId,
                         );
 
@@ -730,7 +739,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
         };
 
         const result = await walletApiService.createPayment(
-          userPhoneNumber,
+          walletUserIdToUse,
           paymentData,
         );
         console.log(`✅ [QPAY-WALLET] Created paymentId: ${result.paymentId} for invoice: ${invoiceId}`);
@@ -754,7 +763,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
 
           try {
             const fullPaymentDetails = await walletApiService.getPayment(
-              userPhoneNumber,
+              walletUserIdToUse,
               result.paymentId,
             );
 

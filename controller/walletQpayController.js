@@ -35,9 +35,9 @@ async function getOrshinSuugchFromToken(req) {
        return cached.data;
     }
 
+    // Use full document instead of lean to allow access to all fields and potential save
     const orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt)
-      .findById(tokenObject.id)
-      .lean();
+      .findById(tokenObject.id);
     
     if (orshinSuugch) {
        userCache.set(tokenObject.id, { timestamp: Date.now(), data: orshinSuugch });
@@ -48,6 +48,23 @@ async function getOrshinSuugchFromToken(req) {
     return null;
   }
 }
+
+/**
+ * Helper: determine the correct userId (UUID or phone) for Wallet API
+ */
+async function getWalletIdentifier(orshinSuugch) {
+  if (!orshinSuugch) return null;
+  
+  // 1. Search in toots for WALLET_API walletUserId
+  const walletToot = orshinSuugch.toots && 
+    orshinSuugch.toots.find(t => t.source === "WALLET_API" && t.walletUserId);
+  
+  let walletUserId = walletToot ? walletToot.walletUserId : orshinSuugch.walletUserId;
+  
+  // 2. Return UUID if found, otherwise phone
+  return walletUserId || orshinSuugch.utas;
+}
+
 
 // ──────────────────────────────────────────────────────
 //  POST /walletQpay/create
@@ -101,11 +118,14 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
     throw new aldaa("Байгууллагын холболт олдсонгүй!");
   }
 
-  /* ── 2. resident / phone ── */
+  /* ── 2. resident / wallet identifier ── */
+  const walletUserId = await getWalletIdentifier(orshinSuugch);
   const userPhone = orshinSuugch?.utas;
-  if (!userPhone) {
-    throw new aldaa("Хэрэглэгчийн утас олдсонгүй. Нэвтрэх шаардлагатай.");
+
+  if (!walletUserId || !userPhone) {
+    throw new aldaa("Хэрэглэгчийн мэдээлэл олдсонгүй. Нэвтрэх шаардлагатай.");
   }
+
 
   /* ── 3. Wallet API: create invoice ── */
   let walletInvoiceId = req.body.invoiceId || req.body.walletInvoiceId || null;
@@ -120,7 +140,7 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
     };
 
     try {
-      walletInvoiceResult = await walletApiService.createInvoice(userPhone, invoiceData);
+      walletInvoiceResult = await walletApiService.createInvoice(walletUserId, invoiceData);
       walletInvoiceId = walletInvoiceResult.invoiceId;
       console.log(`✅ [WALLET QPAY] Wallet invoice created: ${walletInvoiceId}`);
 
@@ -129,7 +149,7 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
         const existing = await WalletInvoice(db.erunkhiiKholbolt).findOne({ walletInvoiceId });
         if (!existing) {
           await WalletInvoice(db.erunkhiiKholbolt).create({
-            userId: userPhone,
+            userId: walletUserId,
             orshinSuugchId: orshinSuugch?._id?.toString() || null,
             walletInvoiceId,
             billingId,
@@ -193,7 +213,7 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
   /* ── 4. Wallet API: create payment ── */
   let walletPaymentResult;
   try {
-    walletPaymentResult = await walletApiService.createPayment(userPhone, {
+    walletPaymentResult = await walletApiService.createPayment(walletUserId, {
       invoiceId: walletInvoiceId,
     });
     console.log(`✅ [WALLET QPAY] Wallet payment created: ${walletPaymentResult.paymentId}`);
@@ -204,7 +224,7 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
     // --- FALLBACK: If payment already created for this invoice, try to fetch it ---
     if (errMsg.includes("нэхэмжлэхээр төлөлт үүссэн байна")) {
        try {
-          const payments = await walletApiService.getBillingPayments(userPhone, billingId);
+          const payments = await walletApiService.getBillingPayments(walletUserId, billingId);
           const existingPayment = payments.find(p => p.invoiceId === walletInvoiceId && p.paymentStatus !== 'CANCELLED');
           if (existingPayment) {
             walletPaymentResult = existingPayment;
@@ -481,7 +501,7 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
       let userId = walletInvoiceDoc?.userId;
       if (!userId) {
          const orshinSuugch = await getOrshinSuugchFromToken(req);
-         userId = orshinSuugch?.utas;
+         userId = await getWalletIdentifier(orshinSuugch);
       }
       
       if (userId) {
@@ -579,14 +599,14 @@ exports.getWalletPayment = asyncHandler(async (req, res, next) => {
   const { paymentId } = req.params;
   
   const orshinSuugch = await getOrshinSuugchFromToken(req);
-  const userPhone = orshinSuugch?.utas;
+  const walletUserId = await getWalletIdentifier(orshinSuugch);
   
-  if (!userPhone) {
+  if (!walletUserId) {
     throw new aldaa("Хэрэглэгчийн утас олдсонгүй. Нэвтрэх шаардлагатай.");
   }
 
   try {
-    const payment = await walletApiService.getPayment(userPhone, paymentId);
+    const payment = await walletApiService.getPayment(walletUserId, paymentId);
     if (!payment) {
       return res.status(404).json({ success: false, message: "Payment not found in Wallet API" });
     }

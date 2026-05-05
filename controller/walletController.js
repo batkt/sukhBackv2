@@ -873,14 +873,20 @@ exports.walletInvoiceCreate = asyncHandler(async (req, res, next) => {
 
 exports.walletInvoiceGet = asyncHandler(async (req, res, next) => {
   try {
-    const { userId } = await getUserIdFromToken(req);
+    const { userId, utas } = await getUserIdFromToken(req);
     const { invoiceId } = req.params;
 
     if (!invoiceId) {
       throw new aldaa("Нэхэмжлэхийн ID заавал бөглөх шаардлагатай!");
     }
 
-    const invoice = await walletApiService.getInvoice(userId, invoiceId);
+    let invoice = await walletApiService.getInvoice(userId, invoiceId);
+    
+    // Fallback: If not found with UUID/primary userId, try with phone number
+    if (!invoice && userId !== utas) {
+      console.log(`ℹ️ [WALLET INVOICE GET] Invoice not found for ${userId}, trying fallback to ${utas}`);
+      invoice = await walletApiService.getInvoice(utas, invoiceId);
+    }
 
     if (!invoice) {
       return res.status(404).json({
@@ -888,6 +894,7 @@ exports.walletInvoiceGet = asyncHandler(async (req, res, next) => {
         message: "Нэхэмжлэх олдсонгүй",
       });
     }
+
 
     res.status(200).json({
       success: true,
@@ -953,14 +960,20 @@ exports.walletPaymentCreate = asyncHandler(async (req, res, next) => {
 
 exports.walletPaymentGet = asyncHandler(async (req, res, next) => {
   try {
-    const { userId } = await getUserIdFromToken(req);
+    const { userId, utas } = await getUserIdFromToken(req);
     const { paymentId } = req.params;
 
     if (!paymentId) {
       throw new aldaa("Төлбөрийн ID заавал бөглөх шаардлагатай!");
     }
 
-    const result = await walletApiService.getPayment(userId, paymentId);
+    let result = await walletApiService.getPayment(userId, paymentId);
+
+    // Fallback: If not found with UUID/primary userId, try with phone number
+    if (!result && userId !== utas) {
+      console.log(`ℹ️ [WALLET PAYMENT GET] Payment not found for ${userId}, trying fallback to ${utas}`);
+      result = await walletApiService.getPayment(utas, paymentId);
+    }
 
     if (!result) {
       return res.status(404).json({
@@ -968,6 +981,7 @@ exports.walletPaymentGet = asyncHandler(async (req, res, next) => {
         message: "Төлбөр олдсонгүй",
       });
     }
+
 
     res.status(200).json({
       success: true,
