@@ -1112,12 +1112,13 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             userData.initialMeterReading !== undefined);
 
         if (isUpdateOnlyRow) {
-          // Find existing user by toot and davkhar
+          // Find existing user by toot, davkhar, and orts
           const existingOrshinSuugch = await OrshinSuugch(
             db.erunkhiiKholbolt,
           ).findOne({
             toot: userData.toot.trim(),
             davkhar: userData.davkhar.trim(),
+            orts: userData.orts ? userData.orts.trim() : "",
             baiguullagiinId: baiguullaga._id,
           });
 
@@ -1404,11 +1405,12 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           ],
         });
 
-        // Prevent duplicate: one toot (optionally + davkhar) can have only one resident per building
+        // Prevent duplicate: one toot (optionally + davkhar + orts) can have only one resident per building
         const tootRaw = userData.toot.trim();
         const davkharToCheck = userData.davkhar
           ? String(userData.davkhar).trim()
           : "";
+        const ortsToCheck = userData.orts ? String(userData.orts).trim() : "";
         const tootListToCheck = tootRaw
           .split(",")
           .map((t) => t.trim())
@@ -1425,6 +1427,10 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           if (davkharToCheck) {
             baseMatch.davkhar = davkharToCheck;
             baseTootMatch.davkhar = davkharToCheck;
+          }
+          if (ortsToCheck) {
+            baseMatch.orts = ortsToCheck;
+            baseTootMatch.orts = ortsToCheck;
           }
           const duplicateQuery = {
             $or: [baseMatch, { toots: { $elemMatch: baseTootMatch } }],

@@ -308,8 +308,6 @@ router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
         req.body.tsahilgaaniiZaalt = firstToot.tsahilgaaniiZaalt;
       }
     }
-
-    // Prevent duplicate: one toot (optionally + davkhar + orts) can have only one resident per building
     const orts = req.body.orts ? String(req.body.orts).trim() : "";
     if (toot && (barilgiinId || baiguullagiinId)) {
       const orConditions = [];
