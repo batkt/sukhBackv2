@@ -1512,67 +1512,42 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
 
       // Group data by year-month for headers
       const periods = new Set();
+      const allChargeNames = new Set();
+
       data.data.forEach((group) => {
         group.avlaga.forEach((inv) => {
           if (inv.ognoo) {
             const d = new Date(inv.ognoo);
-            periods.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+            const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            periods.add(ym);
+            
+            (inv.zardluud || []).forEach(z => {
+              const name = z.ner || z.tailbar || "Бусад";
+              allChargeNames.add(name);
+            });
           }
         });
       });
+
       const sortedPeriods = Array.from(periods).sort();
+      const sortedChargeNames = Array.from(allChargeNames).sort((a, b) => {
+        const isEkhA = a.includes("Эхний үлдэгдэл") ? 0 : 1;
+        const isEkhB = b.includes("Эхний үлдэгдэл") ? 0 : 1;
+        if (isEkhA !== isEkhB) return isEkhA - isEkhB;
+        return a.localeCompare(b, "mn");
+      });
 
-      // Column mapping
-      const serviceColumns = [
-        { label: "Хог", regex: /хог/i },
-        { label: "Үйлчлэгчийн цалин", regex: /үйлчлэгч/i },
-        { label: "Ариутгал цэвэрлэгээний материал", regex: /ариутгал|цэвэрлэгээний материал/i },
-        { label: "Дулаан, агаар сэлгэлт", regex: /дулаан|агаар/i },
-        { label: "Лифт", regex: /лифт/i },
-        { label: "Засвар үйлчилгээ", regex: /засвар/i },
-        { label: "Орон сууцны ашиглалт", regex: /ажилтан|байцаагч/i },
-        { label: "Дундын Цахилгаан", regex: /дундын/i },
-        { label: "Цахилгаан", regex: /^(?!.*дундын).*цахилгаан/i },
-        { label: "Бусад", regex: null },
-      ];
-
-      // Build Headers
-      // Row 1: Fixed Headers | <Period merged cells> | Grand Total
-      // Row 2: № | Харилцагч | Тоот | Утас | <Services per Period...> | Нийт
-      
+      // Headers setup
       const fixedHeaders = ["№", "Харилцагч", "Тоот", "Утас"];
-      const periodColCount = serviceColumns.length;
+      const headerRow2 = [...fixedHeaders];
       
-      // Calculate start col for each period
-      const startColRaw = fixedHeaders.length + 1;
-      
-      // We'll stick to one period for now if that's what's most common, 
-      // but let's assume the user wants the structure they provided.
-      // If we use multiple periods, the table will be very wide.
-      // Let's assume they want the breakdown as columns for the whole range if not specified.
-      
-      const headerRow2 = [];
-      fixedHeaders.forEach(h => headerRow2.push(h));
-      
-      // For each period (e.g. 2026-03), add the service columns
       sortedPeriods.forEach(p => {
-        serviceColumns.forEach(sc => headerRow2.push(sc.label));
+        sortedChargeNames.forEach(name => headerRow2.push(name));
         headerRow2.push("Нийт (" + p + ")");
       });
       headerRow2.push("Ерөнхий Нийт");
 
-      // Row 1: Merge period headers
-      const row1Data = new Array(headerRow2.length).fill("");
-      row1Data[0] = "НЭГТГЭЛ ТАЙЛАН";
-      
-      let currentCol = fixedHeaders.length + 1;
-      sortedPeriods.forEach(p => {
-        row1Data[currentCol - 1] = p;
-        worksheet.mergeCells(4, currentCol, 4, currentCol + serviceColumns.length);
-        currentCol += serviceColumns.length + 1;
-      });
-
-      // Title & Org info
+      // Row 1: Merged title cells
       worksheet.mergeCells("A1:" + worksheet.getColumn(headerRow2.length).letter + "1");
       const titleCell = worksheet.getCell("A1");
       titleCell.value = "НЭГТГЭЛ ТАЙЛАН (" + (orgName || "") + ")";
@@ -1585,6 +1560,23 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
       subTitle.value = "Хугацаа: " + rangeStr;
       subTitle.alignment = { horizontal: "center" };
 
+      // Row 4: Period headers
+      const row4Data = new Array(headerRow2.length).fill("");
+      let currentCol = fixedHeaders.length + 1;
+      sortedPeriods.forEach(p => {
+        row4Data[currentCol - 1] = p;
+        worksheet.mergeCells(4, currentCol, 4, currentCol + sortedChargeNames.length);
+        currentCol += sortedChargeNames.length + 1;
+      });
+      const periodRow = worksheet.addRow(row4Data);
+      periodRow.eachCell(cell => {
+        cell.font = { bold: true };
+        cell.alignment = { horizontal: 'center' };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      });
+
+      // Row 5: Detailed headers
       const headerRowObj = worksheet.addRow(headerRow2);
       headerRowObj.eachCell((cell) => {
         cell.font = { bold: true };
@@ -1598,8 +1590,6 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
       worksheet.getColumn(2).width = 30;  // Харилцагч
       worksheet.getColumn(3).width = 10;  // Тоот
       worksheet.getColumn(4).width = 15;  // Утас
-      
-      // Cost columns width
       for (let i = 5; i <= headerRow2.length; i++) {
         worksheet.getColumn(i).width = 18;
       }
@@ -1615,32 +1605,22 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
 
         let grandTotal = 0;
         sortedPeriods.forEach(period => {
-          const periodCosts = new Array(serviceColumns.length).fill(0);
+          const periodCosts = new Array(sortedChargeNames.length).fill(0);
           let periodTotal = 0;
 
-          // Find invoices in this period
           group.avlaga.forEach(inv => {
             if (!inv.ognoo) return;
-            let invP = "";
-            try {
-              const d = new Date(inv.ognoo);
-              if (!isNaN(d.getTime())) {
-                invP = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-              }
-            } catch (e) {}
+            const d = new Date(inv.ognoo);
+            const invP = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
             if (invP !== period) return;
 
-            inv.zardluud.forEach(z => {
+            (inv.zardluud || []).forEach(z => {
+              const name = z.ner || z.tailbar || "Бусад";
               const amount = Number(z.dun || z.tulukhDun || 0);
-              let matched = false;
-              for (let i = 0; i < serviceColumns.length - 1; i++) {
-                if (serviceColumns[i].regex.test(z.ner || z.tailbar || "")) {
-                  periodCosts[i] += amount;
-                  matched = true;
-                  break;
-                }
+              const colIdx = sortedChargeNames.indexOf(name);
+              if (colIdx >= 0) {
+                periodCosts[colIdx] += amount;
               }
-              if (!matched) periodCosts[serviceColumns.length - 1] += amount; // "Busad"
               periodTotal += amount;
             });
           });
@@ -2644,19 +2624,21 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
 
     const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
 
-    // ── Date range ───────────────────────────────────────────────────────────
-    const startDate = new Date(startStr);
-    startDate.setHours(0, 0, 0, 0);
-    const endDate = new Date(endStr);
-    endDate.setHours(23, 59, 59, 999);
-
     // ── Build DB query ────────────────────────────────────────────────────────
     const query = {
       baiguullagiinId: String(baiguullagiinId),
-      ognoo: { $gte: startDate, $lte: endDate },
     };
     if (barilgiinId) query.barilgiinId = String(barilgiinId);
     if (tuluv) query.tuluv = tuluv;
+
+    if (startStr && endStr) {
+      const startDate = new Date(startStr);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(endStr);
+      endDate.setHours(23, 59, 59, 999);
+      query.ognoo = { $gte: startDate, $lte: endDate };
+    }
+
     if (gereeniiDugaar) {
       query.gereeniiDugaar = {
         $regex: escapeRegex(String(gereeniiDugaar).trim()),
@@ -2665,28 +2647,36 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
     }
 
     const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-
     const Geree = require("../models/geree");
 
-    // Standalone Receivables (e.g. initial balances)
     const standaloneMatch = {
       baiguullagiinId: String(baiguullagiinId),
-      ognoo: { $gte: startDate, $lte: endDate },
       nekhemjlekhId: { $in: [null, ""] },
     };
     if (barilgiinId) standaloneMatch.barilgiinId = String(barilgiinId);
+    if (query.ognoo) standaloneMatch.ognoo = query.ognoo;
 
-    // Standalone Payments
     const standalonePaidMatch = {
       baiguullagiinId: String(baiguullagiinId),
-      ognoo: { $gte: startDate, $lte: endDate },
       nekhemjlekhId: { $in: [null, ""] },
     };
     if (barilgiinId) standalonePaidMatch.barilgiinId = String(barilgiinId);
+    if (query.ognoo) standalonePaidMatch.ognoo = query.ognoo;
 
-    const [invoices, standaloneReceivables, standalonePayments] = await Promise.all([
+    const startDate = query.ognoo?.$gte;
+    const endDate = query.ognoo?.$lte;
+
+    const receivableQuery = {
+      baiguullagiinId: String(baiguullagiinId),
+      dun: { $gt: 0 },
+    };
+    if (startDate && endDate) {
+      receivableQuery.ognoo = { $gte: startDate, $lte: endDate };
+    }
+
+    const [invoices, allReceivables, standalonePayments] = await Promise.all([
       NekhemjlekhiinTuukh(kholbolt).find(query).lean(),
-      GuilgeeAvlaguud(kholbolt).find(standaloneMatch).lean(),
+      GuilgeeAvlaguud(kholbolt).find(receivableQuery).lean(),
       GuilgeeAvlaguud(kholbolt).find(standalonePaidMatch).lean(),
     ]);
 
@@ -2702,6 +2692,27 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
 
     const contractMap = {};
     contracts.forEach((c) => (contractMap[String(c._id)] = c));
+
+    // Map receivables by invoice ID for easy lookup
+    const receivablesByInvoice = new Map();
+    const standaloneReceivables = [];
+
+    allReceivables.forEach((r) => {
+      // Skip Starting Balance as requested
+      const ner = String(r.zardliinNer || r.tailbar || "").toLowerCase();
+      if (ner.includes("эхний үлдэгдэл") || ner.includes("ekhni uldegdel") || r.ekhniiUldegdelEsekh) {
+        return;
+      }
+
+      if (r.nekhemjlekhId) {
+        if (!receivablesByInvoice.has(String(r.nekhemjlekhId))) {
+          receivablesByInvoice.set(String(r.nekhemjlekhId), []);
+        }
+        receivablesByInvoice.get(String(r.nekhemjlekhId)).push(r);
+      } else {
+        standaloneReceivables.push(r);
+      }
+    });
 
     // ── Group invoices by contract ───────────────────────────────────────────
     const groupMap = new Map();
@@ -2742,7 +2753,6 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       if (!groupMap.has(groupKey)) {
         const c = contractMap[String(inv.gereeniiId)] || inv;
         groupMap.set(groupKey, {
-          // Maintaining the nested _id structure as the user preferred in their snippet
           _id: {
             gereeniiId: inv.gereeniiId || "",
             gereeniiDugaar: inv.gereeniiDugaar || "",
@@ -2767,8 +2777,35 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
 
       const group = groupMap.get(groupKey);
 
+      // Get granular charges from allReceivables if available
+      const linkedReceivables = receivablesByInvoice.get(String(inv._id)) || [];
+      let zardluud = [];
+      
+      if (linkedReceivables.length > 0) {
+        zardluud = linkedReceivables.map(r => ({
+          ner: r.zardliinNer || r.tailbar || "Бусад зардал",
+          dun: Number(r.tulukhDun || r.undsenDun || 0),
+          tailbar: r.tailbar || "",
+          turul: r.zardliinTurul || "",
+          isEkhniiUldegdel: r.ekhniiUldegdelEsekh
+        }));
+      } else {
+        // Fallback to invoice snapshot but FILTER OUT Starting Balance
+        zardluud = (inv.medeelel?.zardluud || [])
+          .filter(z => {
+            const zNer = String(z.ner || z.tailbar || "").toLowerCase();
+            return !zNer.includes("эхний үлдэгдэл") && !zNer.includes("ekhni uldegdel") && !z.isEkhniiUldegdel;
+          })
+          .map(z => ({
+            ner: z.ner || z.tailbar || "Бусад зардал",
+            dun: Number(z.tulukhDun || z.dun || 0),
+            tailbar: z.tailbar || "",
+            turul: z.turul || "",
+            isEkhniiUldegdel: z.isEkhniiUldegdel
+          }));
+      }
+
       // Deduplication check: see if this invoice has a starting balance item
-      const zardluud = inv.medeelel?.zardluud || [];
       const hasEkhniiUldegdel = zardluud.some((z) => {
         const ner = String(z.ner || z.tailbar || "").toLowerCase();
         return ner.includes("эхний үлдэгдэл") || ner.includes("ekhni uldegdel") || z.isEkhniiUldegdel;
@@ -2790,15 +2827,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
         uldegdel,
         tuluv: inv.tuluv || "Төлөөгүй",
         nekhemjlekhiinDugaar: inv.nekhemjlekhiinDugaar || "",
-        zardluud: zardluud.map((z) => ({
-          ner: z.ner || z.tailbar || "Бусад зардал",
-          dun: Number(z.tulukhDun || z.dun || 0),
-          tailbar: z.tailbar || "",
-          turul: z.turul || "",
-          zardliinTurul: z.zardliinTurul || "",
-          zaaltTog: z.zaaltTog || null,
-          zaaltUs: z.zaaltUs || null,
-        })),
+        zardluud: zardluud,
         khungulultuud: (inv.medeelel?.khungulultuud || []).map((k) => ({
           ner: k.tailbar || "Хөнгөлөлт",
           dun: Number(k.khungulultiinDun || k.tulukhDun || 0),
