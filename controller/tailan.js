@@ -2877,7 +2877,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
         _id: inv._id,
         toot: inv.toot || inv.medeelel?.toot || "",
         ognoo: inv.ognoo || null,
-        tailbar: inv.zagvariinNer || "Нэхэмжлэх",
+        tailbar: "Нэхэмжлэх",
         tulukhDun,
         niitTulbur: Number(inv.niitTulbur || 0),
         uldegdel,
@@ -3028,10 +3028,21 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       );
     }
 
-    // ── Sort ──────────────────────────────────────────────────────────────────
+    // ── Sort by Toot (Unit Number) ───────────────────────────────────────────
     groups.sort((a, b) => {
-      const n = (a._id.ner || "").localeCompare(b._id.ner || "", "mn");
-      return n !== 0 ? n : (a._id.gereeniiDugaar || "").localeCompare(b._id.gereeniiDugaar || "", "mn");
+      const aToot = parseInt(a._id.toot || "0");
+      const bToot = parseInt(b._id.toot || "0");
+      
+      if (!isNaN(aToot) && !isNaN(bToot) && aToot !== bToot) {
+        return aToot - bToot;
+      }
+      
+      // Fallback to string compare for non-numeric toots
+      const tootCompare = String(a._id.toot || "").localeCompare(String(b._id.toot || ""), undefined, { numeric: true });
+      if (tootCompare !== 0) return tootCompare;
+
+      // Final fallback to name
+      return (a._id.ner || "").localeCompare(b._id.ner || "", "mn");
     });
 
     // ── Pagination ────────────────────────────────────────────────────────────
