@@ -1196,41 +1196,83 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       ekhlekhOgnoo,
       duusakhOgnoo,
       khuudasniiDugaar = 1,
-      khuudasniiKhemjee = 20,
+      khuudasniiKhemjee = 200,
+      orshinSuugch,
+      toot,
+      davkhar,
+      gereeniiDugaar,
       search,
     } = source || {};
 
     if (!baiguullagiinId) {
-      return res
-        .status(400)
-        .json({ success: false, message: "baiguullagiinId is required" });
+      return res.status(400).json({ success: false, message: "baiguullagiinId is required" });
     }
 
     const kholbolt = db.kholboltuud.find(
       (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
     );
     if (!kholbolt) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Холболтын мэдээлэл олдсонгүй" });
+      return res.status(404).json({ success: false, message: "Холболтын мэдээлэл олдсонгүй" });
     }
 
     const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
     const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
     const Geree = require("../models/geree");
+    const OrshinSuugch = require("../models/orshinSuugch");
 
-    const match = {
-      baiguullagiinId: String(baiguullagiinId),
-    };
+    const match = { baiguullagiinId: String(baiguullagiinId) };
     if (barilgiinId) match.barilgiinId = String(barilgiinId);
 
-    // ─── Use Resident-First Aggregation for 100% accurate balances ────────────
-    const OrshinSuugch = require("../models/orshinSuugch");
+    // Apply filters to the resident match object
+    if (search || orshinSuugch || toot || gereeniiDugaar || davkhar) {
+      match.$and = match.$and || [];
+      const orConditions = [];
+      if (search) {
+        const re = new RegExp(escapeRegex(String(search).trim()), "i");
+        orConditions.push({ ner: re }, { ovog: re }, { toot: re }, { gereeniiDugaar: re }, { "medeelel.toot": re });
+      }
+      if (orshinSuugch) {
+        const re = new RegExp(escapeRegex(String(orshinSuugch).trim()), "i");
+        orConditions.push({ ner: re }, { ovog: re });
+      }
+      if (toot) {
+        const re = new RegExp(escapeRegex(String(toot).trim()), "i");
+        orConditions.push({ toot: re }, { "medeelel.toot": re });
+      }
+      if (gereeniiDugaar) {
+        const re = new RegExp(escapeRegex(String(gereeniiDugaar).trim()), "i");
+        orConditions.push({ gereeniiDugaar: re });
+      }
+      if (davkhar) {
+        const re = new RegExp(escapeRegex(String(davkhar).trim()), "i");
+        orConditions.push({ davkhar: re });
+      }
+      if (orConditions.length > 0) match.$and.push({ $or: orConditions });
+    }
+
+    const transactionMatch = { baiguullagiinId: String(baiguullagiinId) };
+    if (barilgiinId) transactionMatch.barilgiinId = String(barilgiinId);
+
+    if (duusakhOgnoo) {
+      const parseDate = (dateStr) => {
+        if (!dateStr) return null;
+        let str = String(dateStr).trim();
+        if (/^\d{4}\.\d{2}\.\d{2}/.test(str)) str = str.replace(/^(\d{4})\.(\d{2})\.(\d{2})/, "$1-$2-$3");
+        const d = new Date(str);
+        return isNaN(d.getTime()) ? null : d;
+      };
+      const endDate = parseDate(duusakhOgnoo);
+      if (endDate) {
+        endDate.setHours(23, 59, 59, 999);
+        transactionMatch.ognoo = { $lte: endDate };
+      }
+    }
+
     const [allOrshinSuugch, allContractsList, allInvoices, allLedgerEntries] = await Promise.all([
       OrshinSuugch(kholbolt).find(match).lean(),
       Geree(kholbolt).find(match).lean(),
-      NekhemjlekhiinTuukh(kholbolt).find({ ...match, tuluv: { $ne: "Цуцалсан" } }).sort({ ognoo: 1 }).lean(),
-      GuilgeeAvlaguud(kholbolt).find(match).lean(),
+      NekhemjlekhiinTuukh(kholbolt).find({ ...transactionMatch, tuluv: { $ne: "Цуцалсан" } }).sort({ ognoo: 1 }).lean(),
+      GuilgeeAvlaguud(kholbolt).find(transactionMatch).lean(),
     ]);
 
     const activeContracts = allContractsList.filter(c => {
@@ -1239,8 +1281,6 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
     });
 
     const residentMap = new Map();
-
-    // Initialize with all residents to ensure 100% coverage
     allOrshinSuugch.forEach(r => {
       const gid = String(r._id);
       residentMap.set(gid, {
@@ -1259,12 +1299,10 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
         p61_90: 0,
         p91_120: 0,
         p120plus: 0,
-        invoices: [],
-        standaloneUnpaid: 0,
+        gereeniiId: "",
       });
     });
 
-    // Map contracts to residents
     activeContracts.forEach(c => {
       const resId = String(c.orshinSuugchiinId || c.residentId || "");
       const res = residentMap.get(resId);
@@ -1274,11 +1312,9 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       }
     });
 
-    // Categorize invoices
     const now = new Date();
     allInvoices.forEach(inv => {
       const gid = String(inv.gereeniiId || inv.gereeniiDugaar || "");
-      // Find resident by contract ID or resident ID
       let res = Array.from(residentMap.values()).find(r => r.gereeniiId === gid || r._id === gid);
       if (!res) return;
 
@@ -1293,7 +1329,6 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       if (uldegdel > 0) {
         const invDate = new Date(inv.ognoo || inv.createdAt);
         const diffDays = Math.floor((now.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24));
-
         if (diffDays <= 30) res.p0_30 += uldegdel;
         else if (diffDays <= 60) res.p31_60 += uldegdel;
         else if (diffDays <= 90) res.p61_90 += uldegdel;
@@ -1302,9 +1337,8 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       }
     });
 
-    // Standalone Ledger Entries
     allLedgerEntries.forEach(s => {
-      if (s.nekhemjlekhId) return; // Skip invoice-linked entries
+      if (s.nekhemjlekhId) return;
       const gid = String(s.gereeniiId || s.residentId || "");
       const res = residentMap.get(gid) || Array.from(residentMap.values()).find(r => r.gereeniiId === gid);
       if (!res) return;
@@ -1317,7 +1351,6 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
          res.undsenDun += dun;
          res.tulsunDun += tulsun;
          res.uldegdel += uld;
-         
          if (uld > 0) {
            const sDate = new Date(s.ognoo || s.createdAt);
            const diffDays = Math.floor((now.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -1328,10 +1361,8 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
            else res.p120plus += uld;
          }
       } else if (dun < 0) {
-         // Standalone payment
          res.tulsunDun += Math.abs(dun);
          res.uldegdel -= Math.abs(dun);
-         // Reduce buckets from oldest to newest
          let remainingCredit = Math.abs(dun);
          const buckets = ["p120plus", "p91_120", "p61_90", "p31_60", "p0_30"];
          for (const b of buckets) {
@@ -1345,7 +1376,6 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
 
     let list = Array.from(residentMap.values()).filter(r => r.uldegdel !== 0 || r.undsenDun !== 0);
 
-    // Sorting by toot
     list.sort((a, b) => {
       const aToot = parseInt(a.toot);
       const bToot = parseInt(b.toot);
@@ -1353,11 +1383,8 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       return String(a.toot).localeCompare(String(b.toot), undefined, { numeric: true });
     });
 
-    // Pagination
     const totalCount = list.length;
-    const pageNum = Number(khuudasniiDugaar);
-    const sizeNum = Number(khuudasniiKhemjee);
-    const paginated = list.slice((pageNum - 1) * sizeNum, pageNum * sizeNum);
+    const paginated = list.slice((Number(khuudasniiDugaar) - 1) * Number(khuudasniiKhemjee), Number(khuudasniiDugaar) * Number(khuudasniiKhemjee));
 
     const totals = {
       undsenDun: list.reduce((s, r) => s + r.undsenDun, 0),
@@ -1370,12 +1397,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       p120plus: list.reduce((s, r) => s + r.p120plus, 0),
     };
 
-    res.json({
-      success: true,
-      data: paginated,
-      totalCount,
-      totals,
-    });
+    res.json({ success: true, data: paginated, totalCount, totals });
   } catch (error) {
     next(error);
   }
