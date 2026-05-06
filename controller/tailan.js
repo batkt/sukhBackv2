@@ -2669,20 +2669,20 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       receivableQuery.ognoo = { $gte: startDate, $lte: endDate };
     }
 
+    // Fetch ALL active contracts regardless of activity to accurately reflect the total building balance matching the Tulbur page
+    const gereeQuery = { baiguullagiinId: String(baiguullagiinId) };
+    if (barilgiinId) gereeQuery.barilgiinId = String(barilgiinId);
+
     const OrshinSuugch = require("../models/orshinSuugch");
 
-    const [invoices, allReceivables, standalonePayments, allOrshinSuugch] = await Promise.all([
+    const [invoices, allReceivables, standalonePayments, allOrshinSuugch, allContractsList] = await Promise.all([
       NekhemjlekhiinTuukh(kholbolt).find(query).lean(),
       GuilgeeAvlaguud(kholbolt).find(receivableQuery).lean(),
       GuilgeeAvlaguud(kholbolt).find(standalonePaidMatch).lean(),
       OrshinSuugch(kholbolt).find(gereeQuery).lean(),
+      Geree(kholbolt).find(gereeQuery).lean(),
     ]);
 
-    // Fetch ALL active contracts regardless of activity to accurately reflect the total building balance matching the Tulbur page
-    const gereeQuery = { baiguullagiinId: String(baiguullagiinId) };
-    if (barilgiinId) gereeQuery.barilgiinId = String(barilgiinId);
-    
-    const allContractsList = await Geree(kholbolt).find(gereeQuery).lean();
     const contracts = allContractsList.filter(c => {
       const st = String(c.tuluv || c.status || "").toLowerCase();
       return st !== "цуцалсан" && st !== "tsutlsasan";
