@@ -2605,13 +2605,8 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       });
     }
 
-    // Default to current month if dates missing
-    const now = new Date();
-    const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
-
-    const startStr = ekhlekhOgnoo || defaultStart;
-    const endStr = duusakhOgnoo || defaultEnd;
+    const startStr = ekhlekhOgnoo;
+    const endStr = duusakhOgnoo;
 
     const kholbolt = db.kholboltuud.find(
       (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
@@ -2674,10 +2669,13 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       receivableQuery.ognoo = { $gte: startDate, $lte: endDate };
     }
 
-    const [invoices, allReceivables, standalonePayments] = await Promise.all([
+    const OrshinSuugch = require("../models/orshinSuugch");
+
+    const [invoices, allReceivables, standalonePayments, allOrshinSuugch] = await Promise.all([
       NekhemjlekhiinTuukh(kholbolt).find(query).lean(),
       GuilgeeAvlaguud(kholbolt).find(receivableQuery).lean(),
       GuilgeeAvlaguud(kholbolt).find(standalonePaidMatch).lean(),
+      OrshinSuugch(kholbolt).find(gereeQuery).lean(),
     ]);
 
     // Fetch ALL active contracts regardless of activity to accurately reflect the total building balance matching the Tulbur page
@@ -2717,29 +2715,70 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
     // ── Group invoices by contract ───────────────────────────────────────────
     const groupMap = new Map();
 
-    // Pre-populate groupMap with ALL active contracts
-    contracts.forEach((c) => {
-       groupMap.set(String(c._id), {
+    // Pre-populate groupMap with ALL residents first (to ensure they appear even without contracts)
+    allOrshinSuugch.forEach((r) => {
+       const key = String(r._id);
+       groupMap.set(key, {
           _id: {
-            gereeniiId: String(c._id),
-            gereeniiDugaar: c.gereeniiDugaar || "",
-            register: c.register || c.rd || "",
-            ovog: c.ovog || "",
-            ner: c.ner || "",
-            utas: Array.isArray(c.utas) ? c.utas : c.utas ? [c.utas] : [],
-            davkhar: c.davkhar || "",
-            orts: c.orts || "",
-            toot: c.toot || c.medeelel?.toot || "",
+            gereeniiId: "", // Will be filled if contract exists
+            gereeniiDugaar: "",
+            register: r.register || r.rd || "",
+            ovog: r.ovog || "",
+            ner: r.ner || "",
+            utas: Array.isArray(r.utas) ? r.utas : r.utas ? [r.utas] : [],
+            davkhar: r.davkhar || "",
+            orts: r.orts || "",
+            toot: r.toot || r.medeelel?.toot || "",
           },
           avlaga: [],
           niitTulukhDun: 0,
           niitTulsunDun: 0,
           niitUldegdel: 0, 
-          globalUldegdel: Number(c.globalUldegdel ?? c.uldegdel ?? 0),
+          globalUldegdel: 0,
           invoiceToo: 0,
           paymentToo: 0,
           hasInvoiceEkhniiUldegdel: false,
        });
+    });
+
+    // Overlay contract info
+    contracts.forEach((c) => {
+       const residentId = String(c.orshinSuugchiinId || c.residentId || "");
+       let group;
+       
+       if (residentId && groupMap.has(residentId)) {
+         group = groupMap.get(residentId);
+       } else {
+         const key = String(c._id);
+         if (!groupMap.has(key)) {
+           groupMap.set(key, {
+              _id: {
+                gereeniiId: String(c._id),
+                gereeniiDugaar: c.gereeniiDugaar || "",
+                register: c.register || c.rd || "",
+                ovog: c.ovog || "",
+                ner: c.ner || "",
+                utas: Array.isArray(c.utas) ? c.utas : c.utas ? [c.utas] : [],
+                davkhar: c.davkhar || "",
+                orts: c.orts || "",
+                toot: c.toot || c.medeelel?.toot || "",
+              },
+              avlaga: [],
+              niitTulukhDun: 0,
+              niitTulsunDun: 0,
+              niitUldegdel: 0, 
+              globalUldegdel: 0,
+              invoiceToo: 0,
+              paymentToo: 0,
+              hasInvoiceEkhniiUldegdel: false,
+           });
+         }
+         group = groupMap.get(key);
+       }
+
+       group._id.gereeniiId = String(c._id);
+       group._id.gereeniiDugaar = c.gereeniiDugaar || "";
+       group.globalUldegdel = Number(c.globalUldegdel ?? c.uldegdel ?? 0);
     });
 
     for (const inv of invoices) {
@@ -2910,13 +2949,9 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       };
       group.avlaga.push(row);
       group.niitTulukhDun += row.tulukhDun;
-      // Sum standalone charges
       group.niitUldegdel += row.tulukhDun;
-      // Standalone receivable uldegdel is also not added to niitUldegdel as we use the contract total
-      // We don't count paid based on tulukh - uldegdel for standalone, we only count payments from TulsunRecords
-    }
 
-    // ── Process Standalone Payments ──────────────────────────────────────────
+    }
     for (const p of standalonePayments) {
       const gid = String(p.gereeniiId);
       if (!gid || gid === "undefined" || gid === "null") continue;
