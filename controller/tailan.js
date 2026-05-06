@@ -1284,34 +1284,10 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       }
     }
 
-    // Try both String and ObjectId for maximum compatibility
-    const mongoose = require("mongoose");
-    const toObjectId = (id) => {
-      try { return mongoose.Types.ObjectId(id); } catch(e) { return id; }
-    };
-
-    const makeRobust = (m) => {
-      if (m.baiguullagiinId && typeof m.baiguullagiinId === "string") {
-        const sid = m.baiguullagiinId;
-        const oid = toObjectId(sid);
-        if (sid !== String(oid)) delete m.baiguullagiinId; // Not a valid oid
-        else m.baiguullagiinId = { $in: [sid, oid] };
-      }
-      if (m.barilgiinId && typeof m.barilgiinId === "string") {
-        const sid = m.barilgiinId;
-        const oid = toObjectId(sid);
-        m.barilgiinId = { $in: [sid, oid] };
-      }
-    };
-
-    // Note: transactionMatch and match for Geree/Invoices
-    makeRobust(match);
-    makeRobust(transactionMatch);
-
     const [allOrshinSuugch, allContractsList, allInvoices, allLedgerEntries] = await Promise.all([
       OrshinSuugch(kholbolt).find(residentMatch).lean(),
       Geree(kholbolt).find(match).lean(),
-      NekhemjlekhiinTuukh(kholbolt).find({ ...transactionMatch, tuluv: { $ne: "Цуцалсан" } }).sort({ ognoo: 1 }).lean(),
+      NekhemjlekhiinTuukh(kholbolt).find(transactionMatch).lean(),
       GuilgeeAvlaguud(kholbolt).find(transactionMatch).lean(),
     ]);
 
@@ -1321,10 +1297,12 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
     });
 
     const residentMap = new Map();
+    const contractToResidentMap = new Map(); // Link both _id and gereeniiDugaar to resident
+
     allOrshinSuugch.forEach(r => {
-      const gid = String(r._id);
-      residentMap.set(gid, {
-        _id: gid,
+      const rid = String(r._id);
+      const resObj = {
+        _id: rid,
         ner: r.ner || "",
         ovog: r.ovog || "",
         toot: r.toot || r.medeelel?.toot || "",
@@ -1340,7 +1318,9 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
         p91_120: 0,
         p120plus: 0,
         gereeniiId: "",
-      });
+      };
+      residentMap.set(rid, resObj);
+      contractToResidentMap.set(rid, resObj); // Fallback: resident ID itself
     });
 
     activeContracts.forEach(c => {
@@ -1349,13 +1329,16 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       if (res) {
         res.gereeniiDugaar = c.gereeniiDugaar || "";
         res.gereeniiId = String(c._id);
+        contractToResidentMap.set(String(c._id), res);
+        if (c.gereeniiDugaar) contractToResidentMap.set(String(c.gereeniiDugaar), res);
       }
     });
 
     const now = new Date();
     allInvoices.forEach(inv => {
-      const gid = String(inv.gereeniiId || inv.gereeniiDugaar || "");
-      let res = Array.from(residentMap.values()).find(r => r.gereeniiId === gid || r._id === gid);
+      const gid = String(inv.gereeniiId || "");
+      const gno = String(inv.gereeniiDugaar || "");
+      const res = contractToResidentMap.get(gid) || contractToResidentMap.get(gno) || contractToResidentMap.get(String(inv.residentId || ""));
       if (!res) return;
 
       const billed = Number(inv.niitTulburOriginal != null ? inv.niitTulburOriginal : inv.niitTulbur) || 0;
@@ -1379,8 +1362,8 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
 
     allLedgerEntries.forEach(s => {
       if (s.nekhemjlekhId) return;
-      const gid = String(s.gereeniiId || s.residentId || "");
-      const res = residentMap.get(gid) || Array.from(residentMap.values()).find(r => r.gereeniiId === gid);
+      const gid = String(s.gereeniiId || "");
+      const res = contractToResidentMap.get(gid) || contractToResidentMap.get(String(s.residentId || ""));
       if (!res) return;
 
       const dun = Number(s.dun || 0);
