@@ -2839,7 +2839,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       
       if (linkedReceivables.length > 0) {
         zardluud = linkedReceivables.map(r => ({
-          ner: r.zardliinNer || r.tailbar || "Бусад зардал",
+          ner: r.zardliinNer || r.zardliinTurul || "Бусад",
           dun: Number(r.tulukhDun || r.undsenDun || 0),
           tailbar: r.tailbar || "",
           turul: r.zardliinTurul || "",
@@ -2853,7 +2853,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
             return !zNer.includes("эхний үлдэгдэл") && !zNer.includes("ekhni uldegdel") && !z.isEkhniiUldegdel;
           })
           .map(z => ({
-            ner: z.ner || z.tailbar || "Бусад зардал",
+            ner: z.ner || z.turul || "Бусад",
             dun: Number(z.tulukhDun || z.dun || 0),
             tailbar: z.tailbar || "",
             turul: z.turul || "",
