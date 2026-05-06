@@ -52,10 +52,27 @@ async function fix() {
           let toot = doc.toot || "N/A";
           let davkhar = doc.davkhar || "N/A";
           
-          if (doc.gereeniiId) {
-            const geree = await conn.collection("geree").findOne({ _id: doc.gereeniiId });
+          let gId = doc.gereeniiId;
+          if (gId) {
+            // Try to find geree (handle both ObjectId and String)
+            let searchId = gId;
+            try { if (typeof gId === "string") searchId = new mongoose.Types.ObjectId(gId); } catch(e) {}
+            
+            const geree = await conn.collection("geree").findOne({ _id: searchId });
             if (geree) {
-              const resident = await masterConn.collection("orshinSuugch").findOne({ _id: geree.orshinSuugchiinId });
+              let rId = geree.orshinSuugchiinId;
+              let searchRId = rId;
+              try { if (typeof rId === "string") searchRId = new mongoose.Types.ObjectId(rId); } catch(e) {}
+              
+              const resident = await masterConn.collection("orshinSuugch").findOne({ _id: searchRId });
+              if (resident) {
+                residentName = resident.ner;
+                if (toot === "N/A") toot = resident.toot;
+                if (davkhar === "N/A") davkhar = resident.davkhar;
+              }
+            } else {
+              // If geree not found, maybe lookup resident directly if gereeniiId was actually orshinSuugchiinId? (Rare)
+              const resident = await masterConn.collection("orshinSuugch").findOne({ _id: searchId });
               if (resident) {
                 residentName = resident.ner;
                 if (toot === "N/A") toot = resident.toot;
@@ -64,7 +81,29 @@ async function fix() {
             }
           }
 
+          if (residentName === "N/A" && doc.nekhemjlekhId) {
+             // Try via invoice
+             let nId = doc.nekhemjlekhId;
+             let searchNId = nId;
+             try { if (typeof nId === "string") searchNId = new mongoose.Types.ObjectId(nId); } catch(e) {}
+             const inv = await conn.collection("nekhemjlekhiinTuukh").findOne({ _id: searchNId });
+             if (inv && inv.gereeniiId) {
+                const geree = await conn.collection("geree").findOne({ _id: inv.gereeniiId });
+                if (geree) {
+                   const resident = await masterConn.collection("orshinSuugch").findOne({ _id: geree.orshinSuugchiinId });
+                   if (resident) {
+                      residentName = resident.ner;
+                      if (toot === "N/A") toot = resident.toot;
+                      if (davkhar === "N/A") davkhar = resident.davkhar;
+                   }
+                }
+             }
+          }
+
           console.log(`      [CRIPPLED] ID: ${doc._id} | Resident: ${residentName} | Toot: ${toot} | Floor: ${davkhar}`);
+          if (residentName === "N/A") {
+             console.log(`                 Debug Info: gereeniiId=${doc.gereeniiId}, nekhemjlekhId=${doc.nekhemjlekhId}, toot=${doc.toot}`);
+          }
           console.log(`                 Current: { dun: ${doc.dun}, undsenDun: ${doc.undsenDun}, tulukhDun: ${doc.tulukhDun} }`);
           console.log(`                 Target: ${targetAmount}`);
           
