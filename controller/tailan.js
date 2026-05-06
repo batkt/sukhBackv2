@@ -2715,12 +2715,19 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
     // ── Group invoices by contract ───────────────────────────────────────────
     const groupMap = new Map();
 
-    // Pre-populate groupMap with ALL residents first (to ensure they appear even without contracts)
+    // Pre-populate groupMap using a robust composite key to avoid doubling
     allOrshinSuugch.forEach((r) => {
+       const ner = String(r.ner || "").trim();
+       const toot = String(r.toot || r.medeelel?.toot || "").trim();
+       const utas = Array.isArray(r.utas) ? String(r.utas[0] || "").trim() : String(r.utas || "").trim();
+       
+       // Primary key is ID, but we'll also map it by composite for contract overlay
        const key = String(r._id);
-       groupMap.set(key, {
+       const compositeKey = `${ner}|${toot}|${utas}`;
+
+       const group = {
           _id: {
-            gereeniiId: "", // Will be filled if contract exists
+            gereeniiId: "", 
             gereeniiDugaar: "",
             register: r.register || r.rd || "",
             ovog: r.ovog || "",
@@ -2728,7 +2735,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
             utas: Array.isArray(r.utas) ? r.utas : r.utas ? [r.utas] : [],
             davkhar: r.davkhar || "",
             orts: r.orts || "",
-            toot: r.toot || r.medeelel?.toot || "",
+            toot: toot,
           },
           avlaga: [],
           niitTulukhDun: 0,
@@ -2738,47 +2745,57 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
           invoiceToo: 0,
           paymentToo: 0,
           hasInvoiceEkhniiUldegdel: false,
-       });
+       };
+       
+       groupMap.set(key, group);
+       if (compositeKey && compositeKey !== "||") {
+         groupMap.set(compositeKey, group);
+       }
     });
 
     // Overlay contract info
     contracts.forEach((c) => {
-       const residentId = String(c.orshinSuugchiinId || c.residentId || "");
-       let group;
+       const resId = String(c.orshinSuugchiinId || c.residentId || "");
+       const ner = String(c.ner || "").trim();
+       const toot = String(c.toot || c.medeelel?.toot || "").trim();
+       const utas = Array.isArray(c.utas) ? String(c.utas[0] || "").trim() : String(c.utas || "").trim();
+       const compositeKey = `${ner}|${toot}|${utas}`;
+
+       let group = groupMap.get(resId) || groupMap.get(compositeKey);
        
-       if (residentId && groupMap.has(residentId)) {
-         group = groupMap.get(residentId);
-       } else {
+       if (!group) {
          const key = String(c._id);
-         if (!groupMap.has(key)) {
-           groupMap.set(key, {
-              _id: {
-                gereeniiId: String(c._id),
-                gereeniiDugaar: c.gereeniiDugaar || "",
-                register: c.register || c.rd || "",
-                ovog: c.ovog || "",
-                ner: c.ner || "",
-                utas: Array.isArray(c.utas) ? c.utas : c.utas ? [c.utas] : [],
-                davkhar: c.davkhar || "",
-                orts: c.orts || "",
-                toot: c.toot || c.medeelel?.toot || "",
-              },
-              avlaga: [],
-              niitTulukhDun: 0,
-              niitTulsunDun: 0,
-              niitUldegdel: 0, 
-              globalUldegdel: 0,
-              invoiceToo: 0,
-              paymentToo: 0,
-              hasInvoiceEkhniiUldegdel: false,
-           });
-         }
-         group = groupMap.get(key);
+         group = {
+            _id: {
+              gereeniiId: String(c._id),
+              gereeniiDugaar: c.gereeniiDugaar || "",
+              register: c.register || c.rd || "",
+              ovog: c.ovog || "",
+              ner: c.ner || "",
+              utas: Array.isArray(c.utas) ? c.utas : c.utas ? [c.utas] : [],
+              davkhar: c.davkhar || "",
+              orts: c.orts || "",
+              toot: toot,
+            },
+            avlaga: [],
+            niitTulukhDun: 0,
+            niitTulsunDun: 0,
+            niitUldegdel: 0, 
+            globalUldegdel: 0,
+            invoiceToo: 0,
+            paymentToo: 0,
+            hasInvoiceEkhniiUldegdel: false,
+         };
+         groupMap.set(key, group);
+         if (compositeKey && compositeKey !== "||") groupMap.set(compositeKey, group);
        }
 
        group._id.gereeniiId = String(c._id);
        group._id.gereeniiDugaar = c.gereeniiDugaar || "";
        group.globalUldegdel = Number(c.globalUldegdel ?? c.uldegdel ?? 0);
+       
+       // Also ensure the contract ID points to this group for invoice matching
+       groupMap.set(String(c._id), group);
     });
 
     for (const inv of invoices) {
@@ -2996,7 +3013,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
     }
 
     // ── Convert map to array ──────────────────────────────────────────────────
-    let groups = Array.from(groupMap.values());
+    const groups = Array.from(new Set(groupMap.values()));
 
     // ── Post-group search ─────────────────────────────────────────────────────
     if (search && String(search).trim()) {
