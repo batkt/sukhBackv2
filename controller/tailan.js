@@ -2844,7 +2844,9 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       // Only count payments that occurred WITHIN the period
       const periodPayments = (inv.paymentHistory || []).filter(p => {
         const pDate = new Date(p.ognoo || p.tulsunOgnoo || p.createdAt);
-        return pDate >= startDate && pDate <= endDate;
+        const afterStart = !startDate || pDate >= startDate;
+        const beforeEnd = !endDate || pDate <= endDate;
+        return afterStart && beforeEnd;
       }).reduce((s, p) => s + (Number(p.dun || p.tulsunDun || 0)), 0);
       
       group.niitTulsunDun += periodPayments;
