@@ -2877,7 +2877,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
         _id: inv._id,
         toot: inv.toot || inv.medeelel?.toot || "",
         ognoo: inv.ognoo || null,
-        tailbar: inv.tailbar || inv.zagvariinNer || "Нэхэмжлэх",
+        tailbar: inv.zagvariinNer || "Нэхэмжлэх",
         tulukhDun,
         niitTulbur: Number(inv.niitTulbur || 0),
         uldegdel,
