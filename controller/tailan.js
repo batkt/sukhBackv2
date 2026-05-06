@@ -1284,6 +1284,30 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       }
     }
 
+    // Try both String and ObjectId for maximum compatibility
+    const mongoose = require("mongoose");
+    const toObjectId = (id) => {
+      try { return mongoose.Types.ObjectId(id); } catch(e) { return id; }
+    };
+
+    const makeRobust = (m) => {
+      if (m.baiguullagiinId && typeof m.baiguullagiinId === "string") {
+        const sid = m.baiguullagiinId;
+        const oid = toObjectId(sid);
+        if (sid !== String(oid)) delete m.baiguullagiinId; // Not a valid oid
+        else m.baiguullagiinId = { $in: [sid, oid] };
+      }
+      if (m.barilgiinId && typeof m.barilgiinId === "string") {
+        const sid = m.barilgiinId;
+        const oid = toObjectId(sid);
+        m.barilgiinId = { $in: [sid, oid] };
+      }
+    };
+
+    // Note: transactionMatch and match for Geree/Invoices
+    makeRobust(match);
+    makeRobust(transactionMatch);
+
     const [allOrshinSuugch, allContractsList, allInvoices, allLedgerEntries] = await Promise.all([
       OrshinSuugch(kholbolt).find(residentMatch).lean(),
       Geree(kholbolt).find(match).lean(),
@@ -1390,7 +1414,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       }
     });
 
-    let list = Array.from(residentMap.values()).filter(r => r.uldegdel !== 0 || r.undsenDun !== 0);
+    let list = Array.from(residentMap.values());
 
     list.sort((a, b) => {
       const aToot = parseInt(a.toot);
