@@ -1220,15 +1220,15 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
     const Geree = require("../models/geree");
     const OrshinSuugch = require("../models/orshinSuugch");
 
-    const match = {
+    const residentMatch = {
       $or: [
         { baiguullagiinId: String(baiguullagiinId) },
         { "toots.baiguullagiinId": String(baiguullagiinId) }
       ]
     };
     if (barilgiinId) {
-      match.$and = match.$and || [];
-      match.$and.push({
+      residentMatch.$and = residentMatch.$and || [];
+      residentMatch.$and.push({
         $or: [
           { barilgiinId: String(barilgiinId) },
           { "toots.barilgiinId": String(barilgiinId) }
@@ -1236,9 +1236,12 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       });
     }
 
-    // Apply filters to the resident match object
+    const match = { baiguullagiinId: String(baiguullagiinId) };
+    if (barilgiinId) match.barilgiinId = String(barilgiinId);
+
+    // Apply filters to the resident match object for search
     if (search || orshinSuugch || toot || gereeniiDugaar || davkhar) {
-      match.$and = match.$and || [];
+      residentMatch.$and = residentMatch.$and || [];
       const orConditions = [];
       if (search) {
         const re = new RegExp(escapeRegex(String(search).trim()), "i");
@@ -1260,7 +1263,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
         const re = new RegExp(escapeRegex(String(davkhar).trim()), "i");
         orConditions.push({ davkhar: re });
       }
-      if (orConditions.length > 0) match.$and.push({ $or: orConditions });
+      if (orConditions.length > 0) residentMatch.$and.push({ $or: orConditions });
     }
 
     const transactionMatch = { baiguullagiinId: String(baiguullagiinId) };
@@ -1282,7 +1285,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
     }
 
     const [allOrshinSuugch, allContractsList, allInvoices, allLedgerEntries] = await Promise.all([
-      OrshinSuugch(kholbolt).find(match).lean(),
+      OrshinSuugch(kholbolt).find(residentMatch).lean(),
       Geree(kholbolt).find(match).lean(),
       NekhemjlekhiinTuukh(kholbolt).find({ ...transactionMatch, tuluv: { $ne: "Цуцалсан" } }).sort({ ognoo: 1 }).lean(),
       GuilgeeAvlaguud(kholbolt).find(transactionMatch).lean(),
