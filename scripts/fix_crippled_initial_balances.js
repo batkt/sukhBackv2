@@ -35,7 +35,7 @@ async function fix() {
         continue;
       }
 
-      const collection = conn.collection("guilgeeavlaguuds");
+      const collection = conn.collection("guilgeeAvlaguud");
 
       const query = {
         $and: [
