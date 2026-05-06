@@ -52,52 +52,69 @@ async function fix() {
           let toot = doc.toot || "N/A";
           let davkhar = doc.davkhar || "N/A";
           
-          let gId = doc.gereeniiId;
-          if (gId) {
-            // Try to find geree (handle both ObjectId and String)
-            let searchId = gId;
-            try { if (typeof gId === "string") searchId = new mongoose.Types.ObjectId(gId); } catch(e) {}
-            
-            const geree = await conn.collection("geree").findOne({ _id: searchId });
-            if (geree) {
-              let rId = geree.orshinSuugchiinId;
-              let searchRId = rId;
-              try { if (typeof rId === "string") searchRId = new mongoose.Types.ObjectId(rId); } catch(e) {}
-              
-              const resident = await masterConn.collection("orshinSuugch").findOne({ _id: searchRId });
-              if (resident) {
-                residentName = resident.ner;
-                if (toot === "N/A") toot = resident.toot;
-                if (davkhar === "N/A") davkhar = resident.davkhar;
-              }
-            } else {
-              // If geree not found, maybe lookup resident directly if gereeniiId was actually orshinSuugchiinId? (Rare)
-              const resident = await masterConn.collection("orshinSuugch").findOne({ _id: searchId });
-              if (resident) {
-                residentName = resident.ner;
-                if (toot === "N/A") toot = resident.toot;
-                if (davkhar === "N/A") davkhar = resident.davkhar;
-              }
-            }
-          }
+          const findGeree = async (id) => {
+            if (!id) return null;
+            // Try as is
+            let res = await conn.collection("geree").findOne({ _id: id });
+            if (res) return res;
+            // Try as ObjectId
+            try { 
+              res = await conn.collection("geree").findOne({ _id: new mongoose.Types.ObjectId(id) });
+              if (res) return res;
+            } catch(e) {}
+            // Try as String
+            try {
+              res = await conn.collection("geree").findOne({ _id: String(id) });
+              if (res) return res;
+            } catch(e) {}
+            return null;
+          };
 
-          if (residentName === "N/A" && doc.nekhemjlekhId) {
+          const findResident = async (rId) => {
+             if (!rId) return null;
+             let res = await masterConn.collection("orshinSuugch").findOne({ _id: rId });
+             if (res) return res;
+             try {
+                res = await masterConn.collection("orshinSuugch").findOne({ _id: new mongoose.Types.ObjectId(rId) });
+                if (res) return res;
+             } catch(e) {}
+             try {
+                res = await masterConn.collection("orshinSuugch").findOne({ _id: String(rId) });
+                if (res) return res;
+             } catch(e) {}
+             return null;
+          };
+
+          let gId = doc.gereeniiId;
+          let geree = await findGeree(gId);
+          
+          if (!geree && doc.nekhemjlekhId) {
              // Try via invoice
              let nId = doc.nekhemjlekhId;
-             let searchNId = nId;
-             try { if (typeof nId === "string") searchNId = new mongoose.Types.ObjectId(nId); } catch(e) {}
-             const inv = await conn.collection("nekhemjlekhiinTuukh").findOne({ _id: searchNId });
-             if (inv && inv.gereeniiId) {
-                const geree = await conn.collection("geree").findOne({ _id: inv.gereeniiId });
-                if (geree) {
-                   const resident = await masterConn.collection("orshinSuugch").findOne({ _id: geree.orshinSuugchiinId });
-                   if (resident) {
-                      residentName = resident.ner;
-                      if (toot === "N/A") toot = resident.toot;
-                      if (davkhar === "N/A") davkhar = resident.davkhar;
-                   }
-                }
+             let inv = await conn.collection("nekhemjlekhiinTuukh").findOne({ _id: nId });
+             if (!inv) {
+                try { inv = await conn.collection("nekhemjlekhiinTuukh").findOne({ _id: new mongoose.Types.ObjectId(nId) }); } catch(e) {}
              }
+             if (inv && inv.gereeniiId) {
+                gereeniiId = inv.gereeniiId;
+                geree = await findGeree(inv.gereeniiId);
+             }
+          }
+
+          if (geree) {
+            residentName = geree.ner || geree.suhNer || "N/A";
+            if (toot === "N/A") toot = geree.toot || "N/A";
+            if (davkhar === "N/A") davkhar = geree.davkhar || "N/A";
+            
+            // If still N/A, try resident lookup
+            if (residentName === "N/A" && geree.orshinSuugchiinId) {
+               const resident = await findResident(geree.orshinSuugchiinId);
+               if (resident) {
+                  residentName = resident.ner;
+                  if (toot === "N/A") toot = resident.toot;
+                  if (davkhar === "N/A") davkhar = resident.davkhar;
+               }
+            }
           }
 
           console.log(`      [CRIPPLED] ID: ${doc._id} | Resident: ${residentName} | Toot: ${toot} | Floor: ${davkhar}`);
