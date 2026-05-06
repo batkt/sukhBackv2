@@ -37,6 +37,7 @@ async function fix() {
 
       const collection = conn.collection("guilgeeAvlaguud");
 
+      // Broad query to find ANYTHING that looks like an initial balance
       const query = {
         $and: [
           {
@@ -45,11 +46,12 @@ async function fix() {
               { ekhniiUldegdelEsekh: true }
             ]
           },
-          { turul: "avlaga" },
           { 
             $or: [
               { tulukhDun: 0 },
-              { tulukhDun: { $exists: false } }
+              { tulukhDun: { $exists: false } },
+              { undsenDun: 0 },
+              { undsenDun: { $exists: false } }
             ]
           },
           { 
