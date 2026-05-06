@@ -1195,13 +1195,8 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       barilgiinId,
       ekhlekhOgnoo,
       duusakhOgnoo,
-      view = "huraangui",
       khuudasniiDugaar = 1,
       khuudasniiKhemjee = 20,
-      orshinSuugch,
-      toot,
-      davkhar,
-      gereeniiDugaar,
       search,
     } = source || {};
 
@@ -1224,77 +1219,162 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
     const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
     const Geree = require("../models/geree");
 
-    const parseDate = (dateStr) => {
-      if (!dateStr) return null;
-      let str = String(dateStr).trim();
-      if (/^\d{4}\.\d{2}\.\d{2}/.test(str)) {
-        str = str.replace(/^(\d{4})\.(\d{2})\.(\d{2})/, "$1-$2-$3");
-      }
-      const d = new Date(str);
-      return isNaN(d.getTime()) ? null : d;
-    };
-
     const match = {
       baiguullagiinId: String(baiguullagiinId),
     };
     if (barilgiinId) match.barilgiinId = String(barilgiinId);
 
-    const applySearch = (m) => {
-      if (search || orshinSuugch || toot || gereeniiDugaar || davkhar) {
-        m.$and = m.$and || [];
-        const orConditions = [];
-        if (search) {
-          const re = new RegExp(escapeRegex(String(search).trim()), "i");
-          orConditions.push(
-            { ner: re },
-            { ovog: re },
-            { toot: re },
-            { gereeniiDugaar: re },
-            { "medeelel.toot": re }
-          );
-        }
-        if (orshinSuugch) {
-          const re = new RegExp(escapeRegex(String(orshinSuugch).trim()), "i");
-          orConditions.push({ ner: re }, { ovog: re });
-        }
-        if (toot) {
-          const re = new RegExp(escapeRegex(String(toot).trim()), "i");
-          orConditions.push({ toot: re }, { "medeelel.toot": re });
-        }
-        if (gereeniiDugaar) {
-          const re = new RegExp(escapeRegex(String(gereeniiDugaar).trim()), "i");
-          orConditions.push({ gereeniiDugaar: re });
-        }
-        if (davkhar) {
-          const re = new RegExp(escapeRegex(String(davkhar).trim()), "i");
-          orConditions.push({ davkhar: re });
-        }
-        if (orConditions.length > 0) m.$and.push({ $or: orConditions });
+    // ─── Use Resident-First Aggregation for 100% accurate balances ────────────
+    const OrshinSuugch = require("../models/orshinSuugch");
+    const [allOrshinSuugch, allContractsList, allInvoices, allLedgerEntries] = await Promise.all([
+      OrshinSuugch(kholbolt).find(match).lean(),
+      Geree(kholbolt).find(match).lean(),
+      NekhemjlekhiinTuukh(kholbolt).find({ ...match, tuluv: { $ne: "Цуцалсан" } }).sort({ ognoo: 1 }).lean(),
+      GuilgeeAvlaguud(kholbolt).find(match).lean(),
+    ]);
+
+    const activeContracts = allContractsList.filter(c => {
+      const st = String(c.tuluv || c.status || "").toLowerCase();
+      return st !== "цуцалсан" && st !== "tsutlsasan";
+    });
+
+    const residentMap = new Map();
+
+    // Initialize with all residents to ensure 100% coverage
+    allOrshinSuugch.forEach(r => {
+      const gid = String(r._id);
+      residentMap.set(gid, {
+        _id: gid,
+        ner: r.ner || "",
+        ovog: r.ovog || "",
+        toot: r.toot || r.medeelel?.toot || "",
+        davkhar: r.davkhar || "",
+        register: r.register || r.rd || "",
+        gereeniiDugaar: "",
+        undsenDun: 0,
+        tulsunDun: 0,
+        uldegdel: 0,
+        p0_30: 0,
+        p31_60: 0,
+        p61_90: 0,
+        p91_120: 0,
+        p120plus: 0,
+        invoices: [],
+        standaloneUnpaid: 0,
+      });
+    });
+
+    // Map contracts to residents
+    activeContracts.forEach(c => {
+      const resId = String(c.orshinSuugchiinId || c.residentId || "");
+      const res = residentMap.get(resId);
+      if (res) {
+        res.gereeniiDugaar = c.gereeniiDugaar || "";
+        res.gereeniiId = String(c._id);
       }
+    });
+
+    // Categorize invoices
+    const now = new Date();
+    allInvoices.forEach(inv => {
+      const gid = String(inv.gereeniiId || inv.gereeniiDugaar || "");
+      // Find resident by contract ID or resident ID
+      let res = Array.from(residentMap.values()).find(r => r.gereeniiId === gid || r._id === gid);
+      if (!res) return;
+
+      const billed = Number(inv.niitTulburOriginal != null ? inv.niitTulburOriginal : inv.niitTulbur) || 0;
+      const uldegdel = Number(inv.uldegdel || 0);
+      const tulsun = billed - uldegdel;
+
+      res.undsenDun += billed;
+      res.tulsunDun += tulsun;
+      res.uldegdel += uldegdel;
+
+      if (uldegdel > 0) {
+        const invDate = new Date(inv.ognoo || inv.createdAt);
+        const diffDays = Math.floor((now.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (diffDays <= 30) res.p0_30 += uldegdel;
+        else if (diffDays <= 60) res.p31_60 += uldegdel;
+        else if (diffDays <= 90) res.p61_90 += uldegdel;
+        else if (diffDays <= 120) res.p91_120 += uldegdel;
+        else res.p120plus += uldegdel;
+      }
+    });
+
+    // Standalone Ledger Entries
+    allLedgerEntries.forEach(s => {
+      if (s.nekhemjlekhId) return; // Skip invoice-linked entries
+      const gid = String(s.gereeniiId || s.residentId || "");
+      const res = residentMap.get(gid) || Array.from(residentMap.values()).find(r => r.gereeniiId === gid);
+      if (!res) return;
+
+      const dun = Number(s.dun || 0);
+      const tulsun = Number(s.tulsunDun || 0);
+      const uld = Number(s.uldegdel || 0);
+
+      if (dun > 0) {
+         res.undsenDun += dun;
+         res.tulsunDun += tulsun;
+         res.uldegdel += uld;
+         
+         if (uld > 0) {
+           const sDate = new Date(s.ognoo || s.createdAt);
+           const diffDays = Math.floor((now.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24));
+           if (diffDays <= 30) res.p0_30 += uld;
+           else if (diffDays <= 60) res.p31_60 += uld;
+           else if (diffDays <= 90) res.p61_90 += uld;
+           else if (diffDays <= 120) res.p91_120 += uld;
+           else res.p120plus += uld;
+         }
+      } else if (dun < 0) {
+         // Standalone payment
+         res.tulsunDun += Math.abs(dun);
+         res.uldegdel -= Math.abs(dun);
+         // Reduce buckets from oldest to newest
+         let remainingCredit = Math.abs(dun);
+         const buckets = ["p120plus", "p91_120", "p61_90", "p31_60", "p0_30"];
+         for (const b of buckets) {
+            if (remainingCredit <= 0) break;
+            const toApply = Math.min(remainingCredit, res[b]);
+            res[b] -= toApply;
+            remainingCredit -= toApply;
+         }
+      }
+    });
+
+    let list = Array.from(residentMap.values()).filter(r => r.uldegdel !== 0 || r.undsenDun !== 0);
+
+    // Sorting by toot
+    list.sort((a, b) => {
+      const aToot = parseInt(a.toot);
+      const bToot = parseInt(b.toot);
+      if (!isNaN(aToot) && !isNaN(bToot) && aToot !== bToot) return aToot - bToot;
+      return String(a.toot).localeCompare(String(b.toot), undefined, { numeric: true });
+    });
+
+    // Pagination
+    const totalCount = list.length;
+    const pageNum = Number(khuudasniiDugaar);
+    const sizeNum = Number(khuudasniiKhemjee);
+    const paginated = list.slice((pageNum - 1) * sizeNum, pageNum * sizeNum);
+
+    const totals = {
+      undsenDun: list.reduce((s, r) => s + r.undsenDun, 0),
+      tulsunDun: list.reduce((s, r) => s + r.tulsunDun, 0),
+      uldegdel: list.reduce((s, r) => s + r.uldegdel, 0),
+      p0_30: list.reduce((s, r) => s + r.p0_30, 0),
+      p31_60: list.reduce((s, r) => s + r.p31_60, 0),
+      p61_90: list.reduce((s, r) => s + r.p61_90, 0),
+      p91_120: list.reduce((s, r) => s + r.p91_120, 0),
+      p120plus: list.reduce((s, r) => s + r.p120plus, 0),
     };
-    applySearch(match);
 
-    // When ekhlekhOgnoo is provided, we don't filter invoices by start date 
-    // because Aging must be cumulative to show accurate total balances.
-    // We only use duusakhOgnoo for "as of" date filtering.
-    if (duusakhOgnoo) {
-      const endDate = parseDate(duusakhOgnoo);
-      if (endDate) {
-        endDate.setHours(23, 59, 59, 999);
-        match.ognoo = match.ognoo || {};
-        match.ognoo.$lte = endDate;
-      }
-    }
-
-    // ─── Use getHistoryLedger per contract for 100% accurate balances ─────────
-    // This matches the guilgeeTuukh (Ledger) page exactly.
-    // Ledger logic removed as per request.
-    const GuilgeeAvlaguudModel2 = require("../models/guilgeeAvlaguud");
-
-
-    res.status(501).json({
-      success: false,
-      message: "Aging report is temporarily disabled during refactoring.",
+    res.json({
+      success: true,
+      data: paginated,
+      totalCount,
+      totals,
     });
   } catch (error) {
     next(error);
