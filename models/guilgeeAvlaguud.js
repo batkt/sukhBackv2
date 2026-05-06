@@ -78,10 +78,12 @@ const guilgeeAvlaguudSchema = new Schema(
 );
 
 guilgeeAvlaguudSchema.pre("save", function (next) {
+  // If dun is provided, ensure it syncs to undsenDun/tulukhDun for receivables (positive)
+  // or tulsunDun for payments (negative)
   if (typeof this.dun === "number" && this.dun !== 0) {
     if (this.dun > 0) {
-      this.undsenDun = this.dun;
-      this.tulukhDun = this.dun;
+      if (!this.undsenDun || this.undsenDun === 0) this.undsenDun = this.dun;
+      if (!this.tulukhDun || this.tulukhDun === 0) this.tulukhDun = this.dun;
       this.tulsunDun = 0;
       this.tulsunAldangi = 0;
     } else {
@@ -90,6 +92,14 @@ guilgeeAvlaguudSchema.pre("save", function (next) {
       this.tulukhDun = 0;
       this.tulukhAldangi = 0;
     }
+  } else if (this.turul === "avlaga" && (this.undsenDun > 0 || this.tulukhDun > 0 || this.undsenUne > 0)) {
+    
+    if (!this.dun || this.dun === 0) {
+       this.dun = this.undsenDun || this.tulukhDun || this.undsenUne;
+    }
+    // Ensure both are set
+    if (!this.undsenDun || this.undsenDun === 0) this.undsenDun = this.tulukhDun || this.undsenUne || this.dun;
+    if (!this.tulukhDun || this.tulukhDun === 0) this.tulukhDun = this.undsenDun || this.undsenUne || this.dun;
   }
 
   next();

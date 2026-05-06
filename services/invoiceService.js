@@ -267,7 +267,7 @@ async function ensureEkhniiUldegdel(kholbolt, geree, options = {}) {
     ekhniiUldegdelEsekh: true,
   }).lean();
 
-  const currentTotal = rows.reduce((sum, r) => sum + (Number(r.undsenDun) || 0), 0);
+  const currentTotal = rows.reduce((sum, r) => sum + (Number(r.undsenDun || r.tulukhDun || r.dun || r.undsenUne) || 0), 0);
   const targetEkhnii = Number(geree.ekhniiUldegdel || 0);
   const delta = Math.round((targetEkhnii - currentTotal) * 100) / 100;
 
