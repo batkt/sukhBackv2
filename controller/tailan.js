@@ -1220,8 +1220,21 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
     const Geree = require("../models/geree");
     const OrshinSuugch = require("../models/orshinSuugch");
 
-    const match = { baiguullagiinId: String(baiguullagiinId) };
-    if (barilgiinId) match.barilgiinId = String(barilgiinId);
+    const match = {
+      $or: [
+        { baiguullagiinId: String(baiguullagiinId) },
+        { "toots.baiguullagiinId": String(baiguullagiinId) }
+      ]
+    };
+    if (barilgiinId) {
+      match.$and = match.$and || [];
+      match.$and.push({
+        $or: [
+          { barilgiinId: String(barilgiinId) },
+          { "toots.barilgiinId": String(barilgiinId) }
+        ]
+      });
+    }
 
     // Apply filters to the resident match object
     if (search || orshinSuugch || toot || gereeniiDugaar || davkhar) {
