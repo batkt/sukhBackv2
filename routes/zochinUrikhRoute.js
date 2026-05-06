@@ -93,9 +93,10 @@ async function orshinSuugchKhadgalya(
       console.log(`ℹ️ [ZOCHIN_URI] User exists with phone ${phoneString}, using existing record.`);
       return existingByUtas;
     }
-    // Prevent duplicate: one toot (optionally + davkhar) can have only one resident per building
+    // Prevent duplicate: one toot (optionally + davkhar + orts) can have only one resident per building
     const toot = orshinSuugchData.toot ? String(orshinSuugchData.toot).trim() : "";
     const davkhar = orshinSuugchData.davkhar ? String(orshinSuugchData.davkhar).trim() : "";
+    const orts = orshinSuugchData.orts ? String(orshinSuugchData.orts).trim() : "";
     const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
     if (toot && barilgiinId) {
       const baseMatch = { toot, barilgiinId: String(barilgiinId) };
@@ -103,6 +104,10 @@ async function orshinSuugchKhadgalya(
       if (davkhar) {
         baseMatch.davkhar = davkhar;
         baseTootMatch.davkhar = davkhar;
+      }
+      if (orts) {
+        baseMatch.orts = orts;
+        baseTootMatch.orts = orts;
       }
       const existingToot = await OrshinSuugchModel.findOne({
         $or: [

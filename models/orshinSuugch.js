@@ -177,12 +177,13 @@ orshinSuugchSchema.pre("save", async function (next) {
   // Top-level toot
   const toot = this.toot ? String(this.toot).trim() : "";
   const davkhar = this.davkhar ? String(this.davkhar).trim() : "";
+  const orts = this.orts ? String(this.orts).trim() : "";
   const barilgiinId = this.barilgiinId ? String(this.barilgiinId) : "";
   const baiguullagiinId = this.baiguullagiinId
     ? String(this.baiguullagiinId)
     : "";
   if (toot && (barilgiinId || baiguullagiinId)) {
-    toCheck.push({ toot, davkhar, barilgiinId, baiguullagiinId });
+    toCheck.push({ toot, davkhar, orts, barilgiinId, baiguullagiinId });
   }
 
   // Each toot in toots array
@@ -190,6 +191,7 @@ orshinSuugchSchema.pre("save", async function (next) {
     for (const t of this.toots) {
       const tToot = t?.toot ? String(t.toot).trim() : "";
       const tDavkhar = t?.davkhar ? String(t.davkhar).trim() : "";
+      const tOrts = t?.orts ? String(t.orts).trim() : "";
       const tBarilgiinId = t?.barilgiinId ? String(t.barilgiinId) : "";
       const tBaiguullagiinId = t?.baiguullagiinId
         ? String(t.baiguullagiinId)
@@ -198,6 +200,7 @@ orshinSuugchSchema.pre("save", async function (next) {
         toCheck.push({
           toot: tToot,
           davkhar: tDavkhar,
+          orts: tOrts,
           barilgiinId: tBarilgiinId,
           baiguullagiinId: tBaiguullagiinId,
         });
@@ -208,6 +211,7 @@ orshinSuugchSchema.pre("save", async function (next) {
   for (const {
     toot: t,
     davkhar: d,
+    orts: o,
     barilgiinId: bId,
     baiguullagiinId: baId,
   } of toCheck) {
@@ -217,6 +221,10 @@ orshinSuugchSchema.pre("save", async function (next) {
     if (d) {
       baseMatch.davkhar = d;
       baseTootMatch.davkhar = d;
+    }
+    if (o) {
+      baseMatch.orts = o;
+      baseTootMatch.orts = o;
     }
     if (bId) {
       orConditions.push({ ...baseMatch, barilgiinId: bId });

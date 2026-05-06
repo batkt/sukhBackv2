@@ -309,7 +309,8 @@ router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
       }
     }
 
-    // Prevent duplicate: one toot (optionally + davkhar) can have only one resident per building
+    // Prevent duplicate: one toot (optionally + davkhar + orts) can have only one resident per building
+    const orts = req.body.orts ? String(req.body.orts).trim() : "";
     if (toot && (barilgiinId || baiguullagiinId)) {
       const orConditions = [];
       const baseMatch = { toot };
@@ -317,6 +318,10 @@ router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
       if (davkhar) {
         baseMatch.davkhar = davkhar;
         baseTootMatch.davkhar = davkhar;
+      }
+      if (orts) {
+        baseMatch.orts = orts;
+        baseTootMatch.orts = orts;
       }
       if (barilgiinId) {
         orConditions.push({ ...baseMatch, barilgiinId });
@@ -623,6 +628,7 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
       ? String(req.body.baiguullagiinId)
       : null;
     if (updateToot && (updateBarilgiinId || updateBaiguullagiinId)) {
+      const updateOrts = req.body.orts ? String(req.body.orts).trim() : null;
       const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
       const orConditions = [];
       const baseMatch = { toot: updateToot };
@@ -630,6 +636,10 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
       if (updateDavkhar) {
         baseMatch.davkhar = updateDavkhar;
         baseTootMatch.davkhar = updateDavkhar;
+      }
+      if (updateOrts) {
+        baseMatch.orts = updateOrts;
+        baseTootMatch.orts = updateOrts;
       }
       if (updateBarilgiinId) {
         orConditions.push({ ...baseMatch, barilgiinId: updateBarilgiinId });
