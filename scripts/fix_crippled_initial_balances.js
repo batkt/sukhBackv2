@@ -22,7 +22,7 @@ async function fix() {
 
     for (const org of orgs) {
       if (!org.dotoodNer) continue;
-      const dbName = `${org.dotoodNer}Sukh`;
+      const dbName = `${String(org.dotoodNer).trim()}Sukh`.replace(/\s/g, "");
       
       let conn;
       try {
