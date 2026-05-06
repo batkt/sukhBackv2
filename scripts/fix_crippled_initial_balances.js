@@ -8,101 +8,95 @@ const DRY_RUN = process.argv.includes("--dry-run");
 
 async function fix() {
   try {
-    if (DRY_RUN) {
-      console.log("🔍 [DRY RUN] Simulating repair of crippled initial balances...");
-    } else {
-      console.log("🚀 [FIX] Repairing crippled initial balances (tulukhDun: 0)...");
-    }
-    
+    const targetDb = "nairamdalSukh";
+    console.log(`🚀 Focusing on database: ${targetDb}`);
+    if (DRY_RUN) console.log("🔍 [DRY RUN MODE]");
+
     const masterConn = await mongoose.createConnection(MONGODB_URI_BASE.replace("{db}", "amarSukh")).asPromise();
-    const Baiguullaga = masterConn.model("baiguullaga", new mongoose.Schema({}, { strict: false }), "baiguullaga");
-    const orgs = await Baiguullaga.find({}).lean();
+    const conn = await mongoose.createConnection(MONGODB_URI_BASE.replace("{db}", targetDb)).asPromise();
     
-    console.log(`Found ${orgs.length} organizations to check.`);
-
-    for (const org of orgs) {
-      if (!org.dotoodNer) continue;
-      const dbName = `${String(org.dotoodNer).trim()}Sukh`.replace(/\s/g, "");
+    // We'll check both collection names to be safe
+    const collections = ["guilgeeAvlaguud", "guilgeeavlaguuds"];
+    
+    for (const collName of collections) {
+      const collection = conn.collection(collName);
       
-      let conn;
-      try {
-        conn = await mongoose.createConnection(MONGODB_URI_BASE.replace("{db}", dbName)).asPromise();
-      } catch (connErr) {
-        // Skip silent error for missing dbs unless it's an actual auth/conn error
-        if (!connErr.message.includes("does not exist")) {
-           // console.error(`   ❌ Connection error for ${dbName}: ${connErr.message}`);
-        }
-        continue;
-      }
-
-      const collection = conn.collection("guilgeeAvlaguud");
-
-      // Broad query to find ANYTHING that looks like an initial balance
+      // Extremely broad query to find any initial balance
       const query = {
-        $and: [
-          {
-            $or: [
-              { zardliinNer: { $regex: "Эхний үлдэгдэл", $options: "i" } },
-              { ekhniiUldegdelEsekh: true }
-            ]
-          },
-          { 
-            $or: [
-              { tulukhDun: 0 },
-              { tulukhDun: { $exists: false } },
-              { undsenDun: 0 },
-              { undsenDun: { $exists: false } }
-            ]
-          },
-          { 
-            $or: [
-              { dun: { $gt: 0 } },
-              { undsenDun: { $gt: 0 } },
-              { undsenUne: { $gt: 0 } }
-            ]
-          }
+        $or: [
+          { zardliinNer: { $regex: "Эхний үлдэгдэл", $options: "i" } },
+          { ekhniiUldegdelEsekh: true }
         ]
       };
 
-      const crippledDocs = await collection.find(query).toArray();
-      
-      if (crippledDocs.length > 0) {
-        console.log(`\n📂 Organization: ${org.ner} (${dbName})`);
-        console.log(`   🔍 Found ${crippledDocs.length} crippled documents`);
+      const docs = await collection.find(query).toArray();
+      if (docs.length === 0) {
+        console.log(`   No records found in collection: ${collName}`);
+        continue;
+      }
+
+      console.log(`   Checking ${docs.length} records in ${collName}...`);
+
+      let matchCount = 0;
+      for (const doc of docs) {
+        const targetAmount = Number(doc.dun || doc.undsenDun || doc.undsenUne || 0);
+        const currentTulukh = Number(doc.tulukhDun || 0);
+        const currentUndsen = Number(doc.undsenDun || 0);
         
-        let fixedCount = 0;
-        for (const doc of crippledDocs) {
-          const targetAmount = Number(doc.dun || doc.undsenDun || doc.undsenUne || 0);
-          if (targetAmount > 0) {
-            if (DRY_RUN) {
-              console.log(`      [DRY RUN] Would fix doc ${doc._id}: Setting tulukhDun and undsenDun to ${targetAmount} (Tailbar: ${doc.tailbar || 'N/A'})`);
-            } else {
-              console.log(`      🛠️ Fixing doc ${doc._id}: Setting tulukhDun and undsenDun to ${targetAmount}`);
-              await collection.updateOne(
-                { _id: doc._id },
-                { 
-                  $set: { 
-                    undsenDun: targetAmount, 
-                    tulukhDun: targetAmount,
-                    fixNote: `Force synced to undsenDun (${targetAmount})`
-                  } 
-                }
-              );
+        // Is it crippled?
+        if (targetAmount > 0 && (currentTulukh === 0 || currentUndsen === 0)) {
+          matchCount++;
+          
+          // Get resident info
+          let residentName = "N/A";
+          let toot = doc.toot || "N/A";
+          let davkhar = doc.davkhar || "N/A";
+          
+          if (doc.gereeniiId) {
+            const geree = await conn.collection("geree").findOne({ _id: doc.gereeniiId });
+            if (geree) {
+              const resident = await masterConn.collection("orshinSuugch").findOne({ _id: geree.orshinSuugchiinId });
+              if (resident) {
+                residentName = resident.ner;
+                if (toot === "N/A") toot = resident.toot;
+                if (davkhar === "N/A") davkhar = resident.davkhar;
+              }
             }
-            fixedCount++;
+          }
+
+          console.log(`      [CRIPPLED] ID: ${doc._id} | Resident: ${residentName} | Toot: ${toot} | Floor: ${davkhar}`);
+          console.log(`                 Current: { dun: ${doc.dun}, undsenDun: ${doc.undsenDun}, tulukhDun: ${doc.tulukhDun} }`);
+          console.log(`                 Target: ${targetAmount}`);
+          
+          if (!DRY_RUN) {
+            await collection.updateOne(
+              { _id: doc._id },
+              { 
+                $set: { 
+                  undsenDun: targetAmount, 
+                  tulukhDun: targetAmount,
+                  fixNote: `Force synced to ${targetAmount} (detailed-fix)`
+                } 
+              }
+            );
+            console.log(`                 ✅ Fixed.`);
           }
         }
-        if (!DRY_RUN) console.log(`   ✅ Fixed ${fixedCount} documents in ${dbName}`);
       }
       
-      await conn.close();
+      if (matchCount === 0) {
+        console.log(`   No crippled records found in ${collName}.`);
+      } else {
+        console.log(`   Finished ${collName}: ${matchCount} records handled.`);
+      }
     }
 
+    await conn.close();
     await masterConn.close();
-    console.log(`\n🏁 [FINISHED] ${DRY_RUN ? 'Dry run' : 'Repair'} complete!`);
+    console.log("\n🏁 Done!");
     process.exit(0);
   } catch (err) {
-    console.error("❌ CRITICAL ERROR:", err);
+    console.error("❌ ERROR:", err);
     process.exit(1);
   }
 }
