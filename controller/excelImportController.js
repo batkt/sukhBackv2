@@ -928,6 +928,45 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
       width: [15, 15, 12, 25, 10, 10, 10, 15, 20, 15, 22, 22, 15, 20][i] || 15,
     }));
 
+    // Style the header row
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: '000000' } };
+    
+    // Define required and optional columns
+    // Required: Ner(2), Utas(3), Orts(5), Davkhar(6), Toot(7)
+    const requiredCols = [2, 3, 5, 6, 7];
+    
+    headerRow.eachCell((cell, colNumber) => {
+      if (requiredCols.includes(colNumber)) {
+        // Green background for required
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'C6EFCE' } // Light Green
+        };
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      } else {
+        // Yellow background for optional
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFEB9C' } // Light Yellow
+        };
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      }
+    });
+    headerRow.commit();
+
     // Data validation for Orts (Column E) and Davkhar (Column F)
     const ortsFormula = `"${ortsList.join(",")}"`;
     const davkharFormula =
