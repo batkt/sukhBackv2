@@ -245,9 +245,32 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
             )
             .lean();
 
+          const activeGereeIds = activeGerees.map((g) => g._id.toString());
+
+          // Calculate current balances from ledger (guilgeeAvlaguud)
+          const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(tukhainBaaziinKholbolt);
+          const ledgerStats = await GuilgeeAvlaguudModel.aggregate([
+            { $match: { gereeniiId: { $in: activeGereeIds } } },
+            {
+              $group: {
+                _id: "$gereeniiId",
+                totalBalance: { $sum: "$dun" },
+              },
+            },
+          ]);
+
+          const balanceMap = {};
+          ledgerStats.forEach((s) => {
+            balanceMap[String(s._id)] = s.totalBalance || 0;
+          });
+
           activeGerees.forEach((g) => {
             const resId = String(g.orshinSuugchId);
             const tootKey = `${resId}|${String(g.toot).trim()}`;
+            const gid = g._id.toString();
+
+            // Set the dynamic balance from ledger
+            g.dynamicUldegdel = balanceMap[gid] ?? g.ekhniiUldegdel ?? 0;
 
             // If we already have an active contract for this resident, don't overwrite it with an inactive one
             const existing = gereeMap[resId];
@@ -325,8 +348,9 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
         // --- FINAL AUTHORITATIVE OVERLAY (Source of Truth: Geree) ---
         // If an active contract exists, it overrides everything else for billing display
         if (authoritativeGeree) {
-          if (authoritativeGeree.ekhniiUldegdel !== undefined) {
-            mur.ekhniiUldegdel = authoritativeGeree.ekhniiUldegdel;
+          if (authoritativeGeree.dynamicUldegdel !== undefined) {
+            mur.ekhniiUldegdel = authoritativeGeree.dynamicUldegdel;
+            mur.uldegdel = authoritativeGeree.dynamicUldegdel;
           }
           // Use suuliinZaalt (Last Reading) if available, otherwise umnukhZaalt (Previous Reading)
           if (authoritativeGeree.suuliinZaalt !== undefined && authoritativeGeree.suuliinZaalt > 0) {
@@ -381,11 +405,33 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
 
             console.log(`[DEBUG] Resident Detail: Found ${allGerees.length} contracts for resident ${result._id}`);
 
+            const activeGereeIds = allGerees.map((g) => g._id.toString());
+
+            // Calculate current balances from ledger (guilgeeAvlaguud)
+            const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(tukhainBaaziinKholbolt);
+            const ledgerStats = await GuilgeeAvlaguudModel.aggregate([
+              { $match: { gereeniiId: { $in: activeGereeIds } } },
+              {
+                $group: {
+                  _id: "$gereeniiId",
+                  totalBalance: { $sum: "$dun" },
+                },
+              },
+            ]);
+
+            const balanceMap = {};
+            ledgerStats.forEach((s) => {
+              balanceMap[String(s._id)] = s.totalBalance || 0;
+            });
+
             const unitGereeMap = {};
             allGerees.forEach(g => {
               const tootKey = String(g.toot || "").trim();
+              const gid = g._id.toString();
+
+              g.dynamicUldegdel = balanceMap[gid] ?? g.ekhniiUldegdel ?? 0;
               
-              console.log(`[DEBUG] Resident Detail: Mapping Toot Key: "${tootKey}" to Geree ${g._id} (Balance: ${g.ekhniiUldegdel})`);
+              console.log(`[DEBUG] Resident Detail: Mapping Toot Key: "${tootKey}" to Geree ${g._id} (Balance: ${g.dynamicUldegdel})`);
               if (!unitGereeMap[tootKey] || g.tuluv === "Идэвхтэй") {
                 unitGereeMap[tootKey] = g;
               }
@@ -398,7 +444,10 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
                 const g = unitGereeMap[currentToot];
                 console.log(`[DEBUG] Resident Detail: Checking unit "${currentToot}" -> Found Match: ${!!g}`);
                 if (g) {
-                  if (g.ekhniiUldegdel !== undefined) t.ekhniiUldegdel = g.ekhniiUldegdel;
+                  if (g.dynamicUldegdel !== undefined) {
+                    t.ekhniiUldegdel = g.dynamicUldegdel;
+                    t.uldegdel = g.dynamicUldegdel;
+                  }
                   if (g.suuliinZaalt !== undefined && g.suuliinZaalt > 0) {
                     t.tsahilgaaniiZaalt = g.suuliinZaalt;
                   } else if (g.umnukhZaalt !== undefined) {
@@ -412,8 +461,9 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             const authoritativeGeree = allGerees.find(g => g.tuluv === "Идэвхтэй") || allGerees[0];
 
             if (authoritativeGeree) {
-              if (authoritativeGeree.ekhniiUldegdel !== undefined) {
-                result.ekhniiUldegdel = authoritativeGeree.ekhniiUldegdel;
+              if (authoritativeGeree.dynamicUldegdel !== undefined) {
+                result.ekhniiUldegdel = authoritativeGeree.dynamicUldegdel;
+                result.uldegdel = authoritativeGeree.dynamicUldegdel;
               }
               if (authoritativeGeree.suuliinZaalt !== undefined && authoritativeGeree.suuliinZaalt > 0) {
                 result.tsahilgaaniiZaalt = authoritativeGeree.suuliinZaalt;
