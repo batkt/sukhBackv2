@@ -213,6 +213,7 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
         (k) => String(k.baiguullagiinId) === targetBaiguullagiinId,
       );
       const gereeMap = {};
+      const unitGereeMap = {};
 
       if (tukhainBaaziinKholbolt) {
         try {
@@ -220,14 +221,24 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
           const residentIds = jagsaalt.map((r) => r._id.toString());
           const activeGerees = await GereeModel.find({
             orshinSuugchId: { $in: residentIds },
-            tuluv: "Идэвхтэй",
           })
-            .select("orshinSuugchId ekhniiUldegdel umnukhZaalt suuliinZaalt toot davkhar")
+            .select("orshinSuugchId ekhniiUldegdel umnukhZaalt suuliinZaalt toot davkhar tuluv")
             .lean();
 
           activeGerees.forEach((g) => {
-            // Group by resident ID. If multiple contracts, latest one (by _id) wins
-            gereeMap[g.orshinSuugchId] = g;
+            const resId = String(g.orshinSuugchId);
+            const tootKey = `${resId}|${String(g.toot).trim()}`;
+            
+            // If we already have an active contract for this resident, don't overwrite it with an inactive one
+            const existing = gereeMap[resId];
+            if (!existing || g.tuluv === "Идэвхтэй") {
+              gereeMap[resId] = g;
+            }
+
+            const existingUnit = unitGereeMap[tootKey];
+            if (!existingUnit || g.tuluv === "Идэвхтэй") {
+              unitGereeMap[tootKey] = g;
+            }
           });
         } catch (err) {
           console.error("Error fetching authoritative geree data:", err);
@@ -247,6 +258,21 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
             matchingToot = mur.toots.find(
               (t) => String(t.baiguullagiinId) === targetBaiguullagiinId,
             );
+
+            // NEW: Update ALL toots with their specific contract data if available
+            mur.toots.forEach((t) => {
+              const resId = mur._id.toString();
+              const tootKey = `${resId}|${String(t.toot).trim()}`;
+              const g = unitGereeMap[tootKey];
+              if (g) {
+                if (g.ekhniiUldegdel !== undefined) t.ekhniiUldegdel = g.ekhniiUldegdel;
+                if (g.suuliinZaalt !== undefined && g.suuliinZaalt > 0) {
+                  t.tsahilgaaniiZaalt = g.suuliinZaalt;
+                } else if (g.umnukhZaalt !== undefined) {
+                  t.tsahilgaaniiZaalt = g.umnukhZaalt;
+                }
+              }
+            });
           }
 
           // If found and it's different from the main record (or if main record is just different org)
@@ -324,10 +350,37 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
         if (tukhainBaaziinKholbolt) {
           try {
             const GereeModel = Geree(tukhainBaaziinKholbolt);
-            const authoritativeGeree = await GereeModel.findOne({
+            
+            // Fetch all contracts for this resident to map to specific units
+            const allGerees = await GereeModel.find({
               orshinSuugchId: result._id.toString(),
-              tuluv: "Идэвхтэй",
             }).lean();
+
+            const unitGereeMap = {};
+            allGerees.forEach(g => {
+              const tootKey = String(g.toot).trim();
+              if (!unitGereeMap[tootKey] || g.tuluv === "Идэвхтэй") {
+                unitGereeMap[tootKey] = g;
+              }
+            });
+
+            // Update toots array
+            if (Array.isArray(result.toots)) {
+              result.toots.forEach((t) => {
+                const g = unitGereeMap[String(t.toot).trim()];
+                if (g) {
+                  if (g.ekhniiUldegdel !== undefined) t.ekhniiUldegdel = g.ekhniiUldegdel;
+                  if (g.suuliinZaalt !== undefined && g.suuliinZaalt > 0) {
+                    t.tsahilgaaniiZaalt = g.suuliinZaalt;
+                  } else if (g.umnukhZaalt !== undefined) {
+                    t.tsahilgaaniiZaalt = g.umnukhZaalt;
+                  }
+                }
+              });
+            }
+
+            // Fallback: Use latest active contract for top-level fields
+            const authoritativeGeree = allGerees.find(g => g.tuluv === "Идэвхтэй") || allGerees[0];
 
             if (authoritativeGeree) {
               if (authoritativeGeree.ekhniiUldegdel !== undefined) {
