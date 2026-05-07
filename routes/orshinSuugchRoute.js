@@ -246,11 +246,22 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
             .lean();
 
           const activeGereeIds = activeGerees.map((g) => g._id.toString());
+          const activeGereeObjectIds = activeGereeIds.map(id => {
+            try { return new mongoose.Types.ObjectId(id); } catch (e) { return null; }
+          }).filter(Boolean);
 
           // Calculate current balances from ledger (guilgeeAvlaguud)
           const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(tukhainBaaziinKholbolt);
           const ledgerStats = await GuilgeeAvlaguudModel.aggregate([
-            { $match: { gereeniiId: { $in: activeGereeIds } } },
+            { 
+              $match: { 
+                baiguullagiinId: targetBaiguullagiinId,
+                $or: [
+                  { gereeniiId: { $in: activeGereeIds } },
+                  { gereeniiId: { $in: activeGereeObjectIds } }
+                ]
+              } 
+            },
             {
               $group: {
                 _id: "$gereeniiId",
@@ -261,7 +272,9 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
 
           const balanceMap = {};
           ledgerStats.forEach((s) => {
-            balanceMap[String(s._id)] = s.totalBalance || 0;
+            if (s._id) {
+              balanceMap[String(s._id)] = s.totalBalance || 0;
+            }
           });
 
           activeGerees.forEach((g) => {
@@ -406,11 +419,22 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             console.log(`[DEBUG] Resident Detail: Found ${allGerees.length} contracts for resident ${result._id}`);
 
             const activeGereeIds = allGerees.map((g) => g._id.toString());
+            const activeGereeObjectIds = activeGereeIds.map(id => {
+              try { return new mongoose.Types.ObjectId(id); } catch (e) { return null; }
+            }).filter(Boolean);
 
             // Calculate current balances from ledger (guilgeeAvlaguud)
             const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(tukhainBaaziinKholbolt);
             const ledgerStats = await GuilgeeAvlaguudModel.aggregate([
-              { $match: { gereeniiId: { $in: activeGereeIds } } },
+              { 
+                $match: { 
+                  baiguullagiinId: String(result.baiguullagiinId),
+                  $or: [
+                    { gereeniiId: { $in: activeGereeIds } },
+                    { gereeniiId: { $in: activeGereeObjectIds } }
+                  ]
+                } 
+              },
               {
                 $group: {
                   _id: "$gereeniiId",
@@ -421,7 +445,9 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
 
             const balanceMap = {};
             ledgerStats.forEach((s) => {
-              balanceMap[String(s._id)] = s.totalBalance || 0;
+              if (s._id) {
+                balanceMap[String(s._id)] = s.totalBalance || 0;
+              }
             });
 
             const unitGereeMap = {};
