@@ -15,9 +15,9 @@ const path = require("path");
 const express = require("express");
 const dotenv = require("dotenv");
 
-const BAIGUULLAGIIN_ID = "697723dc3e77b46e52ccf577";
+const BAIGUULLAGIIN_ID = "69f3f56a2899d5fdc24251d1";
 /** Must match the database name in this org's Mongo URI inside zevback `kholboltuud`. */
-const TENANT_DATABASE_NAME = "dotoodSukh";
+const TENANT_DATABASE_NAME = "zevSukh";
 
 const projectRoot = path.resolve(__dirname, "..");
 process.chdir(projectRoot);
@@ -34,7 +34,7 @@ const { manualSendMassInvoices } = require("../services/invoiceSendService");
 function parseArgs(argv) {
   const out = {
     year: new Date().getFullYear(),
-    months: [2, 3],
+    months: [2, 3, 4, 5],
     override: false,
     barilgiinId: null,
     waitMs: 4000,
