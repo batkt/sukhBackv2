@@ -1618,7 +1618,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           toot: userData.toot || "", // Keep for backward compatibility
           orts: userData.orts || "",
           ekhniiUldegdel: userData.ekhniiUldegdel || 0,
-          tsahilgaaniiZaalt: userData.tsahilgaaniiZaalt || 0, // Тариф ₮/кВт from Excel
+          tsahilgaaniiZaalt: userData.tsahilgaaniiZaalt || 0, // Тоолуурын заалт (кВт·ц) from Excel
           tailbar: userData.tailbar || "", // Save tailbar to orshinSuugch
           toots: [], // Initialize toots array
           // Link to Wallet API (unifies Excel-imported users with website/mobile users)
@@ -1691,6 +1691,8 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
               horoo: horooData,
               soh: sohNer,
               bairniiNer: targetBarilga.ner || "",
+              ekhniiUldegdel: userData.ekhniiUldegdel || 0,
+              tsahilgaaniiZaalt: userData.tsahilgaaniiZaalt || 0,
               createdAt: new Date(),
             };
 
@@ -1801,8 +1803,8 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                   register: orshinSuugch.register || "",
                   utas: Array.isArray(orshinSuugch.utas) ? orshinSuugch.utas : [orshinSuugch.utas],
                   mail: orshinSuugch.mail || "",
-                  suuliinZaalt: userData.initialMeterReading || userData.tsahilgaaniiZaalt || existingGeree.suuliinZaalt,
-                  umnukhZaalt: userData.initialMeterReading || userData.tsahilgaaniiZaalt || existingGeree.umnukhZaalt,
+                  suuliinZaalt: userData.tsahilgaaniiZaalt || userData.initialMeterReading || existingGeree.suuliinZaalt,
+                  umnukhZaalt: userData.tsahilgaaniiZaalt || userData.initialMeterReading || existingGeree.umnukhZaalt,
                 };
                 
                 await GereeModel.findByIdAndUpdate(existingGeree._id, { $set: syncData });
@@ -1919,8 +1921,8 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                 khonogoorBodokhEsekh: userData.khonogoorBodokhEsekh || false,
                 bodokhKhonog: userData.bodokhKhonog || 0,
                 // ekhniiUldegdel removed
-                umnukhZaalt: userData.initialMeterReading || 0,
-                suuliinZaalt: userData.initialMeterReading || 0,
+                umnukhZaalt: userData.tsahilgaaniiZaalt || userData.initialMeterReading || 0,
+                suuliinZaalt: userData.tsahilgaaniiZaalt || userData.initialMeterReading || 0,
                 zaaltTog: 0, // Day reading (will be updated later)
                 zaaltUs: 0, // Night reading (will be updated later)
                 zardluud: zardluudArray,
