@@ -432,7 +432,7 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
     let tukhainBaaziinKholbolt = null;
     if (baiguullaga) {
       tukhainBaaziinKholbolt = db.kholboltuud.find(
-        (kholbolt) => kholbolt.baiguullagiinId === baiguullaga._id.toString(),
+        (kholbolt) => String(kholbolt.baiguullagiinId) === String(baiguullaga._id),
       );
     }
 
@@ -1078,7 +1078,7 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
         if (!tukhainBaaziinKholboltForMashin && baiguullagaForMashin) {
           tukhainBaaziinKholboltForMashin = db.kholboltuud.find(
             (kholbolt) =>
-              kholbolt.baiguullagiinId === baiguullagaForMashin._id.toString(),
+              String(kholbolt.baiguullagiinId) === String(baiguullagaForMashin._id),
           );
         }
 
@@ -5207,6 +5207,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
         : [];
 
   let anyReactivated = false;
+  console.log(`[SYNC] Processing ${tootsToProcess.length} units for resident ${orshinSuugch.ner} in org ${baiguullagiinId}`);
 
   // 1. Identify all active contracts for this resident in this organization
   const allActiveGerees = await GereeModel.find({
@@ -5221,7 +5222,9 @@ exports.syncResidentContracts = async function syncResidentContracts(
     if (!entryOrgId || entryOrgId === baiguullagiinId) {
       const bId = t.barilgiinId || barilgiinId;
       if (bId) {
-        validUnitKeys.add(`${String(bId)}|${String(t.toot).trim()}`);
+        const key = `${String(bId)}|${String(t.toot).trim()}`;
+        validUnitKeys.add(key);
+        console.log(`[SYNC] Registered valid unit key: ${key}`);
       }
     }
   });
@@ -5239,10 +5242,14 @@ exports.syncResidentContracts = async function syncResidentContracts(
         }
       });
     }
+  }
+
   for (const tootEntry of tootsToProcess) {
     // Only process units that belong to the current organization context
     const entryOrgId = tootEntry.baiguullagiinId ? String(tootEntry.baiguullagiinId) : null;
     
+    console.log(`[SYNC] Checking unit ${tootEntry.toot} (Org: ${entryOrgId}) against context ${baiguullagiinId}`);
+
     // If the unit association has an org ID, it MUST match the current one
     if (entryOrgId && entryOrgId !== baiguullagiinId) {
       continue;
@@ -5254,11 +5261,15 @@ exports.syncResidentContracts = async function syncResidentContracts(
     }
 
     const currentBarilgiinId = tootEntry.barilgiinId || barilgiinId;
+    if (!currentBarilgiinId) {
+      console.log(`[SYNC] Skipping unit ${tootEntry.toot} - No barilgiinId found`);
+      continue;
+    }
 
     // Check if ACTIVE contract already exists for this unit
     const existingActiveGeree = await GereeModel.findOne({
-      toot: tootEntry.toot,
-      barilgiinId: currentBarilgiinId,
+      toot: String(tootEntry.toot).trim(),
+      barilgiinId: String(currentBarilgiinId),
       tuluv: "Идэвхтэй",
       orshinSuugchId: orshinSuugch._id.toString(),
     });
@@ -5542,4 +5553,3 @@ exports.syncResidentContracts = async function syncResidentContracts(
 
   return anyReactivated;
 };
-}
