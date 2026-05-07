@@ -1772,7 +1772,7 @@ exports.zaaltExcelDataAvya = asyncHandler(async (req, res, next) => {
     const ZaaltUnshlalt = require("../models/zaaltUnshlalt");
 
     // Get all electricity readings for this building, sorted by contract number and date
-    const zaaltUnshlaltuud = await ZaaltUnshlalt(tukhainBaaziinKholbolt)
+    let zaaltUnshlaltuud = await ZaaltUnshlalt(tukhainBaaziinKholbolt)
       .find({
         baiguullagiinId: baiguullaga._id.toString(),
         barilgiinId: barilgiinId,
@@ -1781,7 +1781,30 @@ exports.zaaltExcelDataAvya = asyncHandler(async (req, res, next) => {
       .lean();
 
     if (!zaaltUnshlaltuud || zaaltUnshlaltuud.length === 0) {
-      throw new aldaa("Цахилгааны уншилтын мэдээлэл олдсонгүй");
+      // FALLBACK: If no historical readings imported yet, use all active contracts as current state
+      const Geree = require("../models/geree");
+      const activeGerees = await Geree(tukhainBaaziinKholbolt).find({
+        baiguullagiinId: baiguullaga._id.toString(),
+        barilgiinId: barilgiinId,
+        tuluv: "Идэвхтэй"
+      }).lean();
+
+      if (!activeGerees || activeGerees.length === 0) {
+        throw new aldaa("Цахилгааны уншилтын мэдээлэл олдсонгүй");
+      }
+
+      // Map Gerees to a format compatible with the rest of the function
+      zaaltUnshlaltuud = activeGerees.map(g => ({
+        gereeniiDugaar: g.gereeniiDugaar,
+        toot: g.toot,
+        umnukhZaalt: g.umnukhZaalt || 0,
+        suuliinZaalt: g.suuliinZaalt || 0,
+        zaaltTog: g.zaaltTog || 0,
+        zaaltUs: g.zaaltUs || 0,
+        zoruu: (g.suuliinZaalt || 0) - (g.umnukhZaalt || 0),
+        unshlaltiinOgnoo: new Date(),
+        importOgnoo: new Date()
+      }));
     }
 
     // Get unique contracts (latest reading for each contract)
