@@ -950,6 +950,16 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
       });
     }
 
+    // Data validation for Turul (Column H) - "Үндсэн", "Түр"
+    worksheet.dataValidations.add("H2:H2000", {
+      type: "list",
+      allowBlank: true,
+      formulae: ['"Үндсэн,Түр"'],
+      showErrorMessage: true,
+      errorStyle: "error",
+      error: "Жагсаалтаас сонгоно уу!",
+    });
+
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1791,7 +1801,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
               const contractData = {
                 gereeniiDugaar: `ГД-${uniqueSuffix.toString().slice(-8)}`,
                 gereeniiOgnoo: new Date(),
-                turul: "Үндсэн",
+                turul: userData.turul || "Үндсэн",
                 tuluv: "Идэвхтэй",
                 ovog: userData.ovog || "",
                 ner: userData.ner,
@@ -2453,7 +2463,7 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
 exports.generateInitialBalanceTemplate = asyncHandler(
   async (req, res, next) => {
     try {
-      const headers = ["Утас", "Гэрээний дугаар", "Тоот", "Эхний үлдэгдэл"];
+      const headers = ["Утас", "Гэрээний дугаар", "Тоот", "Эхний үлдэгдэл", "Огноо"];
 
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet([headers]);
@@ -2463,6 +2473,7 @@ exports.generateInitialBalanceTemplate = asyncHandler(
         { wch: 20 }, // Гэрээний дугаар
         { wch: 10 }, // Тоот
         { wch: 15 }, // Эхний үлдэгдэл
+        { wch: 15 }, // Огноо
       ];
       ws["!cols"] = colWidths;
 
@@ -2540,6 +2551,23 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
         const gereeniiDugaar = row["Гэрээний дугаар"]?.toString().trim();
         const toot = row["Тоот"]?.toString().trim();
         const amount = parseExcelNumber(row["Эхний үлдэгдэл"]);
+        
+        // Handle row-specific date
+        let rowOgnoo = importOgnoo;
+        if (row["Огноо"]) {
+          const parsedDate = new Date(row["Огноо"]);
+          // Check if it's a valid date and not an Excel serial number
+          if (!isNaN(parsedDate.getTime()) && String(row["Огноо"]).includes("-")) {
+            rowOgnoo = parsedDate;
+          } else {
+            // Might be an Excel serial number
+            const serial = parseFloat(row["Огноо"]);
+            if (!isNaN(serial)) {
+              // Convert Excel serial date to JS Date
+              rowOgnoo = new Date(Math.round((serial - 25569) * 86400 * 1000));
+            }
+          }
+        }
 
         if (isNaN(amount) || amount === 0) {
           results.failed.push({
@@ -2588,7 +2616,7 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
           gereeniiId: geree._id.toString(),
           gereeniiDugaar: geree.gereeniiDugaar,
           orshinSuugchId: geree.orshinSuugchId,
-          ognoo: importOgnoo,
+          ognoo: rowOgnoo,
           dun: amount,
           turul: "avlaga",
 

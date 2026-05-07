@@ -346,9 +346,10 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
 
-    // Note: duureg, horoo, and soh are optional - can be retrieved from baiguullaga if not provided
-    // baiguullagiinId can be determined from address selection (OWN_ORG) if not provided upfront
-    // If email is provided, proceed with Wallet API registration and get baiguullagiinId from address
+    // Normalize resident type field (handle both turul and orshinSuugchTurul from frontend)
+    if (!req.body.turul && req.body.orshinSuugchTurul) {
+      req.body.turul = req.body.orshinSuugchTurul;
+    }
 
     if (!req.body.utas) {
       throw new aldaa("Утасны дугаар заавал бөглөх шаардлагатай!");
@@ -2396,7 +2397,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
             const contractData = {
               gereeniiDugaar: `ГД-${Date.now().toString().slice(-8)}`,
               gereeniiOgnoo: new Date(),
-              turul: "Үндсэн",
+              turul: req.body.turul || "Үндсэн",
               tuluv: "Идэвхтэй",
               ovog: orshinSuugch.ovog || "",
               ner: orshinSuugch.ner || "",
@@ -2561,7 +2562,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
                     const contractData = {
                       gereeniiDugaar: `ГД-${Date.now().toString().slice(-8)}`,
                       gereeniiOgnoo: new Date(),
-                      turul: "Үндсэн",
+                      turul: req.body.turul || "Үндсэн",
                       tuluv: "Идэвхтэй",
                       ovog: orshinSuugch.ovog || "",
                       ner: orshinSuugch.ner || "",
@@ -3285,7 +3286,7 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
             const contractData = {
               gereeniiDugaar: `ГД-${Date.now().toString().slice(-8)}`,
               gereeniiOgnoo: new Date(),
-              turul: "Үндсэн",
+              turul: req.body.turul || "Үндсэн",
               tuluv: "Идэвхтэй",
               ovog: orshinSuugch.ovog || "",
               ner: orshinSuugch.ner || "",
@@ -3435,7 +3436,7 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
                 const contractData = {
                   gereeniiDugaar: `ГД-${Date.now().toString().slice(-8)}`,
                   gereeniiOgnoo: new Date(),
-                  turul: "Үндсэн",
+                  turul: req.body.turul || "Үндсэн",
                   tuluv: "Идэвхтэй",
                   ovog: orshinSuugch.ovog || "",
                   ner: orshinSuugch.ner || "",
@@ -5391,7 +5392,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
       const contractData = {
         gereeniiDugaar: `ГД-${Date.now().toString().slice(-8)}`,
         gereeniiOgnoo: new Date(),
-        turul: "Үндсэн",
+        turul: req.body.turul || "Үндсэн",
         tuluv: "Идэвхтэй",
         ovog: req.body.ovog || orshinSuugch.ovog || "",
         ner: req.body.ner || orshinSuugch.ner,
