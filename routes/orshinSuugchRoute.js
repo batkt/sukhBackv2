@@ -265,12 +265,15 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
               const tootKey = `${resId}|${String(t.toot).trim()}`;
               const g = unitGereeMap[tootKey];
               if (g) {
+                console.log(`[DEBUG] Resident List: Unit ${tootKey} matched Geree (Balance: ${g.ekhniiUldegdel})`);
                 if (g.ekhniiUldegdel !== undefined) t.ekhniiUldegdel = g.ekhniiUldegdel;
                 if (g.suuliinZaalt !== undefined && g.suuliinZaalt > 0) {
                   t.tsahilgaaniiZaalt = g.suuliinZaalt;
                 } else if (g.umnukhZaalt !== undefined) {
                   t.tsahilgaaniiZaalt = g.umnukhZaalt;
                 }
+              } else {
+                console.log(`[DEBUG] Resident List: Unit ${tootKey} has no matching Geree`);
               }
             });
           }
@@ -356,9 +359,12 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
               orshinSuugchId: result._id.toString(),
             }).lean();
 
+            console.log(`[DEBUG] Resident Detail: Found ${allGerees.length} contracts for resident ${result._id}`);
+
             const unitGereeMap = {};
             allGerees.forEach(g => {
-              const tootKey = String(g.toot).trim();
+              const tootKey = String(g.toot || "").trim();
+              console.log(`[DEBUG] Resident Detail: Mapping Toot Key: "${tootKey}" to Geree ${g._id} (Balance: ${g.ekhniiUldegdel})`);
               if (!unitGereeMap[tootKey] || g.tuluv === "Идэвхтэй") {
                 unitGereeMap[tootKey] = g;
               }
@@ -367,7 +373,9 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             // Update toots array
             if (Array.isArray(result.toots)) {
               result.toots.forEach((t) => {
-                const g = unitGereeMap[String(t.toot).trim()];
+                const currentToot = String(t.toot || "").trim();
+                const g = unitGereeMap[currentToot];
+                console.log(`[DEBUG] Resident Detail: Checking unit "${currentToot}" -> Found Match: ${!!g}`);
                 if (g) {
                   if (g.ekhniiUldegdel !== undefined) t.ekhniiUldegdel = g.ekhniiUldegdel;
                   if (g.suuliinZaalt !== undefined && g.suuliinZaalt > 0) {
