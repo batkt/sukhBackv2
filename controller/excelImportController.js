@@ -644,6 +644,8 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
           ? item.horoo?.ner || ""
           : item.horoo || "",
       soh: item.soh || "",
+      khonogoorBodokhEsekh: item.khonogoorBodokhEsekh ? "Тийм" : "Үгүй",
+      bodokhKhonog: item.bodokhKhonog || 0,
     }));
 
     // Set data for download
@@ -663,10 +665,12 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
       { key: "duureg", label: "Дүүрэг" },
       { key: "horoo", label: "Хороо" },
       { key: "soh", label: "СӨХ" },
+      { key: "khonogoorBodokhEsekh", label: "Хоногоор бодох" },
+      { key: "bodokhKhonog", label: "Ирээдүйд ашиглах хоног" },
     ];
     req.body.fileName = req.body.fileName || `orshinSuugch_${Date.now()}`;
     req.body.sheetName = req.body.sheetName || "Оршин суугчид";
-    req.body.colWidths = [10, 20, 20, 15, 25, 10, 10, 10, 15, 20, 25, 15, 15, 20];
+    req.body.colWidths = [10, 20, 20, 15, 25, 10, 10, 10, 15, 20, 25, 15, 15, 20, 15, 20];
 
     // Call downloadExcelList function directly
     return exports.downloadExcelList(req, res, next);
@@ -911,6 +915,8 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
       "Эхний үлдэгдэл",
       "Цахилгаан кВт (тариф ₮/кВт)",
       "Тайлбар",
+      "Хоногоор бодох",
+      "Ирээдүйд ашиглах хоног",
     ];
 
     let workbook = new excel.Workbook();
@@ -919,7 +925,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     worksheet.columns = headers.map((h, i) => ({
       header: h,
       key: h,
-      width: [15, 15, 12, 25, 10, 10, 10, 15, 20, 15, 22, 22, 30][i] || 15,
+      width: [15, 15, 12, 25, 10, 10, 10, 15, 20, 15, 22, 22, 15, 20][i] || 15,
     }));
 
     // Data validation for Orts (Column E) and Davkhar (Column F)
@@ -955,6 +961,16 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
       type: "list",
       allowBlank: true,
       formulae: ['"Үндсэн,Түр"'],
+      showErrorMessage: true,
+      errorStyle: "error",
+      error: "Жагсаалтаас сонгоно уу!",
+    });
+
+    // Data validation for KhonogoorBodokh (Column M) - "Тийм", "Үгүй"
+    worksheet.dataValidations.add("M2:M2000", {
+      type: "list",
+      allowBlank: true,
+      formulae: ['"Тийм,Үгүй"'],
       showErrorMessage: true,
       errorStyle: "error",
       error: "Жагсаалтаас сонгоно уу!",
@@ -1104,7 +1120,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             row["Хоногоор бодох"] === true ||
             String(row["Хоногоор бодох"]).toLowerCase() === "true" ||
             String(row["Хоногоор бодох"]).toLowerCase() === "тийм",
-          bodokhKhonog: parseInt(row["Ашиглах хоног"]) || 0,
+          bodokhKhonog: parseInt(row["Ирээдүйд ашиглах хоног"]) || parseInt(row["Ашиглах хоног"]) || 0,
         };
 
         // Check if this is an update-only row (only toot, davkhar, ekhniiUldegdel, and possibly tsahilgaaniiZaalt)
