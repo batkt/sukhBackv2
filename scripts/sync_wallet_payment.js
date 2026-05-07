@@ -23,7 +23,6 @@ for (const p of configPaths) {
 
 const { db } = require("zevbackv2");
 const { getKholboltByBaiguullagiinId } = require("../utils/dbConnection");
-const walletApiService = require("../services/walletApiService");
 
 const WALLET_API_BASE_URL = process.env.WALLET_API_BASE_URL || "http://localhost:30510/v1";
 const WALLET_API_USERNAME = process.env.WALLET_API_USERNAME || "neo_bpay";
@@ -51,8 +50,8 @@ async function sync() {
     console.log("🔌 Initializing database connection...");
     db.kholboltUusgey(app, MONGODB_URI);
 
-    console.log("Waiting 4000ms for connections to initialize...");
-    await new Promise((r) => setTimeout(r, 4000));
+    console.log("Waiting 6000ms for connections to initialize...");
+    await new Promise((r) => setTimeout(r, 6000));
 
     if (!db.kholboltuud || db.kholboltuud.length === 0) {
       console.error("❌ No tenant connections. Check MONGODB_URI.");
@@ -62,10 +61,9 @@ async function sync() {
     const kholbolt = getKholboltByBaiguullagiinId(TARGET_BAIGUULLAGIIN_ID);
     if (!kholbolt) {
       console.error(`❌ Connection info not found for baiguullagiinId: ${TARGET_BAIGUULLAGIIN_ID}`);
+      console.log("Available IDs in db.kholboltuud:", db.kholboltuud.map(k => k.baiguullagiinId).join(", "));
       process.exit(1);
     }
-
-    console.log(`✅ Found connection for organization: ${kholbolt.baiguullagiinNer || TARGET_BAIGUULLAGIIN_ID}`);
 
     const { QuickQpayObject } = require("quickqpaypackvSukh");
     const WalletInvoice = require("../models/walletInvoice");
@@ -81,8 +79,6 @@ async function sync() {
        process.exit(1);
     }
 
-    console.log(`✅ Found record: ${qpayObject._id}. Current status: ${qpayObject.tulsunEsekh}`);
-
     qpayObject.tulsunEsekh = true;
     const qpayPaymentId = qpayObject.invoice_id;
     const trxNo = qpayObject.legacy_id;
@@ -92,11 +88,10 @@ async function sync() {
     console.log("✅ Local record marked as PAID.");
 
     // Notify Wallet API
-    const walletInvoiceDoc = await WalletInvoice(db.erunkhiiKholbolt).findOne({ walletPaymentId: TARGET_WALLET_PAYMENT_ID }).lean();
-    const userId = walletInvoiceDoc?.userId || qpayObject.userId;
-
-    if (userId) {
-      console.log(`📡 Notifying Wallet API for userId: ${userId}...`);
+    const userId = "88046904"; // Forced correct userId
+    console.log(`📡 Notifying Wallet API for userId: ${userId}...`);
+    
+    try {
       const token = await getWalletServiceToken();
       const bankAccount = qpayObject.qpay?.bank_accounts?.[0] || {};
       
@@ -111,10 +106,10 @@ async function sync() {
         receiverAccountName: bankAccount.account_name || "",
       };
 
-      await axios.put(`${WALLET_API_BASE_URL}/api/payment/qpay/${TARGET_WALLET_PAYMENT_ID}`, payload, {
+      const result = await axios.put(`${WALLET_API_BASE_URL}/api/payment/qpay/${TARGET_WALLET_PAYMENT_ID}`, payload, {
         headers: { userId, Authorization: `Bearer ${token}` }
       });
-      console.log("✅ Wallet API notified successfully.");
+      console.log("✅ Wallet API notified successfully. Response:", result.data?.responseMsg || "OK");
 
       // Create BankniiGuilgee
       try {
@@ -134,6 +129,8 @@ async function sync() {
       } catch (e) {
         console.warn("⚠️ Could not create BankniiGuilgee:", e.message);
       }
+    } catch (apiErr) {
+      console.error("❌ Wallet API Notification Error:", apiErr.response?.data || apiErr.message);
     }
 
     console.log("\n🏁 All done!");
