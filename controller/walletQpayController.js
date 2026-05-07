@@ -1018,11 +1018,20 @@ exports.resyncWalletPayment = asyncHandler(async (req, res, next) => {
     });
   }
 
-  /* ── 3. Store qpayPaymentId if we now have it ── */
+  /* ── 3. Store qpayPaymentId and mark PAID locally ── */
+  let needsSave = false;
   if (qpayPaymentId && qpayPaymentId !== qpayObject.payment_id) {
     qpayObject.payment_id = qpayPaymentId;
+    needsSave = true;
+  }
+  if (!qpayObject.tulsunEsekh) {
     qpayObject.tulsunEsekh = true;
+    needsSave = true;
+  }
+
+  if (needsSave) {
     await qpayObject.save();
+    console.log(`✅ [WALLET QPAY RESYNC] Marked PAID locally: ${qpayObject._id}`);
   }
 
   /* ── 4. Find userId from WalletInvoice ── */
