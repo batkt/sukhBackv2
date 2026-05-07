@@ -1285,7 +1285,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
     }
 
     const [allOrshinSuugch, allContractsList, allInvoices, allLedgerEntries] = await Promise.all([
-      OrshinSuugch(kholbolt).find(residentMatch).lean(),
+      OrshinSuugch(db.erunkhiiKholbolt).find(residentMatch).lean(),
       Geree(kholbolt).find(match).lean(),
       NekhemjlekhiinTuukh(kholbolt).find(transactionMatch).lean(),
       GuilgeeAvlaguud(kholbolt).find(transactionMatch).lean(),
@@ -2804,7 +2804,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       NekhemjlekhiinTuukh(kholbolt).find(query).lean(),
       GuilgeeAvlaguud(kholbolt).find(receivableQuery).lean(),
       GuilgeeAvlaguud(kholbolt).find(standalonePaidMatch).lean(),
-      OrshinSuugch(kholbolt).find(gereeQuery).lean(),
+      OrshinSuugch(db.erunkhiiKholbolt).find(gereeQuery).lean(),
       Geree(kholbolt).find(gereeQuery).lean(),
     ]);
 
