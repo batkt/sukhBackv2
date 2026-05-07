@@ -1529,21 +1529,78 @@ async function handleWalletEbarimt(
  */
 exports.walletWebhook = asyncHandler(async (req, res, next) => {
   const { objectId, objectType, notificationId, userId } = req.query;
+  const { db } = require("zevbackv2");
 
-  console.log(`🔔 [WALLET WEBHOOK] Received notification:`);
-  console.log(`   notificationId: ${notificationId}`);
-  console.log(`   objectType: ${objectType}`);
-  console.log(`   objectId: ${objectId}`);
-  console.log(`   userId: ${userId}`);
+  console.log(`🔔 [WALLET WEBHOOK] Received notification: notificationId=${notificationId}, type=${objectType}, objectId=${objectId}`);
 
   // Process based on objectType
-  if (objectType === "PAYMENT") {
-     console.log(`💳 [WALLET WEBHOOK] Payment notification received for objectId: ${objectId}`);
-     // Here you can trigger a background check/sync for this payment
+  if (objectType === "PAYMENT" && objectId) {
+    try {
+      // 1. Find the wallet invoice metadata in the main DB to identify the organization
+      const invoiceMetadata = await WalletInvoice(db.erunkhiiKholbolt).findOne({ 
+        walletPaymentId: objectId 
+      }).lean();
+
+      if (!invoiceMetadata) {
+        console.warn(`⚠️ [WALLET WEBHOOK] Invoice metadata not found for walletPaymentId: ${objectId}`);
+        return res.status(200).json({ success: true, message: "Metadata not found" });
+      }
+
+      const baiguullagiinId = invoiceMetadata.baiguullagiinId;
+      const tukhainBaaziinKholbolt = db.kholboltuud.find(
+        (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
+      );
+
+      if (!tukhainBaaziinKholbolt) {
+        console.error(`❌ [WALLET WEBHOOK] Connection not found for org: ${baiguullagiinId}`);
+        return res.status(200).json({ success: true, message: "Org connection not found" });
+      }
+
+      // 2. Fetch the QPay object from the tenant DB
+      const qpayObject = await QuickQpayObject(tukhainBaaziinKholbolt).findOne({
+        walletPaymentId: objectId
+      });
+
+      if (!qpayObject) {
+        console.warn(`⚠️ [WALLET WEBHOOK] Qpay object not found for walletPaymentId: ${objectId}`);
+        return res.status(200).json({ success: true, message: "Qpay object not found" });
+      }
+
+      if (qpayObject.tulsunEsekh) {
+        console.log(`ℹ️ [WALLET WEBHOOK] Payment ${objectId} is already marked as paid.`);
+        return res.status(200).json({ success: true });
+      }
+
+      // 3. Verify status with Wallet API before settling (resilient check)
+      const walletUserId = invoiceMetadata.userId || userId;
+      const paymentInfo = await walletApiService.getPayment(walletUserId, objectId);
+      
+      if (paymentInfo && (paymentInfo.paymentStatus === "PAID" || paymentInfo.paymentStatus === "SUCCESS")) {
+        console.log(`✅ [WALLET WEBHOOK] Wallet API confirms payment is PAID. Settling locally...`);
+        
+        // Extract transaction info from Wallet API response if available
+        const trx = paymentInfo.paymentTransactions?.[0] || {};
+        const qpayPaymentId = paymentInfo.qpayPaymentId || qpayObject.invoice_id;
+
+        // 4. Trigger the internal settlement logic
+        await exports.settleWalletPayment(tukhainBaaziinKholbolt, objectId, qpayObject, {
+          qpayPaymentId: qpayPaymentId,
+          trxNo: trx.trxNo,
+          trxDate: trx.trxDate
+        });
+        
+        console.log(`✅ [WALLET WEBHOOK] Settlement completed for payment: ${objectId}`);
+      } else {
+        console.log(`ℹ️ [WALLET WEBHOOK] Wallet API status is ${paymentInfo?.paymentStatus || 'UNKNOWN'}. Skipping settlement.`);
+      }
+    } catch (err) {
+      console.error(`❌ [WALLET WEBHOOK] Error processing payment ${objectId}:`, err.message);
+      // We still return 200 to acknowledge the webhook, but we log the error
+    }
   } else if (objectType === "CHAT") {
-     console.log(`💬 [WALLET WEBHOOK] Chat message notification received`);
+     console.log(`💬 [WALLET WEBHOOK] Chat message notification received for objectId: ${objectId}`);
   }
 
-  // Always return success 200 as per documentation
+  // Always return success 200 as per documentation to avoid retries from eBill
   res.status(200).json({ success: true });
 });
