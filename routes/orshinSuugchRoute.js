@@ -306,11 +306,48 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
 
 router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
   try {
+    const baiguullagiinId = req.query.baiguullagiinId;
+
     // Residents MUST be in erunkhiiKholbolt
     let kholbolt = db.erunkhiiKholbolt;
 
     const result = await OrshinSuugch(kholbolt).findById(req.params.id);
-    if (result != null) result.key = result._id;
+    if (result != null) {
+      result.key = result._id;
+
+      // --- Authoritative Overlay (Source of Truth: Geree) ---
+      if (baiguullagiinId && db.kholboltuud) {
+        const tukhainBaaziinKholbolt = db.kholboltuud.find(
+          (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+        );
+
+        if (tukhainBaaziinKholbolt) {
+          try {
+            const GereeModel = Geree(tukhainBaaziinKholbolt);
+            const authoritativeGeree = await GereeModel.findOne({
+              orshinSuugchId: result._id.toString(),
+              tuluv: "Идэвхтэй",
+            }).lean();
+
+            if (authoritativeGeree) {
+              if (authoritativeGeree.ekhniiUldegdel !== undefined) {
+                result.ekhniiUldegdel = authoritativeGeree.ekhniiUldegdel;
+              }
+              if (authoritativeGeree.suuliinZaalt !== undefined && authoritativeGeree.suuliinZaalt > 0) {
+                result.tsahilgaaniiZaalt = authoritativeGeree.suuliinZaalt;
+              } else if (authoritativeGeree.umnukhZaalt !== undefined) {
+                result.tsahilgaaniiZaalt = authoritativeGeree.umnukhZaalt;
+              }
+              
+              if (authoritativeGeree.toot) result.toot = authoritativeGeree.toot;
+              if (authoritativeGeree.davkhar) result.davkhar = authoritativeGeree.davkhar;
+            }
+          } catch (err) {
+            console.error("Error overlaying contract data in detail view:", err);
+          }
+        }
+      }
+    }
     res.send(result);
   } catch (error) {
     next(error);
