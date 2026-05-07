@@ -899,7 +899,10 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
           }
 
           // Address components (propagate if specified)
-          if (req.body.toot !== undefined) syncData.toot = req.body.toot;
+          if (req.body.toot !== undefined) {
+            syncData.toot = req.body.toot;
+            invoiceUpdateData.toot = req.body.toot;
+          }
           if (req.body.davkhar !== undefined) {
             syncData.davkhar = req.body.davkhar;
             invoiceUpdateData.davkhar = req.body.davkhar;
@@ -997,9 +1000,16 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
                     ajiltanNer: req.ajiltan?.ner,
                   },
                 );
-              }
             }
+          }
 
+          // 1. Update Geree (Contracts) - Essential to keep personal info in sync
+          if (Object.keys(syncData).length > 0) {
+            await GereeModel.updateMany(
+              { orshinSuugchId: result._id.toString() },
+              { $set: syncData }
+            );
+          }
 
           // 2. Update Invoices (nekhemjlekhiinTuukh) - update all associated records for consistency
           if (Object.keys(invoiceUpdateData).length > 0) {
