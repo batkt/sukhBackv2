@@ -971,15 +971,6 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             syncData.bodokhKhonog = Number(req.body.bodokhKhonog) || 0;
           }
 
-          // 1. Update Geree (Contracts) - Essential to keep personal info in sync
-          // This MUST happen before syncResidentContracts so it can find the updated records
-          if (Object.keys(syncData).length > 0) {
-            await GereeModel.updateMany(
-              { orshinSuugchId: result._id.toString() },
-              { $set: syncData }
-            );
-          }
-
           // Use shared service to sync contracts for all units (create/reactivate/update)
           const syncService = require("../controller/orshinSuugch");
           const baiguullaga = await require("../models/baiguullaga")(db.erunkhiiKholbolt).findById(orgId);
@@ -1012,6 +1003,13 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             }
           }
 
+          // 1. Update Geree (Contracts) - Essential to keep personal info in sync
+          if (Object.keys(syncData).length > 0) {
+            await GereeModel.updateMany(
+              { orshinSuugchId: result._id.toString() },
+              { $set: syncData }
+            );
+          }
 
           // 2. Update Invoices (nekhemjlekhiinTuukh) - update all associated records for consistency
           if (Object.keys(invoiceUpdateData).length > 0) {

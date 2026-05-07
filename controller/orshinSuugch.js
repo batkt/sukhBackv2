@@ -5208,6 +5208,37 @@ exports.syncResidentContracts = async function syncResidentContracts(
 
   let anyReactivated = false;
 
+  // 1. Identify all active contracts for this resident in this organization
+  const allActiveGerees = await GereeModel.find({
+    orshinSuugchId: orshinSuugch._id.toString(),
+    tuluv: "Идэвхтэй"
+  }).lean();
+
+  // 2. Create a set of "Valid Unit Keys" for this organization
+  const validUnitKeys = new Set();
+  tootsToProcess.forEach(t => {
+    const entryOrgId = t.baiguullagiinId ? String(t.baiguullagiinId) : null;
+    if (!entryOrgId || entryOrgId === baiguullagiinId) {
+      const bId = t.barilgiinId || barilgiinId;
+      if (bId) {
+        validUnitKeys.add(`${String(bId)}|${String(t.toot).trim()}`);
+      }
+    }
+  });
+
+  // 3. Cancel contracts that are no longer associated with this resident
+  for (const g of allActiveGerees) {
+    const key = `${String(g.barilgiinId)}|${String(g.toot).trim()}`;
+    if (!validUnitKeys.has(key)) {
+      console.log(`🚫 [SYNC] Cancelling contract ${g.gereeniiDugaar} for unit ${g.toot} (No longer associated)`);
+      await GereeModel.findByIdAndUpdate(g._id, {
+        $set: { 
+          tuluv: "Цуцалсан", 
+          tsutsalsanOgnoo: new Date(),
+          temdeglel: `Системээс автоматаар цуцлагдсан (Тоот өөрчлөгдсөн)`
+        }
+      });
+    }
   for (const tootEntry of tootsToProcess) {
     // Only process units that belong to the current organization context
     const entryOrgId = tootEntry.baiguullagiinId ? String(tootEntry.baiguullagiinId) : null;
@@ -5223,12 +5254,11 @@ exports.syncResidentContracts = async function syncResidentContracts(
     }
 
     const currentBarilgiinId = tootEntry.barilgiinId || barilgiinId;
-    if (!currentBarilgiinId) continue;
 
     // Check if ACTIVE contract already exists for this unit
     const existingActiveGeree = await GereeModel.findOne({
-      toot: String(tootEntry.toot).trim(),
-      barilgiinId: String(currentBarilgiinId),
+      toot: tootEntry.toot,
+      barilgiinId: currentBarilgiinId,
       tuluv: "Идэвхтэй",
       orshinSuugchId: orshinSuugch._id.toString(),
     });
@@ -5512,3 +5542,4 @@ exports.syncResidentContracts = async function syncResidentContracts(
 
   return anyReactivated;
 };
+}
