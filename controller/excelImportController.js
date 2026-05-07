@@ -707,42 +707,8 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
       );
     }
 
-    // Helper function to format row data
-    const formatRow = (item) => {
-      return headerKeys.map((key) => {
-        let value;
-        if (key.includes(".")) {
-          value = key.split(".").reduce((obj, prop) => {
-            if (obj && obj[prop] !== undefined) {
-              return obj[prop];
-            }
-            return null;
-          }, item);
-        } else {
-          value = item[key];
-        }
-
-        if (value === null || value === undefined) {
-          return "";
-        }
-        if (Array.isArray(value)) {
-          return value.join(", ");
-        }
-        if (typeof value === "object" && !(value instanceof Date)) {
-          if (value.ner && value.kod) {
-            return `${value.ner} (${value.kod})`;
-          }
-          return JSON.stringify(value);
-        }
-        if (value instanceof Date) {
-          return value.toISOString().split("T")[0];
-        }
-        return String(value);
-      });
-    };
-
-    const wb = XLSX.utils.book_new();
-
+    const workbook = new excel.Workbook();
+    
     // Check if data has barilgiinId field and separate by it
     const hasBarilgiinId = data.some(
       (item) =>
@@ -752,72 +718,74 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
         item.barilgiinId !== "",
     );
 
+    const groups = hasBarilgiinId ? {} : { default: data };
+    
     if (hasBarilgiinId) {
-      // Group data by barilgiinId
-      const groupedData = {};
-      data.forEach((item) => {
-        const barilgiinId = item?.barilgiinId || "Бусад";
-        if (!groupedData[barilgiinId]) {
-          groupedData[barilgiinId] = [];
-        }
-        groupedData[barilgiinId].push(item);
+      data.forEach(item => {
+        const bid = item.barilgiinId || "Бусад";
+        if (!groups[bid]) groups[bid] = [];
+        groups[bid].push(item);
       });
-
-      // Create a sheet for each barilgiinId
-      const barilgiinIds = Object.keys(groupedData).sort();
-      barilgiinIds.forEach((barilgiinId, index) => {
-        const groupData = groupedData[barilgiinId];
-        const rows = groupData.map(formatRow);
-
-        const ws = XLSX.utils.aoa_to_sheet([headerLabels, ...rows]);
-
-        if (colWidths && Array.isArray(colWidths)) {
-          ws["!cols"] = colWidths.map((w) => ({
-            wch: typeof w === "number" ? w : 15,
-          }));
-        } else {
-          ws["!cols"] = headerLabels.map(() => ({ wch: 15 }));
-        }
-
-        // Create sheet name from barilgiinId (Excel sheet names have limitations)
-        let sheetNameForBarilga = barilgiinId;
-        if (sheetNameForBarilga.length > 31) {
-          sheetNameForBarilga = sheetNameForBarilga.substring(0, 28) + "...";
-        }
-        // Replace invalid characters for Excel sheet names
-        sheetNameForBarilga = sheetNameForBarilga.replace(
-          /[\\\/\?\*\[\]:]/g,
-          "_",
-        );
-
-        // If we have a base sheetName, use it with barilgiinId
-        const finalSheetName = sheetName
-          ? `${sheetName}_${index + 1}`
-          : barilgiinIds.length > 1
-            ? sheetNameForBarilga
-            : sheetName || "Sheet1";
-
-        XLSX.utils.book_append_sheet(wb, ws, finalSheetName);
-      });
-    } else {
-      // No barilgiinId, create single sheet as before
-      const rows = data.map(formatRow);
-      const ws = XLSX.utils.aoa_to_sheet([headerLabels, ...rows]);
-
-      if (colWidths && Array.isArray(colWidths)) {
-        ws["!cols"] = colWidths.map((w) => ({
-          wch: typeof w === "number" ? w : 15,
-        }));
-      } else {
-        ws["!cols"] = headerLabels.map(() => ({ wch: 15 }));
-      }
-
-      XLSX.utils.book_append_sheet(wb, ws, sheetName || "Sheet1");
     }
 
-    const excelBuffer = XLSX.write(wb, {
-      type: "buffer",
-      bookType: "xlsx",
+    Object.keys(groups).forEach((groupKey, index) => {
+      const groupData = groups[groupKey];
+      let sName = sheetName || "Sheet1";
+      if (hasBarilgiinId) {
+        sName = String(groupKey).substring(0, 31).replace(/[\\\/\?\*\[\]:]/g, "_");
+        if (Object.keys(groups).length > 1 && sName === sheetName) sName = `${sheetName}_${index + 1}`;
+      }
+      
+      const worksheet = workbook.addWorksheet(sName);
+
+      // Define columns
+      worksheet.columns = headerLabels.map((label, i) => ({
+        header: label,
+        key: headerKeys[i],
+        width: Array.isArray(colWidths) && colWidths[i] ? (typeof colWidths[i] === 'number' ? colWidths[i] : 15) : 15
+      }));
+
+      // Add data
+      groupData.forEach(item => {
+        const rowData = {};
+        headerKeys.forEach(key => {
+          let value;
+          if (key.includes(".")) {
+            value = key.split(".").reduce((obj, prop) => (obj && obj[prop] !== undefined ? obj[prop] : null), item);
+          } else {
+            value = item[key];
+          }
+
+          if (value instanceof Date) {
+            rowData[key] = value.toISOString().split("T")[0];
+          } else if (Array.isArray(value)) {
+            rowData[key] = value.join(", ");
+          } else if (typeof value === "object" && value !== null) {
+            rowData[key] = value.ner || JSON.stringify(value);
+          } else {
+            rowData[key] = value ?? "";
+          }
+        });
+        worksheet.addRow(rowData);
+      });
+
+      // Style Header
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: "FFFFFF" } };
+      headerRow.eachCell((cell) => {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "2F5597" } // Dark Blue Professional Header
+        };
+        cell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" }
+        };
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      });
     });
 
     res.setHeader(
@@ -830,7 +798,8 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
       `attachment; filename="${encodedFileName}.xlsx"; filename*=UTF-8''${encodedFileName}.xlsx`,
     );
 
-    res.send(excelBuffer);
+    await workbook.xlsx.write(res);
+    res.end();
   } catch (error) {
     next(error);
   }
@@ -2158,26 +2127,32 @@ exports.generateTootBurtgelExcelTemplate = asyncHandler(
           ? Array.from(ortsSet).sort((a, b) => parseInt(a) - parseInt(b))
           : ["1"];
 
-      const wb = XLSX.utils.book_new();
+      const workbook = new excel.Workbook();
       const headers = ["Давхар", "Тоот"];
 
-      const colWidths = [
-        { wch: 12 }, // Давхар (floor)
-        { wch: 20 }, // Тоот (apartment number - wider for comma-separated values)
-      ];
-
-      // Create a sheet for each orts
       ortsList.forEach((orts) => {
-        const ws = XLSX.utils.aoa_to_sheet([headers]);
-        ws["!cols"] = colWidths;
+        const worksheet = workbook.addWorksheet(`Орц ${orts}`);
+        worksheet.columns = [
+          { header: "Давхар", key: "floor", width: 15 },
+          { header: "Тоот", key: "apartment", width: 25 },
+        ];
 
-        const sheetName = `Орц ${orts}`;
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
-      });
-
-      const excelBuffer = XLSX.write(wb, {
-        type: "buffer",
-        bookType: "xlsx",
+        // Style the header
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { bold: true, color: { argb: "000000" } };
+        headerRow.eachCell((cell) => {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "C6EFCE" }, // Green for required
+          };
+          cell.border = {
+            top: { style: "thin" },
+            left: { style: "thin" },
+            bottom: { style: "thin" },
+            right: { style: "thin" },
+          };
+        });
       });
 
       res.setHeader(
@@ -2189,7 +2164,8 @@ exports.generateTootBurtgelExcelTemplate = asyncHandler(
         `attachment; filename="tootBurtgel_import_template_${Date.now()}.xlsx"`,
       );
 
-      res.send(excelBuffer);
+      await workbook.xlsx.write(res);
+      res.end();
     } catch (error) {
       next(error);
     }
@@ -2518,25 +2494,31 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
 exports.generateInitialBalanceTemplate = asyncHandler(
   async (req, res, next) => {
     try {
+      const workbook = new excel.Workbook();
+      const worksheet = workbook.addWorksheet("Эхний үлдэгдэл");
+
       const headers = ["Утас", "Гэрээний дугаар", "Тоот", "Эхний үлдэгдэл", "Огноо"];
+      worksheet.columns = headers.map((h, i) => ({
+        header: h,
+        key: h,
+        width: [18, 22, 12, 18, 18][i] || 15,
+      }));
 
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet([headers]);
-
-      const colWidths = [
-        { wch: 15 }, // Утас
-        { wch: 20 }, // Гэрээний дугаар
-        { wch: 10 }, // Тоот
-        { wch: 15 }, // Эхний үлдэгдэл
-        { wch: 15 }, // Огноо
-      ];
-      ws["!cols"] = colWidths;
-
-      XLSX.utils.book_append_sheet(wb, ws, "Эхний үлдэгдэл");
-
-      const excelBuffer = XLSX.write(wb, {
-        type: "buffer",
-        bookType: "xlsx",
+      // Style header
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true };
+      headerRow.eachCell((cell) => {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "C6EFCE" }, // All green for initial balance template
+        };
+        cell.border = {
+          top: { style: "thin" },
+          left: { style: "thin" },
+          bottom: { style: "thin" },
+          right: { style: "thin" },
+        };
       });
 
       res.setHeader(
@@ -2548,7 +2530,8 @@ exports.generateInitialBalanceTemplate = asyncHandler(
         `attachment; filename="initial_balance_template_${Date.now()}.xlsx"`,
       );
 
-      res.send(excelBuffer);
+      await workbook.xlsx.write(res);
+      res.end();
     } catch (error) {
       next(error);
     }
