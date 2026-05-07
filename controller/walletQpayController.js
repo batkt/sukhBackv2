@@ -1537,12 +1537,43 @@ exports.walletWebhook = asyncHandler(async (req, res, next) => {
   if (objectType === "PAYMENT" && objectId) {
     try {
       // 1. Find the wallet invoice metadata in the main DB to identify the organization
-      const invoiceMetadata = await WalletInvoice(db.erunkhiiKholbolt).findOne({ 
-        walletPaymentId: objectId 
+      let invoiceMetadata = await WalletInvoice(db.erunkhiiKholbolt).findOne({ 
+        $or: [
+          { walletPaymentId: objectId },
+          { walletInvoiceId: objectId }
+        ]
       }).lean();
 
+      // Fallback: If not found, it might be a race condition or an external payment
       if (!invoiceMetadata) {
-        console.warn(`⚠️ [WALLET WEBHOOK] Invoice metadata not found for walletPaymentId: ${objectId}`);
+        console.log(`ℹ️ [WALLET WEBHOOK] Metadata not found for ${objectId}, trying fallback...`);
+        
+        // Brief wait for race condition
+        await new Promise(r => setTimeout(r, 2000));
+        
+        invoiceMetadata = await WalletInvoice(db.erunkhiiKholbolt).findOne({ 
+          $or: [
+            { walletPaymentId: objectId },
+            { walletInvoiceId: objectId }
+          ]
+        }).lean();
+
+        // If still not found, try to fetch from Wallet API to see if we can identify it
+        if (!invoiceMetadata && userId) {
+          try {
+            const paymentInfo = await walletApiService.getPayment(userId, objectId);
+            if (paymentInfo && paymentInfo.billingId) {
+               // Try to find ANY invoice for this billingId to get the baiguullagiinId
+               invoiceMetadata = await WalletInvoice(db.erunkhiiKholbolt).findOne({ 
+                 billingId: paymentInfo.billingId 
+               }).lean();
+            }
+          } catch (e) {}
+        }
+      }
+
+      if (!invoiceMetadata) {
+        console.warn(`⚠️ [WALLET WEBHOOK] Invoice metadata not found for objectId: ${objectId} (userId: ${userId || 'N/A'})`);
         return res.status(200).json({ success: true });
       }
 
@@ -1582,12 +1613,14 @@ exports.walletWebhook = asyncHandler(async (req, res, next) => {
         const trx = paymentInfo.paymentTransactions?.[0] || {};
         const qpayPaymentId = paymentInfo.qpayPaymentId || qpayObject.invoice_id;
 
-        // 4. Trigger the internal settlement logic
-        await exports.settleWalletPayment(tukhainBaaziinKholbolt, objectId, qpayObject, {
-          qpayPaymentId: qpayPaymentId,
-          trxNo: trx.trxNo,
-          trxDate: trx.trxDate
-        });
+        // 4. Trigger the internal settlement logic with correct signature
+        await settleWalletPayment(
+          qpayObject,
+          tukhainBaaziinKholbolt,
+          baiguullagiinId,
+          qpayPaymentId,
+          req.app.get("socketio")
+        );
         
         console.log(`✅ [WALLET WEBHOOK] Settlement completed for payment: ${objectId}`);
       } else {
