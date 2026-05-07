@@ -1543,7 +1543,7 @@ exports.walletWebhook = asyncHandler(async (req, res, next) => {
 
       if (!invoiceMetadata) {
         console.warn(`⚠️ [WALLET WEBHOOK] Invoice metadata not found for walletPaymentId: ${objectId}`);
-        return res.status(200).json({ success: true, message: "Metadata not found" });
+        return res.status(200).json({ success: true });
       }
 
       const baiguullagiinId = invoiceMetadata.baiguullagiinId;
@@ -1553,7 +1553,7 @@ exports.walletWebhook = asyncHandler(async (req, res, next) => {
 
       if (!tukhainBaaziinKholbolt) {
         console.error(`❌ [WALLET WEBHOOK] Connection not found for org: ${baiguullagiinId}`);
-        return res.status(200).json({ success: true, message: "Org connection not found" });
+        return res.status(200).json({ success: true });
       }
 
       // 2. Fetch the QPay object from the tenant DB
@@ -1563,7 +1563,7 @@ exports.walletWebhook = asyncHandler(async (req, res, next) => {
 
       if (!qpayObject) {
         console.warn(`⚠️ [WALLET WEBHOOK] Qpay object not found for walletPaymentId: ${objectId}`);
-        return res.status(200).json({ success: true, message: "Qpay object not found" });
+        return res.status(200).json({ success: true });
       }
 
       if (qpayObject.tulsunEsekh) {
