@@ -241,7 +241,7 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
             orshinSuugchId: { $in: residentIds },
           })
             .select(
-              "orshinSuugchId ekhniiUldegdel umnukhZaalt suuliinZaalt toot davkhar tuluv",
+              "_id orshinSuugchId baiguullagiinId ekhniiUldegdel umnukhZaalt suuliinZaalt toot davkhar tuluv",
             )
             .lean();
 
@@ -250,26 +250,21 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
           );
           const activeGereeIds = activeGerees.map((g) => g._id.toString());
 
-          // Fetch the latest invoice for each contract to determine payment status
-          const latestInvoices = await NekhemjlekhModel.aggregate([
-            {
-              $match: {
-                gereeniiId: { $in: activeGereeIds },
-                tuluv: { $ne: "Цуцлагдсан" },
-              },
-            },
-            { $sort: { ognoo: -1, createdAt: -1 } },
-            {
-              $group: {
-                _id: "$gereeniiId",
-                tuluv: { $first: "$tuluv" },
-              },
-            },
-          ]);
+          // Fetch invoices for these contracts to determine payment status
+          const invoices = await NekhemjlekhModel.find({
+            baiguullagiinId: targetBaiguullagiinId,
+            gereeniiId: { $in: activeGereeIds },
+            tuluv: { $ne: "Цуцлагдсан" },
+          })
+            .sort({ ognoo: -1, updatedAt: -1, _id: -1 })
+            .lean();
 
           const invoiceStatusMap = {};
-          latestInvoices.forEach((inv) => {
-            invoiceStatusMap[inv._id] = inv.tuluv;
+          invoices.forEach((inv) => {
+            const gid = String(inv.gereeniiId);
+            if (!invoiceStatusMap[gid]) {
+              invoiceStatusMap[gid] = inv.tuluv;
+            }
           });
 
           activeGerees.forEach((g) => {
