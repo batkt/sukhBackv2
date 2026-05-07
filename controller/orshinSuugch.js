@@ -5209,13 +5209,26 @@ exports.syncResidentContracts = async function syncResidentContracts(
   let anyReactivated = false;
 
   for (const tootEntry of tootsToProcess) {
+    // Only process units that belong to the current organization context
+    const entryOrgId = tootEntry.baiguullagiinId ? String(tootEntry.baiguullagiinId) : null;
+    
+    // If the unit association has an org ID, it MUST match the current one
+    if (entryOrgId && entryOrgId !== baiguullagiinId) {
+      continue;
+    }
+    
+    // If it doesn't have an org ID, only process it if this is the resident's primary organization
+    if (!entryOrgId && String(orshinSuugch.baiguullagiinId) !== baiguullagiinId) {
+      continue;
+    }
+
     const currentBarilgiinId = tootEntry.barilgiinId || barilgiinId;
     if (!currentBarilgiinId) continue;
 
     // Check if ACTIVE contract already exists for this unit
     const existingActiveGeree = await GereeModel.findOne({
-      toot: tootEntry.toot,
-      barilgiinId: currentBarilgiinId,
+      toot: String(tootEntry.toot).trim(),
+      barilgiinId: String(currentBarilgiinId),
       tuluv: "Идэвхтэй",
       orshinSuugchId: orshinSuugch._id.toString(),
     });
