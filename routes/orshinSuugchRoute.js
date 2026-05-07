@@ -245,37 +245,9 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
             )
             .lean();
 
-          const NekhemjlekhModel = require("../models/nekhemjlekhiinTuukh")(
-            tukhainBaaziinKholbolt,
-          );
-          const activeGereeIds = activeGerees.map((g) => g._id.toString());
-
-          // Fetch invoices for these contracts to determine payment status
-          const invoices = await NekhemjlekhModel.find({
-            baiguullagiinId: targetBaiguullagiinId,
-            gereeniiId: { $in: activeGereeIds },
-            tuluv: { $ne: "Цуцлагдсан" },
-          })
-            .sort({ ognoo: -1, updatedAt: -1, _id: -1 })
-            .lean();
-
-          const invoiceStatusMap = {};
-          invoices.forEach((inv) => {
-            const gid = String(inv.gereeniiId);
-            if (!invoiceStatusMap[gid]) {
-              invoiceStatusMap[gid] = inv.tuluv;
-            }
-          });
-
           activeGerees.forEach((g) => {
             const resId = String(g.orshinSuugchId);
             const tootKey = `${resId}|${String(g.toot).trim()}`;
-            const gereeId = g._id.toString();
-
-            // Inject the latest invoice status into the contract object
-            if (invoiceStatusMap[gereeId]) {
-              g.latestInvoiceStatus = invoiceStatusMap[gereeId];
-            }
 
             // If we already have an active contract for this resident, don't overwrite it with an inactive one
             const existing = gereeMap[resId];
@@ -289,10 +261,7 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
             }
           });
         } catch (err) {
-          console.error(
-            "Error fetching authoritative geree and invoice data:",
-            err,
-          );
+          console.error("Error fetching authoritative geree data:", err);
         }
       }
 
@@ -369,11 +338,6 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
           // Sync contextually relevant fields from the contract
           if (authoritativeGeree.toot) mur.toot = authoritativeGeree.toot;
           if (authoritativeGeree.davkhar) mur.davkhar = authoritativeGeree.davkhar;
-
-          // Sync latest invoice status for UI display
-          if (authoritativeGeree.latestInvoiceStatus) {
-            mur.latestInvoiceStatus = authoritativeGeree.latestInvoiceStatus;
-          }
         }
       });
     }
@@ -417,30 +381,10 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
 
             console.log(`[DEBUG] Resident Detail: Found ${allGerees.length} contracts for resident ${result._id}`);
 
-            const NekhemjlekhModel = require("../models/nekhemjlekhiinTuukh")(tukhainBaaziinKholbolt);
-            const activeGereeIds = allGerees.map(g => g._id.toString());
-            
-            // Fetch latest invoices for status overlay
-            const latestInvoices = await NekhemjlekhModel.aggregate([
-              { $match: { gereeniiId: { $in: activeGereeIds }, tuluv: { $ne: "Цуцлагдсан" } } },
-              { $sort: { ognoo: -1, createdAt: -1 } },
-              { $group: { _id: "$gereeniiId", tuluv: { $first: "$tuluv" } } }
-            ]);
-            
-            const invoiceStatusMap = {};
-            latestInvoices.forEach(inv => {
-              invoiceStatusMap[inv._id] = inv.tuluv;
-            });
-
             const unitGereeMap = {};
             allGerees.forEach(g => {
               const tootKey = String(g.toot || "").trim();
-              const gereeId = g._id.toString();
               
-              if (invoiceStatusMap[gereeId]) {
-                g.latestInvoiceStatus = invoiceStatusMap[gereeId];
-              }
-
               console.log(`[DEBUG] Resident Detail: Mapping Toot Key: "${tootKey}" to Geree ${g._id} (Balance: ${g.ekhniiUldegdel})`);
               if (!unitGereeMap[tootKey] || g.tuluv === "Идэвхтэй") {
                 unitGereeMap[tootKey] = g;
@@ -455,7 +399,6 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
                 console.log(`[DEBUG] Resident Detail: Checking unit "${currentToot}" -> Found Match: ${!!g}`);
                 if (g) {
                   if (g.ekhniiUldegdel !== undefined) t.ekhniiUldegdel = g.ekhniiUldegdel;
-                  if (g.latestInvoiceStatus) t.latestInvoiceStatus = g.latestInvoiceStatus;
                   if (g.suuliinZaalt !== undefined && g.suuliinZaalt > 0) {
                     t.tsahilgaaniiZaalt = g.suuliinZaalt;
                   } else if (g.umnukhZaalt !== undefined) {
@@ -472,9 +415,6 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
               if (authoritativeGeree.ekhniiUldegdel !== undefined) {
                 result.ekhniiUldegdel = authoritativeGeree.ekhniiUldegdel;
               }
-              if (authoritativeGeree.latestInvoiceStatus) {
-                result.latestInvoiceStatus = authoritativeGeree.latestInvoiceStatus;
-              }
               if (authoritativeGeree.suuliinZaalt !== undefined && authoritativeGeree.suuliinZaalt > 0) {
                 result.tsahilgaaniiZaalt = authoritativeGeree.suuliinZaalt;
               } else if (authoritativeGeree.umnukhZaalt !== undefined) {
@@ -485,7 +425,7 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
               if (authoritativeGeree.davkhar) result.davkhar = authoritativeGeree.davkhar;
             }
           } catch (err) {
-            console.error("Error overlaying contract and invoice data in detail view:", err);
+            console.error("Error overlaying contract data in detail view:", err);
           }
         }
       }
