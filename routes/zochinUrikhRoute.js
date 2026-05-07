@@ -925,6 +925,7 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
     const limit = parseInt(req.query.khuudasniiKhemjee) || 50;
     const skip = (page - 1) * limit;
     const baiguullagiinId = req.query.baiguullagiinId;
+    const barilgiinId = req.query.barilgiinId;
 
     if (!baiguullagiinId) {
       return res.status(400).send("baiguullagiinId required");
@@ -935,6 +936,10 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
       baiguullagiinId: String(baiguullagiinId),
       zochinTurul: { $exists: true } // Only vehicles with guest/resident settings
     };
+
+    if (barilgiinId) {
+      matchQuery.barilgiinId = String(barilgiinId);
+    }
 
     // Add search if provided
     if (req.query.search) {
