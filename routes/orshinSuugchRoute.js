@@ -900,7 +900,7 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
 
           // Address components (propagate if specified)
           if (req.body.toot !== undefined) {
-            syncData.toot = req.body.toot;
+            // syncData.toot = req.body.toot; // Removed to allow cancellation of old unit
             invoiceUpdateData.toot = req.body.toot;
           }
           if (req.body.davkhar !== undefined) {
