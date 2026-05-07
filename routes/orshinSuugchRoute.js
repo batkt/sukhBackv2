@@ -142,7 +142,25 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
       ? Number(body.khuudasniiKhemjee)
       : 1000;
 
+    // Handle search parameter (ovog, ner, register, utas, toot)
+    if (body.search && body.search.trim() !== "") {
+      const searchVal = body.search.trim();
+      const searchFilter = {
+        $or: [
+          { ovog: { $regex: searchVal, $options: "i" } },
+          { ner: { $regex: searchVal, $options: "i" } },
+          { register: { $regex: searchVal, $options: "i" } },
+          { utas: { $regex: searchVal, $options: "i" } },
+          { toot: { $regex: searchVal, $options: "i" } },
+        ],
+      };
 
+      if (Object.keys(body.query).length > 0) {
+        body.query = { $and: [body.query, searchFilter] };
+      } else {
+        body.query = searchFilter;
+      }
+    }
 
     const filters = [];
 
