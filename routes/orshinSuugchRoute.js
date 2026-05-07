@@ -208,8 +208,35 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
         body.query.baiguullagiinId || baiguullagiinId,
       );
 
+      // --- NEW: Use Geree (Contract) as authoritative fallback for display data ---
+      const tukhainBaaziinKholbolt = db.kholboltuud.find(
+        (k) => String(k.baiguullagiinId) === targetBaiguullagiinId,
+      );
+      const gereeMap = {};
+
+      if (tukhainBaaziinKholbolt) {
+        try {
+          const GereeModel = Geree(tukhainBaaziinKholbolt);
+          const residentIds = jagsaalt.map((r) => r._id.toString());
+          const activeGerees = await GereeModel.find({
+            orshinSuugchId: { $in: residentIds },
+            tuluv: "Идэвхтэй",
+          })
+            .select("orshinSuugchId ekhniiUldegdel umnukhZaalt suuliinZaalt toot davkhar")
+            .lean();
+
+          activeGerees.forEach((g) => {
+            // Group by resident ID. If multiple contracts, latest one (by _id) wins
+            gereeMap[g.orshinSuugchId] = g;
+          });
+        } catch (err) {
+          console.error("Error fetching authoritative geree data:", err);
+        }
+      }
+
       jagsaalt.forEach((mur) => {
         mur.key = mur._id;
+        const authoritativeGeree = gereeMap[mur._id.toString()];
 
         // If query has baiguullagiinId, ensure the returned object reflects that organization's data
         if (targetBaiguullagiinId && Array.isArray(mur.toots)) {
@@ -244,6 +271,24 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
               mur._isSecondaryView = true;
             }
           }
+        }
+
+        // --- FINAL AUTHORITATIVE OVERLAY (Source of Truth: Geree) ---
+        // If an active contract exists, it overrides everything else for billing display
+        if (authoritativeGeree) {
+          if (authoritativeGeree.ekhniiUldegdel !== undefined) {
+            mur.ekhniiUldegdel = authoritativeGeree.ekhniiUldegdel;
+          }
+          // Use suuliinZaalt (Last Reading) if available, otherwise umnukhZaalt (Previous Reading)
+          if (authoritativeGeree.suuliinZaalt !== undefined && authoritativeGeree.suuliinZaalt > 0) {
+            mur.tsahilgaaniiZaalt = authoritativeGeree.suuliinZaalt;
+          } else if (authoritativeGeree.umnukhZaalt !== undefined) {
+            mur.tsahilgaaniiZaalt = authoritativeGeree.umnukhZaalt;
+          }
+
+          // Sync contextually relevant fields from the contract
+          if (authoritativeGeree.toot) mur.toot = authoritativeGeree.toot;
+          if (authoritativeGeree.davkhar) mur.davkhar = authoritativeGeree.davkhar;
         }
       });
     }
