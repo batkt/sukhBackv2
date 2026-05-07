@@ -30,6 +30,12 @@ const walletInvoiceSchema = new Schema(
     // Order number mapping
     zakhialgiinDugaar: { type: String },
 
+    // Wallet payment identifier (if applicable)
+    walletPaymentId: { type: String },
+
+    // Organization mapping
+    baiguullagiinId: { type: String },
+
     // Source marker
     source: {
       type: String,
@@ -40,6 +46,9 @@ const walletInvoiceSchema = new Schema(
     timestamps: true,
   },
 );
+
+walletInvoiceSchema.index({ walletPaymentId: 1 });
+walletInvoiceSchema.index({ baiguullagiinId: 1 });
 
 walletInvoiceSchema.index({ userId: 1, walletInvoiceId: 1 }, { unique: true });
 walletInvoiceSchema.index({ zakhialgiinDugaar: 1 });
