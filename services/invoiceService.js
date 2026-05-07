@@ -199,11 +199,7 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     gereeniiId: geree._id.toString(),
     ekhniiUldegdelEsekh: true
   });
-
   if (!options.skipCharges) {
-    const billingMonth = (options.billingDate || new Date()).getMonth();
-    const billingYear = (options.billingDate || new Date()).getFullYear();
-
     for (const c of charges) {
       if (c.isEkhniiUldegdel && existingEkhnii) continue;
 
@@ -212,8 +208,8 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
         zardliinNer: c.ner,
         source: "nekhemjlekh",
         ognoo: {
-          $gte: new Date(billingYear, billingMonth, 1),
-          $lte: new Date(billingYear, billingMonth, 31, 23, 59, 59)
+          $gte: startOfMonth,
+          $lte: endOfMonth
         }
       });
 
