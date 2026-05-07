@@ -196,18 +196,25 @@ async function main() {
     process.exit(1);
   }
 
+  const query = { baiguullagiinId: BAIGUULLAGIIN_ID, tuluv: "Идэвхтэй" };
+  if (opts.barilgiinId) query.barilgiinId = opts.barilgiinId;
+  const gerees = await Geree(kholboltEntry).find(query).select("_id").lean();
+  const gereeIds = gerees.map(g => g._id);
+
+  console.log(`Found ${gereeIds.length} target contracts for processing.`);
+
   const summary = [];
 
   for (const month of opts.months) {
     const label = `${MONTH_NAMES[month]} ${opts.year}`;
     console.log(`\n---------- ${label} (month=${month}) ----------`);
+    
+    const billingDate = new Date(opts.year, month - 1, 1, 12, 0, 0);
     const result = await manualSendMassInvoices(
       BAIGUULLAGIIN_ID,
-      opts.barilgiinId,
+      gereeIds,
       opts.override,
-      month,
-      opts.year,
-      null,
+      { billingDate }
     );
 
     summary.push({ month, year: opts.year, result });
@@ -217,12 +224,13 @@ async function main() {
       continue;
     }
 
+    const stats = result.data || {};
     console.log(
-      `Total gerees: ${result.total}, success rows: ${result.created}, errors: ${result.errors}`,
+      `Total gerees: ${gereeIds.length}, success rows: ${stats.created || 0}, errors: ${stats.errors || 0}`,
     );
-    if (result.errorsList && result.errorsList.length) {
+    if (stats.errorsList && stats.errorsList.length) {
       console.log("Errors (first 20):");
-      console.log(JSON.stringify(result.errorsList.slice(0, 20), null, 2));
+      console.log(JSON.stringify(stats.errorsList.slice(0, 20), null, 2));
     }
   }
 
