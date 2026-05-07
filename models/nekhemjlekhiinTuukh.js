@@ -21,6 +21,7 @@ const nekhemjlekhiinTuukhSchema = new Schema(
     davkhar: String,
     toot: String,
     toots: Array,
+    orshinSuugchId: String,
     daraagiinTulukhOgnoo: Date,
     dansniiDugaar: String,
     gereeniiZagvariinId: String,
