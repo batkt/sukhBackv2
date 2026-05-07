@@ -995,11 +995,14 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             );
           }
 
-          // 1a. Update unit-specific details (Meter readings, unit balances)
+          // 1a. Update unit-specific details (Meter readings, unit balances, names)
           if (Array.isArray(result.toots)) {
             for (const unit of result.toots) {
               if (String(unit.baiguullagiinId) === String(orgId)) {
                 const unitSyncData = {};
+                if (unit.ner !== undefined) unitSyncData.ner = unit.ner;
+                if (unit.ovog !== undefined) unitSyncData.ovog = unit.ovog;
+                
                 if (unit.tsahilgaaniiZaalt !== undefined) {
                   const zaalt = parseFloat(unit.tsahilgaaniiZaalt) || 0;
                   unitSyncData.suuliinZaalt = zaalt;

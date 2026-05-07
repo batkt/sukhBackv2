@@ -1741,6 +1741,18 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
               });
 
               if (existingGeree) {
+                // Update personal info and unit-specific data on existing contract
+                const syncData = {
+                  ner: userData.ner || orshinSuugch.ner,
+                  ovog: userData.ovog || orshinSuugch.ovog,
+                  register: orshinSuugch.register || "",
+                  utas: Array.isArray(orshinSuugch.utas) ? orshinSuugch.utas : [orshinSuugch.utas],
+                  mail: orshinSuugch.mail || "",
+                  suuliinZaalt: userData.initialMeterReading || userData.tsahilgaaniiZaalt || existingGeree.suuliinZaalt,
+                  umnukhZaalt: userData.initialMeterReading || userData.tsahilgaaniiZaalt || existingGeree.umnukhZaalt,
+                };
+                
+                await GereeModel.findByIdAndUpdate(existingGeree._id, { $set: syncData });
                 continue;
               }
 
