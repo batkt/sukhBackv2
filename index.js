@@ -233,11 +233,12 @@ const serveMedegdelImage = (req, res, next) => {
 };
 
 // Medegdel API (thread, reply, etc.) must be tried before image route so /medegdel/thread/:id is not matched as image
+app.use("/wallet", walletRoute);
+app.use(walletQpayRoute);
 app.use(baiguullagaRoute);
 app.use(ajiltanRoute);
 app.use(licenseRoute);
 app.use(orshinSuugchRoute);
-app.use("/wallet", walletRoute);
 app.use(gereeRoute);
 app.use(gereeniiZagvarRoute);
 app.use(nekhemjlekhiinZagvarRoute);
@@ -263,7 +264,7 @@ app.use(uneguiMashinRoute);
 app.use(zochinUrikhRoute);
 app.use("/audit", auditRoute);
 app.use(transformationRoute);
-app.use(walletQpayRoute);
+// walletQpayRoute moved to top
 app.use(appVersionRoute);
 app.use(blogRoute);
 
