@@ -898,9 +898,7 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             mashinUpdateData.utas = utasnudaa.length > 0 ? utasnudaa[0] : "";
           }
 
-          // Address components (propagate if specified)
           if (req.body.toot !== undefined) {
-            // syncData.toot = req.body.toot; // Removed to allow cancellation of old unit
             invoiceUpdateData.toot = req.body.toot;
           }
           if (req.body.davkhar !== undefined) {
@@ -946,22 +944,8 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             }
           }
 
-          if (req.body.tsahilgaaniiZaalt !== undefined && result.baiguullagiinId && result.baiguullagiinId.toString() === orgId) {
-            const zaalt = parseFloat(req.body.tsahilgaaniiZaalt) || 0;
-            syncData.suuliinZaalt = zaalt;
-            syncData.umnukhZaalt = zaalt;
-          }
-
-          if (req.body.ekhniiUldegdel !== undefined) {
+          if (req.body.ekhniiUldegdel !== undefined && result.baiguullagiinId && result.baiguullagiinId.toString() === orgId) {
             syncData.ekhniiUldegdel = parseFloat(req.body.ekhniiUldegdel) || 0;
-          }
-          
-          // Check if this org context has a specific balance in the toots array
-          if (Array.isArray(result.toots)) {
-            const matchingToot = result.toots.find(t => String(t.baiguullagiinId) === String(orgId));
-            if (matchingToot && matchingToot.ekhniiUldegdel !== undefined) {
-               syncData.ekhniiUldegdel = parseFloat(matchingToot.ekhniiUldegdel) || 0;
-            }
           }
 
           if (req.body.khonogoorBodokhEsekh !== undefined) {
@@ -1009,6 +993,34 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
               { orshinSuugchId: result._id.toString() },
               { $set: syncData }
             );
+          }
+
+          // 1a. Update unit-specific details (Meter readings, unit balances)
+          if (Array.isArray(result.toots)) {
+            for (const unit of result.toots) {
+              if (String(unit.baiguullagiinId) === String(orgId)) {
+                const unitSyncData = {};
+                if (unit.tsahilgaaniiZaalt !== undefined) {
+                  const zaalt = parseFloat(unit.tsahilgaaniiZaalt) || 0;
+                  unitSyncData.suuliinZaalt = zaalt;
+                  unitSyncData.umnukhZaalt = zaalt;
+                }
+                if (unit.ekhniiUldegdel !== undefined) {
+                  unitSyncData.ekhniiUldegdel = parseFloat(unit.ekhniiUldegdel) || 0;
+                }
+
+                if (Object.keys(unitSyncData).length > 0) {
+                  await GereeModel.updateMany(
+                    { 
+                      orshinSuugchId: result._id.toString(),
+                      toot: unit.toot,
+                      barilgiinId: unit.barilgiinId 
+                    },
+                    { $set: unitSyncData }
+                  );
+                }
+              }
+            }
           }
 
           // 2. Update Invoices (nekhemjlekhiinTuukh) - update all associated records for consistency
