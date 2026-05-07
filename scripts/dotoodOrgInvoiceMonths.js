@@ -58,7 +58,7 @@ function parseArgs(argv) {
       out.waitMs = parseInt(arg.slice("--waitMs=".length), 10) || 4000;
   }
 
-  if (!out.months.length) out.months = [2, 3];
+  if (!out.months.length) out.months = [2, 3, 4, 5];
   if (Number.isNaN(out.year)) out.year = new Date().getFullYear();
   return out;
 }
