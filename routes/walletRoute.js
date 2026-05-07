@@ -57,5 +57,14 @@ router.get("/chat/:chatId", tokenShalgakh, walletChatGet);
 router.get("/chat/object/:objectId", tokenShalgakh, walletChatGetByObject);
 router.put("/chat/:chatId", tokenShalgakh, walletChatSendMessage);
 
+const walletQpayController = require("../controller/walletQpayController");
+
+/**
+ * @route GET /webhook
+ * @desc  General Wallet Webhook handler (eBill notifications)
+ * @access Public
+ */
+router.get("/webhook", walletQpayController.walletWebhook);
+
 module.exports = router;
 

@@ -1522,3 +1522,28 @@ async function handleWalletEbarimt(
     console.error("❌ [WALLET EBARIMT] Error handling ebarimt:", err.message);
   }
 }
+
+/**
+ * @desc  General Wallet Webhook handler for eBill system notifications
+ *        GET /walletQpay/webhook?objectId=...&objectType=...&notificationId=...&userId=...
+ */
+exports.walletWebhook = asyncHandler(async (req, res, next) => {
+  const { objectId, objectType, notificationId, userId } = req.query;
+
+  console.log(`🔔 [WALLET WEBHOOK] Received notification:`);
+  console.log(`   notificationId: ${notificationId}`);
+  console.log(`   objectType: ${objectType}`);
+  console.log(`   objectId: ${objectId}`);
+  console.log(`   userId: ${userId}`);
+
+  // Process based on objectType
+  if (objectType === "PAYMENT") {
+     console.log(`💳 [WALLET WEBHOOK] Payment notification received for objectId: ${objectId}`);
+     // Here you can trigger a background check/sync for this payment
+  } else if (objectType === "CHAT") {
+     console.log(`💬 [WALLET WEBHOOK] Chat message notification received`);
+  }
+
+  // Always return success 200 as per documentation
+  res.status(200).json({ success: true });
+});
