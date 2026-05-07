@@ -121,10 +121,15 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     return { success: true, message: "No charges to bill", total: 0 };
   }
 
-  // 1. Get or Create the one unpaid invoice
+  // 1. Get or Create the one unpaid invoice for the target month
+  const billingDate = options.billingDate || new Date();
+  const startOfMonth = new Date(billingDate.getFullYear(), billingDate.getMonth(), 1);
+  const endOfMonth = new Date(billingDate.getFullYear(), billingDate.getMonth() + 1, 0, 23, 59, 59);
+
   let invoice = await NekhemjlekhiinTuukhModel.findOne({
     gereeniiId: geree._id.toString(),
-    tuluv: "Төлөөгүй"
+    tuluv: "Төлөөгүй",
+    ognoo: { $gte: startOfMonth, $lte: endOfMonth }
   }).sort({ ognoo: -1 });
 
   if (!invoice) {
@@ -139,7 +144,6 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     );
     const invoiceNumber = `НЭХ-${stamp}-${String(dugaarObj.dugaar).padStart(4, "0")}`;
 
-    const billingDate = options.billingDate || new Date();
     let tulukhOgnoo = billingDate;
 
     // Fetch cron schedule to determine due date based on billing cycle
