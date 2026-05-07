@@ -835,6 +835,14 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
       }
     }
 
+    // Propagate top-level name changes to toots array if provided
+    if (req.body.toots && Array.isArray(req.body.toots)) {
+      req.body.toots.forEach(t => {
+        if (req.body.ner !== undefined && t.ner === undefined) t.ner = req.body.ner;
+        if (req.body.ovog !== undefined && t.ovog === undefined) t.ovog = req.body.ovog;
+      });
+    }
+
     const result = await OrshinSuugch(db.erunkhiiKholbolt).findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -999,9 +1007,10 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
           if (Array.isArray(result.toots)) {
             for (const unit of result.toots) {
               if (String(unit.baiguullagiinId) === String(orgId)) {
-                const unitSyncData = {};
-                if (unit.ner !== undefined) unitSyncData.ner = unit.ner;
-                if (unit.ovog !== undefined) unitSyncData.ovog = unit.ovog;
+                const unitSyncData = {
+                  ner: unit.ner || result.ner,
+                  ovog: unit.ovog || result.ovog
+                };
                 
                 if (unit.tsahilgaaniiZaalt !== undefined) {
                   const zaalt = parseFloat(unit.tsahilgaaniiZaalt) || 0;

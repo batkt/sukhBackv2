@@ -1165,17 +1165,48 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
               existingOrshinSuugch.tsahilgaaniiZaalt =
                 userData.tsahilgaaniiZaalt;
             }
+
+            // Sync specifically the matching unit in toots array
+            if (Array.isArray(existingOrshinSuugch.toots)) {
+              existingOrshinSuugch.toots.forEach((t) => {
+                if (
+                  String(t.toot).trim() === userData.toot.trim() &&
+                  (!userData.orts || String(t.orts || "").trim() === userData.orts.trim())
+                ) {
+                  if (userData.ekhniiUldegdel !== undefined)
+                    t.ekhniiUldegdel = userData.ekhniiUldegdel;
+                  if (userData.tsahilgaaniiZaalt !== undefined)
+                    t.tsahilgaaniiZaalt = userData.tsahilgaaniiZaalt;
+                }
+              });
+            }
+
             await existingOrshinSuugch.save();
 
-            // Keep active contracts in org DB aligned with updated resident opening balance.
-            if (userData.ekhniiUldegdel !== undefined) {
-              const tukhainBaaziinKholbolt = db.kholboltuud.find(
-                (kholbolt) =>
-                  String(kholbolt.baiguullagiinId) === String(baiguullaga._id),
-              );
+            // Keep active contracts in org DB aligned with updated resident data.
+            const tukhainBaaziinKholbolt = db.kholboltuud.find(
+              (kholbolt) =>
+                String(kholbolt.baiguullagiinId) === String(baiguullaga._id),
+            );
 
-              if (tukhainBaaziinKholbolt) {
-                const GereeModel = Geree(tukhainBaaziinKholbolt);
+            if (tukhainBaaziinKholbolt) {
+              const GereeModel = Geree(tukhainBaaziinKholbolt);
+
+              // Update meter readings in Geree for this unit
+              if (userData.initialMeterReading || userData.tsahilgaaniiZaalt) {
+                const zaalt =
+                  userData.initialMeterReading || userData.tsahilgaaniiZaalt;
+                await GereeModel.updateMany(
+                  {
+                    orshinSuugchId: existingOrshinSuugch._id.toString(),
+                    toot: userData.toot.trim(),
+                    baiguullagiinId: String(baiguullaga._id),
+                  },
+                  { $set: { suuliinZaalt: zaalt, umnukhZaalt: zaalt } },
+                );
+              }
+
+              if (userData.ekhniiUldegdel !== undefined) {
                 const NekhemjlekhModel = require("../models/nekhemjlekhiinTuukh")(
                   tukhainBaaziinKholbolt,
                 );
@@ -1601,7 +1632,29 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           // Update personal info
           if (userObject.ovog) orshinSuugch.ovog = userObject.ovog;
           if (userObject.ner) orshinSuugch.ner = userObject.ner;
+
+          // Propagate name changes to all toots in the array to keep them in sync
+          if (Array.isArray(orshinSuugch.toots)) {
+            orshinSuugch.toots.forEach((t) => {
+              if (userObject.ovog) t.ovog = userObject.ovog;
+              if (userObject.ner) t.ner = userObject.ner;
+            });
+          }
+
+          if (userObject.utas) orshinSuugch.utas = userObject.utas;
           if (userObject.mail) orshinSuugch.mail = userObject.mail;
+          if (userObject.turul) orshinSuugch.turul = userObject.turul;
+          if (userObject.tailbar) orshinSuugch.tailbar = userObject.tailbar;
+          if (userObject.taniltsuulgaKharakhEsekh !== undefined) {
+            orshinSuugch.taniltsuulgaKharakhEsekh =
+              userObject.taniltsuulgaKharakhEsekh;
+          }
+          if (userObject.khonogoorBodokhEsekh !== undefined) {
+            orshinSuugch.khonogoorBodokhEsekh = userObject.khonogoorBodokhEsekh;
+          }
+          if (userObject.bodokhKhonog !== undefined) {
+            orshinSuugch.bodokhKhonog = userObject.bodokhKhonog;
+          }
           if (walletUserId) orshinSuugch.walletUserId = walletUserId;
 
           // DO NOT overwrite baiguullagiinId, barilgiinId at top level
