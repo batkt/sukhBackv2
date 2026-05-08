@@ -1072,6 +1072,15 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
 
     // 5. Add standalone cars (like Sukh/Staff)
     allParkingRecords.forEach(p => {
+        // Apply toot filter to standalone cars if provided
+        if (req.query.toot) {
+            const tootRegex = new RegExp(req.query.toot, 'i');
+            if (!tootRegex.test(p.ezenToot || "")) return;
+        }
+
+        // If orts filter is active, standalone cars (which have no orts) should be hidden
+        if (req.query.orts) return;
+
         const isAlreadyIn = mergedData.some(m => String(m._id) === String(p._id));
         if (!isAlreadyIn) {
             mergedData.push({
