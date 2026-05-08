@@ -210,73 +210,62 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
 
   let totalTulbur = 0;
   let totalTulsun = 0;
-  let generalPayments = 0;
 
-  const invoiceData = {}; 
+  const invoiceCharges = {}; 
   
   allItems.forEach((it) => {
     const dun = Number(it.dun || 0);
-    const invId = it.nekhemjlekhId ? String(it.nekhemjlekhId) : "uninvoiced";
-
-    // Ensure invoice container exists
-    if (invId !== "uninvoiced" && !invoiceData[invId]) {
-      invoiceData[invId] = { charges: 0, payments: 0, date: it.ognoo || it.createdAt, id: invId };
-    }
+    const invId = it.nekhemjlekhId ? String(it.nekhemjlekhId) : null;
 
     if (dun > 0) {
       totalTulbur += dun;
-      if (invId !== "uninvoiced") {
-        invoiceData[invId].charges += dun;
+      if (invId) {
+        if (!invoiceCharges[invId]) {
+          invoiceCharges[invId] = { charges: 0, date: it.ognoo || it.createdAt, id: invId };
+        }
+        invoiceCharges[invId].charges += dun;
       }
     } else {
-      const amt = Math.abs(dun);
-      totalTulsun += amt;
-      if (invId !== "uninvoiced") {
-        invoiceData[invId].payments += amt;
-      } else {
-        generalPayments += amt;
-      }
+      totalTulsun += Math.abs(dun);
     }
   });
 
-  const sortedInvoices = Object.values(invoiceData).sort((a, b) => new Date(a.date) - new Date(b.date));
+  // FIFO: sort invoices by date (oldest first), distribute total payments across them
+  const sortedInvoices = Object.values(invoiceCharges).sort((a, b) => new Date(a.date) - new Date(b.date));
   const nekhemjlekhuud = [];
+  let availableFunds = totalTulsun;
 
   for (const inv of sortedInvoices) {
-    let uld = inv.charges - inv.payments;
-    
-    if (uld > 0 && generalPayments > 0) {
-      const deduct = Math.min(uld, generalPayments);
-      uld -= deduct;
-      generalPayments -= deduct;
-    }
-   
-    if (uld < 0) {
-      generalPayments += Math.abs(uld);
-      uld = 0;
-    }
+    const targetAmount = inv.charges;
+    const isPaid = availableFunds + 0.1 >= targetAmount;
+    const uld = isPaid ? 0 : Math.max(0, targetAmount - availableFunds);
+    const status = (isPaid && targetAmount > 0) ? "Төлсөн" : "Төлөөгүй";
 
     nekhemjlekhuud.push({
       nekhemjlekhId: inv.id,
       niitTulbur: inv.charges,
       uldegdel: Number(uld.toFixed(2)),
-      tuluv: uld <= 0 ? "Төлсөн" : "Төлөөгүй"
+      tuluv: status
     });
 
-    // Sync real invoice status and totals if it exists
+    // Sync real invoice status in DB
     if (inv.id !== "uninvoiced") {
-      // An empty invoice (charges = 0) should remain "Төлөөгүй" (Active) 
-      // so it doesn't trigger the creation of a new empty one.
-      const status = (uld <= 0 && inv.charges > 0) ? "Төлсөн" : "Төлөөгүй";
       await NekhemjlekhiinTuukhModel.updateOne(
         { _id: inv.id },
         { 
           $set: { 
             tuluv: status,
-            niitTulbur: inv.charges // Sync total from ledger
+            uldegdel: Number(uld.toFixed(2)),
+            niitTulbur: inv.charges
           } 
         }
       ).catch(() => {});
+    }
+
+    if (isPaid) {
+      availableFunds -= targetAmount;
+    } else {
+      availableFunds = 0;
     }
   }
 
