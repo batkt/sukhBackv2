@@ -585,16 +585,14 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
           residentData._id = ezemshigchiinId;
         }
 
-        const isResidentType = orshinSuugchMedeelel.orshinSuugchTurul === "Оршин суугч" || orshinSuugchMedeelel.zochinTurul === "Оршин суугч";
+        const isResidentType = orshinSuugchMedeelel.orshinSuugchTurul === "Оршин суугч" || 
+                               orshinSuugchMedeelel.zochinTurul === "Оршин суугч" || 
+                               req.body.turul === "Оршин суугч";
 
-        // Only update OrshinSuugch if it's a primary resident registration AND we don't have an ID yet
-        // OR if it's a resident and the user explicitly wants to update them (though the user asked to skip)
         if (residentData._id) {
-            // If ID exists, just fetch the existing record to link the Mashin, don't update fields like 'toot'
             orshinSuugchResult = await OrshinSuugch(db.erunkhiiKholbolt).findById(residentData._id);
-            console.log(`ℹ️ [ZOCHIN_HADGALYA] Existing resident ID ${residentData._id} found. Skipping registry update as requested.`);
         } else if (isResidentType) {
-            // New resident registration
+            // Only create OrshinSuugch record for actual residents
             orshinSuugchResult = await orshinSuugchKhadgalya(
               residentData,
               phoneString,
@@ -603,26 +601,14 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
               barilgiinId
             );
         } else {
-            // For non-resident types (СӨХ, Ажилтан etc.), try to find by phone to link, but don't create/update a full resident record if possible
-            const query = { utas: phoneString, baiguullagiinId: String(baiguullagiinId) };
-            orshinSuugchResult = await OrshinSuugch(db.erunkhiiKholbolt).findOne(query);
-            
-            if (!orshinSuugchResult) {
-                // Create a minimal record so it appears in the parking list
-                orshinSuugchResult = await orshinSuugchKhadgalya(
-                  { ...residentData, toot: "-" }, // Use placeholder for toot for non-residents
-                  phoneString,
-                  db.erunkhiiKholbolt,
-                  baiguullagiinId,
-                  barilgiinId
-                );
-            }
+            console.log("ℹ️ [ZOCHIN_HADGALYA] Non-resident type. Skipping OrshinSuugch record creation.");
+            orshinSuugchResult = null;
         }
 
-        console.log(`🔍 [ZOCHIN_HADGALYA] orshinSuugchResult:`, orshinSuugchResult ? { id: orshinSuugchResult._id, ner: orshinSuugchResult.ner, toot: orshinSuugchResult.toot } : "NULL");
+        console.log(`🔍 [ZOCHIN_HADGALYA] orshinSuugchResult:`, orshinSuugchResult ? { id: orshinSuugchResult._id, ner: orshinSuugchResult.ner, toot: orshinSuugchResult.toot } : "NULL (Skipped)");
 
         // Also save to Mashin (Vehicle with Guest/Resident Settings)
-        if (orshinSuugchResult) {
+        if (orshinSuugchResult || !isResidentType) {
           const Mashin = require("../models/mashin");
           
           // Fetch defaults from Baiguullaga/Barilga if not provided
@@ -650,16 +636,16 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
             baiguullagiinId: baiguullagiinId.toString(),
             barilgiinId: barilgiinId.toString(),
             dugaar: orshinSuugchMedeelel.mashiniiDugaar || mashiniiDugaar,
-            ezemshigchiinId: orshinSuugchResult._id.toString(),
-            orshinSuugchiinId: orshinSuugchResult._id.toString(),
-            ezemshigchiinNer: orshinSuugchResult.ner,
+            ezemshigchiinId: orshinSuugchResult ? orshinSuugchResult._id.toString() : undefined,
+            orshinSuugchiinId: orshinSuugchResult ? orshinSuugchResult._id.toString() : undefined,
+            ezemshigchiinNer: orshinSuugchResult ? orshinSuugchResult.ner : (orshinSuugchMedeelel.ner || ""),
             ezemshigchiinUtas: phoneString,
             zochinUrikhEsekh: orshinSuugchMedeelel.zochinUrikhEsekh !== undefined ? orshinSuugchMedeelel.zochinUrikhEsekh : defaults.zochinUrikhEsekh,
             zochinTurul: orshinSuugchMedeelel.orshinSuugchTurul || orshinSuugchMedeelel.turul || orshinSuugchMedeelel.zochinTurul || defaults.zochinTurul || "Оршин суугч",
             turul: orshinSuugchMedeelel.orshinSuugchTurul || orshinSuugchMedeelel.turul || orshinSuugchMedeelel.zochinTurul || defaults.zochinTurul || "Оршин суугч",
             davtamjiinTurul: orshinSuugchMedeelel.davtamjiinTurul || defaults.davtamjiinTurul || "saraar",
             dugaarUurchilsunOgnoo: orshinSuugchMedeelel.dugaarUurchilsunOgnoo,
-            ezenToot: orshinSuugchMedeelel.ezenToot,
+            ezenToot: orshinSuugchResult ? orshinSuugchResult.toot : (orshinSuugchMedeelel.ezenToot || "-"),
             zochinTailbar: orshinSuugchMedeelel.zochinTailbar || defaults.zochinTailbar,
             davtamjUtga: orshinSuugchMedeelel.davtamjUtga !== undefined ? orshinSuugchMedeelel.davtamjUtga : defaults.davtamjUtga,
             utas: phoneString,
@@ -951,64 +937,69 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
       return res.status(400).send("baiguullagiinId required");
     }
 
-    // 1. Build match query for OrshinSuugch
-    const matchQuery = {
-      baiguullagiinId: String(baiguullagiinId)
-    };
+    // 1. Fetch all Mashin records for this building/org
+    const mashinQuery = { baiguullagiinId: String(baiguullagiinId) };
+    if (barilgiinId) mashinQuery.barilgiinId = String(barilgiinId);
+    
+    if (req.query.search) {
+      const regex = new RegExp(req.query.search, 'i');
+      mashinQuery.$or = [
+        { dugaar: regex },
+        { mashiniiDugaar: regex },
+        { ezemshigchiinNer: regex },
+        { ezemshigchiinUtas: regex },
+        { ezenToot: regex }
+      ];
+    }
 
+    const allParkingRecords = await Mashin(tukhainBaaziinKholbolt).find(mashinQuery).sort({ createdAt: -1 }).lean();
+
+    // 2. Fetch all Residents for this building/org (to catch those without cars)
+    const resQuery = { baiguullagiinId: String(baiguullagiinId) };
     if (barilgiinId) {
-      matchQuery.$or = [
+      resQuery.$or = [
         { barilgiinId: String(barilgiinId) },
         { "toots.barilgiinId": String(barilgiinId) }
       ];
     }
-
-    // Add search if provided
     if (req.query.search) {
-       const regex = new RegExp(req.query.search, 'i');
-       matchQuery.$or = [
-           { ner: regex },
-           { orshinSuugchNer: regex },
-           { utas: regex },
-           { toot: regex },
-           { "toots.toot": regex }
-       ];
+      const regex = new RegExp(req.query.search, 'i');
+      resQuery.$or = [
+        { ner: regex },
+        { orshinSuugchNer: regex },
+        { utas: regex },
+        { toot: regex },
+        { "toots.toot": regex }
+      ];
     }
 
-    // 2. Fetch residents with pagination
-    const residents = await OrshinSuugch(db.erunkhiiKholbolt)
-      .find(matchQuery)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
+    const residents = await OrshinSuugch(db.erunkhiiKholbolt).find(resQuery).sort({ createdAt: -1 }).limit(limit).skip(skip).lean();
+    const residentTotal = await OrshinSuugch(db.erunkhiiKholbolt).countDocuments(resQuery);
 
-    const total = await OrshinSuugch(db.erunkhiiKholbolt).countDocuments(matchQuery);
-
-    // 3. Fetch associated Mashin records for these residents to get parking settings
+    // 3. Map residents to their parking records
     const residentIds = residents.map(r => String(r._id));
-    const parkingRecords = await Mashin(tukhainBaaziinKholbolt).find({
-      ezemshigchiinId: { $in: residentIds },
-      zochinTurul: "Оршин суугч" // Primary resident parking config
+    const parkingMap = {};
+    
+    const linkedParking = await Mashin(tukhainBaaziinKholbolt).find({
+        ezemshigchiinId: { $in: residentIds }
     }).lean();
 
-    const parkingMap = {};
-    parkingRecords.forEach(p => {
-      parkingMap[String(p.ezemshigchiinId)] = p;
+    linkedParking.forEach(p => {
+        if (p.ezemshigchiinId) parkingMap[String(p.ezemshigchiinId)] = p;
     });
 
-    // 4. Format data
-    const formattedData = residents.map(resObj => {
+    // 4. Merge Data
+    const mergedData = residents.map(resObj => {
         const p = parkingMap[String(resObj._id)];
         return {
-          _id: p?._id || resObj._id, // Use parking ID if exists for edits, else resident ID
+          _id: p?._id || resObj._id,
           ezemshigchiinId: resObj._id,
           createdAt: p?.createdAt || resObj.createdAt,
           ner: resObj.ner || resObj.orshinSuugchNer || "БҮРТГЭЛГҮЙ",
           ovog: resObj.ovog || "",
           utas: resObj.utas || (Array.isArray(resObj.utas) ? resObj.utas[0] : ""),
           mashiniiDugaar: p?.dugaar || "",
-          zochinTurul: p?.zochinTurul || p?.turul || "",
+          zochinTurul: p?.zochinTurul || p?.turul || "Оршин суугч",
           zochinTailbar: p?.zochinTailbar || "",
           ezenToot: p?.ezenToot || resObj.toot || (resObj.toots && resObj.toots[0]?.toot) || "", 
           orts: resObj.orts || (resObj.toots && resObj.toots[0]?.orts) || "",
@@ -1021,12 +1012,36 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
         };
     });
 
-     res.send({
-      jagsaalt: formattedData,
-      niitMur: total,
-      niitKhuudas: Math.ceil(total / limit),
-      khuudasniiDugaar: page,
-      khuudasniiKhemjee: limit
+    // 5. Add standalone cars (like Sukh/Staff)
+    allParkingRecords.forEach(p => {
+        const isAlreadyIn = mergedData.some(m => String(m._id) === String(p._id));
+        if (!isAlreadyIn) {
+            mergedData.push({
+                _id: p._id,
+                ezemshigchiinId: p.ezemshigchiinId || null,
+                createdAt: p.createdAt,
+                ner: p.ezemshigchiinNer || "БҮРТГЭЛГҮЙ",
+                ovog: "",
+                utas: p.ezemshigchiinUtas || p.utas || "",
+                mashiniiDugaar: p.dugaar || "",
+                zochinTurul: p.zochinTurul || p.turul || "",
+                zochinTailbar: p.zochinTailbar || "",
+                ezenToot: p.ezenToot || "-",
+                orts: "",
+                davtamjiinTurul: p.davtamjiinTurul || "saraar",
+                baiguullagiinId: p.baiguullagiinId || null,
+                barilgiinId: p.barilgiinId || null,
+                burtgesenAjiltaniiNer: p.burtgesenAjiltaniiNer || "-",
+                zochinErkhiinToo: p.zochinErkhiinToo,
+                zochinTusBurUneguiMinut: p.zochinTusBurUneguiMinut
+            });
+        }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: mergedData,
+      niitMur: residentTotal + (allParkingRecords.length - linkedParking.length)
     });
     
   } catch (error) {
