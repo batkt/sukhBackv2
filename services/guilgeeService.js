@@ -116,47 +116,62 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
     const NekhemjlekhModel = require("../models/nekhemjlekhiinTuukh")(kholbolt);
     const GuilgeeModel = require("../models/guilgeeAvlaguud")(kholbolt);
 
-    // 1. Get all ledger entries for this contract
-    const allLedger = await GuilgeeModel.find({
-      gereeniiId: String(gereeniiId),
-    }).lean();
+    console.log(`🔍 [LEDGER SYNC] Starting sync for contract: ${gereeniiId}`);
 
-    // 2. Calculate Total Paid (sum of all negative dun)
-    const totalPaid = allLedger
+    // 1. Get all ledger entries for this contract
+    const allLedger = await GuilgeeModel.find({ gereeniiId: gereeniiId }).lean();
+
+    // 2. Calculate Total Paid (negative entries)
+    const totalPayments = allLedger
       .filter((r) => (r.dun || 0) < 0)
       .reduce((sum, r) => sum + Math.abs(r.dun || 0), 0);
 
-    // 3. Fetch all invoices for this contract, sorted by date (FIFO)
-    const invoices = await NekhemjlekhModel.find({
-      gereeniiId: String(gereeniiId),
-    })
+    // 3. Calculate Total Charges NOT linked to any invoice (loose charges)
+    const looseCharges = allLedger
+      .filter((r) => (r.dun || 0) > 0 && !r.nekhemjlekhId)
+      .reduce((sum, r) => sum + (r.dun || 0), 0);
+
+    let availableFunds = totalPayments - looseCharges;
+
+    // 4. Fetch all invoices for this contract, sorted by date (FIFO)
+    const invoices = await NekhemjlekhModel.find({ gereeniiId: gereeniiId })
       .sort({ ognoo: 1 })
       .lean();
 
-    let cumulativeCharges = 0;
+    console.log(`ℹ️ [LEDGER SYNC] Stats: TotalPayments=${totalPayments}, LooseCharges=${looseCharges}, AvailableForInvoices=${availableFunds}, InvoicesCount=${invoices.length}`);
 
     for (const inv of invoices) {
-      // Charge for this specific invoice = sum of positive dun linked to it in ledger
+      // Amount for this specific invoice = sum of positive dun linked to it in ledger
       const invCharge = allLedger
         .filter((r) => String(r.nekhemjlekhId || "") === String(inv._id) && (r.dun || 0) > 0)
         .reduce((sum, r) => sum + (r.dun || 0), 0);
 
-      cumulativeCharges += invCharge;
+      // Fallback to niitTulbur if ledger doesn't have explicit charges yet
+      const targetAmount = invCharge > 0 ? invCharge : (inv.niitTulbur || 0);
 
-      // Check if this invoice is covered by the total payments received so far
-      const isPaid = totalPaid + 0.01 >= cumulativeCharges;
+      const isPaid = availableFunds + 0.1 >= targetAmount;
       const newStatus = isPaid ? "Төлсөн" : "Төлөөгүй";
+      const newUldegdel = isPaid ? 0 : Math.max(0, targetAmount - availableFunds);
 
-      if (inv.tuluv !== newStatus) {
-        console.log(`🔄 [LEDGER SYNC] Updating invoice ${inv.nekhemjlekhiinDugaar} to ${newStatus} (Paid:${totalPaid}, Charge:${cumulativeCharges})`);
-        await NekhemjlekhModel.findByIdAndUpdate(inv._id, {
-          tuluv: newStatus,
-          tulsunOgnoo: isPaid ? new Date() : null,
-        });
+      console.log(`   - Inv ${inv.nekhemjlekhiinDugaar} (${inv.ognoo.toISOString().split('T')[0]}): Target=${targetAmount}, Status=${newStatus}, Uldegdel=${newUldegdel}`);
+
+      // Update the invoice with new status AND uldegdel
+      // We update regardless of status change to ensure uldegdel is consistent
+      await NekhemjlekhModel.findByIdAndUpdate(inv._id, {
+        tuluv: newStatus,
+        uldegdel: newUldegdel,
+        tulsunOgnoo: isPaid ? new Date() : null,
+      });
+
+      if (isPaid) {
+        availableFunds -= targetAmount;
+      } else {
+        availableFunds = 0; 
       }
     }
+    console.log(`🏁 [LEDGER SYNC] Sync completed for contract: ${gereeniiId}. Remaining credit: ${availableFunds.toFixed(2)}`);
   } catch (err) {
-    console.error("❌ [LEDGER SYNC] Error in syncInvoicesStatus:", err.message);
+    console.error("❌ [LEDGER SYNC] Error in syncInvoicesStatus:", err.message, err.stack);
   }
 }
 
