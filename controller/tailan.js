@@ -1355,11 +1355,17 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
     console.log("[NASJILT DEBUG] Map Sizes - Residents:", residentMap.size, "Contract Map:", contractToResidentMap.size);
 
     const now = new Date();
+    let matchedInvoices = 0;
+    let unmatchedInvoices = 0;
     allInvoices.forEach(inv => {
       const gid = String(inv.gereeniiId || "");
       const gno = String(inv.gereeniiDugaar || "");
       const res = contractToResidentMap.get(gid) || contractToResidentMap.get(gno) || contractToResidentMap.get(String(inv.residentId || ""));
-      if (!res) return;
+      if (!res) {
+        unmatchedInvoices++;
+        return;
+      }
+      matchedInvoices++;
 
       const billed = Number(inv.niitTulburOriginal != null ? inv.niitTulburOriginal : inv.niitTulbur) || 0;
       const uldegdel = Number(inv.uldegdel || 0);
@@ -1379,6 +1385,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
         else res.p120plus += uldegdel;
       }
     });
+    console.log("[NASJILT DEBUG] Invoice Mapping - Matched:", matchedInvoices, "Unmatched:", unmatchedInvoices);
 
     allLedgerEntries.forEach(s => {
       if (s.nekhemjlekhId) return;
