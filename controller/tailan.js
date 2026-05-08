@@ -1183,267 +1183,133 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
     const source = req.params.baiguullagiinId
-      ? {
-          baiguullagiinId: req.params.baiguullagiinId,
-          ...(req.method === "GET" ? req.query : req.body),
-        }
-      : req.method === "GET"
-      ? req.query
-      : req.body;
-    const {
-      baiguullagiinId,
-      barilgiinId,
-      ekhlekhOgnoo,
-      duusakhOgnoo,
-      khuudasniiDugaar = 1,
-      khuudasniiKhemjee = 200,
-      orshinSuugch,
-      toot,
-      davkhar,
-      gereeniiDugaar,
-      search,
-    } = source || {};
+      ? { baiguullagiinId: req.params.baiguullagiinId, ...(req.method === "GET" ? req.query : req.body) }
+      : (req.method === "GET" ? req.query : req.body);
 
-    if (!baiguullagiinId) {
-      return res.status(400).json({ success: false, message: "baiguullagiinId is required" });
-    }
+    const { baiguullagiinId, barilgiinId, search, orshinSuugch, toot, khuudasniiDugaar = 1, khuudasniiKhemjee = 200 } = source || {};
 
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
-    );
-    if (!kholbolt) {
-      return res.status(404).json({ success: false, message: "Холболтын мэдээлэл олдсонгүй" });
-    }
+    if (!baiguullagiinId) return res.status(400).json({ success: false, message: "baiguullagiinId is required" });
 
-    const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
-    const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-    const Geree = require("../models/geree");
-    const OrshinSuugch = require("../models/orshinSuugch");
-
-    const residentMatch = {
-      $or: [
-        { baiguullagiinId: String(baiguullagiinId) },
-        { "toots.baiguullagiinId": String(baiguullagiinId) }
-      ]
-    };
-    if (barilgiinId) {
-      residentMatch.$and = residentMatch.$and || [];
-      residentMatch.$and.push({
-        $or: [
-          { barilgiinId: String(barilgiinId) },
-          { "toots.barilgiinId": String(barilgiinId) }
-        ]
-      });
-    }
-
-    const match = { baiguullagiinId: String(baiguullagiinId) };
-    if (barilgiinId) match.barilgiinId = String(barilgiinId);
-
-    // Apply filters to the resident match object for search
-    if (search || orshinSuugch || toot || gereeniiDugaar || davkhar) {
-      residentMatch.$and = residentMatch.$and || [];
-      const orConditions = [];
-      if (search) {
-        const re = new RegExp(escapeRegex(String(search).trim()), "i");
-        orConditions.push({ ner: re }, { ovog: re }, { toot: re }, { gereeniiDugaar: re }, { "medeelel.toot": re });
-      }
-      if (orshinSuugch) {
-        const re = new RegExp(escapeRegex(String(orshinSuugch).trim()), "i");
-        orConditions.push({ ner: re }, { ovog: re });
-      }
-      if (toot) {
-        const re = new RegExp(escapeRegex(String(toot).trim()), "i");
-        orConditions.push({ toot: re }, { "medeelel.toot": re });
-      }
-      if (gereeniiDugaar) {
-        const re = new RegExp(escapeRegex(String(gereeniiDugaar).trim()), "i");
-        orConditions.push({ gereeniiDugaar: re });
-      }
-      if (davkhar) {
-        const re = new RegExp(escapeRegex(String(davkhar).trim()), "i");
-        orConditions.push({ davkhar: re });
-      }
-      if (orConditions.length > 0) residentMatch.$and.push({ $or: orConditions });
-    }
-
-    const transactionMatch = { baiguullagiinId: String(baiguullagiinId) };
-    if (barilgiinId) transactionMatch.barilgiinId = String(barilgiinId);
-
-    if (duusakhOgnoo) {
-      const parseDate = (dateStr) => {
-        if (!dateStr) return null;
-        let str = String(dateStr).trim();
-        if (/^\d{4}\.\d{2}\.\d{2}/.test(str)) str = str.replace(/^(\d{4})\.(\d{2})\.(\d{2})/, "$1-$2-$3");
-        const d = new Date(str);
-        return isNaN(d.getTime()) ? null : d;
-      };
-      const endDate = parseDate(duusakhOgnoo);
-      if (endDate) {
-        endDate.setHours(23, 59, 59, 999);
-        transactionMatch.ognoo = { $lte: endDate };
-      }
-    }
-
-    const [allOrshinSuugch, allContractsList, allInvoices, allLedgerEntries] = await Promise.all([
-      OrshinSuugch(db.erunkhiiKholbolt).find(residentMatch).lean(),
-      Geree(kholbolt).find(match).lean(),
-      NekhemjlekhiinTuukh(kholbolt).find(transactionMatch).lean(),
-      GuilgeeAvlaguud(kholbolt).find(transactionMatch).lean(),
+    // 1. Define matches
+    const baseMatch = { baiguullagiinId: String(baiguullagiinId), barilgiinId: String(barilgiinId), ustgagdakhEsekh: { $ne: true } };
+    
+    // 2. Fetch Contracts, Invoices, and Ledger in parallel
+    const [allContractsList, allInvoices, allLedgerEntries] = await Promise.all([
+      db.collection("Geree").find({ ...baseMatch, tuluv: "ACTIVE" }).toArray(),
+      db.collection("NekhemjlekhiinTuukh").find(baseMatch).toArray(),
+      db.collection("GuilgeeAvlaguud").find(baseMatch).toArray(),
     ]);
 
-    console.log("[NASJILT DEBUG] residentMatch:", JSON.stringify(residentMatch));
-    console.log("[NASJILT DEBUG] contractMatch:", JSON.stringify(match));
-    console.log("[NASJILT DEBUG] transactionMatch:", JSON.stringify(transactionMatch));
-    console.log("[NASJILT DEBUG] allOrshinSuugch count:", allOrshinSuugch.length);
-    console.log("[NASJILT DEBUG] allContractsList count:", allContractsList.length);
-    console.log("[NASJILT DEBUG] allInvoices count:", allInvoices.length);
-    console.log("[NASJILT DEBUG] allLedgerEntries count:", allLedgerEntries.length);
+    // 3. Extract ALL relevant resident IDs to ensure we don't miss anyone
+    const residentIdSet = new Set();
+    allContractsList.forEach(c => residentIdSet.add(String(c.orshinSuugchiinId || c.residentId || c.orshinSuugchId || "")));
+    allInvoices.forEach(i => residentIdSet.add(String(i.residentId || "")));
+    allLedgerEntries.forEach(l => residentIdSet.add(String(l.residentId || "")));
+    residentIdSet.delete("");
 
-    const activeContracts = allContractsList.filter(c => {
-      const st = String(c.tuluv || c.status || "").toLowerCase();
-      return st !== "цуцалсан" && st !== "tsutlsasan";
-    });
-    console.log("[NASJILT DEBUG] activeContracts count:", activeContracts.length);
+    // 4. Fetch Residents
+    const residentMatch: any = {
+      $or: [
+        { baiguullagiinId: String(baiguullagiinId), barilgiinId: String(barilgiinId) },
+        { "toots.baiguullagiinId": String(baiguullagiinId), "toots.barilgiinId": String(barilgiinId) },
+        { _id: { $in: Array.from(residentIdSet).map(id => db.ObjectId(id)) } }
+      ]
+    };
+    if (search) residentMatch.ner = { $regex: search, $options: "i" };
+    else if (orshinSuugch) residentMatch.ner = { $regex: orshinSuugch, $options: "i" };
+    if (toot) residentMatch.$or = [{ toot: { $regex: toot, $options: "i" } }, { "toots.toot": { $regex: toot, $options: "i" } }];
 
+    const allOrshinSuugch = await db.collection("OrshinSuugch").find(residentMatch).toArray();
+
+    // 5. Build Maps
     const residentMap = new Map();
-    const contractToResidentMap = new Map(); // Link both _id and gereeniiDugaar to resident
+    const contractToResidentMap = new Map();
 
     allOrshinSuugch.forEach(r => {
       const rid = String(r._id);
-      const resObj = {
+      const obj = {
         _id: rid,
         ner: r.ner || "",
-        ovog: r.ovog || "",
-        toot: r.toot || r.medeelel?.toot || "",
-        davkhar: r.davkhar || "",
-        register: r.register || r.rd || "",
-        gereeniiDugaar: "",
-        undsenDun: 0,
-        tulsunDun: 0,
-        uldegdel: 0,
-        p0_30: 0,
-        p31_60: 0,
-        p61_90: 0,
-        p91_120: 0,
-        p120plus: 0,
-        gereeniiId: "",
+        toot: r.toot || r.medeelel?.toot || (r.toots && r.toots[0]?.toot) || "",
+        undsenDun: 0, tulsunDun: 0, uldegdel: 0,
+        p0_30: 0, p31_60: 0, p61_90: 0, p91_120: 0, p120plus: 0
       };
-      residentMap.set(rid, resObj);
-      contractToResidentMap.set(rid, resObj); // Fallback: resident ID itself
+      residentMap.set(rid, obj);
+      contractToResidentMap.set(rid, obj);
     });
 
-    let linkedContracts = 0;
-    let unlinkedContracts = 0;
-    activeContracts.forEach(c => {
-      const resId = String(c.orshinSuugchiinId || c.residentId || c.orshinSuugchId || "");
-      const res = residentMap.get(resId);
+    allContractsList.forEach(c => {
+      const rid = String(c.orshinSuugchiinId || c.residentId || c.orshinSuugchId || "");
+      const res = residentMap.get(rid);
       if (res) {
-        linkedContracts++;
-        res.gereeniiDugaar = c.gereeniiDugaar || "";
-        res.gereeniiId = String(c._id);
         contractToResidentMap.set(String(c._id), res);
         if (c.gereeniiDugaar) contractToResidentMap.set(String(c.gereeniiDugaar), res);
-      } else {
-        unlinkedContracts++;
-        if (unlinkedContracts <= 3) {
-          console.log("[NASJILT DEBUG] Unlinked contract full:", JSON.stringify(c));
-        }
       }
     });
 
-    console.log("[NASJILT DEBUG] Final Counts - Linked:", linkedContracts, "Unlinked:", unlinkedContracts);
-    console.log("[NASJILT DEBUG] Map Sizes - Residents:", residentMap.size, "Contract Map:", contractToResidentMap.size);
-
     const now = new Date();
-    let matchedInvoices = 0;
-    let unmatchedInvoices = 0;
+
+    // 6. Process Invoices
     allInvoices.forEach(inv => {
-      const gid = String(inv.gereeniiId || "");
-      const gno = String(inv.gereeniiDugaar || "");
-      const res = contractToResidentMap.get(gid) || contractToResidentMap.get(gno) || contractToResidentMap.get(String(inv.residentId || ""));
-      if (!res) {
-        unmatchedInvoices++;
-        if (unmatchedInvoices <= 3) {
-          console.log("[NASJILT DEBUG] Unmatched Invoice Sample:", {
-            _id: inv._id,
-            gereeniiId: inv.gereeniiId,
-            gereeniiDugaar: inv.gereeniiDugaar,
-            residentId: inv.residentId,
-            niitDun: inv.niitDun
-          });
-        }
-        return;
-      }
-      matchedInvoices++;
+      const res = contractToResidentMap.get(String(inv.gereeniiId || "")) || 
+                  contractToResidentMap.get(String(inv.gereeniiDugaar || "")) || 
+                  contractToResidentMap.get(String(inv.residentId || ""));
+      if (!res) return;
 
-      const billed = Number(inv.niitTulburOriginal != null ? inv.niitTulburOriginal : inv.niitTulbur) || 0;
+      const billed = Number(inv.niitTulburOriginal ?? inv.niitTulbur ?? inv.niitDun) || 0;
       const uldegdel = Number(inv.uldegdel || 0);
-      const tulsun = billed - uldegdel;
-
       res.undsenDun += billed;
-      res.tulsunDun += tulsun;
+      res.tulsunDun += (billed - uldegdel);
       res.uldegdel += uldegdel;
 
       if (uldegdel > 0) {
-        const invDate = new Date(inv.ognoo || inv.createdAt);
-        const diffDays = Math.floor((now.getTime() - invDate.getTime()) / (1000 * 60 * 60 * 24));
-        if (diffDays <= 30) res.p0_30 += uldegdel;
-        else if (diffDays <= 60) res.p31_60 += uldegdel;
-        else if (diffDays <= 90) res.p61_90 += uldegdel;
-        else if (diffDays <= 120) res.p91_120 += uldegdel;
+        const diff = Math.floor((now.getTime() - new Date(inv.ognoo || inv.createdAt).getTime()) / 86400000);
+        if (diff <= 30) res.p0_30 += uldegdel;
+        else if (diff <= 60) res.p31_60 += uldegdel;
+        else if (diff <= 90) res.p61_90 += uldegdel;
+        else if (diff <= 120) res.p91_120 += uldegdel;
         else res.p120plus += uldegdel;
       }
     });
-    console.log("[NASJILT DEBUG] Invoice Mapping - Matched:", matchedInvoices, "Unmatched:", unmatchedInvoices);
 
+    // 7. Process Ledger (FIFO for credits)
     allLedgerEntries.forEach(s => {
-      if (s.nekhemjlekhId) return;
-      const gid = String(s.gereeniiId || "");
-      const res = contractToResidentMap.get(gid) || contractToResidentMap.get(String(s.residentId || ""));
+      if (s.nekhemjlekhId) return; // Already handled via invoice
+      const res = contractToResidentMap.get(String(s.gereeniiId || "")) || contractToResidentMap.get(String(s.residentId || ""));
       if (!res) return;
 
       const dun = Number(s.dun || 0);
-      const tulsun = Number(s.tulsunDun || 0);
-      const uld = Number(s.uldegdel || 0);
-
       if (dun > 0) {
-         res.undsenDun += dun;
-         res.tulsunDun += tulsun;
-         res.uldegdel += uld;
-         if (uld > 0) {
-           const sDate = new Date(s.ognoo || s.createdAt);
-           const diffDays = Math.floor((now.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24));
-           if (diffDays <= 30) res.p0_30 += uld;
-           else if (diffDays <= 60) res.p31_60 += uld;
-           else if (diffDays <= 90) res.p61_90 += uld;
-           else if (diffDays <= 120) res.p91_120 += uld;
-           else res.p120plus += uld;
-         }
+        const uld = Number(s.uldegdel || 0);
+        res.undsenDun += dun;
+        res.tulsunDun += (dun - uld);
+        res.uldegdel += uld;
+        if (uld > 0) {
+          const diff = Math.floor((now.getTime() - new Date(s.ognoo || s.createdAt).getTime()) / 86400000);
+          if (diff <= 30) res.p0_30 += uld;
+          else if (diff <= 60) res.p31_60 += uld;
+          else if (diff <= 90) res.p61_90 += uld;
+          else if (diff <= 120) res.p91_120 += uld;
+          else res.p120plus += uld;
+        }
       } else if (dun < 0) {
-         res.tulsunDun += Math.abs(dun);
-         res.uldegdel -= Math.abs(dun);
-         let remainingCredit = Math.abs(dun);
-         const buckets = ["p120plus", "p91_120", "p61_90", "p31_60", "p0_30"];
-         for (const b of buckets) {
-            if (remainingCredit <= 0) break;
-            const toApply = Math.min(remainingCredit, res[b]);
-            res[b] -= toApply;
-            remainingCredit -= toApply;
-         }
+        const credit = Math.abs(dun);
+        res.tulsunDun += credit;
+        res.uldegdel -= credit;
+        let rem = credit;
+        const buckets = ["p120plus", "p91_120", "p61_90", "p31_60", "p0_30"];
+        for (const b of buckets) {
+          if (rem <= 0) break;
+          const take = Math.min(rem, res[b]);
+          res[b] -= take;
+          rem -= take;
+        }
       }
     });
 
-    let list = Array.from(residentMap.values());
-
-    list.sort((a, b) => {
-      const aToot = parseInt(a.toot);
-      const bToot = parseInt(b.toot);
-      if (!isNaN(aToot) && !isNaN(bToot) && aToot !== bToot) return aToot - bToot;
-      return String(a.toot).localeCompare(String(b.toot), undefined, { numeric: true });
-    });
-
+    const list = Array.from(residentMap.values()).sort((a, b) => String(a.toot).localeCompare(String(b.toot), undefined, { numeric: true }));
     const totalCount = list.length;
-    const paginated = list.slice((Number(khuudasniiDugaar) - 1) * Number(khuudasniiKhemjee), Number(khuudasniiDugaar) * Number(khuudasniiKhemjee));
+    const paginated = list.slice((khuudasniiDugaar - 1) * khuudasniiKhemjee, khuudasniiDugaar * khuudasniiKhemjee);
 
     const totals = {
       undsenDun: list.reduce((s, r) => s + r.undsenDun, 0),
