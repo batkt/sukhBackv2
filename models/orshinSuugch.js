@@ -95,7 +95,7 @@ const orshinSuugchSchema = new Schema(
   },
 );
 
-orshinSuugchSchema.index({ utas: 1 });
+orshinSuugchSchema.index({ utas: 1 }, { unique: true, sparse: true });
 orshinSuugchSchema.index({ baiguullagiinId: 1 });
 orshinSuugchSchema.index({ "toots.walletUserId": 1 });
 orshinSuugchSchema.index({ "toots.toot": 1 });
