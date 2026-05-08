@@ -1363,6 +1363,15 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       const res = contractToResidentMap.get(gid) || contractToResidentMap.get(gno) || contractToResidentMap.get(String(inv.residentId || ""));
       if (!res) {
         unmatchedInvoices++;
+        if (unmatchedInvoices <= 3) {
+          console.log("[NASJILT DEBUG] Unmatched Invoice Sample:", {
+            _id: inv._id,
+            gereeniiId: inv.gereeniiId,
+            gereeniiDugaar: inv.gereeniiDugaar,
+            residentId: inv.residentId,
+            niitDun: inv.niitDun
+          });
+        }
         return;
       }
       matchedInvoices++;
