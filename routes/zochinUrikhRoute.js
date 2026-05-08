@@ -1055,7 +1055,7 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: mergedData,
+      jagsaalt: mergedData,
       niitMur: residentTotal + (allParkingRecords.length - linkedParking.length)
     });
     
