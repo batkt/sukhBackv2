@@ -1003,15 +1003,26 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
       });
     }
 
-    // New Specific Filters for Residents
+    // turul filter: OrshinSuugch has no turul field, so we use Mashin records
+    // to find which residents belong to a specific turul category
     if (req.query.turul && req.query.turul !== "Бүгд") {
-      resFilters.push({
-        $or: [
-          { turul: req.query.turul },
-          { zochinTurul: req.query.turul }
-        ]
-      });
+      // Get resident IDs that have matching Mashin records
+      const matchingResidentIds = allParkingRecords
+        .filter(p => p.ezemshigchiinId)
+        .map(p => String(p.ezemshigchiinId));
+      
+      if (matchingResidentIds.length > 0) {
+        const { ObjectId } = require("mongoose").Types;
+        const objectIds = matchingResidentIds
+          .filter(id => ObjectId.isValid(id))
+          .map(id => new ObjectId(id));
+        resFilters.push({ _id: { $in: objectIds } });
+      } else {
+        // No matching parking records found, so no residents should be shown
+        resFilters.push({ _id: null });
+      }
     }
+
     if (req.query.orts) {
       resFilters.push({
         $or: [
