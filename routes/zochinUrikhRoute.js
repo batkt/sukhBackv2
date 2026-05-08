@@ -1016,20 +1016,48 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
     // turul filter: OrshinSuugch has no turul field, so we use Mashin records
     // to find which residents belong to a specific turul category
     if (req.query.turul && req.query.turul !== "Бүгд") {
-      // Get resident IDs that have matching Mashin records
+      // Get all resident IDs that have ANY Mashin record (regardless of turul)
+      const allMashinBase = { baiguullagiinId: String(baiguullagiinId) };
+      if (barilgiinId) allMashinBase.barilgiinId = String(barilgiinId);
+      const allMashinRecords = await Mashin(tukhainBaaziinKholbolt).find(allMashinBase).select("ezemshigchiinId").lean();
+      const allLinkedResidentIds = new Set(
+        allMashinRecords.filter(p => p.ezemshigchiinId).map(p => String(p.ezemshigchiinId))
+      );
+
+      // Get resident IDs that have matching Mashin records for this turul
       const matchingResidentIds = allParkingRecords
         .filter(p => p.ezemshigchiinId)
         .map(p => String(p.ezemshigchiinId));
       
-      if (matchingResidentIds.length > 0) {
-        const { ObjectId } = require("mongoose").Types;
-        const objectIds = matchingResidentIds
+      const { ObjectId } = require("mongoose").Types;
+
+      if (req.query.turul === "Оршин суугч") {
+        // "Оршин суугч" is the default — include residents with matching Mashin
+        // AND residents with NO Mashin record at all (they default to "Оршин суугч")
+        const matchIds = matchingResidentIds
           .filter(id => ObjectId.isValid(id))
           .map(id => new ObjectId(id));
-        resFilters.push({ _id: { $in: objectIds } });
+        const allLinkedIds = [...allLinkedResidentIds]
+          .filter(id => ObjectId.isValid(id))
+          .map(id => new ObjectId(id));
+        
+        resFilters.push({
+          $or: [
+            ...(matchIds.length > 0 ? [{ _id: { $in: matchIds } }] : []),
+            // Residents with no Mashin record default to "Оршин суугч"
+            ...(allLinkedIds.length > 0 ? [{ _id: { $nin: allLinkedIds } }] : [{}]),
+          ]
+        });
       } else {
-        // No matching parking records found, so no residents should be shown
-        resFilters.push({ _id: null });
+        if (matchingResidentIds.length > 0) {
+          const objectIds = matchingResidentIds
+            .filter(id => ObjectId.isValid(id))
+            .map(id => new ObjectId(id));
+          resFilters.push({ _id: { $in: objectIds } });
+        } else {
+          // No matching parking records found, so no residents should be shown
+          resFilters.push({ _id: null });
+        }
       }
     }
 
