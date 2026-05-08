@@ -736,23 +736,23 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
                  // If plate is not provided, treat as generic update
                  if (!updateData.dugaar) {
                     filter = {
-                        ezemshigchiinId: orshinSuugchResult._id.toString(),
+                        ...(orshinSuugchResult ? { ezemshigchiinId: orshinSuugchResult._id.toString() } : { baiguullagiinId: baiguullagiinId.toString(), ezemshigchiinUtas: phoneString }),
                         zochinTurul: updateData.zochinTurul
                     };
                  } else {
                     // Updating/Creating by Plate Number
                     filter = {
-                        ezemshigchiinId: orshinSuugchResult._id.toString(),
+                        ...(orshinSuugchResult ? { ezemshigchiinId: orshinSuugchResult._id.toString() } : { baiguullagiinId: baiguullagiinId.toString(), ezemshigchiinUtas: phoneString }),
                         dugaar: updateData.dugaar
                     };
                     
                     // Only apply Resident Car Limit if we are trying to add a NEW "Оршин суугч" car
-                    if (updateData.zochinTurul === "Оршин суугч") {
+                    if (updateData.zochinTurul === "Оршин суугч" && orshinSuugchResult) {
                          filter.zochinTurul = "Оршин суугч";
                          
                          const limit = defaults.orshinSuugchMashiniiLimit || 1; 
                          const currentCount = await Mashin(tukhainBaaziinKholbolt).countDocuments({
-                            ezemshigchiinId: orshinSuugchResult._id.toString(),
+                            ...(orshinSuugchResult ? { ezemshigchiinId: orshinSuugchResult._id.toString() } : { baiguullagiinId: baiguullagiinId.toString(), ezemshigchiinUtas: phoneString }),
                             zochinTurul: "Оршин суугч"
                          });
 
@@ -798,7 +798,7 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
     }
 
     // Машины мэдээллийг хадгална/засварлана
-    if (mashinMedeelel && mashiniiDugaar && mashiniiDugaar !== "БҮРТГЭЛГҮЙ") {
+    if (!mashinResult && mashinMedeelel && mashiniiDugaar && mashiniiDugaar !== "БҮРТГЭЛГҮЙ") {
       try {
         mashinResult = await mashinHadgalya(
           mashinMedeelel,
