@@ -592,16 +592,16 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
         if (residentData._id) {
             orshinSuugchResult = await OrshinSuugch(db.erunkhiiKholbolt).findById(residentData._id);
         } else if (isResidentType) {
-            // Only create OrshinSuugch record for actual residents
-            orshinSuugchResult = await orshinSuugchKhadgalya(
-              residentData,
-              phoneString,
-              db.erunkhiiKholbolt,
-              baiguullagiinId,
-              barilgiinId
-            );
+            const query = { utas: phoneString, baiguullagiinId: String(baiguullagiinId) };
+            orshinSuugchResult = await OrshinSuugch(db.erunkhiiKholbolt).findOne(query);
+            
+            if (!orshinSuugchResult) {
+                return res.status(403).json({ 
+                    success: false, 
+                    message: "Энэ дугаар дээр оршин суугч бүртгэгдээгүй байна. Та эхлээд оршин суугчийг бүртгэлийн хэсгээс бүртгэнэ үү." 
+                });
+            }
         } else {
-            console.log("ℹ️ [ZOCHIN_HADGALYA] Non-resident type. Skipping OrshinSuugch record creation.");
             orshinSuugchResult = null;
         }
 
