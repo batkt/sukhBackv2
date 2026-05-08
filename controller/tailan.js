@@ -1202,17 +1202,31 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
 
     // 3. Extract ALL relevant resident IDs to ensure we don't miss anyone
     const residentIdSet = new Set();
-    allContractsList.forEach(c => residentIdSet.add(String(c.orshinSuugchiinId || c.residentId || c.orshinSuugchId || "")));
-    allInvoices.forEach(i => residentIdSet.add(String(i.residentId || "")));
-    allLedgerEntries.forEach(l => residentIdSet.add(String(l.residentId || "")));
-    residentIdSet.delete("");
+    allContractsList.forEach(c => {
+      const rid = String(c.orshinSuugchiinId || c.residentId || c.orshinSuugchId || "");
+      if (rid && rid.length === 24) residentIdSet.add(rid);
+    });
+    allInvoices.forEach(i => {
+      const rid = String(i.residentId || "");
+      if (rid && rid.length === 24) residentIdSet.add(rid);
+    });
+    allLedgerEntries.forEach(l => {
+      const rid = String(l.residentId || "");
+      if (rid && rid.length === 24) residentIdSet.add(rid);
+    });
+
+    console.log("[NASJILT DEBUG] Extracted residentIdSet size:", residentIdSet.size);
 
     // 4. Fetch Residents
+    const { ObjectId } = require("mongodb");
+    const validIds = Array.from(residentIdSet).map(id => new ObjectId(id));
+    
     const residentMatch = {
       $or: [
         { baiguullagiinId: String(baiguullagiinId), barilgiinId: String(barilgiinId) },
         { "toots.baiguullagiinId": String(baiguullagiinId), "toots.barilgiinId": String(barilgiinId) },
-        { _id: { $in: Array.from(residentIdSet).map(id => db.ObjectId(id)) } }
+        { baiguullagiinId: String(baiguullagiinId) }, // Fallback: just org
+        { _id: { $in: validIds } }
       ]
     };
     if (search) residentMatch.ner = { $regex: search, $options: "i" };
@@ -1220,6 +1234,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
     if (toot) residentMatch.$or = [{ toot: { $regex: toot, $options: "i" } }, { "toots.toot": { $regex: toot, $options: "i" } }];
 
     const allOrshinSuugch = await db.collection("OrshinSuugch").find(residentMatch).toArray();
+    console.log("[NASJILT DEBUG] Fetched residents count:", allOrshinSuugch.length);
 
     // 5. Build Maps
     const residentMap = new Map();
