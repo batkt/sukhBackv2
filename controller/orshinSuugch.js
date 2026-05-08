@@ -342,7 +342,20 @@ exports.calculateLiftShalgaya = async function calculateLiftShalgaya(
   } catch (error) {}
 };
 
+const activeProcessings = new Set();
+
 exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
+  const phoneNumber = req.body.utas ? String(req.body.utas).trim() : null;
+  
+  if (phoneNumber && activeProcessings.has(phoneNumber)) {
+    return res.status(429).json({
+      success: false,
+      aldaa: "Таны хүсэлт боловсруулагдаж байна, түр хүлээнэ үү."
+    });
+  }
+
+  if (phoneNumber) activeProcessings.add(phoneNumber);
+
   try {
     const { db } = require("zevbackv2");
 
