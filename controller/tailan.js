@@ -1190,14 +1190,21 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
 
     if (!baiguullagiinId) return res.status(400).json({ success: false, message: "baiguullagiinId is required" });
 
-    // 1. Define matches
-    const baseMatch = { baiguullagiinId: String(baiguullagiinId), barilgiinId: String(barilgiinId), ustgagdakhEsekh: { $ne: true } };
-    
-    // 2. Fetch Contracts, Invoices, and Ledger in parallel
+    const kholbolt = db.kholboltuud.find(k => String(k.baiguullagiinId) === String(baiguullagiinId));
+    if (!kholbolt) return res.status(404).json({ success: false, message: "Холболтын мэдээлэл олдсонгүй" });
+
+    const Geree = require("../models/geree");
+    const OrshinSuugch = require("../models/orshinSuugch");
+    const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+    const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+
+    const match = { baiguullagiinId: String(baiguullagiinId), barilgiinId: String(barilgiinId), ustgagdakhEsekh: { $ne: true } };
+
+    // 2. Fetch Contracts, Invoices, and Ledger in parallel using models
     const [allContractsList, allInvoices, allLedgerEntries] = await Promise.all([
-      db.collection("Geree").find({ ...baseMatch, tuluv: "ACTIVE" }).toArray(),
-      db.collection("NekhemjlekhiinTuukh").find(baseMatch).toArray(),
-      db.collection("GuilgeeAvlaguud").find(baseMatch).toArray(),
+      Geree(kholbolt).find({ ...match, tuluv: "ACTIVE" }).lean(),
+      NekhemjlekhiinTuukh(kholbolt).find(match).lean(),
+      GuilgeeAvlaguud(kholbolt).find(match).lean(),
     ]);
 
     // 3. Extract ALL relevant resident IDs to ensure we don't miss anyone
@@ -1215,8 +1222,6 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       if (rid && rid.length === 24) residentIdSet.add(rid);
     });
 
-    console.log("[NASJILT DEBUG] Extracted residentIdSet size:", residentIdSet.size);
-
     // 4. Fetch Residents
     const { ObjectId } = require("mongodb");
     const validIds = Array.from(residentIdSet).map(id => new ObjectId(id));
@@ -1225,7 +1230,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       $or: [
         { baiguullagiinId: String(baiguullagiinId), barilgiinId: String(barilgiinId) },
         { "toots.baiguullagiinId": String(baiguullagiinId), "toots.barilgiinId": String(barilgiinId) },
-        { baiguullagiinId: String(baiguullagiinId) }, // Fallback: just org
+        { baiguullagiinId: String(baiguullagiinId) },
         { _id: { $in: validIds } }
       ]
     };
@@ -1233,7 +1238,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
     else if (orshinSuugch) residentMatch.ner = { $regex: orshinSuugch, $options: "i" };
     if (toot) residentMatch.$or = [{ toot: { $regex: toot, $options: "i" } }, { "toots.toot": { $regex: toot, $options: "i" } }];
 
-    const allOrshinSuugch = await db.collection("OrshinSuugch").find(residentMatch).toArray();
+    const allOrshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt).find(residentMatch).lean();
     console.log("[NASJILT DEBUG] Fetched residents count:", allOrshinSuugch.length);
 
     // 5. Build Maps
