@@ -451,6 +451,7 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
       tukhainBaaziinKholbolt,
       orshinSuugchMedeelel,
       khariltsagchMedeelel,
+      orshinSuugchTurul,
       mashinMedeelel,
     } = req.body;
 
@@ -654,8 +655,8 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
             ezemshigchiinNer: orshinSuugchResult.ner,
             ezemshigchiinUtas: phoneString,
             zochinUrikhEsekh: orshinSuugchMedeelel.zochinUrikhEsekh !== undefined ? orshinSuugchMedeelel.zochinUrikhEsekh : defaults.zochinUrikhEsekh,
-            zochinTurul: orshinSuugchMedeelel.turul || orshinSuugchMedeelel.zochinTurul || defaults.zochinTurul || "Оршин суугч",
-            turul: orshinSuugchMedeelel.turul || orshinSuugchMedeelel.zochinTurul || defaults.zochinTurul || "Оршин суугч",
+            zochinTurul: orshinSuugchMedeelel.orshinSuugchTurul || orshinSuugchMedeelel.turul || orshinSuugchMedeelel.zochinTurul || defaults.zochinTurul || "Оршин суугч",
+            turul: orshinSuugchMedeelel.orshinSuugchTurul || orshinSuugchMedeelel.turul || orshinSuugchMedeelel.zochinTurul || defaults.zochinTurul || "Оршин суугч",
             davtamjiinTurul: orshinSuugchMedeelel.davtamjiinTurul || defaults.davtamjiinTurul || "saraar",
             dugaarUurchilsunOgnoo: orshinSuugchMedeelel.dugaarUurchilsunOgnoo,
             ezenToot: orshinSuugchMedeelel.ezenToot,
