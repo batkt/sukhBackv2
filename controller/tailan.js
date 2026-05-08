@@ -1332,35 +1332,27 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       contractToResidentMap.set(rid, resObj); // Fallback: resident ID itself
     });
 
+    let linkedContracts = 0;
+    let unlinkedContracts = 0;
     activeContracts.forEach(c => {
       const resId = String(c.orshinSuugchiinId || c.residentId || c.orshinSuugchId || "");
       const res = residentMap.get(resId);
       if (res) {
+        linkedContracts++;
         res.gereeniiDugaar = c.gereeniiDugaar || "";
         res.gereeniiId = String(c._id);
         contractToResidentMap.set(String(c._id), res);
         if (c.gereeniiDugaar) contractToResidentMap.set(String(c.gereeniiDugaar), res);
-      }
-    });
-
-    // Debug: Count linked/unlinked contracts
-    let linkedContracts = 0;
-    let unlinkedContracts = 0;
-    activeContracts.forEach(c => {
-      const resId = String(c.orshinSuugchiinId || c.residentId || "");
-      if (residentMap.has(resId)) linkedContracts++;
-      else {
+      } else {
         unlinkedContracts++;
         if (unlinkedContracts <= 3) {
-          console.log("[NASJILT DEBUG] Unlinked contract keys:", Object.keys(c), "Full:", JSON.stringify(c));
+          console.log("[NASJILT DEBUG] Unlinked contract full:", JSON.stringify(c));
         }
       }
     });
-    console.log("[NASJILT DEBUG] linkedContracts:", linkedContracts, "unlinkedContracts:", unlinkedContracts);
-    console.log("[NASJILT DEBUG] residentMap size:", residentMap.size, "contractToResidentMap size:", contractToResidentMap.size);
-    if (allOrshinSuugch.length > 0) {
-      console.log("[NASJILT DEBUG] resident sample (first 3):", allOrshinSuugch.slice(0, 3).map(r => ({ _id: String(r._id), ner: r.ner, baiguullagiinId: r.baiguullagiinId, barilgiinId: r.barilgiinId })));
-    }
+
+    console.log("[NASJILT DEBUG] Final Counts - Linked:", linkedContracts, "Unlinked:", unlinkedContracts);
+    console.log("[NASJILT DEBUG] Map Sizes - Residents:", residentMap.size, "Contract Map:", contractToResidentMap.size);
 
     const now = new Date();
     allInvoices.forEach(inv => {
