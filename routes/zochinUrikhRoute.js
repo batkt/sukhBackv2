@@ -723,8 +723,8 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
                 filter = { _id: targetCarId };
                 
                 // FORCE "Оршин суугч" type if we are updating a resident owner's primary car
-                // This fixes the issue where frontend sends "Иргэн" or other types by mistake when editing
-                if (!updateData.zochinTurul || updateData.zochinTurul !== 'Оршин суугч') {
+                // Only do this if it's actually linked to a Resident profile
+                if (orshinSuugchResult && (!updateData.zochinTurul || updateData.zochinTurul !== 'Оршин суугч')) {
                      console.log("ℹ️ [ZOCHIN_HADGALYA] Forcing type to 'Оршин суугч' for resident vehicle update.");
                      updateData.zochinTurul = "Оршин суугч";
                      updateData.turul = "Оршин суугч";
