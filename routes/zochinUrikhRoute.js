@@ -966,10 +966,20 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
 
     // New Specific Filters
     if (req.query.turul && req.query.turul !== "Бүгд") {
-      mashinQuery.$or = [
-        { turul: req.query.turul },
-        { zochinTurul: req.query.turul }
-      ];
+      if (req.query.turul === "Бусад") {
+        // "Бусад" = everything NOT in known categories
+        const knownCategories = ["Оршин суугч", "СӨХ", "Ажилтан", "Түрээслэгч"];
+        mashinQuery.$and = mashinQuery.$and || [];
+        mashinQuery.$and.push(
+          { turul: { $nin: knownCategories } },
+          { zochinTurul: { $nin: knownCategories } }
+        );
+      } else {
+        mashinQuery.$or = [
+          { turul: req.query.turul },
+          { zochinTurul: req.query.turul }
+        ];
+      }
     }
     if (req.query.toot) {
       mashinQuery.ezenToot = { $regex: req.query.toot, $options: 'i' };
