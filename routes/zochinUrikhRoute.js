@@ -584,22 +584,39 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
           residentData._id = ezemshigchiinId;
         }
 
-        // Fix: Verify if ID exists before calling helper to avoid "Not Found" error
+        const isResidentType = orshinSuugchMedeelel.orshinSuugchTurul === "Оршин суугч" || orshinSuugchMedeelel.zochinTurul === "Оршин суугч";
+
+        // Only update OrshinSuugch if it's a primary resident registration AND we don't have an ID yet
+        // OR if it's a resident and the user explicitly wants to update them (though the user asked to skip)
         if (residentData._id) {
-            const exists = await OrshinSuugch(db.erunkhiiKholbolt).findById(residentData._id);
-            if (!exists) {
-                console.warn(`⚠️ [ZOCHIN_HADGALYA] User ID ${residentData._id} not found. Treating as new user.`);
-                delete residentData._id;
+            // If ID exists, just fetch the existing record to link the Mashin, don't update fields like 'toot'
+            orshinSuugchResult = await OrshinSuugch(db.erunkhiiKholbolt).findById(residentData._id);
+            console.log(`ℹ️ [ZOCHIN_HADGALYA] Existing resident ID ${residentData._id} found. Skipping registry update as requested.`);
+        } else if (isResidentType) {
+            // New resident registration
+            orshinSuugchResult = await orshinSuugchKhadgalya(
+              residentData,
+              phoneString,
+              db.erunkhiiKholbolt,
+              baiguullagiinId,
+              barilgiinId
+            );
+        } else {
+            // For non-resident types (СӨХ, Ажилтан etc.), try to find by phone to link, but don't create/update a full resident record if possible
+            const query = { utas: phoneString, baiguullagiinId: String(baiguullagiinId) };
+            orshinSuugchResult = await OrshinSuugch(db.erunkhiiKholbolt).findOne(query);
+            
+            if (!orshinSuugchResult) {
+                // Create a minimal record so it appears in the parking list
+                orshinSuugchResult = await orshinSuugchKhadgalya(
+                  { ...residentData, toot: "-" }, // Use placeholder for toot for non-residents
+                  phoneString,
+                  db.erunkhiiKholbolt,
+                  baiguullagiinId,
+                  barilgiinId
+                );
             }
         }
-
-        orshinSuugchResult = await orshinSuugchKhadgalya(
-          residentData,
-          phoneString,
-          db.erunkhiiKholbolt,
-          baiguullagiinId,
-          barilgiinId
-        );
 
         console.log(`🔍 [ZOCHIN_HADGALYA] orshinSuugchResult:`, orshinSuugchResult ? { id: orshinSuugchResult._id, ner: orshinSuugchResult.ner, toot: orshinSuugchResult.toot } : "NULL");
 
