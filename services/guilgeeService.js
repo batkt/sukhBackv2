@@ -17,7 +17,6 @@ function getMongoClient(kholbolt) {
 
 /**
  * Record a charge (receivable) in the ledger
- * Uses atomic operation and optional transaction
  */
 async function recordCharge(kholbolt, data, options = {}) {
   const GuilgeeAvlaguudModel = GuilgeeAvlaguud(kholbolt);
@@ -27,7 +26,6 @@ async function recordCharge(kholbolt, data, options = {}) {
   if (!data.nekhemjlekhId && data.gereeniiId) {
     const invoiceService = require("./invoiceService");
     const activeInv = await invoiceService.ensureActiveInvoice(kholbolt, data.gereeniiId);
-
     if (activeInv) {
       data.nekhemjlekhId = activeInv._id.toString();
     }
@@ -46,22 +44,30 @@ async function recordCharge(kholbolt, data, options = {}) {
     charge.$session(options.session);
   }
 
-  return await charge.save();
+  const saved = await charge.save();
+
+  // Sync statuses immediately
+  if (data.gereeniiId) {
+    await syncInvoicesStatus(kholbolt, data.gereeniiId).catch(err => {
+      console.error("❌ [LEDGER SYNC] syncInvoicesStatus failed:", err.message);
+    });
+  }
+
+  return saved;
 }
 
+/**
+ * Record a single payment in the ledger
+ */
 async function recordPayment(kholbolt, data, options = {}) {
   const GuilgeeAvlaguudModel = GuilgeeAvlaguud(kholbolt);
   const paidAmount = roundMoney(Math.abs(data.dun || 0));
 
   if (paidAmount <= 0) {
-    console.warn(`⚠️ [LEDGER] recordPayment: Invalid amount ${paidAmount}`);
     return { success: false, error: "Invalid payment amount" };
   }
 
-  console.log(`ℹ️ [LEDGER] Recording payment: gereeniiId=${data.gereeniiId}, amount=${paidAmount}, bankId=${data.bankniiGuilgeeId || 'N/A'}`);
-
   const { session } = options;
-
 
   if (data.bankniiGuilgeeId) {
     const existing = await GuilgeeAvlaguudModel.findOne({
@@ -94,16 +100,12 @@ async function recordPayment(kholbolt, data, options = {}) {
 
   // Trigger Full Sync of invoice statuses for this contract
   if (data.gereeniiId) {
-    // We don't await this to keep the response fast, or we can await if we want strict consistency
-    syncInvoicesStatus(kholbolt, data.gereeniiId).catch((err) => {
+    await syncInvoicesStatus(kholbolt, data.gereeniiId).catch((err) => {
       console.error("❌ [LEDGER SYNC] syncInvoicesStatus failed:", err.message);
     });
   }
 
-  return {
-    success: true,
-    paymentRecord,
-  };
+  return { success: true, paymentRecord };
 }
 
 /**
@@ -119,9 +121,9 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
       gereeniiId: String(gereeniiId),
     }).lean();
 
-    // 2. Calculate Total Paid (Global sum of all negative dun)
+    // 2. Calculate Total Paid (sum of all negative dun)
     const totalPaid = allLedger
-      .filter((r) => r.dun < 0)
+      .filter((r) => (r.dun || 0) < 0)
       .reduce((sum, r) => sum + Math.abs(r.dun || 0), 0);
 
     // 3. Fetch all invoices for this contract, sorted by date (FIFO)
@@ -136,20 +138,17 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
     for (const inv of invoices) {
       // Charge for this specific invoice = sum of positive dun linked to it in ledger
       const invCharge = allLedger
-        .filter((r) => r.nekhemjlekhId === inv._id.toString() && r.dun > 0)
+        .filter((r) => String(r.nekhemjlekhId || "") === String(inv._id) && (r.dun || 0) > 0)
         .reduce((sum, r) => sum + (r.dun || 0), 0);
 
       cumulativeCharges += invCharge;
 
       // Check if this invoice is covered by the total payments received so far
-      // We use a 0.01 tolerance for floating point precision
       const isPaid = totalPaid + 0.01 >= cumulativeCharges;
       const newStatus = isPaid ? "Төлсөн" : "Төлөөгүй";
 
       if (inv.tuluv !== newStatus) {
-        console.log(
-          `🔄 [LEDGER SYNC] Updating invoice ${inv.nekhemjlekhiinDugaar} (${inv._id}) to ${newStatus} (TotalPaid: ${totalPaid}, CumulativeCharge: ${cumulativeCharges})`,
-        );
+        console.log(`🔄 [LEDGER SYNC] Updating invoice ${inv.nekhemjlekhiinDugaar} to ${newStatus} (Paid:${totalPaid}, Charge:${cumulativeCharges})`);
         await NekhemjlekhModel.findByIdAndUpdate(inv._id, {
           tuluv: newStatus,
           tulsunOgnoo: isPaid ? new Date() : null,
@@ -166,12 +165,9 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
  */
 async function recordPayments(kholbolt, payments, options = {}) {
   const client = getMongoClient(kholbolt);
-  if (!client) {
-    return { success: false, error: "MongoDB client not available" };
-  }
+  if (!client) return { success: false, error: "MongoDB client not available" };
 
   const session = client.startSession();
-
   try {
     let result;
     await session.withTransaction(async () => {
@@ -182,6 +178,11 @@ async function recordPayments(kholbolt, payments, options = {}) {
       }
       result = { success: true, results };
     });
+
+    // Sync contract after bulk update
+    if (payments[0]?.gereeniiId) {
+      await syncInvoicesStatus(kholbolt, payments[0].gereeniiId);
+    }
 
     return result || { success: false, error: "Transaction failed" };
   } finally {
@@ -205,7 +206,6 @@ async function getBalance(kholbolt, query) {
   ]);
 
   const balance = result[0]?.uldegdel || 0;
-  console.log(`📊 [LEDGER] Balance check: query=${JSON.stringify(query)}, result=${balance}`);
   return balance;
 }
 
@@ -224,12 +224,8 @@ async function getBalanceByInvoice(kholbolt, query) {
         uldegdel: { $sum: "$uldegdel" },
       },
     },
-    {
-      $match: { uldegdel: { $ne: 0 } },
-    },
-    {
-      $sort: { _id: 1 },
-    },
+    { $match: { uldegdel: { $ne: 0 } } },
+    { $sort: { _id: 1 } },
   ]);
 
   return records;
