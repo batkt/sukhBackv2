@@ -269,25 +269,7 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     }
   }
 
-  // Check if we already have an active (unpaid or empty) invoice container
-  let hasActiveContainer = nekhemjlekhuud.some(inv => inv.tuluv === "Төлөөгүй" || inv.niitTulbur === 0);
-  if (!hasActiveContainer) {
-    const existingEmpty = await NekhemjlekhiinTuukhModel.findOne({
-      gereeniiId,
-      tuluv: "Төлөөгүй"
-    }).lean();
-    if (existingEmpty) hasActiveContainer = true;
-  }
 
-  // Only auto-create a new invoice if there's no active container AND there is actual debt/charges
-  if (!hasActiveContainer && totalTulbur > 0) {
-    const invoiceService = require("../services/invoiceService");
-    await invoiceService.ensureActiveInvoice(
-      kholbolt, 
-      gereeniiId,
-      { skipCharges: true }
-    ).catch(err => console.error("Error auto-creating next invoice:", err));
-  }
 
   res.json({
     success: true,
