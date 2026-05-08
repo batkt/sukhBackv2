@@ -1208,7 +1208,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
     residentIdSet.delete("");
 
     // 4. Fetch Residents
-    const residentMatch: any = {
+    const residentMatch = {
       $or: [
         { baiguullagiinId: String(baiguullagiinId), barilgiinId: String(barilgiinId) },
         { "toots.baiguullagiinId": String(baiguullagiinId), "toots.barilgiinId": String(barilgiinId) },
