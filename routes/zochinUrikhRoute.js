@@ -660,10 +660,16 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
           Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
 
           // Define filter for upsert
-          let filter = { 
-            ezemshigchiinId: orshinSuugchResult._id.toString(),
-            dugaar: updateData.dugaar 
-          };
+          let filter = {};
+          if (orshinSuugchResult) {
+            filter.ezemshigchiinId = orshinSuugchResult._id.toString();
+            filter.dugaar = updateData.dugaar;
+          } else {
+            // Standalone car (Sukh, Staff, etc.) - find by plate and organization
+            filter.dugaar = updateData.dugaar;
+            filter.baiguullagiinId = baiguullagiinId.toString();
+            filter.ezemshigchiinUtas = phoneString;
+          }
 
            // 1. Identify TARGET document to update (Resident Car Strategy)
            // We try to find if we are updating an existing resident car, regardless of what 'turul' the frontend sent
@@ -674,7 +680,7 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
                console.log("ℹ️ [ZOCHIN_HADGALYA] Target by ID:", mashinMedeelel._id);
                targetCarId = mashinMedeelel._id;
            } 
-           else {
+           else if (orshinSuugchResult) {
                 // B: Check for Placeholder "БҮРТГЭЛГҮЙ"
                 const placeholderCar = await Mashin(tukhainBaaziinKholbolt).findOne({
                    ezemshigchiinId: orshinSuugchResult._id.toString(),
