@@ -78,6 +78,7 @@ router.post("/uldegdelBodyo", tokenShalgakh, gereeController.uldegdelBodyo);
 crud(router, "liftShalgaya", LiftShalgaya, UstsanBarimt);
 
 // Emit tulburUpdated on delete of avlaga records so web clients refresh
+// AND trigger Full Sync of invoice statuses
 router.use((req, res, next) => {
   const isAvlagaMutation =
     (req.method === "DELETE" ||
@@ -94,10 +95,22 @@ router.use((req, res, next) => {
         req.app.get("socketio").emit(`tulburUpdated:${baiguullagiinId}`, {});
       } catch (e) {}
     }
+
+    // Trigger Full Sync for the affected contract
+    const gereeniiId = req.body?.gereeniiId || data?.gereeniiId;
+    const kholbolt = req.body?.tukhainBaaziinKholbolt;
+    if (gereeniiId && kholbolt) {
+      const guilgeeService = require("../services/guilgeeService");
+      guilgeeService.syncInvoicesStatus(kholbolt, gereeniiId).catch((err) => {
+        console.error("❌ [GEREE ROUTE] syncInvoicesStatus failed:", err.message);
+      });
+    }
+
     return originalJson(data);
   };
   next();
 });
+
 // Intercept manual receivable creation to ensure they get a nekhemjlekhId
 router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
   const { gereeniiId, nekhemjlekhId, tukhainBaaziinKholbolt } = req.body;
@@ -130,6 +143,20 @@ router.get("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
 // Main GuilgeeAvlaguud CRUD
 crud(router, "guilgeeAvlaguud", GuilgeeAvlaguud, UstsanBarimt);
 
+// Manual sync endpoint - triggers FIFO reconciliation for a contract
+router.post("/syncInvoices", tokenShalgakh, async (req, res, next) => {
+  try {
+    const { gereeniiId, tukhainBaaziinKholbolt } = req.body;
+    if (!gereeniiId || !tukhainBaaziinKholbolt) {
+      return res.status(400).json({ success: false, error: "gereeniiId and tukhainBaaziinKholbolt required" });
+    }
+    const guilgeeService = require("../services/guilgeeService");
+    await guilgeeService.syncInvoicesStatus(tukhainBaaziinKholbolt, gereeniiId);
+    res.json({ success: true, message: `Sync completed for contract ${gereeniiId}` });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get("/geree", tokenShalgakh, async (req, res, next) => {
   try {
