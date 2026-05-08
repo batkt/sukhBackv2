@@ -1188,8 +1188,8 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
     };
 
     res.status(201).json(response);
-  } catch (error) {
-    next(error);
+  } finally {
+    if (phoneNumber) activeProcessings.delete(phoneNumber);
   }
 });
 
