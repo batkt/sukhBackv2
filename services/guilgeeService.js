@@ -92,10 +92,73 @@ async function recordPayment(kholbolt, data, options = {}) {
   await paymentRecord.save();
   console.log(`✅ [LEDGER] Payment persisted: ${paymentRecord._id}, amount=${paymentRecord.dun}`);
 
+  // Trigger Full Sync of invoice statuses for this contract
+  if (data.gereeniiId) {
+    // We don't await this to keep the response fast, or we can await if we want strict consistency
+    syncInvoicesStatus(kholbolt, data.gereeniiId).catch((err) => {
+      console.error("❌ [LEDGER SYNC] syncInvoicesStatus failed:", err.message);
+    });
+  }
+
   return {
     success: true,
     paymentRecord,
   };
+}
+
+/**
+ * Synchronize all invoices for a contract based on total ledger balance (Full Sync / FIFO)
+ */
+async function syncInvoicesStatus(kholbolt, gereeniiId) {
+  try {
+    const NekhemjlekhModel = require("../models/nekhemjlekhiinTuukh")(kholbolt);
+    const GuilgeeModel = require("../models/guilgeeAvlaguud")(kholbolt);
+
+    // 1. Get all ledger entries for this contract
+    const allLedger = await GuilgeeModel.find({
+      gereeniiId: String(gereeniiId),
+    }).lean();
+
+    // 2. Calculate Total Paid (Global sum of all negative dun)
+    const totalPaid = allLedger
+      .filter((r) => r.dun < 0)
+      .reduce((sum, r) => sum + Math.abs(r.dun || 0), 0);
+
+    // 3. Fetch all invoices for this contract, sorted by date (FIFO)
+    const invoices = await NekhemjlekhModel.find({
+      gereeniiId: String(gereeniiId),
+    })
+      .sort({ ognoo: 1 })
+      .lean();
+
+    let cumulativeCharges = 0;
+
+    for (const inv of invoices) {
+      // Charge for this specific invoice = sum of positive dun linked to it in ledger
+      const invCharge = allLedger
+        .filter((r) => r.nekhemjlekhId === inv._id.toString() && r.dun > 0)
+        .reduce((sum, r) => sum + (r.dun || 0), 0);
+
+      cumulativeCharges += invCharge;
+
+      // Check if this invoice is covered by the total payments received so far
+      // We use a 0.01 tolerance for floating point precision
+      const isPaid = totalPaid + 0.01 >= cumulativeCharges;
+      const newStatus = isPaid ? "Төлсөн" : "Төлөөгүй";
+
+      if (inv.tuluv !== newStatus) {
+        console.log(
+          `🔄 [LEDGER SYNC] Updating invoice ${inv.nekhemjlekhiinDugaar} (${inv._id}) to ${newStatus} (TotalPaid: ${totalPaid}, CumulativeCharge: ${cumulativeCharges})`,
+        );
+        await NekhemjlekhModel.findByIdAndUpdate(inv._id, {
+          tuluv: newStatus,
+          tulsunOgnoo: isPaid ? new Date() : null,
+        });
+      }
+    }
+  } catch (err) {
+    console.error("❌ [LEDGER SYNC] Error in syncInvoicesStatus:", err.message);
+  }
 }
 
 /**
@@ -178,6 +241,7 @@ module.exports = {
   recordPayments,
   getBalance,
   getBalanceByInvoice,
+  syncInvoicesStatus,
   getMongoClient,
   roundMoney,
 };
