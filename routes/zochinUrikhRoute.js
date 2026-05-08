@@ -993,6 +993,7 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
           zochinTurul: p?.zochinTurul || p?.turul || "",
           zochinTailbar: p?.zochinTailbar || "",
           ezenToot: p?.ezenToot || resObj.toot || (resObj.toots && resObj.toots[0]?.toot) || "", 
+          orts: resObj.orts || (resObj.toots && resObj.toots[0]?.orts) || "",
           davtamjiinTurul: p?.davtamjiinTurul || "saraar",
           baiguullagiinId: resObj.baiguullagiinId || null,
           barilgiinId: resObj.barilgiinId || null,
