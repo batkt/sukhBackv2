@@ -1333,7 +1333,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
     });
 
     activeContracts.forEach(c => {
-      const resId = String(c.orshinSuugchiinId || c.residentId || "");
+      const resId = String(c.orshinSuugchiinId || c.residentId || c.orshinSuugchId || "");
       const res = residentMap.get(resId);
       if (res) {
         res.gereeniiDugaar = c.gereeniiDugaar || "";
@@ -1352,7 +1352,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       else {
         unlinkedContracts++;
         if (unlinkedContracts <= 3) {
-          console.log("[NASJILT DEBUG] Unlinked contract:", { _id: String(c._id), orshinSuugchiinId: c.orshinSuugchiinId, residentId: c.residentId, gereeniiDugaar: c.gereeniiDugaar });
+          console.log("[NASJILT DEBUG] Unlinked contract keys:", Object.keys(c), "Full:", JSON.stringify(c));
         }
       }
     });
