@@ -964,6 +964,17 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
       if (barilgiinId) mashinQuery.$and.push({ barilgiinId: String(barilgiinId) });
     }
 
+    // New Specific Filters
+    if (req.query.turul && req.query.turul !== "Бүгд") {
+      mashinQuery.$or = [
+        { turul: req.query.turul },
+        { zochinTurul: req.query.turul }
+      ];
+    }
+    if (req.query.toot) {
+      mashinQuery.ezenToot = { $regex: req.query.toot, $options: 'i' };
+    }
+
     const allParkingRecords = await Mashin(tukhainBaaziinKholbolt).find(mashinQuery).sort({ createdAt: -1 }).lean();
 
     // 2. Fetch all Residents for this building/org (to catch those without cars)
@@ -988,6 +999,32 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
           { utas: regex },
           { toot: regex },
           { "toots.toot": regex }
+        ]
+      });
+    }
+
+    // New Specific Filters for Residents
+    if (req.query.turul && req.query.turul !== "Бүгд") {
+      resFilters.push({
+        $or: [
+          { turul: req.query.turul },
+          { zochinTurul: req.query.turul }
+        ]
+      });
+    }
+    if (req.query.orts) {
+      resFilters.push({
+        $or: [
+          { orts: req.query.orts },
+          { "toots.orts": req.query.orts }
+        ]
+      });
+    }
+    if (req.query.toot) {
+      resFilters.push({
+        $or: [
+          { toot: { $regex: req.query.toot, $options: 'i' } },
+          { "toots.toot": { $regex: req.query.toot, $options: 'i' } }
         ]
       });
     }
