@@ -1106,7 +1106,7 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
           ovog: resObj.ovog || "",
           utas: resObj.utas || (Array.isArray(resObj.utas) ? resObj.utas[0] : ""),
           mashiniiDugaar: p?.dugaar || "",
-          zochinTurul: p?.zochinTurul || p?.turul || "Оршин суугч",
+          zochinTurul: (p?.zochinTurul === "Үйлчлүүлэгч" || p?.turul === "Үйлчлүүлэгч") ? "СӨХ" : (p?.zochinTurul || p?.turul || "Оршин суугч"),
           zochinTailbar: p?.zochinTailbar || "",
           ezenToot: p?.ezenToot || resObj.toot || (resObj.toots && resObj.toots[0]?.toot) || "", 
           orts: resObj.orts || (resObj.toots && resObj.toots[0]?.orts) || "",

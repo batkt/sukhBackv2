@@ -1291,10 +1291,19 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       GuilgeeAvlaguud(kholbolt).find(transactionMatch).lean(),
     ]);
 
+    console.log("[NASJILT DEBUG] residentMatch:", JSON.stringify(residentMatch));
+    console.log("[NASJILT DEBUG] contractMatch:", JSON.stringify(match));
+    console.log("[NASJILT DEBUG] transactionMatch:", JSON.stringify(transactionMatch));
+    console.log("[NASJILT DEBUG] allOrshinSuugch count:", allOrshinSuugch.length);
+    console.log("[NASJILT DEBUG] allContractsList count:", allContractsList.length);
+    console.log("[NASJILT DEBUG] allInvoices count:", allInvoices.length);
+    console.log("[NASJILT DEBUG] allLedgerEntries count:", allLedgerEntries.length);
+
     const activeContracts = allContractsList.filter(c => {
       const st = String(c.tuluv || c.status || "").toLowerCase();
       return st !== "цуцалсан" && st !== "tsutlsasan";
     });
+    console.log("[NASJILT DEBUG] activeContracts count:", activeContracts.length);
 
     const residentMap = new Map();
     const contractToResidentMap = new Map(); // Link both _id and gereeniiDugaar to resident
@@ -1333,6 +1342,25 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
         if (c.gereeniiDugaar) contractToResidentMap.set(String(c.gereeniiDugaar), res);
       }
     });
+
+    // Debug: Count linked/unlinked contracts
+    let linkedContracts = 0;
+    let unlinkedContracts = 0;
+    activeContracts.forEach(c => {
+      const resId = String(c.orshinSuugchiinId || c.residentId || "");
+      if (residentMap.has(resId)) linkedContracts++;
+      else {
+        unlinkedContracts++;
+        if (unlinkedContracts <= 3) {
+          console.log("[NASJILT DEBUG] Unlinked contract:", { _id: String(c._id), orshinSuugchiinId: c.orshinSuugchiinId, residentId: c.residentId, gereeniiDugaar: c.gereeniiDugaar });
+        }
+      }
+    });
+    console.log("[NASJILT DEBUG] linkedContracts:", linkedContracts, "unlinkedContracts:", unlinkedContracts);
+    console.log("[NASJILT DEBUG] residentMap size:", residentMap.size, "contractToResidentMap size:", contractToResidentMap.size);
+    if (allOrshinSuugch.length > 0) {
+      console.log("[NASJILT DEBUG] resident sample (first 3):", allOrshinSuugch.slice(0, 3).map(r => ({ _id: String(r._id), ner: r.ner, baiguullagiinId: r.baiguullagiinId, barilgiinId: r.barilgiinId })));
+    }
 
     const now = new Date();
     allInvoices.forEach(inv => {
