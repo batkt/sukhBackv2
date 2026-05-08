@@ -943,38 +943,53 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
     
     if (req.query.search) {
       const regex = new RegExp(req.query.search, 'i');
-      mashinQuery.$or = [
-        { dugaar: regex },
-        { mashiniiDugaar: regex },
-        { ezemshigchiinNer: regex },
-        { ezemshigchiinUtas: regex },
-        { ezenToot: regex }
+      mashinQuery.$and = [
+        { baiguullagiinId: String(baiguullagiinId) },
+        {
+          $or: [
+            { dugaar: regex },
+            { mashiniiDugaar: regex },
+            { ezemshigchiinNer: regex },
+            { ezemshigchiinUtas: regex },
+            { ezenToot: regex }
+          ]
+        }
       ];
+      if (barilgiinId) mashinQuery.$and.push({ barilgiinId: String(barilgiinId) });
     }
 
     const allParkingRecords = await Mashin(tukhainBaaziinKholbolt).find(mashinQuery).sort({ createdAt: -1 }).lean();
 
     // 2. Fetch all Residents for this building/org (to catch those without cars)
-    const resQuery = { baiguullagiinId: String(baiguullagiinId) };
+    const resFilters = [];
+    resFilters.push({ baiguullagiinId: String(baiguullagiinId) });
+
     if (barilgiinId) {
-      resQuery.$or = [
-        { barilgiinId: String(barilgiinId) },
-        { "toots.barilgiinId": String(barilgiinId) }
-      ];
-    }
-    if (req.query.search) {
-      const regex = new RegExp(req.query.search, 'i');
-      resQuery.$or = [
-        { ner: regex },
-        { orshinSuugchNer: regex },
-        { utas: regex },
-        { toot: regex },
-        { "toots.toot": regex }
-      ];
+      resFilters.push({
+        $or: [
+          { barilgiinId: String(barilgiinId) },
+          { "toots.barilgiinId": String(barilgiinId) }
+        ]
+      });
     }
 
-    const residents = await OrshinSuugch(db.erunkhiiKholbolt).find(resQuery).sort({ createdAt: -1 }).limit(limit).skip(skip).lean();
-    const residentTotal = await OrshinSuugch(db.erunkhiiKholbolt).countDocuments(resQuery);
+    if (req.query.search) {
+      const regex = new RegExp(req.query.search, 'i');
+      resFilters.push({
+        $or: [
+          { ner: regex },
+          { orshinSuugchNer: regex },
+          { utas: regex },
+          { toot: regex },
+          { "toots.toot": regex }
+        ]
+      });
+    }
+
+    const finalResQuery = resFilters.length > 1 ? { $and: resFilters } : resFilters[0];
+
+    const residents = await OrshinSuugch(db.erunkhiiKholbolt).find(finalResQuery).sort({ createdAt: -1 }).limit(limit).skip(skip).lean();
+    const residentTotal = await OrshinSuugch(db.erunkhiiKholbolt).countDocuments(finalResQuery);
 
     // 3. Map residents to their parking records
     const residentIds = residents.map(r => String(r._id));
