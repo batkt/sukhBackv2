@@ -918,8 +918,10 @@ router.post("/ezenUrisanTuukh", tokenShalgakh, async (req, res, next) => {
 
 router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
   try {
+    const OrshinSuugch = require("../models/orshinSuugch");
     const Mashin = require("../models/mashin");
     const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
+    const { db } = require("zevbackv2");
     
     const page = parseInt(req.query.khuudasniiDugaar) || 1;
     const limit = parseInt(req.query.khuudasniiKhemjee) || 50;
@@ -931,53 +933,72 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
       return res.status(400).send("baiguullagiinId required");
     }
 
-    // Build match query
+    // 1. Build match query for OrshinSuugch
     const matchQuery = {
-      baiguullagiinId: String(baiguullagiinId),
-      zochinTurul: { $exists: true } // Only vehicles with guest/resident settings
+      baiguullagiinId: String(baiguullagiinId)
     };
 
     if (barilgiinId) {
-      matchQuery.barilgiinId = String(barilgiinId);
+      matchQuery.$or = [
+        { barilgiinId: String(barilgiinId) },
+        { "toots.barilgiinId": String(barilgiinId) }
+      ];
     }
 
     // Add search if provided
     if (req.query.search) {
        const regex = new RegExp(req.query.search, 'i');
        matchQuery.$or = [
-           { ezemshigchiinNer: regex },
-           { ezemshigchiinUtas: regex },
-           { dugaar: regex },
-           { ezenToot: regex }
+           { ner: regex },
+           { orshinSuugchNer: regex },
+           { utas: regex },
+           { toot: regex },
+           { "toots.toot": regex }
        ];
     }
 
-    // Execute query with pagination
-    const data = await Mashin(tukhainBaaziinKholbolt)
+    // 2. Fetch residents with pagination
+    const residents = await OrshinSuugch(db.erunkhiiKholbolt)
       .find(matchQuery)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean();
 
-    const total = await Mashin(tukhainBaaziinKholbolt).countDocuments(matchQuery);
+    const total = await OrshinSuugch(db.erunkhiiKholbolt).countDocuments(matchQuery);
 
-    // Reshape data for table
-    const formattedData = data.map(item => {
+    // 3. Fetch associated Mashin records for these residents to get parking settings
+    const residentIds = residents.map(r => String(r._id));
+    const parkingRecords = await Mashin(tukhainBaaziinKholbolt).find({
+      ezemshigchiinId: { $in: residentIds },
+      zochinTurul: "Оршин суугч" // Primary resident parking config
+    }).lean();
+
+    const parkingMap = {};
+    parkingRecords.forEach(p => {
+      parkingMap[String(p.ezemshigchiinId)] = p;
+    });
+
+    // 4. Format data
+    const formattedData = residents.map(resObj => {
+        const p = parkingMap[String(resObj._id)];
         return {
-          _id: item._id,
-          createdAt: item.createdAt,
-          ezemshigchiinId: item.ezemshigchiinId,
-          ner: item.ezemshigchiinNer || "БҮРТГЭЛГҮЙ",
-          utas: item.ezemshigchiinUtas || item.utas || "",
-          mashiniiDugaar: item.dugaar,
-          zochinTurul: item.zochinTurul,
-          zochinTailbar: item.zochinTailbar,
-          ezenToot: item.ezenToot || "", 
-          davtamjiinTurul: item.davtamjiinTurul,
-          baiguullagiinId: item.baiguullagiinId || null,
-          barilgiinId: item.barilgiinId || null,
-          burtgesenAjiltaniiNer: item.burtgesenAjiltaniiNer || "-"
+          _id: p?._id || resObj._id, // Use parking ID if exists for edits, else resident ID
+          ezemshigchiinId: resObj._id,
+          createdAt: p?.createdAt || resObj.createdAt,
+          ner: resObj.ner || resObj.orshinSuugchNer || "БҮРТГЭЛГҮЙ",
+          ovog: resObj.ovog || "",
+          utas: resObj.utas || (Array.isArray(resObj.utas) ? resObj.utas[0] : ""),
+          mashiniiDugaar: p?.dugaar || "",
+          zochinTurul: p?.zochinTurul || p?.turul || "",
+          zochinTailbar: p?.zochinTailbar || "",
+          ezenToot: p?.ezenToot || resObj.toot || (resObj.toots && resObj.toots[0]?.toot) || "", 
+          davtamjiinTurul: p?.davtamjiinTurul || "saraar",
+          baiguullagiinId: resObj.baiguullagiinId || null,
+          barilgiinId: resObj.barilgiinId || null,
+          burtgesenAjiltaniiNer: p?.burtgesenAjiltaniiNer || resObj.burtgesenAjiltaniiNer || "-",
+          zochinErkhiinToo: p?.zochinErkhiinToo,
+          zochinTusBurUneguiMinut: p?.zochinTusBurUneguiMinut
         };
     });
 
