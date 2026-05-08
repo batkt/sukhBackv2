@@ -5213,38 +5213,54 @@ exports.syncResidentContracts = async function syncResidentContracts(
   const allActiveGerees = await GereeModel.find({
     orshinSuugchId: orshinSuugch._id.toString(),
     tuluv: "Идэвхтэй"
-  }).lean();
+  }).sort({ createdAt: -1 }).lean();
 
   // 2. Create a set of "Valid Unit Keys" for this organization
   const validUnitKeys = new Set();
-  tootsToProcess.forEach(t => {
+  const uniqueToots = [];
+  const processedKeys = new Set();
+
+  (tootsToProcess || []).forEach(t => {
     const entryOrgId = t.baiguullagiinId ? String(t.baiguullagiinId) : null;
     if (!entryOrgId || entryOrgId === baiguullagiinId) {
       const bId = t.barilgiinId || barilgiinId;
       if (bId) {
         const key = `${String(bId)}|${String(t.toot).trim()}`;
-        validUnitKeys.add(key);
-        console.log(`[SYNC] Registered valid unit key: ${key}`);
+        if (!processedKeys.has(key)) {
+           processedKeys.add(key);
+           uniqueToots.push(t);
+           validUnitKeys.add(key);
+           console.log(`[SYNC] Registered valid unit key: ${key}`);
+        }
       }
     }
   });
 
   // 3. Cancel contracts that are no longer associated with this resident
+  // OR are duplicates for the same unit
+  const activeKeysFound = new Set();
   for (const g of allActiveGerees) {
     const key = `${String(g.barilgiinId)}|${String(g.toot).trim()}`;
-    if (!validUnitKeys.has(key)) {
-      console.log(`🚫 [SYNC] Cancelling contract ${g.gereeniiDugaar} for unit ${g.toot} (No longer associated)`);
+    
+    const isInvalid = !validUnitKeys.has(key);
+    const isDuplicate = activeKeysFound.has(key);
+
+    if (isInvalid || isDuplicate) {
+      const reason = isInvalid ? "Тоот өөрчлөгдсөн" : "Давхардсан гэрээ цэвэрлэгээ";
+      console.log(`🚫 [SYNC] Cancelling contract ${g.gereeniiDugaar} for unit ${g.toot} (${reason})`);
       await GereeModel.findByIdAndUpdate(g._id, {
         $set: { 
           tuluv: "Цуцалсан", 
           tsutsalsanOgnoo: new Date(),
-          temdeglel: `Системээс автоматаар цуцлагдсан (Тоот өөрчлөгдсөн)`
+          temdeglel: `Системээс автоматаар цуцлагдсан (${reason})`
         }
       });
+    } else {
+      activeKeysFound.add(key);
     }
   }
 
-  for (const tootEntry of tootsToProcess) {
+  for (const tootEntry of uniqueToots) {
     // Only process units that belong to the current organization context
     const entryOrgId = tootEntry.baiguullagiinId ? String(tootEntry.baiguullagiinId) : null;
     

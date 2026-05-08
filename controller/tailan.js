@@ -1198,18 +1198,19 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
     const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
     const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
 
-    const match = { baiguullagiinId: String(baiguullagiinId), barilgiinId: String(barilgiinId), ustgagdakhEsekh: { $ne: true } };
+    const match = { baiguullagiinId: String(baiguullagiinId), ustgagdakhEsekh: { $ne: true } };
+    const buildingFilter = String(barilgiinId);
 
-    // 2. Fetch Contracts, Invoices, and Ledger in parallel using models
-    const [allContractsList, allInvoices, allLedgerEntries] = await Promise.all([
-      Geree(kholbolt).find({ ...match, tuluv: "ACTIVE" }).lean(),
+    const [activeContracts, allContracts, allInvoices, allLedgerEntries] = await Promise.all([
+      Geree(kholbolt).find({ ...match, barilgiinId: buildingFilter, tuluv: "ACTIVE" }).lean(),
+      Geree(kholbolt).find({ ...match, barilgiinId: buildingFilter }).lean(),
       NekhemjlekhiinTuukh(kholbolt).find(match).lean(),
       GuilgeeAvlaguud(kholbolt).find(match).lean(),
     ]);
 
-    // 3. Extract ALL relevant resident IDs to ensure we don't miss anyone
+    // 3. Extract ALL relevant resident IDs from ALL contracts, invoices and ledger
     const residentIdSet = new Set();
-    allContractsList.forEach(c => {
+    allContracts.forEach(c => {
       const rid = String(c.orshinSuugchiinId || c.residentId || c.orshinSuugchId || "");
       if (rid && rid.length === 24) residentIdSet.add(rid);
     });
@@ -1258,7 +1259,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       contractToResidentMap.set(rid, obj);
     });
 
-    allContractsList.forEach(c => {
+    allContracts.forEach(c => {
       const rid = String(c.orshinSuugchiinId || c.residentId || c.orshinSuugchId || "");
       const res = residentMap.get(rid);
       if (res) {
