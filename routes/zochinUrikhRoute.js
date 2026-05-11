@@ -1000,6 +1000,29 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
       });
     }
 
+    // --- Filter: Only show residents with ACTIVE contracts in this building ---
+    const activeContractQuery = {
+      baiguullagiinId: String(baiguullagiinId),
+      tuluv: "Идэвхтэй"
+    };
+    if (barilgiinId) activeContractQuery.barilgiinId = String(barilgiinId);
+
+    const activeResidentIds = await Geree(tukhainBaaziinKholbolt).find(activeContractQuery).distinct("orshinSuugchId");
+    const activeResidentIdSet = new Set(activeResidentIds.map(id => String(id)));
+
+    const { ObjectId } = require("mongoose").Types;
+    const activeObjectIds = activeResidentIds
+      .filter(id => id && ObjectId.isValid(id))
+      .map(id => new ObjectId(id));
+
+    if (activeObjectIds.length > 0) {
+      resFilters.push({ _id: { $in: activeObjectIds } });
+    } else {
+      // If no active contracts found, we should only see residents who aren't in this building yet
+      // but to satisfy "only active orshinSuugchid", we restrict to null if nothing active.
+      resFilters.push({ _id: null });
+    }
+
     if (req.query.search) {
       const regex = new RegExp(req.query.search, 'i');
       resFilters.push({
@@ -1121,6 +1144,11 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
 
     // 5. Add standalone cars (like Sukh/Staff)
     allParkingRecords.forEach(p => {
+        // Skip cars linked to inactive/cancelled residents (already handled or should be hidden)
+        if (p.ezemshigchiinId && !activeResidentIdSet.has(String(p.ezemshigchiinId))) {
+          return;
+        }
+
         // Apply toot filter to standalone cars if provided
         if (req.query.toot) {
             const tootRegex = new RegExp(req.query.toot, 'i');
