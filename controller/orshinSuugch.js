@@ -1191,6 +1191,16 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
       },
     };
 
+    // Add tukhainBaaziinKholbolt to response so the app knows which DB to use for contracts/billing
+    if (orshinSuugch.baiguullagiinId) {
+      const matchingKholbolt = db.kholboltuud.find(
+        (k) => k.baiguullagiinId === orshinSuugch.baiguullagiinId.toString(),
+      );
+      if (matchingKholbolt) {
+        response.tukhainBaaziinKholbolt = matchingKholbolt.kholboltNer;
+      }
+    }
+
     res.status(201).json(response);
   } finally {
     if (phoneNumber) activeProcessings.delete(phoneNumber);
@@ -2664,6 +2674,16 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
       walletUserInfo: walletUserInfo,
     };
 
+    // Add tukhainBaaziinKholbolt to response so the app knows which DB to use for contracts/billing
+    if (orshinSuugch.baiguullagiinId) {
+      const matchingKholbolt = db.kholboltuud.find(
+        (k) => k.baiguullagiinId === orshinSuugch.baiguullagiinId.toString(),
+      );
+      if (matchingKholbolt) {
+        butsaakhObject.tukhainBaaziinKholbolt = matchingKholbolt.kholboltNer;
+      }
+    }
+
     if (billingInfo) {
       butsaakhObject.billingInfo = billingInfo;
     }
@@ -3667,6 +3687,16 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
       walletUserInfo: walletUserInfo,
       message: "Хэтэвчний системд амжилттай бүртгүүлж, нэвтэрлээ",
     };
+
+    // Add tukhainBaaziinKholbolt to response
+    if (orshinSuugch.baiguullagiinId) {
+      const matchingKholbolt = db.kholboltuud.find(
+        (k) => k.baiguullagiinId === orshinSuugch.baiguullagiinId.toString(),
+      );
+      if (matchingKholbolt) {
+        butsaakhObject.tukhainBaaziinKholbolt = matchingKholbolt.kholboltNer;
+      }
+    }
 
     if (billingInfo) {
       butsaakhObject.billingInfo = billingInfo;
