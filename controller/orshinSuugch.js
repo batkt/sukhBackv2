@@ -142,7 +142,7 @@ async function validateCodeOnly(
 
 function duusakhOgnooAvya(ugugdul, onFinish, next) {
   request.get(
-    "http://103.143.40.123:8282/baiguullagiinDuusakhKhugatsaaAvya",
+    "http://103.236.194.68:8282/baiguullagiinDuusakhKhugatsaaAvya",
     { json: true, body: ugugdul },
     (err, res1, body) => {
       if (err) next(err);

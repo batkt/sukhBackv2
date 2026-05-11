@@ -13,7 +13,7 @@ function aldaagIlgeeye(aldaa, req) {
     })
   );
   const options = {
-    hostname: "103.143.40.123",
+    hostname: "103.236.194.68",
     port: 8282,
     path: "/aldaa",
     method: "POST",
@@ -53,7 +53,7 @@ const aldaaBarigch = (err, req, res, next) => {
       err.message = "Нэвтрэх нэр давхардаж байна!";
     else if (
       !!err.message &&
-      !!err.message.includes("connect ECONNREFUSED 103.143.40.123:8282")
+      !!err.message.includes("connect ECONNREFUSED 103.236.194.68:8282")
     ) {
       err.message = "Лицензийн хэсэгтэй холбогдоход алдаа гарлаа!";
     }

@@ -275,7 +275,7 @@ router.post("/ajiltandErkhUgyu/:id", tokenShalgakh, async (req, res, next) => {
           erkhuud: req.body.erkhuud,
         };
         await request.post(
-          "http://103.143.40.123:8282/erkhOruulya",
+          "http://103.236.194.68:8282/erkhOruulya",
           { json: true, body: ilgeekhBody },
           (err, res1, body) => {
             if (err) next(err);
@@ -313,7 +313,7 @@ router.post("/backAvya", tokenShalgakh, backAvya);
 router.get("/licenseOgnooAvya", tokenShalgakh, async (req, res, next) => {
   try {
     request.get(
-      "http://103.143.40.123:8282/baiguullagiinDuusakhKhugatsaaAvya",
+      "http://103.236.194.68:8282/baiguullagiinDuusakhKhugatsaaAvya",
       { json: true, body: { register: req.body.register, system: "Sukh" } },
       (err, res1, body) => {
         if (err) next(err);
