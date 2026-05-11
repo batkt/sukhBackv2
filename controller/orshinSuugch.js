@@ -770,8 +770,9 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
 
       // Update user info if provided (name, email, etc.) but DON'T update toot-related fields
       // We'll add the new toot to toots array instead
-      if (req.body.ner) orshinSuugch.ner = req.body.ner;
-      if (req.body.ovog) orshinSuugch.ovog = req.body.ovog;
+      // Only update name if it hasn't been set yet (protect primary registration name)
+      if (req.body.ner && !orshinSuugch.ner) orshinSuugch.ner = req.body.ner;
+      if (req.body.ovog && !orshinSuugch.ovog) orshinSuugch.ovog = req.body.ovog;
       if (req.body.mail || walletUserInfo?.email) {
         orshinSuugch.mail =
           walletUserInfo?.email || req.body.mail || email || orshinSuugch.mail;
@@ -2171,7 +2172,9 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
           }
 
           // Update user fields in memory
-          if (billingInfo.customerName) {
+          // Update primary user fields ONLY if they are not already set
+          // This prevents overwriting the user's registration name with a bill name (e.g. from a relative's unit)
+          if (billingInfo.customerName && !orshinSuugch.ner) {
             const nameParts = billingInfo.customerName.split(" ");
             if (nameParts.length >= 2) {
               orshinSuugch.ovog = nameParts[0];
@@ -3649,7 +3652,7 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
 
           // Update user with billing data
           const updateData = {};
-          if (billingInfo.customerName) {
+          if (billingInfo.customerName && !orshinSuugch.ner) {
             const nameParts = billingInfo.customerName.split(" ");
             if (nameParts.length >= 2) {
               updateData.ovog = nameParts[0];
