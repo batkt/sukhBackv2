@@ -479,6 +479,8 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
                   } else if (g.umnukhZaalt !== undefined) {
                     t.tsahilgaaniiZaalt = g.umnukhZaalt;
                   }
+                  if (g.khonogoorBodokhEsekh !== undefined) t.khonogoorBodokhEsekh = g.khonogoorBodokhEsekh;
+                  if (g.bodokhKhonog !== undefined) t.bodokhKhonog = g.bodokhKhonog;
                 }
               });
             }
@@ -499,6 +501,8 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
               
               if (authoritativeGeree.toot) result.toot = authoritativeGeree.toot;
               if (authoritativeGeree.davkhar) result.davkhar = authoritativeGeree.davkhar;
+              if (authoritativeGeree.khonogoorBodokhEsekh !== undefined) result.khonogoorBodokhEsekh = authoritativeGeree.khonogoorBodokhEsekh;
+              if (authoritativeGeree.bodokhKhonog !== undefined) result.bodokhKhonog = authoritativeGeree.bodokhKhonog;
             }
           } catch (err) {
             console.error("Error overlaying contract data in detail view:", err);

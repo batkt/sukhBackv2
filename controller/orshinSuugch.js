@@ -6,6 +6,7 @@ const MsgTuukh = require("../models/msgTuukh");
 const IpTuukh = require("../models/ipTuukh");
 const BatalgaajuulahCode = require("../models/batalgaajuulahCode");
 const Geree = require("../models/geree");
+const Mashin = require("../models/mashin");
 const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
 const aldaa = require("../components/aldaa");
 const request = require("request");
@@ -4716,13 +4717,6 @@ exports.orshinSuugchOorooUstgakh = asyncHandler(async (req, res, next) => {
           { orshinSuugchId: userIdString },
           { $set: { tuluv: "Цуцалсан", tsutsalsanOgnoo: new Date() } }
         );
-
-        // Invalidate all vehicle registrations
-        const Mashin = require("../models/mashin");
-        await Mashin(conn).updateMany(
-          { ezemshigchiinId: userIdString },
-          { $set: { tuluv: "Цуцалсан", temdeglel: "Оршин суугч өөрөө устгагдсан тул цуцлав." } }
-        );
       }
     }
 
@@ -4791,9 +4785,26 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
 
     // Verify user exists
     const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
-    const orshinSuugch = await OrshinSuugchModel.findById(userId);
+    let orshinSuugch = await OrshinSuugchModel.findById(userId);
 
     if (!orshinSuugch) {
+      // FIX: If resident not found, check if this is a Mashin ID (common in merged Zogsool views)
+      console.log(`🔍 [DELETE-RESIDENT] User ${userId} not found in OrshinSuugch, checking Mashin records...`);
+      for (const conn of db.kholboltuud) {
+        try {
+          const MashinModel = Mashin(conn);
+          const mashinDoc = await MashinModel.findById(userId);
+          if (mashinDoc) {
+            console.log(`🗑️ [DELETE-RESIDENT] Found Mashin record with ID ${userId} in org ${conn.baiguullagiinId}. Deleting...`);
+            await MashinModel.findByIdAndDelete(userId);
+            return res.status(200).json({
+              success: true,
+              message: "Машины бүртгэл амжилттай устгагдлаа. (Plate removed)",
+              data: { mashinId: userId }
+            });
+          }
+        } catch (e) { /* ignore individual db errors */ }
+      }
       throw new aldaa("Хэрэглэгч олдсонгүй!");
     }
 
@@ -4807,17 +4818,20 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
     for (const orgId of orgIdsForDel) {
       const conn = db.kholboltuud.find(k => String(k.baiguullagiinId) === String(orgId));
       if (conn) {
+        // Cancel contracts
         await Geree(conn).updateMany(
           { orshinSuugchId: userIdString },
           { $set: { tuluv: "Цуцалсан", tsutsalsanOgnoo: new Date() } }
         );
 
-        // Invalidate all vehicle registrations
-        const Mashin = require("../models/mashin");
-        await Mashin(conn).updateMany(
-          { ezemshigchiinId: userIdString },
-          { $set: { tuluv: "Цуцалсан", temdeglel: "Админ оршин суугчийг устгасан тул цуцлав." } }
-        );
+        // CLEANUP: Delete all vehicle registrations for this resident
+        console.log(`🗑️ [DELETE-RESIDENT] Cleaning up vehicles for resident ${userIdString} in org ${orgId}`);
+        await Mashin(conn).deleteMany({
+          $or: [
+            { ezemshigchiinId: userIdString },
+            { orshinSuugchiinId: userIdString }
+          ]
+        });
       }
     }
 
@@ -5243,17 +5257,6 @@ exports.orshinSuugchTootUstgakh = asyncHandler(async (req, res, next) => {
         },
         { $set: { tuluv: "Цуцалсан", tsutsalsanOgnoo: new Date() } },
       );
-
-      // Invalidate vehicle registrations for this unit
-      const Mashin = require("../models/mashin");
-      await Mashin(conn).updateMany(
-        {
-          ezemshigchiinId: String(residentId),
-          ezenToot: String(toot).trim(),
-          ...(barilgiinId ? { barilgiinId: String(barilgiinId) } : {}),
-        },
-        { $set: { tuluv: "Цуцалсан", temdeglel: "Тоот устгагдсан тул цуцлав." } }
-      );
     }
 
     res.json({
@@ -5346,18 +5349,6 @@ exports.syncResidentContracts = async function syncResidentContracts(
           temdeglel: `Системээс автоматаар цуцлагдсан (${reason})`
         }
       });
-
-      // Invalidate car registrations for this unit
-      const Mashin = require("../models/mashin");
-      const MashinModel = Mashin(tukhainBaaziinKholbolt);
-      await MashinModel.updateMany(
-        { 
-          ezemshigchiinId: String(orshinSuugch._id),
-          ezenToot: String(g.toot).trim(),
-          barilgiinId: String(g.barilgiinId)
-        },
-        { $set: { tuluv: "Цуцалсан", temdeglel: `Гэрээ цуцлагдсан (${reason}) тул цуцлав.` } }
-      );
     } else {
       activeKeysFound.add(key);
     }
@@ -5394,24 +5385,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
     });
 
     if (existingActiveGeree) {
-      // Update existing contract with new resident details and pro-rating settings
-      const isUnitProrating = tootEntry.khonogoorBodokhEsekh !== undefined
-        ? tootEntry.khonogoorBodokhEsekh
-        : (req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true");
-      
-      await GereeModel.findByIdAndUpdate(existingActiveGeree._id, {
-        $set: {
-          ovog: req.body.ovog || orshinSuugch.ovog || existingActiveGeree.ovog,
-          ner: req.body.ner || orshinSuugch.ner || existingActiveGeree.ner,
-          register: req.body.register || orshinSuugch.register || existingActiveGeree.register,
-          utas: Array.isArray(orshinSuugch.utas) ? orshinSuugch.utas : [orshinSuugch.utas],
-          mail: req.body.mail || orshinSuugch.mail || existingActiveGeree.mail,
-          khonogoorBodokhEsekh: isUnitProrating,
-          bodokhKhonog: tootEntry.bodokhKhonog !== undefined
-            ? Number(tootEntry.bodokhKhonog)
-            : Number(req.body.bodokhKhonog) || 0,
-        }
-      });
+      // Already has an active contract, update its details if needed but skip creation
       continue;
     }
 
