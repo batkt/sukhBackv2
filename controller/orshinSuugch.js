@@ -5218,15 +5218,30 @@ exports.orshinSuugchTootUstgakh = asyncHandler(async (req, res, next) => {
         // Shift to the next available property
         const nextToot = updatedToots[0];
         orshinSuugch.baiguullagiinId = nextToot.baiguullagiinId;
-        orshinSuugch.baiguullagiinNer = nextToot.baiguullagiinNer;
+        orshinSuugch.baiguullagiinNer =
+          nextToot.baiguullagiinNer && typeof nextToot.baiguullagiinNer === "object"
+            ? nextToot.baiguullagiinNer.ner
+            : nextToot.baiguullagiinNer;
         orshinSuugch.barilgiinId = nextToot.barilgiinId;
-        orshinSuugch.bairniiNer = nextToot.bairniiNer;
+        orshinSuugch.bairniiNer =
+          nextToot.bairniiNer && typeof nextToot.bairniiNer === "object"
+            ? nextToot.bairniiNer.ner
+            : nextToot.bairniiNer;
         orshinSuugch.toot = nextToot.toot;
         orshinSuugch.davkhar = nextToot.davkhar;
         orshinSuugch.orts = nextToot.orts;
-        orshinSuugch.duureg = nextToot.duureg;
-        orshinSuugch.horoo = nextToot.horoo;
-        orshinSuugch.soh = nextToot.soh;
+        orshinSuugch.duureg =
+          nextToot.duureg && typeof nextToot.duureg === "object"
+            ? nextToot.duureg.ner
+            : nextToot.duureg;
+        orshinSuugch.horoo =
+          nextToot.horoo && typeof nextToot.horoo === "object"
+            ? nextToot.horoo.ner
+            : nextToot.horoo;
+        orshinSuugch.soh =
+          nextToot.soh && typeof nextToot.soh === "object"
+            ? nextToot.soh.ner
+            : nextToot.soh;
       } else {
         // This was the last property - clear the fields but keep the user record
         orshinSuugch.baiguullagiinId = undefined;
@@ -5236,6 +5251,9 @@ exports.orshinSuugchTootUstgakh = asyncHandler(async (req, res, next) => {
         orshinSuugch.toot = undefined;
         orshinSuugch.davkhar = undefined;
         orshinSuugch.orts = undefined;
+        orshinSuugch.duureg = undefined;
+        orshinSuugch.horoo = undefined;
+        orshinSuugch.soh = undefined;
       }
     }
 
