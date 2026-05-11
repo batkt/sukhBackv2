@@ -1165,4 +1165,33 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
   }
 });
 
+/**
+ * DELETE /zochinUstgaya/:id - Delete a vehicle registration (Mashin record)
+ */
+router.delete("/zochinUstgaya/:id", tokenShalgakh, async (req, res, next) => {
+  try {
+    const Mashin = require("../models/mashin");
+    const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
+    const mashinId = req.params.id;
+
+    if (!mashinId) {
+      return res.status(400).json({ success: false, message: "ID шаардлагатай" });
+    }
+
+    const deleted = await Mashin(tukhainBaaziinKholbolt).findByIdAndDelete(mashinId);
+
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: "Бүртгэл олдсонгүй" });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Амжилттай устгагдлаа",
+      data: deleted
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
