@@ -910,7 +910,8 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
           }
 
           // Set primary fields if this is the first unit of a new user
-          if (!existingUser && !orshinSuugch.toot) {
+          // OR if the user is currently only in the centralized (wallet) organization
+          if ((!existingUser || String(orshinSuugch.baiguullagiinId) === CENTRALIZED_ORG_ID) && (!orshinSuugch.toot || String(orshinSuugch.baiguullagiinId) === CENTRALIZED_ORG_ID)) {
             orshinSuugch.toot = unitToot;
             orshinSuugch.davkhar = unitDavkhar;
             orshinSuugch.orts = unitOrts;
@@ -944,9 +945,12 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
             walletBairName,
           );
 
-          // Set centralized org as primary address
-          orshinSuugch.baiguullagiinId = CENTRALIZED_ORG_ID;
-          orshinSuugch.barilgiinId = barilgaResult.barilgiinId;
+          // Set centralized org as primary address ONLY if user doesn't have one 
+          // OR if their current one is already centralized (prevents overwriting OWN_ORG)
+          if (!orshinSuugch.baiguullagiinId || String(orshinSuugch.baiguullagiinId) === CENTRALIZED_ORG_ID) {
+            orshinSuugch.baiguullagiinId = CENTRALIZED_ORG_ID;
+            orshinSuugch.barilgiinId = barilgaResult.barilgiinId;
+          }
 
           // Parse customerName into ovog + ner if not directly provided
           const _custNameParts = (req.body.customerName || "").split(" ").filter(Boolean);
@@ -1659,13 +1663,13 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
     // Single Device Login: Set unique sessionId
     userData.currentSessionId = String(Date.now() + Math.random().toString(36).substring(2, 7));
 
-    // 1. Preserve existing primary organization - STRIKTLY IMMUTABLE
-    if (orshinSuugch && orshinSuugch.baiguullagiinId) {
-      // If user exists and has an org, that is their PERMANENT primary home in erunkhiiBaaz
+    // 1. Preserve existing primary organization - STRIKTLY IMMUTABLE (except upgrading from centralized)
+    if (orshinSuugch && orshinSuugch.baiguullagiinId && String(orshinSuugch.baiguullagiinId) !== CENTRALIZED_ORG_ID) {
+      // If user exists and has a REAL org, that is their PERMANENT primary home in erunkhiiBaaz
       userData.baiguullagiinId = orshinSuugch.baiguullagiinId;
       userData.baiguullagiinNer = orshinSuugch.baiguullagiinNer;
     } else if (req.body.baiguullagiinId) {
-      // For NEW users without an org, set the initial primary org
+      // For NEW users or centralized-only users, set the initial primary org
       userData.baiguullagiinId = req.body.baiguullagiinId;
     }
 
@@ -1730,12 +1734,12 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
       }
     }
 
-    // 3. Preserve existing primary building - STRIKTLY IMMUTABLE
-    if (orshinSuugch && orshinSuugch.barilgiinId) {
+    // 3. Preserve existing primary building - STRIKTLY IMMUTABLE (except upgrading from centralized)
+    if (orshinSuugch && orshinSuugch.barilgiinId && String(orshinSuugch.baiguullagiinId) !== CENTRALIZED_ORG_ID) {
       // Use existing building, ignore barilgiinIdToSave for primary document
       userData.barilgiinId = orshinSuugch.barilgiinId;
     } else if (barilgiinIdToSave) {
-      // First time setting a building
+      // First time setting a building or upgrading from centralized
       userData.barilgiinId = barilgiinIdToSave;
     }
 
@@ -1933,8 +1937,8 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
         orshinSuugch.toots.push(userData.newTootEntry);
       }
 
-      // Also set as primary toot ONLY if user doesn't have one (first registration)
-      if (!orshinSuugch.baiguullagiinId) {
+      // Also set as primary toot ONLY if user doesn't have one OR is in centralized org
+      if (!orshinSuugch.baiguullagiinId || String(orshinSuugch.baiguullagiinId) === CENTRALIZED_ORG_ID) {
         orshinSuugch.toot = userData.newTootEntry.toot;
         orshinSuugch.baiguullagiinId = userData.newTootEntry.baiguullagiinId;
         orshinSuugch.barilgiinId = userData.newTootEntry.barilgiinId;
@@ -1983,9 +1987,12 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
             walletBairName,
           );
 
-          // Set centralized org as primary address
-          orshinSuugch.baiguullagiinId = CENTRALIZED_ORG_ID;
-          orshinSuugch.barilgiinId = barilgaResult.barilgiinId;
+          // Set centralized org as primary address ONLY if user doesn't have one
+          // OR if their current one is already centralized (prevents overwriting OWN_ORG)
+          if (!orshinSuugch.baiguullagiinId || String(orshinSuugch.baiguullagiinId) === CENTRALIZED_ORG_ID) {
+            orshinSuugch.baiguullagiinId = CENTRALIZED_ORG_ID;
+            orshinSuugch.barilgiinId = barilgaResult.barilgiinId;
+          }
 
           // Also add to toots array for tracking
           const walletTootEntry = {
@@ -2713,8 +2720,8 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
       userData.nuutsUg = req.body.nuutsUg;
     }
 
-    // Preserve existing baiguullagiinId if user already has one
-    if (orshinSuugch && orshinSuugch.baiguullagiinId) {
+    // Preserve existing baiguullagiinId if user already has one (and it's not centralized)
+    if (orshinSuugch && orshinSuugch.baiguullagiinId && String(orshinSuugch.baiguullagiinId) !== CENTRALIZED_ORG_ID) {
       userData.baiguullagiinId = orshinSuugch.baiguullagiinId;
       userData.baiguullagiinNer = orshinSuugch.baiguullagiinNer;
     }
@@ -2781,8 +2788,8 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
 
     if (barilgiinIdToSave) {
       userData.barilgiinId = barilgiinIdToSave;
-    } else if (orshinSuugch && orshinSuugch.barilgiinId) {
-      // Preserve existing barilgiinId if user already has one
+    } else if (orshinSuugch && orshinSuugch.barilgiinId && String(orshinSuugch.baiguullagiinId) !== CENTRALIZED_ORG_ID) {
+      // Preserve existing barilgiinId if user already has one (and it's not centralized)
       userData.barilgiinId = orshinSuugch.barilgiinId;
     }
 
@@ -2983,15 +2990,17 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
         orshinSuugch.toots.push(userData.newTootEntry);
       }
 
-      // Also set as primary toot for backward compatibility
-      orshinSuugch.toot = userData.newTootEntry.toot;
-      orshinSuugch.baiguullagiinId = userData.newTootEntry.baiguullagiinId;
-      orshinSuugch.barilgiinId = userData.newTootEntry.barilgiinId;
-      orshinSuugch.davkhar = userData.newTootEntry.davkhar; // Auto-determined from toot
-      orshinSuugch.orts = userData.newTootEntry.orts; // Auto-determined from toot
-      orshinSuugch.duureg = userData.newTootEntry.duureg;
-      orshinSuugch.horoo = userData.newTootEntry.horoo;
-      orshinSuugch.soh = userData.newTootEntry.soh;
+      // Also set as primary toot for backward compatibility ONLY if user doesn't have one or is in centralized org
+      if (!orshinSuugch.baiguullagiinId || String(orshinSuugch.baiguullagiinId) === CENTRALIZED_ORG_ID) {
+        orshinSuugch.toot = userData.newTootEntry.toot;
+        orshinSuugch.baiguullagiinId = userData.newTootEntry.baiguullagiinId;
+        orshinSuugch.barilgiinId = userData.newTootEntry.barilgiinId;
+        orshinSuugch.davkhar = userData.newTootEntry.davkhar; // Auto-determined from toot
+        orshinSuugch.orts = userData.newTootEntry.orts; // Auto-determined from toot
+        orshinSuugch.duureg = userData.newTootEntry.duureg;
+        orshinSuugch.horoo = userData.newTootEntry.horoo;
+        orshinSuugch.soh = userData.newTootEntry.soh;
+      }
     } else if (
       req.body.bairId &&
       req.body.doorNo &&
@@ -3011,9 +3020,11 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
             walletBairName,
           );
 
-          // Set centralized org as primary address
-          orshinSuugch.baiguullagiinId = CENTRALIZED_ORG_ID;
-          orshinSuugch.barilgiinId = barilgaResult.barilgiinId;
+          // Set centralized org as primary address ONLY if user doesn't have one or is already centralized
+          if (!orshinSuugch.baiguullagiinId || String(orshinSuugch.baiguullagiinId) === CENTRALIZED_ORG_ID) {
+            orshinSuugch.baiguullagiinId = CENTRALIZED_ORG_ID;
+            orshinSuugch.barilgiinId = barilgaResult.barilgiinId;
+          }
 
           // Also add to toots array for tracking
           const walletTootEntry = {
@@ -3793,8 +3804,11 @@ exports.walletBillingHavakh = asyncHandler(async (req, res, next) => {
       
       if (walletBairName && bairId) {
         const barilgaResult = await findOrCreateBarilgaFromWallet(bairId, walletBairName);
-        updateData.baiguullagiinId = CENTRALIZED_ORG_ID;
-        updateData.barilgiinId = barilgaResult.barilgiinId;
+        // Set centralized org as primary address ONLY if user doesn't have one or is already centralized
+        if (!orshinSuugch.baiguullagiinId || String(orshinSuugch.baiguullagiinId) === CENTRALIZED_ORG_ID) {
+          updateData.baiguullagiinId = CENTRALIZED_ORG_ID;
+          updateData.barilgiinId = barilgaResult.barilgiinId;
+        }
       }
     } catch (bErr) {}
 
