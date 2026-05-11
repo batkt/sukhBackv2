@@ -4864,16 +4864,15 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
       // Don't block deletion if audit logging fails
     }
 
-    // Actually delete the orshinSuugch user account
-    // The gerees are marked as "Цуцалсан" and can be restored when they register again with the same utas
-    console.log(`🗑️ [TRACE-DELETE-RESIDENT] Attempting to delete resident: ${userId}.`);
-    // Note: This operation should NOT affect Baiguullaga.
-    await OrshinSuugchModel.findByIdAndDelete(userId);
-    console.log(`✅ [TRACE-DELETE-RESIDENT] Resident ${userId} deleted successfully.`);
+    // Clear the plate registration from the resident profile
+    orshinSuugch.mashiniiDugaar = "";
+    await orshinSuugch.save();
+
+    console.log(`✅ [DELETE-RESIDENT] Resident ${userId} vehicle data cleared and contracts cancelled. Record preserved.`);
 
     res.status(200).json({
       success: true,
-      message: "Хэрэглэгчийн данс устгагдлаа. Бүх мэдээлэл хадгалагдсан байна.",
+      message: "Бүртгэл амжилттай цуцлагдлаа. Машины мэдээлэл устгагдсан.",
       data: {
         userId: userId,
         status: "Cancelled"
