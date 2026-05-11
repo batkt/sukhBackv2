@@ -2341,6 +2341,8 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
                 utas: [orshinSuugch.utas],
                 mail: orshinSuugch.mail || existingCancelledGeree.mail,
                 tailbar: existingCancelledGeree.tailbar || "", // Preserve tailbar if exists
+                khonogoorBodokhEsekh: tootEntry.khonogoorBodokhEsekh ?? orshinSuugch.khonogoorBodokhEsekh ?? false,
+                bodokhKhonog: tootEntry.bodokhKhonog ?? orshinSuugch.bodokhKhonog ?? 0,
               };
 
               await GereeModel.findByIdAndUpdate(existingCancelledGeree._id, {
@@ -2457,7 +2459,9 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
               tailbar: "",
               actOgnoo: new Date(),
               baritsaaniiUldegdel: 0,
-              ekhniiUldegdel: orshinSuugch.ekhniiUldegdel || 0,
+              ekhniiUldegdel: tootEntry.ekhniiUldegdel ?? orshinSuugch.ekhniiUldegdel ?? 0,
+               khonogoorBodokhEsekh: tootEntry.khonogoorBodokhEsekh ?? orshinSuugch.khonogoorBodokhEsekh ?? false,
+               bodokhKhonog: tootEntry.bodokhKhonog ?? orshinSuugch.bodokhKhonog ?? 0,
               zardluud: zardluudArray,
               segmentuud: [],
               khungulultuud: [],
@@ -2622,6 +2626,8 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
                       actOgnoo: new Date(),
                       baritsaaniiUldegdel: 0,
                       ekhniiUldegdel: orshinSuugch.ekhniiUldegdel || 0,
+                      khonogoorBodokhEsekh: orshinSuugch.khonogoorBodokhEsekh || false,
+                      bodokhKhonog: orshinSuugch.bodokhKhonog || 0,
                       zardluud: zardluudArray,
                       segmentuud: [],
                       khungulultuud: [],

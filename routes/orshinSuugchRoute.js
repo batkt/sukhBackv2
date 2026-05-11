@@ -547,6 +547,12 @@ router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
       if (req.body.tsahilgaaniiZaalt === undefined && firstToot.tsahilgaaniiZaalt !== undefined) {
         req.body.tsahilgaaniiZaalt = firstToot.tsahilgaaniiZaalt;
       }
+      if (req.body.khonogoorBodokhEsekh === undefined && firstToot.khonogoorBodokhEsekh !== undefined) {
+        req.body.khonogoorBodokhEsekh = firstToot.khonogoorBodokhEsekh;
+      }
+      if (req.body.bodokhKhonog === undefined && firstToot.bodokhKhonog !== undefined) {
+        req.body.bodokhKhonog = firstToot.bodokhKhonog;
+      }
     }
     const orts = req.body.orts ? String(req.body.orts).trim() : "";
     if (toot && (barilgiinId || baiguullagiinId)) {
@@ -694,6 +700,8 @@ router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
                 ekhniiUldegdel: result.ekhniiUldegdel || 0,
                 umnukhZaalt: result.tsahilgaaniiZaalt || 0,
                 suuliinZaalt: result.tsahilgaaniiZaalt || 0,
+                khonogoorBodokhEsekh: result.khonogoorBodokhEsekh || false,
+                bodokhKhonog: result.bodokhKhonog || 0,
                 zardluud: zardluudArray,
                 segmentuud: [],
                 khungulultuud: [],
@@ -1098,6 +1106,12 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
                 }
                 if (unit.ekhniiUldegdel !== undefined) {
                   unitSyncData.ekhniiUldegdel = parseFloat(unit.ekhniiUldegdel) || 0;
+                }
+                if (unit.khonogoorBodokhEsekh !== undefined) {
+                  unitSyncData.khonogoorBodokhEsekh = unit.khonogoorBodokhEsekh === true || unit.khonogoorBodokhEsekh === "true";
+                }
+                if (unit.bodokhKhonog !== undefined) {
+                  unitSyncData.bodokhKhonog = Number(unit.bodokhKhonog) || 0;
                 }
 
                 if (Object.keys(unitSyncData).length > 0) {

@@ -35,6 +35,14 @@ const orshinSuugchSchema = new Schema(
         walletDoorNo: String, // Keer multiple wallet accounts
         ekhniiUldegdel: Number,
         tsahilgaaniiZaalt: Number,
+        khonogoorBodokhEsekh: {
+          type: Boolean,
+          default: false,
+        },
+        bodokhKhonog: {
+          type: Number,
+          default: 0,
+        },
         createdAt: {
           type: Date,
           default: Date.now,
