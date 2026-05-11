@@ -4716,6 +4716,13 @@ exports.orshinSuugchOorooUstgakh = asyncHandler(async (req, res, next) => {
           { orshinSuugchId: userIdString },
           { $set: { tuluv: "Цуцалсан", tsutsalsanOgnoo: new Date() } }
         );
+
+        // Invalidate all vehicle registrations
+        const Mashin = require("../models/mashin");
+        await Mashin(conn).updateMany(
+          { ezemshigchiinId: userIdString },
+          { $set: { tuluv: "Цуцалсан", temdeglel: "Оршин суугч өөрөө устгагдсан тул цуцлав." } }
+        );
       }
     }
 
@@ -4803,6 +4810,13 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
         await Geree(conn).updateMany(
           { orshinSuugchId: userIdString },
           { $set: { tuluv: "Цуцалсан", tsutsalsanOgnoo: new Date() } }
+        );
+
+        // Invalidate all vehicle registrations
+        const Mashin = require("../models/mashin");
+        await Mashin(conn).updateMany(
+          { ezemshigchiinId: userIdString },
+          { $set: { tuluv: "Цуцалсан", temdeglel: "Админ оршин суугчийг устгасан тул цуцлав." } }
         );
       }
     }
@@ -5229,6 +5243,17 @@ exports.orshinSuugchTootUstgakh = asyncHandler(async (req, res, next) => {
         },
         { $set: { tuluv: "Цуцалсан", tsutsalsanOgnoo: new Date() } },
       );
+
+      // Invalidate vehicle registrations for this unit
+      const Mashin = require("../models/mashin");
+      await Mashin(conn).updateMany(
+        {
+          ezemshigchiinId: String(residentId),
+          ezenToot: String(toot).trim(),
+          ...(barilgiinId ? { barilgiinId: String(barilgiinId) } : {}),
+        },
+        { $set: { tuluv: "Цуцалсан", temdeglel: "Тоот устгагдсан тул цуцлав." } }
+      );
     }
 
     res.json({
@@ -5321,6 +5346,18 @@ exports.syncResidentContracts = async function syncResidentContracts(
           temdeglel: `Системээс автоматаар цуцлагдсан (${reason})`
         }
       });
+
+      // Invalidate car registrations for this unit
+      const Mashin = require("../models/mashin");
+      const MashinModel = Mashin(tukhainBaaziinKholbolt);
+      await MashinModel.updateMany(
+        { 
+          ezemshigchiinId: String(orshinSuugch._id),
+          ezenToot: String(g.toot).trim(),
+          barilgiinId: String(g.barilgiinId)
+        },
+        { $set: { tuluv: "Цуцалсан", temdeglel: `Гэрээ цуцлагдсан (${reason}) тул цуцлав.` } }
+      );
     } else {
       activeKeysFound.add(key);
     }
@@ -5357,7 +5394,24 @@ exports.syncResidentContracts = async function syncResidentContracts(
     });
 
     if (existingActiveGeree) {
-      // Already has an active contract, update its details if needed but skip creation
+      // Update existing contract with new resident details and pro-rating settings
+      const isUnitProrating = tootEntry.khonogoorBodokhEsekh !== undefined
+        ? tootEntry.khonogoorBodokhEsekh
+        : (req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true");
+      
+      await GereeModel.findByIdAndUpdate(existingActiveGeree._id, {
+        $set: {
+          ovog: req.body.ovog || orshinSuugch.ovog || existingActiveGeree.ovog,
+          ner: req.body.ner || orshinSuugch.ner || existingActiveGeree.ner,
+          register: req.body.register || orshinSuugch.register || existingActiveGeree.register,
+          utas: Array.isArray(orshinSuugch.utas) ? orshinSuugch.utas : [orshinSuugch.utas],
+          mail: req.body.mail || orshinSuugch.mail || existingActiveGeree.mail,
+          khonogoorBodokhEsekh: isUnitProrating,
+          bodokhKhonog: tootEntry.bodokhKhonog !== undefined
+            ? Number(tootEntry.bodokhKhonog)
+            : Number(req.body.bodokhKhonog) || 0,
+        }
+      });
       continue;
     }
 

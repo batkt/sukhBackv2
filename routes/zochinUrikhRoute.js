@@ -930,7 +930,7 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
   try {
     const OrshinSuugch = require("../models/orshinSuugch");
     const Mashin = require("../models/mashin");
-    const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
+    const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt || db.erunkhiiKholbolt;
     const { db } = require("zevbackv2");
     
     const page = parseInt(req.query.khuudasniiDugaar) || 1;
@@ -1171,7 +1171,9 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
 router.delete("/zochinUstgaya/:id", tokenShalgakh, async (req, res, next) => {
   try {
     const Mashin = require("../models/mashin");
-    const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
+    const { db } = require("zevbackv2");
+    const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt || db.erunkhiiKholbolt;
+
     const mashinId = req.params.id;
 
     if (!mashinId) {
