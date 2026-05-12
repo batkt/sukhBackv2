@@ -320,30 +320,59 @@ exports.walletBillingBills = asyncHandler(async (req, res, next) => {
     const data = Array.isArray(bills) ? bills : [];
 
     // Ensure all bills are properly sanitized (double-check)
-    const sanitizedData = data.map((bill) => {
-      const sanitized = {};
-      for (const key in bill) {
-        if (bill.hasOwnProperty(key)) {
-          const value = bill[key];
+    // Enrich with local status
+    const { db } = require("zevbackv2");
+    const WalletInvoice = require("../models/walletInvoice");
+    const WalletPayment = require("../models/walletPayment");
+    const WalletInvoiceModel = WalletInvoice(db.erunkhiiKholbolt);
+    const WalletPaymentModel = WalletPayment(db.erunkhiiKholbolt);
 
-          // Convert null/undefined to empty string for all fields
-          if (value === null || value === undefined) {
-            sanitized[key] = "";
-          } else if (Array.isArray(value)) {
-            sanitized[key] = value.map((item) => {
-              return item === null || item === undefined ? "" : item;
-            });
-          } else {
-            sanitized[key] = value;
+    const enrichedData = await Promise.all(
+      data.map(async (bill) => {
+        const sanitized = {};
+        for (const key in bill) {
+          if (bill.hasOwnProperty(key)) {
+            const value = bill[key];
+            if (value === null || value === undefined) {
+              sanitized[key] = "";
+            } else if (Array.isArray(value)) {
+              sanitized[key] = value.map((item) =>
+                item === null || item === undefined ? "" : item,
+              );
+            } else {
+              sanitized[key] = value;
+            }
           }
         }
-      }
-      return sanitized;
-    });
+
+        // Check if this specific bill is linked to a PAID local invoice
+        const billId = sanitized.billId || sanitized.id;
+        if (billId) {
+          const linkedInvoice = await WalletInvoiceModel.findOne({
+            billIds: billId,
+          })
+            .sort({ createdAt: -1 })
+            .lean();
+          if (linkedInvoice && linkedInvoice.walletPaymentId) {
+            const localPayment = await WalletPaymentModel.findOne({
+              paymentId: linkedInvoice.walletPaymentId,
+              status: "PAID",
+            }).lean();
+            if (localPayment) {
+              sanitized.isLocallyPaid = true;
+              sanitized.localPaymentId = localPayment.qpayPaymentId;
+              sanitized.localPaymentDate = localPayment.createdAt;
+            }
+          }
+        }
+
+        return sanitized;
+      }),
+    );
 
     res.status(200).json({
       success: true,
-      data: sanitizedData,
+      data: enrichedData,
     });
   } catch (err) {
     console.error("❌ [WALLET BILLING BILLS] Error:", err.message);
@@ -370,7 +399,39 @@ exports.walletBillingPayments = asyncHandler(async (req, res, next) => {
       userId,
       billingId,
     );
-    const data = Array.isArray(payments) ? payments : [];
+    let data = Array.isArray(payments) ? payments : [];
+
+    // Enrich each payment with local status and QPay info
+    try {
+      const { db } = require("zevbackv2");
+      const WalletPayment = require("../models/walletPayment");
+      const WalletPaymentModel = WalletPayment(db.erunkhiiKholbolt);
+
+      const enrichedData = await Promise.all(
+        data.map(async (payment) => {
+          const p = { ...payment };
+          // Check local DB by paymentId
+          const localPayment = await WalletPaymentModel.findOne({
+            paymentId: payment.paymentId || payment.id,
+          });
+
+          if (localPayment) {
+            p.isPaid = localPayment.status === "PAID";
+            p.qpayPaymentId = localPayment.qpayPaymentId;
+            p.trxNo = localPayment.trxNo;
+            p.paymentStatus = localPayment.status;
+            p.localSync = true;
+          }
+          return p;
+        }),
+      );
+      data = enrichedData;
+    } catch (enrichErr) {
+      console.warn(
+        "⚠️ [WALLET PAYMENTS LIST] Could not enrich with local data:",
+        enrichErr.message,
+      );
+    }
 
     res.status(200).json({
       success: true,
@@ -895,6 +956,36 @@ exports.walletInvoiceGet = asyncHandler(async (req, res, next) => {
       });
     }
 
+    // Enrich with local payment status and QPay ID
+    try {
+      const { db } = require("zevbackv2");
+      const WalletInvoice = require("../models/walletInvoice");
+      const WalletPayment = require("../models/walletPayment");
+
+      const localInvoice = await WalletInvoice(db.erunkhiiKholbolt).findOne({
+        walletInvoiceId: invoiceId,
+      });
+
+      if (localInvoice) {
+        invoice.localInfo = localInvoice;
+        if (localInvoice.walletPaymentId) {
+          const localPayment = await WalletPayment(db.erunkhiiKholbolt).findOne({
+            paymentId: localInvoice.walletPaymentId,
+          });
+          if (localPayment) {
+            invoice.isPaid = localPayment.status === "PAID";
+            invoice.qpayPaymentId = localPayment.qpayPaymentId;
+            invoice.trxNo = localPayment.trxNo;
+            invoice.paymentStatus = localPayment.status;
+          }
+        }
+      }
+    } catch (enrichErr) {
+      console.warn(
+        "⚠️ [WALLET INVOICE GET] Could not enrich with local data:",
+        enrichErr.message,
+      );
+    }
 
     res.status(200).json({
       success: true,
@@ -1141,14 +1232,22 @@ exports.walletUserEdit = asyncHandler(async (req, res, next) => {
 });
 exports.walletChatCreate = asyncHandler(async (req, res, next) => {
   try {
+    console.log("📥 [WALLET CHAT CREATE] Body:", JSON.stringify(req.body));
     const { userId } = await getUserIdFromToken(req);
-    const { paymentId, reason } = req.body;
+    const { paymentId, objectId, reason } = req.body;
 
-    if (!paymentId || !reason) {
-      throw new aldaa("Төлбөрийн ID болон шалтгаан заавал бөглөх шаардлагатай!");
+    if ((!paymentId && !objectId) || !reason) {
+      throw new aldaa(
+        "Төлбөрийн ID (эсвэл Объектын ID) болон шалтгаан заавал бөглөх шаардлагатай!",
+      );
     }
 
-    const result = await walletApiService.createChat(userId, paymentId, reason);
+    const result = await walletApiService.createChat(
+      userId,
+      paymentId,
+      reason,
+      objectId,
+    );
     res.status(200).json({
       success: true,
       data: result,
