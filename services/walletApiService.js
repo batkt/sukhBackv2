@@ -1169,6 +1169,7 @@ async function getPayment(userId, paymentId) {
 
 async function updateQPayPayment(userId, paymentId, qpayData) {
   try {
+    console.log(`📤 [WALLET API] Calling paidByQpay (updateQPayPayment) for userId=${userId}, paymentId=${paymentId}, trxNo=${qpayData.trxNo || 'N/A'}`);
     const token = await getWalletServiceToken();
     
     const response = await axios.put(

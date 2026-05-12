@@ -276,7 +276,6 @@ exports.walletBillingBills = asyncHandler(async (req, res, next) => {
   try {
     // For billing endpoints, Wallet-Service requires phone number as userId, not walletUserId
     const { db } = require("zevbackv2");
-    const OrshinSuugch = require("../models/orshinSuugch");
     const jwt = require("jsonwebtoken");
     const token = req.headers.authorization.split(" ")[1];
     const tokenObject = jwt.verify(token, process.env.APP_SECRET);
@@ -462,7 +461,6 @@ exports.walletBillingSave = asyncHandler(async (req, res, next) => {
     // Sync local orshinSuugch toots array
     try {
       const { db } = require("zevbackv2");
-      const OrshinSuugch = require("../models/orshinSuugch");
       const jwt = require("jsonwebtoken");
       const token = req.headers.authorization.split(" ")[1];
       const tokenObject = jwt.verify(token, process.env.APP_SECRET);
@@ -563,7 +561,6 @@ exports.walletBillingSave = asyncHandler(async (req, res, next) => {
 exports.walletBillingRemove = asyncHandler(async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
-    const OrshinSuugch = require("../models/orshinSuugch");
     const jwt = require("jsonwebtoken");
     const token = req.headers.authorization.split(" ")[1];
     const tokenObject = jwt.verify(token, process.env.APP_SECRET);
@@ -772,7 +769,6 @@ exports.walletBillingRemove = asyncHandler(async (req, res, next) => {
 exports.walletBillRemove = asyncHandler(async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
-    const OrshinSuugch = require("../models/orshinSuugch");
     const jwt = require("jsonwebtoken");
     const token = req.headers.authorization.split(" ")[1];
     const tokenObject = jwt.verify(token, process.env.APP_SECRET);
@@ -857,7 +853,6 @@ exports.walletBillingChangeName = asyncHandler(async (req, res, next) => {
 exports.walletBillingSetNickname = asyncHandler(async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
-    const OrshinSuugch = require("../models/orshinSuugch");
     const jwt = require("jsonwebtoken");
     if (!req.headers.authorization) {
       throw new aldaa("Нэвтрэх шаардлагатай!");

@@ -287,6 +287,8 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
     baiguullagiinId +
     "/" +
     walletPaymentId;
+  
+  console.log(`🔗 [WALLET QPAY] Generated callback URL: ${callback_url}`);
 
   let qpayResult;
   try {
@@ -384,7 +386,9 @@ exports.walletQpayCallback = asyncHandler(async (req, res, next) => {
   const { db } = require("zevbackv2");
   const { baiguullagiinId, walletPaymentId } = req.params;
 
-  console.log(`📥 [WALLET QPAY CALLBACK] baiguullagiinId=${baiguullagiinId}, walletPaymentId=${walletPaymentId}`);
+  console.log(`📥 [WALLET QPAY CALLBACK] ENTERED - baiguullagiinId=${baiguullagiinId}, walletPaymentId=${walletPaymentId}`);
+  console.log(`📥 [WALLET QPAY CALLBACK] Query: ${JSON.stringify(req.query)}`);
+  console.log(`📥 [WALLET QPAY CALLBACK] Body: ${JSON.stringify(req.body)}`);
 
   const tukhainBaaziinKholbolt = db.kholboltuud.find(
     (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
