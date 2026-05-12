@@ -46,6 +46,10 @@ const transformationRoute = require("./routes/transformationRoute");
 const walletQpayRoute = require("./routes/walletQpayRoute");
 const appVersionRoute = require("./routes/appVersionRoute");
 const blogRoute = require("./routes/blogRoute");
+const cameraRoute = require("./routes/cameraRoute");
+const neeyeRoute = require("./routes/neeyeRoute");
+
+
 
 const { db } = require("zevbackv2");
 
@@ -94,6 +98,15 @@ process.env.UV_THREADPOOL_SIZE = 20;
     // 4. Final settings
     process.env.TZ = "Asia/Ulaanbaatar";
     app.set("socketio", io);
+
+    // --- GATE WORKER SOCKET REGISTRATION ---
+    io.on("connection", (socket) => {
+      socket.on("register-gate-worker", (barilgiinId) => {
+        socket.join(`gate-room-${barilgiinId}`);
+        console.log(`🏠 [SOCKET] Local Gate Worker registered for Building: ${barilgiinId}`);
+      });
+    });
+
 
     // 5. Start the HTTP server
     const PORT = process.env.PORT || 8084;
@@ -267,6 +280,10 @@ app.use(transformationRoute);
 // walletQpayRoute moved to top
 app.use(appVersionRoute);
 app.use(blogRoute);
+app.use(cameraRoute);
+app.use(neeyeRoute);
+
+
 
 app.use(aldaaBarigch);
 
