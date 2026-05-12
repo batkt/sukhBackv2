@@ -321,7 +321,6 @@ exports.walletBillingBills = asyncHandler(async (req, res, next) => {
 
     // Ensure all bills are properly sanitized (double-check)
     // Enrich with local status
-    const { db } = require("zevbackv2");
     const WalletInvoice = require("../models/walletInvoice");
     const WalletPayment = require("../models/walletPayment");
     const WalletInvoiceModel = WalletInvoice(db.erunkhiiKholbolt);
@@ -403,8 +402,8 @@ exports.walletBillingPayments = asyncHandler(async (req, res, next) => {
 
     // Enrich each payment with local status and QPay info
     try {
-      const { db } = require("zevbackv2");
       const WalletPayment = require("../models/walletPayment");
+      const { db } = require("zevbackv2");
       const WalletPaymentModel = WalletPayment(db.erunkhiiKholbolt);
 
       const enrichedData = await Promise.all(
