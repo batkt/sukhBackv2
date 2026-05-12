@@ -421,18 +421,35 @@ exports.walletQpayCallback = asyncHandler(async (req, res, next) => {
     return res.status(404).send("Payment not found");
   }
 
+  console.log(`💰 [QPAY CALLBACK] Hit for org=${baiguullagiinId}, paymentId=${walletPaymentId}`);
+  if (Object.keys(req.body).length > 0) {
+    console.log(`📦 [QPAY CALLBACK] Body:`, JSON.stringify(req.body));
+  }
+  if (Object.keys(req.query).length > 0) {
+    console.log(`❓ [QPAY CALLBACK] Query:`, JSON.stringify(req.query));
+  }
+
   /* ── 2. Settle ── */
   const io = req.app.get("socketio");
   
-  // Qpay-с webhook хэлбэрээр (POST) ирж магадгүй тул req.body давхар шалгана
-  const qpayPaymentIdReq = req.query?.qpay_payment_id || req.body?.qpay_payment_id || req.body?.payment_id || null;
+  // Extract all possible identifiers from query or body (support both snake_case and camelCase)
+  const body = { ...req.query, ...req.body };
+  const qpayPaymentIdReq = body.qpay_payment_id || body.payment_id || body.qpayPaymentId || null;
+  
+  const extraData = {
+    qpayPaymentId: qpayPaymentIdReq,
+    trxNo: body.trxNo || body.trx_no || null,
+    trxDate: body.trxDate || body.trx_date || null,
+    amount: body.amount || body.dun || null
+  };
 
   await settleWalletPayment(
     qpayObject,
     tukhainBaaziinKholbolt,
     baiguullagiinId,
     qpayPaymentIdReq,
-    io
+    io,
+    extraData
   );
 
   res.sendStatus(200);
@@ -681,7 +698,7 @@ exports.debugWalletCheck = asyncHandler(async (req, res, next) => {
   res.set("Pragma", "no-cache");
   res.set("Expires", "0");
 
-  console.log(`🔍 [WALLET CHECK] baiguullagiinId=${baiguullagiinId}, searchId=${searchId}`);
+  // console.log(`🔍 [WALLET CHECK] baiguullagiinId=${baiguullagiinId}, searchId=${searchId}`);
 
   const tukhainBaaziinKholbolt = db.kholboltuud.find(
     (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
@@ -1117,12 +1134,19 @@ async function settleWalletPayment(
   tukhainBaaziinKholbolt,
   baiguullagiinId,
   qpayPaymentIdFromRequest = null,
-  io = null
+  io = null,
+  extraData = {}
 ) {
   const { db } = require("zevbackv2");
-  if (qpayObject.tulsunEsekh) return;
+  if (qpayObject.tulsunEsekh) {
+    console.log(`ℹ️ [WALLET QPAY] Payment ${qpayObject.walletPaymentId} already marked PAID. Skipping.`);
+    return;
+  }
 
   console.log(`🚀 [WALLET QPAY] Settling payment: ${qpayObject.walletPaymentId}`);
+  if (extraData && Object.keys(extraData).length > 0) {
+    console.log(`📝 [WALLET QPAY] Using extra data:`, JSON.stringify(extraData));
+  }
 
   /* ── 1. Mark paid locally ── */
   qpayObject.tulsunEsekh = true;
@@ -1132,10 +1156,16 @@ async function settleWalletPayment(
   }
 
   // Strictly use invoice_id and legacy_id as per user requirement
-  let qpayPaymentId = qpayObject.invoice_id || "";
-  let trxNo = qpayObject.legacy_id || "";
-  let trxDate = new Date().toISOString();
-  let trxAmount = parseFloat(qpayObject.qpay?.amount || 0);
+  // FALLBACK hierarchy for identifiers:
+  // 1. extraData (from direct callback body)
+  // 2. qpayPaymentIdFromRequest
+  // 3. qpayObject existing fields
+  // 4. invoice_id (QR ID)
+  
+  let qpayPaymentId = extraData.qpayPaymentId || qpayPaymentIdFromRequest || qpayObject.payment_id || qpayObject.invoice_id || "";
+  let trxNo = extraData.trxNo || qpayObject.legacy_id || "";
+  let trxDate = extraData.trxDate || new Date().toISOString();
+  let trxAmount = parseFloat(extraData.amount || qpayObject.qpay?.amount || 0);
 
   if (qpayObject.invoice_id) {
     try {
@@ -1145,11 +1175,17 @@ async function settleWalletPayment(
       );
       if (checkResult?.payments?.[0]) {
         const payment = checkResult.payments[0];
-        // qpayPaymentId is strictly invoice_id
+        // Only override if not provided in request
+        if (!extraData.qpayPaymentId && !qpayPaymentIdFromRequest) {
+           // If we don't have a specific payment_id from callback, check if checkResult has one
+           // However, usually invoice_id is what's used if no specific transaction is found
+        }
+        
         if (payment.transactions?.[0]) {
-          // trxNo is strictly legacy_id
-          trxDate = payment.transactions[0].settlement_date || payment.transactions[0].date || trxDate;
-          trxAmount = payment.transactions[0].amount || trxAmount;
+          const trx = payment.transactions[0];
+          if (!extraData.trxNo) trxNo = trx.id || trxNo;
+          if (!extraData.trxDate) trxDate = trx.settlement_date || trx.date || trxDate;
+          if (!extraData.amount) trxAmount = trx.amount || trxAmount;
         }
       }
     } catch (checkErr) {
@@ -1182,8 +1218,8 @@ async function settleWalletPayment(
 
   if (userId) {
     try {
-      // ── Read receiver details from bank_accounts[0] (actual QPay schema field) ──
-      const bankAccount = qpayObject.qpay?.bank_accounts?.[0] || {};
+      // ── Read receiver details from actual QPay schema fields ──
+      const bankAccount = qpayObject.qpay?.bank_accounts?.[0] || qpayObject.qpay?.custom_bank_accounts?.[0] || {};
       const paidByQpayData = {
         qpayPaymentId: qpayPaymentId,
         trxDate: trxDate,
@@ -1528,10 +1564,23 @@ async function handleWalletEbarimt(
  *        GET /walletQpay/webhook?objectId=...&objectType=...&notificationId=...&userId=...
  */
 exports.walletWebhook = asyncHandler(async (req, res, next) => {
-  const { objectId, objectType, notificationId, userId } = req.query;
+  let { objectId, objectType, notificationId, userId } = { ...req.query, ...req.body };
   const { db } = require("zevbackv2");
 
+  // Support direct QPay/Bank notification format (e.g. from eBill notification service)
+  if (!objectId && req.body.trxDescription && req.body.trxDescription.includes("eBill:")) {
+    const match = req.body.trxDescription.match(/eBill:\s*(\d+)/);
+    if (match) {
+      objectId = match[1];
+      objectType = "PAYMENT";
+      console.log(`ℹ️ [WALLET WEBHOOK] Auto-detected objectId=${objectId} from trxDescription`);
+    }
+  }
+
   console.log(`🔔 [WALLET WEBHOOK] Received notification: notificationId=${notificationId}, type=${objectType}, objectId=${objectId}`);
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log(`📦 [WALLET WEBHOOK] Raw Body:`, JSON.stringify(req.body));
+  }
 
   // Process based on objectType
   if (objectType === "PAYMENT" && objectId) {
@@ -1589,7 +1638,10 @@ exports.walletWebhook = asyncHandler(async (req, res, next) => {
 
       // 2. Fetch the QPay object from the tenant DB
       const qpayObject = await QuickQpayObject(tukhainBaaziinKholbolt).findOne({
-        walletPaymentId: objectId
+        $or: [
+          { walletPaymentId: objectId },
+          { walletInvoiceId: objectId }
+        ]
       });
 
       if (!qpayObject) {
@@ -1619,7 +1671,8 @@ exports.walletWebhook = asyncHandler(async (req, res, next) => {
           tukhainBaaziinKholbolt,
           baiguullagiinId,
           qpayPaymentId,
-          req.app.get("socketio")
+          req.app.get("socketio"),
+          req.body
         );
         
         console.log(`✅ [WALLET WEBHOOK] Settlement completed for payment: ${objectId}`);

@@ -65,6 +65,7 @@ const walletQpayController = require("../controller/walletQpayController");
  * @access Public
  */
 router.get("/webhook", walletQpayController.walletWebhook);
+router.post("/webhook", walletQpayController.walletWebhook);
 
 module.exports = router;
 
