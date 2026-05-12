@@ -1,68 +1,84 @@
 const express = require("express");
 const router = express.Router();
-const axios = require("axios");
+const { v4: uuidv4 } = require("uuid");
+
+// Global map to track pending WebRTC signaling requests
+const pendingSignaling = new Map();
 
 /**
- * Camera Stream Proxy Route
- * Handles WebRTC/RTSP streaming requests from R2WPlayer
- * 
- * Path: POST /camera/stream/stream
+ * WebRTC Signaling Route
+ * Bridges the browser's SDP offer to the local PC worker via Socket.io
  */
 router.post("/camera/stream/stream", async (req, res) => {
-  try {
     const { rtsp, url, sdp64 } = req.body;
+    const barilgiinId = req.body.barilgiinId || req.query.barilgiinId;
     const rtspUrl = rtsp || url;
-
-    if (!rtspUrl) {
-      console.error("[Camera] Missing RTSP URL in request body:", req.body);
-      return res.status(400).json({ error: "RTSP URL is required" });
+    
+    // We need barilgiinId to know which local PC to talk to
+    if (!barilgiinId) {
+        return res.status(400).json({ error: "barilgiinId is required for remote streaming" });
     }
 
-    // go2rtc WebRTC API format: POST /api/webrtc?src={RTSP_URL}
-    // Note: go2rtc default port is 1984, but we'll stick to 8083 if that's your config
-    const streamingProxyUrl = process.env.STREAMING_PROXY_URL || "http://127.0.0.1:1984/api/webrtc";
-    const targetUrl = `${streamingProxyUrl}?src=${encodeURIComponent(rtspUrl)}`;
+    if (!rtspUrl || !sdp64) {
+        return res.status(400).json({ error: "RTSP URL and SDP are required" });
+    }
 
-    console.log(`[Camera] Requesting WebRTC stream from go2rtc: ${targetUrl}`);
+    const io = req.app.get("socketio");
+    if (!io) {
+        return res.status(500).json({ error: "Socket.io not initialized" });
+    }
+
+    // Generate a unique ID for this specific handshake
+    const correlationId = uuidv4();
+    const roomName = `gate-room-${barilgiinId}`;
+
+    console.log(`[Camera] 📡 Relaying WebRTC offer for ${rtspUrl} to room: ${roomName}`);
+
+    // Set up a promise to wait for the answer from the local worker
+    const waitForAnswer = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            pendingSignaling.delete(correlationId);
+            reject(new Error("Timeout waiting for local worker response"));
+        }, 15000); // 15 second timeout
+
+        pendingSignaling.set(correlationId, { resolve, timeout });
+    });
+
+    // Send the offer to the local worker via Socket
+    io.to(roomName).emit("webrtc-offer", {
+        correlationId,
+        rtspUrl,
+        sdp64
+    });
 
     try {
-      // go2rtc expects the SDP (base64) as a raw text body
-      const response = await axios({
-        method: "post",
-        url: targetUrl,
-        data: sdp64,
-        headers: {
-          "Content-Type": "text/plain"
-        },
-        timeout: 10000
-      });
-
-      // go2rtc returns the SDP Answer as raw text
-      return res.status(200).send(response.data);
-    } catch (proxyError) {
-
-      console.error("[Camera] Proxy error:", proxyError.message);
-      
-      if (proxyError.response) {
-        return res.status(proxyError.response.status).send(proxyError.response.data);
-      }
-      
-      return res.status(502).json({ 
-        error: "Streaming proxy unreachable", 
-        message: proxyError.message 
-      });
+        const sdpAnswer = await waitForAnswer;
+        return res.status(200).send(sdpAnswer);
+    } catch (error) {
+        console.error(`[Camera] ❌ Signaling failed: ${error.message}`);
+        return res.status(504).json({ error: error.message });
     }
-  } catch (error) {
-    console.error("[Camera] Route error:", error);
-    res.status(500).json({ error: "Internal server error", message: error.message });
-  }
 });
 
-// Also handle the base path just in case
-router.post("/camera/stream", async (req, res) => {
-  // Re-use the same logic or redirect
-  req.url = "/camera/stream/stream";
-  router.handle(req, res);
-});
+/**
+ * Socket listener for the local worker to send back the SDP answer
+ * This is handled in index.js usually, but we need to resolve the promise here.
+ */
+router.handleWebRTCAnswer = (data) => {
+    const { correlationId, sdpAnswer, error } = data;
+    const pending = pendingSignaling.get(correlationId);
+    
+    if (pending) {
+        clearTimeout(pending.timeout);
+        pendingSignaling.delete(correlationId);
+        
+        if (error) {
+            console.error(`[Camera] Local worker returned error: ${error}`);
+            // Logic to reject the promise if needed
+        } else {
+            pending.resolve(sdpAnswer);
+        }
+    }
+};
 
 module.exports = router;

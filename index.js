@@ -105,6 +105,11 @@ process.env.UV_THREADPOOL_SIZE = 20;
         socket.join(`gate-room-${barilgiinId}`);
         console.log(`🏠 [SOCKET] Local Gate Worker registered for Building: ${barilgiinId}`);
       });
+
+      // Handle WebRTC answers from local workers
+      socket.on("webrtc-answer", (data) => {
+        cameraRoute.handleWebRTCAnswer(data);
+      });
     });
 
 
