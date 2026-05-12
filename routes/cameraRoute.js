@@ -18,29 +18,27 @@ router.post("/camera/stream/stream", async (req, res) => {
       return res.status(400).json({ error: "RTSP URL is required" });
     }
 
-    // Forward to streaming proxy (e.g., go2rtc or similar)
-    const streamingProxyUrl = process.env.STREAMING_PROXY_URL || "http://127.0.0.1:8083/stream";
+    // go2rtc WebRTC API format: POST /api/webrtc?src={RTSP_URL}
+    // Note: go2rtc default port is 1984, but we'll stick to 8083 if that's your config
+    const streamingProxyUrl = process.env.STREAMING_PROXY_URL || "http://127.0.0.1:1984/api/webrtc";
+    const targetUrl = `${streamingProxyUrl}?src=${encodeURIComponent(rtspUrl)}`;
 
-    console.log(`[Camera] Forwarding request for ${rtspUrl} to ${streamingProxyUrl}`);
+    console.log(`[Camera] Requesting WebRTC stream from go2rtc: ${targetUrl}`);
 
     try {
-      // Forward the request to the streaming proxy
+      // go2rtc expects the SDP (base64) as a raw text body
       const response = await axios({
         method: "post",
-        url: streamingProxyUrl,
-        data: {
-          url: rtspUrl,
-          sdp64: sdp64
-        },
+        url: targetUrl,
+        data: sdp64,
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "text/plain"
         },
-        timeout: 10000 // 10 second timeout
+        timeout: 10000
       });
 
-      // Forward the response back to the client with correct headers
-      res.set(response.headers);
-      return res.status(response.status).send(response.data);
+      // go2rtc returns the SDP Answer as raw text
+      return res.status(200).send(response.data);
     } catch (proxyError) {
 
       console.error("[Camera] Proxy error:", proxyError.message);
