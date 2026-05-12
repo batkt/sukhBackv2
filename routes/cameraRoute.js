@@ -8,15 +8,15 @@ const pendingSignaling = new Map();
 /**
  * WebRTC Signaling Route
  * Bridges the browser's SDP offer to the local PC worker via Socket.io
+ * Now uses a path parameter for barilgiinId to avoid query string issues.
  */
-router.post("/camera/stream/stream", async (req, res) => {
+router.post("/camera/stream/:barilgiinId/stream", async (req, res) => {
     const { rtsp, url, sdp64 } = req.body;
-    const barilgiinId = req.body.barilgiinId || req.query.barilgiinId;
+    const { barilgiinId } = req.params;
     const rtspUrl = rtsp || url;
     
-    // We need barilgiinId to know which local PC to talk to
     if (!barilgiinId) {
-        return res.status(400).json({ error: "barilgiinId is required for remote streaming" });
+        return res.status(400).json({ error: "barilgiinId is required" });
     }
 
     if (!rtspUrl || !sdp64) {
@@ -28,23 +28,20 @@ router.post("/camera/stream/stream", async (req, res) => {
         return res.status(500).json({ error: "Socket.io not initialized" });
     }
 
-    // Generate a unique ID for this specific handshake
     const correlationId = uuidv4();
     const roomName = `gate-room-${barilgiinId}`;
 
-    console.log(`[Camera] 📡 Relaying WebRTC offer for ${rtspUrl} to room: ${roomName}`);
+    console.log(`[Camera] 📡 Relaying WebRTC offer (ID: ${correlationId}) to room: ${roomName}`);
 
-    // Set up a promise to wait for the answer from the local worker
     const waitForAnswer = new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
             pendingSignaling.delete(correlationId);
             reject(new Error("Timeout waiting for local worker response"));
-        }, 15000); // 15 second timeout
+        }, 15000);
 
         pendingSignaling.set(correlationId, { resolve, timeout });
     });
 
-    // Send the offer to the local worker via Socket
     io.to(roomName).emit("webrtc-offer", {
         correlationId,
         rtspUrl,
@@ -60,10 +57,6 @@ router.post("/camera/stream/stream", async (req, res) => {
     }
 });
 
-/**
- * Socket listener for the local worker to send back the SDP answer
- * This is handled in index.js usually, but we need to resolve the promise here.
- */
 router.handleWebRTCAnswer = (data) => {
     const { correlationId, sdpAnswer, error } = data;
     const pending = pendingSignaling.get(correlationId);
@@ -73,8 +66,7 @@ router.handleWebRTCAnswer = (data) => {
         pendingSignaling.delete(correlationId);
         
         if (error) {
-            console.error(`[Camera] Local worker returned error: ${error}`);
-            // Logic to reject the promise if needed
+            // Logic to handle error if needed
         } else {
             pending.resolve(sdpAnswer);
         }
