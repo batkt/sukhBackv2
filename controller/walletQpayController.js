@@ -696,14 +696,16 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
   
   const orshinSuugch = await getOrshinSuugchFromToken(req);
   const userPhone = orshinSuugch?.utas;
+  const walletIdentifier = await getWalletIdentifier(orshinSuugch);
   
-  if (!userPhone) {
+  if (!userPhone && !walletIdentifier) {
     throw new aldaa("Хэрэглэгчийн утас олдсонгүй. Нэвтрэх шаардлагатай.");
   }
 
   try {
+    const userIds = Array.from(new Set([userPhone, walletIdentifier].filter(Boolean)));
     const rawInvoices = await WalletInvoice(db.erunkhiiKholbolt)
-      .find({ userId: userPhone })
+      .find({ userId: { $in: userIds } })
       .sort({ createdAt: -1 })
       .limit(50)
       .lean();
@@ -720,17 +722,41 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
           ]
         }).select('tulsunEsekh updatedAt qpay.amount').lean();
         
-        let walletStatus = "UNKNOWN";
+        let walletStatus = p.walletStatus || "UNKNOWN";
         const isPaidLocally = qpayObject?.tulsunEsekh || false;
 
-        // Perform a live reconciliation check for recent PAID payments to find "stuck" ones
-        if (isPaidLocally) {
+        // Reconcile with Wallet API for recent records (not only locally-paid),
+        // so REFUNDED/PENDING transitions are visible in history.
+        try {
+          const baseDate = p.updatedAt || p.createdAt;
+          const isRecent = baseDate
+            ? (new Date() - new Date(baseDate) < 14 * 24 * 60 * 60 * 1000)
+            : true;
+
+          if (isRecent && p.walletPaymentId) {
+            const walletUserId = p.userId || walletIdentifier || userPhone;
+            if (walletUserId) {
+              const walletData = await walletApiService.getPayment(walletUserId, p.walletPaymentId);
+              if (walletData?.paymentStatus) {
+                walletStatus = String(walletData.paymentStatus).toUpperCase();
+              }
+            }
+          }
+        } catch (e) {
+          console.warn(`⚠️ [WALLET QPAY LIST] Wallet status check failed for ${p.walletPaymentId}: ${e.message}`);
+        }
+
+        // Keep "stuck" visibility for locally PAID but API still not PAID.
+        if (isPaidLocally && (walletStatus === "UNKNOWN" || walletStatus === "API_ERROR")) {
           try {
-            // Only check Wallet API for payments from the last 3 days to save performance
-            const isRecent = p.createdAt && (new Date() - new Date(p.createdAt) < 3 * 24 * 60 * 60 * 1000);
-            if (isRecent) {
-              const walletData = await walletApiService.getPayment(userPhone, p.walletPaymentId);
-              walletStatus = walletData?.paymentStatus || "PENDING";
+            if (p.walletPaymentId) {
+              const walletUserId = p.userId || walletIdentifier || userPhone;
+              if (walletUserId) {
+                const walletData = await walletApiService.getPayment(walletUserId, p.walletPaymentId);
+                walletStatus = walletData?.paymentStatus
+                  ? String(walletData.paymentStatus).toUpperCase()
+                  : "PENDING";
+              }
             }
           } catch (e) {
             walletStatus = "API_ERROR";
