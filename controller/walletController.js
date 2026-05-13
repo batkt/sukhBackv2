@@ -379,6 +379,13 @@ exports.walletBillingBills = asyncHandler(async (req, res, next) => {
       sanitized.isLocallyPaid = false;
       sanitized.localPaymentId = "";
       sanitized.localPaymentDate = "";
+      const parsedTotal =
+        Number(sanitized.billTotalAmount || sanitized.billAmount || sanitized.amount || sanitized.totalAmount || 0) || 0;
+      const parsedLateFee =
+        Number(sanitized.billLateFee || sanitized.billlateFee || sanitized.lateFee || 0) || 0;
+      sanitized.billTotalAmount = parsedTotal;
+      sanitized.billAmount = Number(sanitized.billAmount || parsedTotal) || parsedTotal;
+      sanitized.billLateFee = parsedLateFee;
       return sanitized;
     });
 
