@@ -1573,7 +1573,47 @@ router.post("/qpayShalgay", tokenShalgakh, async (req, res, next) => {
 
     const khariu = await qpayShalgay(req.body, tukhainBaaziinKholbolt);
     console.log(`✅ [QPAY-SHALGAY] Success: status=${khariu.invoice_status || khariu.tuluv || "UNKNOWN"}`);
-    console.log(`📊 [QPAY-SHALGAY] Full Response: ${JSON.stringify(khariu)}`);
+    
+    // If PAID, trigger local sync to mark as paid in our DB
+    if ((khariu.invoice_status === 'PAID' || khariu.tuluv === 'PAID') && tukhainBaaziinKholbolt) {
+      try {
+        const { QuickQpayObject } = require("quickqpaypackvSukh");
+        const qp = await QuickQpayObject(tukhainBaaziinKholbolt).findOne({ 
+          invoice_id: req.body.invoice_id 
+        }).lean();
+
+        if (qp && qp.sukhNekhemjlekh?.nekhemjlekhiinId) {
+          const nId = qp.sukhNekhemjlekh.nekhemjlekhiinId;
+          console.log(`📡 [QPAY-SHALGAY] PAID status detected. Triggering sync for invoice: ${nId}`);
+          
+          // We use the already exported callback controller logic
+          // Mocking req/res to call it
+          const { qpayNekhemjlekhCallback } = require("../controller/qpayController");
+          const mockReq = {
+            params: {
+              baiguullagiinId: baiguullagiinId,
+              nekhemjlekhiinId: nId
+            },
+            query: {
+               qpay_payment_id: khariu.payments?.[0]?.transactions?.[0]?.id
+            },
+            app: req.app
+          };
+          const mockRes = {
+            sendStatus: (code) => console.log(`📡 [QPAY-SHALGAY] Sync callback finished with code: ${code}`),
+            status: (code) => ({ send: (msg) => console.log(`📡 [QPAY-SHALGAY] Sync callback status ${code}: ${msg}`) })
+          };
+          
+          // Run it non-blocking
+          qpayNekhemjlekhCallback(mockReq, mockRes, next).catch(e => {
+            console.error(`❌ [QPAY-SHALGAY] Sync error: ${e.message}`);
+          });
+        }
+      } catch (syncErr) {
+        console.error(`❌ [QPAY-SHALGAY] Auto-sync failed: ${syncErr.message}`);
+      }
+    }
+
     res.send(khariu);
   } catch (err) {
     // If QPay API itself returns 500, try to fall back to DB invoice status
