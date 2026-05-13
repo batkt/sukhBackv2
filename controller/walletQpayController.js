@@ -711,12 +711,17 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
         ...(orshinSuugchId ? [{ orshinSuugchId }] : []),
       ],
     };
+    console.log(
+      `🔎 [WALLET QPAY LIST] userPhone=${userPhone || "-"} walletIdentifier=${walletIdentifier || "-"} orshinSuugchId=${orshinSuugchId || "-"}`
+    );
+    console.log(`🔎 [WALLET QPAY LIST] query userIds=${JSON.stringify(userIds)}`);
 
     const rawInvoices = await WalletInvoice(db.erunkhiiKholbolt)
       .find(query)
       .sort({ createdAt: -1 })
       .limit(120)
       .lean();
+    console.log(`🔎 [WALLET QPAY LIST] rawInvoices=${rawInvoices.length}`);
 
     // Deduplicate repeated metadata rows for same walletPaymentId/invoice
     const seen = new Set();
@@ -730,6 +735,7 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
       seen.add(dedupeKey);
       dedupedInvoices.push(inv);
     }
+    console.log(`🔎 [WALLET QPAY LIST] dedupedInvoices=${dedupedInvoices.length}`);
       
     // Parallelize paid-status lookups for performance
     const payments = await Promise.all(dedupedInvoices.map(async (p) => {
@@ -760,6 +766,9 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
               const walletData = await walletApiService.getPayment(walletUserId, p.walletPaymentId);
               if (walletData?.paymentStatus) {
                 walletStatus = String(walletData.paymentStatus).toUpperCase();
+                console.log(
+                  `🔎 [WALLET QPAY LIST] liveStatus walletPaymentId=${p.walletPaymentId} status=${walletStatus}`
+                );
               }
             }
           }
@@ -795,10 +804,94 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
           amount: qpayObject?.qpay?.amount || p.totalAmount
         };
     }));
+
+    // Fallback source-of-truth merge:
+    // pull billing payment history directly from Wallet API so REFUNDED attempts
+    // are not lost when local WalletInvoice metadata is incomplete.
+    const mergedPayments = [...payments];
+    const existingKeys = new Set(
+      mergedPayments.map((p) => p.walletPaymentId || p.paymentId || p.walletInvoiceId).filter(Boolean)
+    );
+
+    const billingIds = Array.from(
+      new Set(dedupedInvoices.map((p) => p.billingId).filter(Boolean))
+    );
+
+    const orgByBillingId = new Map();
+    for (const inv of dedupedInvoices) {
+      if (inv.billingId && inv.baiguullagiinId && !orgByBillingId.has(inv.billingId)) {
+        orgByBillingId.set(inv.billingId, inv.baiguullagiinId);
+      }
+    }
+
+    const walletUserIdForFallback = walletIdentifier || userPhone;
+    if (walletUserIdForFallback) {
+      for (const billingId of billingIds) {
+        try {
+          console.log(
+            `🔎 [WALLET QPAY LIST] fallback billingId=${billingId} walletUserId=${walletUserIdForFallback}`
+          );
+          const billingPayments = await walletApiService.getBillingPayments(
+            walletUserIdForFallback,
+            billingId
+          );
+          console.log(
+            `🔎 [WALLET QPAY LIST] fallbackResult billingId=${billingId} count=${(billingPayments || []).length}`
+          );
+
+          for (const bp of billingPayments || []) {
+            const status = String(bp.paymentStatus || bp.walletStatus || "UNKNOWN").toUpperCase();
+            const key = bp.paymentId || bp.walletPaymentId || bp.id;
+            if (!key || existingKeys.has(key)) continue;
+
+            // Only merge actionable states into walletQpay/list
+            if (!["PAID", "PENDING", "REFUNDED"].includes(status)) continue;
+
+            mergedPayments.push({
+              walletPaymentId: key,
+              paymentId: key,
+              walletInvoiceId: bp.invoiceId || "",
+              zakhialgiinDugaar: bp.invoiceNo || bp.invoiceId || "",
+              invoiceNo: bp.invoiceNo || bp.invoiceId || "",
+              billingId: billingId,
+              baiguullagiinId: orgByBillingId.get(billingId) || "",
+              userId: walletUserIdForFallback,
+              tulsunEsekh: status === "PAID",
+              walletStatus: status,
+              isStuck: false,
+              amount: bp.totalAmount || bp.amount || bp.paymentAmount || 0,
+              createdAt: bp.createdAt || bp.trxDate || new Date(),
+              updatedAt: bp.updatedAt || bp.trxDate || new Date(),
+              source: "WALLET_API_FALLBACK",
+            });
+            existingKeys.add(key);
+            console.log(
+              `✅ [WALLET QPAY LIST] mergedFallback paymentId=${key} status=${status} invoiceNo=${bp.invoiceNo || bp.invoiceId || "-"}`
+            );
+          }
+        } catch (fallbackErr) {
+          console.warn(
+            `⚠️ [WALLET QPAY LIST] billing payments fallback failed for billingId=${billingId}: ${fallbackErr.message}`
+          );
+        }
+      }
+    }
+
+    mergedPayments.sort(
+      (a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0)
+    );
+    const statusCounts = mergedPayments.reduce((acc, item) => {
+      const s = String(item.walletStatus || "UNKNOWN").toUpperCase();
+      acc[s] = (acc[s] || 0) + 1;
+      return acc;
+    }, {});
+    console.log(
+      `📊 [WALLET QPAY LIST] finalCount=${mergedPayments.length} statusCounts=${JSON.stringify(statusCounts)}`
+    );
       
     res.status(200).json({
       success: true,
-      data: payments
+      data: mergedPayments
     });
   } catch (err) {
     console.error("❌ [WALLET QPAY] Error getting payment list:", err.message);
