@@ -1226,7 +1226,7 @@ exports.walletUserEdit = asyncHandler(async (req, res, next) => {
 });
 exports.walletChatCreate = asyncHandler(async (req, res, next) => {
   try {
-    console.log("📥 [WALLET CHAT CREATE] Body:", JSON.stringify(req.body));
+    console.log("📥 [WALLET CHAT CREATE] Body:", req.body);
     const { userId } = await getUserIdFromToken(req);
     const { paymentId, objectId, reason, Subject, description } = req.body;
 
@@ -1302,6 +1302,18 @@ exports.walletChatSendMessage = asyncHandler(async (req, res, next) => {
     }
 
     const result = await walletApiService.sendMessage(userId, chatId, message);
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+exports.walletNotificationsGet = asyncHandler(async (req, res, next) => {
+  try {
+    const { userId } = await getUserIdFromToken(req);
+    const result = await walletApiService.getNotifications(userId);
     res.status(200).json({
       success: true,
       data: result,

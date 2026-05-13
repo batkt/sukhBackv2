@@ -58,7 +58,9 @@ router.get("/chat/:chatId", tokenShalgakh, walletChatGet);
 router.put("/chat/:chatId", tokenShalgakh, walletChatSendMessage);
 router.post("/chat/:chatId", tokenShalgakh, walletChatSendMessage);
 
-const walletQpayController = require("../controller/walletQpayController");
+router.get("/notifications", tokenShalgakh, walletNotificationsGet);
+ 
+ const walletQpayController = require("../controller/walletQpayController");
 
 /**
  * @route GET /webhook

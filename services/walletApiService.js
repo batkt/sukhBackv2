@@ -1390,7 +1390,31 @@ async function sendMessage(userId, chatId, message) {
   }
 }
 
+async function getNotifications(userId) {
+  try {
+    const token = await getWalletServiceToken();
+    const response = await axios.get(
+      `${WALLET_API_BASE_URL}/api/notifications`,
+      {
+        headers: {
+          userId: userId,
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (response.data && response.data.responseCode) {
+      return sanitizeNullValues(response.data.data);
+    }
+    return [];
+  } catch (error) {
+    console.error("❌ [WALLET API] getNotifications error:", error.message);
+    return [];
+  }
+}
+
 module.exports = {
+  getNotifications,
   getUserInfo,
   getBillingByAddress,
   getWalletServiceToken,
