@@ -131,14 +131,14 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
   let walletInvoiceId = req.body.invoiceId || req.body.walletInvoiceId || null;
   let walletInvoiceResult = null;
 
-  if (!walletInvoiceId && billingId && Array.isArray(billIds) && billIds.length > 0) {
-    const invoiceData = {
-      billingId,
-      billIds,
-      vatReceiveType: vatReceiveType || "CITIZEN",
-      vatCompanyReg: req.body.vatCompanyReg || "",
-    };
+  const invoiceData = {
+    billingId,
+    billIds,
+    vatReceiveType: vatReceiveType || "CITIZEN",
+    vatCompanyReg: req.body.vatCompanyReg || "",
+  };
 
+  if (!walletInvoiceId && billingId && Array.isArray(billIds) && billIds.length > 0) {
     try {
       walletInvoiceResult = await walletApiService.createInvoice(walletUserId, invoiceData);
       walletInvoiceId = walletInvoiceResult.invoiceId;
@@ -168,6 +168,7 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
     } catch (err) {
       console.error("❌ [WALLET QPAY] Wallet invoice creation failed:", err.message);
 
+      const errMsg = (err.message || "").toLowerCase();
       // --- FALLBACK: If bills are already in another invoice ---
       if (errMsg.includes("билл өөр нэхэмжлэлээр төлөлт хийгдэж байна")) {
         console.log("🔍 [WALLET QPAY] Bill overlap detected. Checking for existing invoice to re-sync or cancel...");
