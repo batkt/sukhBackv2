@@ -1228,7 +1228,7 @@ exports.walletChatCreate = asyncHandler(async (req, res, next) => {
   try {
     console.log("📥 [WALLET CHAT CREATE] Body:", JSON.stringify(req.body));
     const { userId } = await getUserIdFromToken(req);
-    const { paymentId, objectId, reason } = req.body;
+    const { paymentId, objectId, reason, Subject, description } = req.body;
 
     if ((!paymentId && !objectId) || !reason) {
       throw new aldaa(
@@ -1241,6 +1241,8 @@ exports.walletChatCreate = asyncHandler(async (req, res, next) => {
       paymentId,
       reason,
       objectId,
+      Subject,
+      description
     );
     res.status(200).json({
       success: true,

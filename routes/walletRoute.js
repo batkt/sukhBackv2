@@ -53,9 +53,10 @@ router.put("/user", tokenShalgakh, walletUserEdit);
 
 // Chat routes
 router.post("/chat", tokenShalgakh, walletChatCreate);
-router.get("/chat/:chatId", tokenShalgakh, walletChatGet);
 router.get("/chat/object/:objectId", tokenShalgakh, walletChatGetByObject);
+router.get("/chat/:chatId", tokenShalgakh, walletChatGet);
 router.put("/chat/:chatId", tokenShalgakh, walletChatSendMessage);
+router.post("/chat/:chatId", tokenShalgakh, walletChatSendMessage);
 
 const walletQpayController = require("../controller/walletQpayController");
 

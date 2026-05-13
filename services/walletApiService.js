@@ -1289,12 +1289,14 @@ async function loginUser(phone, password) {
   }
 }
 
-async function createChat(userId, paymentId, reason, objectId) {
+async function createChat(userId, paymentId, reason, objectId, subject, description) {
   try {
     const token = await getWalletServiceToken();
     const payload = { reason };
     if (paymentId) payload.paymentId = paymentId;
     if (objectId) payload.objectId = objectId;
+    if (subject) payload.Subject = subject;
+    if (description) payload.description = description;
 
     const response = await axios.post(
       `${WALLET_API_BASE_URL}/api/chat`,
