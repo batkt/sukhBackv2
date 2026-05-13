@@ -1295,24 +1295,39 @@ async function createChat(userId, paymentId, reason, objectId, subject, descript
     const payload = { reason };
     if (paymentId) payload.paymentId = paymentId;
     if (objectId) payload.objectId = objectId;
-    if (subject) payload.Subject = subject;
-    if (description) payload.description = description;
+    // if (subject) payload.Subject = subject;
+    // if (description) payload.description = description;
 
-    const response = await axios.post(
-      `${WALLET_API_BASE_URL}/api/chat`,
-      payload,
-      {
-        headers: {
-          userId: userId,
-          Authorization: `Bearer ${token}`,
-        },
+    console.log("📤 [WALLET API] createChat Payload:", JSON.stringify(payload));
+    console.log("📤 [WALLET API] userId:", userId);
+
+    try {
+      console.log("📤 [WALLET API] createChat Payload:", JSON.stringify(payload));
+      console.log("📤 [WALLET API] userId:", userId);
+
+      const response = await axios.post(
+        `${WALLET_API_BASE_URL}/api/chat`,
+        payload,
+        {
+          headers: {
+            userId: userId,
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.data && response.data.responseCode) {
+        return sanitizeNullValues(response.data.data);
       }
-    );
-
-    if (response.data && response.data.responseCode) {
-      return sanitizeNullValues(response.data.data);
+      throw new Error(response.data?.responseMsg || "Chat creation failed");
+    } catch (error) {
+      if (error.response) {
+        console.error("❌ [WALLET API] createChat response error:", error.response.status, error.response.data);
+      } else {
+        console.error("❌ [WALLET API] createChat error:", error.message);
+      }
+      throw error;
     }
-    throw new Error(response.data?.responseMsg || "Chat creation failed");
   } catch (error) {
     console.error("❌ [WALLET API] createChat error:", error.message);
     throw error;
