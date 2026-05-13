@@ -112,7 +112,7 @@ router.get("/qpayBankAccountsView", async (req, res, next) => {
 });
 
 router.get(
-  "/api/qpaycallback/:baiguullagiinId/:zakhialgiinDugaar",
+  "/qpaycallback/:baiguullagiinId/:zakhialgiinDugaar",
   async (req, res, next) => {
     try {
       const { db } = require("zevbackv2");
@@ -207,7 +207,7 @@ router.get(
   },
 );
 router.get(
-  "/api/qpaycallbackGadaaSticker/:baiguullagiinId/:barilgiinId/:mashiniiDugaar/:cameraIP/:zakhialgiinDugaar",
+  "/qpaycallbackGadaaSticker/:baiguullagiinId/:barilgiinId/:mashiniiDugaar/:cameraIP/:zakhialgiinDugaar",
   async (req, res, next) => {
     try {
       const { db } = require("zevbackv2");
@@ -1918,12 +1918,12 @@ router.get("/qpayBankAccounts", tokenShalgakh, async (req, res, next) => {
   }
 });
 
-router.get("/api/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
-router.post("/api/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
+router.get("/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
+router.post("/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
 
 // Callback route for multiple invoice payments
 router.get(
-  "/api/qpayNekhemjlekhMultipleCallback/:baiguullagiinId/:invoiceIds",
+  "/qpayNekhemjlekhMultipleCallback/:baiguullagiinId/:invoiceIds",
   async (req, res, next) => {
     try {
       const { db } = require("zevbackv2");
