@@ -824,55 +824,69 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
       }
     }
 
-    const walletUserIdForFallback = walletIdentifier || userPhone;
-    if (walletUserIdForFallback) {
+    const fallbackUserIds = Array.from(
+      new Set(
+        [
+          walletIdentifier,
+          userPhone,
+          ...dedupedInvoices.map((p) => p.userId).filter(Boolean),
+        ].filter(Boolean)
+      )
+    );
+    console.log(
+      `🔎 [WALLET QPAY LIST] fallbackUserIds=${JSON.stringify(fallbackUserIds)}`
+    );
+
+    if (fallbackUserIds.length > 0) {
       for (const billingId of billingIds) {
-        try {
-          console.log(
-            `🔎 [WALLET QPAY LIST] fallback billingId=${billingId} walletUserId=${walletUserIdForFallback}`
-          );
-          const billingPayments = await walletApiService.getBillingPayments(
-            walletUserIdForFallback,
-            billingId
-          );
-          console.log(
-            `🔎 [WALLET QPAY LIST] fallbackResult billingId=${billingId} count=${(billingPayments || []).length}`
-          );
-
-          for (const bp of billingPayments || []) {
-            const status = String(bp.paymentStatus || bp.walletStatus || "UNKNOWN").toUpperCase();
-            const key = bp.paymentId || bp.walletPaymentId || bp.id;
-            if (!key || existingKeys.has(key)) continue;
-
-            // Only merge actionable states into walletQpay/list
-            if (!["PAID", "PENDING", "REFUNDED"].includes(status)) continue;
-
-            mergedPayments.push({
-              walletPaymentId: key,
-              paymentId: key,
-              walletInvoiceId: bp.invoiceId || "",
-              zakhialgiinDugaar: bp.invoiceNo || bp.invoiceId || "",
-              invoiceNo: bp.invoiceNo || bp.invoiceId || "",
-              billingId: billingId,
-              baiguullagiinId: orgByBillingId.get(billingId) || "",
-              userId: walletUserIdForFallback,
-              tulsunEsekh: status === "PAID",
-              walletStatus: status,
-              isStuck: false,
-              amount: bp.totalAmount || bp.amount || bp.paymentAmount || 0,
-              createdAt: bp.createdAt || bp.trxDate || new Date(),
-              updatedAt: bp.updatedAt || bp.trxDate || new Date(),
-              source: "WALLET_API_FALLBACK",
-            });
-            existingKeys.add(key);
+        for (const fallbackUserId of fallbackUserIds) {
+          try {
             console.log(
-              `✅ [WALLET QPAY LIST] mergedFallback paymentId=${key} status=${status} invoiceNo=${bp.invoiceNo || bp.invoiceId || "-"}`
+              `🔎 [WALLET QPAY LIST] fallback billingId=${billingId} walletUserId=${fallbackUserId}`
+            );
+            const billingPayments = await walletApiService.getBillingPayments(
+              fallbackUserId,
+              billingId
+            );
+            console.log(
+              `🔎 [WALLET QPAY LIST] fallbackResult billingId=${billingId} userId=${fallbackUserId} count=${(billingPayments || []).length}`
+            );
+
+            for (const bp of billingPayments || []) {
+              const status = String(bp.paymentStatus || bp.walletStatus || "UNKNOWN").toUpperCase();
+              const key = bp.paymentId || bp.walletPaymentId || bp.id;
+              if (!key || existingKeys.has(key)) continue;
+
+              // Only merge actionable states into walletQpay/list
+              if (!["PAID", "PENDING", "REFUNDED"].includes(status)) continue;
+
+              mergedPayments.push({
+                walletPaymentId: key,
+                paymentId: key,
+                walletInvoiceId: bp.invoiceId || "",
+                zakhialgiinDugaar: bp.invoiceNo || bp.invoiceId || "",
+                invoiceNo: bp.invoiceNo || bp.invoiceId || "",
+                billingId: billingId,
+                baiguullagiinId: orgByBillingId.get(billingId) || "",
+                userId: fallbackUserId,
+                tulsunEsekh: status === "PAID",
+                walletStatus: status,
+                isStuck: false,
+                amount: bp.totalAmount || bp.amount || bp.paymentAmount || 0,
+                createdAt: bp.createdAt || bp.trxDate || new Date(),
+                updatedAt: bp.updatedAt || bp.trxDate || new Date(),
+                source: "WALLET_API_FALLBACK",
+              });
+              existingKeys.add(key);
+              console.log(
+                `✅ [WALLET QPAY LIST] mergedFallback paymentId=${key} status=${status} invoiceNo=${bp.invoiceNo || bp.invoiceId || "-"} userId=${fallbackUserId}`
+              );
+            }
+          } catch (fallbackErr) {
+            console.warn(
+              `⚠️ [WALLET QPAY LIST] billing payments fallback failed for billingId=${billingId}, userId=${fallbackUserId}: ${fallbackErr.message}`
             );
           }
-        } catch (fallbackErr) {
-          console.warn(
-            `⚠️ [WALLET QPAY LIST] billing payments fallback failed for billingId=${billingId}: ${fallbackErr.message}`
-          );
         }
       }
     }
