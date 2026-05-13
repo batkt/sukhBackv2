@@ -1226,10 +1226,8 @@ exports.walletUserEdit = asyncHandler(async (req, res, next) => {
 });
 exports.walletChatCreate = asyncHandler(async (req, res, next) => {
   try {
-    console.log("📥 [WALLET CHAT CREATE] Body:", req.body);
     const { utas } = await getUserIdFromToken(req);
     const { paymentId, objectId, reason, Subject, description } = req.body;
-    console.log("📥 [WALLET CHAT CREATE] Extracted:", { paymentId, objectId, reason, Subject, description });
 
     if ((!paymentId && !objectId) || !reason) {
       throw new aldaa(
@@ -1242,9 +1240,7 @@ exports.walletChatCreate = asyncHandler(async (req, res, next) => {
       utas,
       paymentId,
       reason,
-      objectId,
-      Subject,
-      description
+      objectId
     );
     res.status(200).json({
       success: true,

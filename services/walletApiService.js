@@ -1284,27 +1284,18 @@ async function loginUser(phone, password) {
     if (error.code === 'ECONNREFUSED' || error.response?.status === 404) {
       return { success: false, message: "Login endpoint not available" };
     }
-    console.error("❌ [WALLET API] Error during login:", error.message);
     return { success: false, message: "Login failed" };
   }
 }
 
-async function createChat(userId, paymentId, reason, objectId, subject, description) {
+async function createChat(userId, paymentId, reason, objectId) {
   try {
     const token = await getWalletServiceToken();
     const payload = { reason };
     if (paymentId) payload.paymentId = paymentId;
     if (objectId) payload.objectId = objectId;
-    if (subject) payload.Subject = subject;
-    if (description) payload.description = description;
-
-    console.log("📤 [WALLET API] createChat Payload:", JSON.stringify(payload));
-    console.log("📤 [WALLET API] userId:", userId);
 
     try {
-      console.log("📤 [WALLET API] createChat Payload:", JSON.stringify(payload));
-      console.log("📤 [WALLET API] userId:", userId);
-
       const response = await axios.post(
         `${WALLET_API_BASE_URL}/api/chat`,
         payload,
