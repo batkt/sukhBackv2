@@ -30,6 +30,8 @@ router.post(
 );
 
 
+router.get("/qpayTulye/:baiguullagiinId/:barilgiinId/:dugaar", qpayTulye);
+
 // BANK ACCOUNT ENDPOINT - MUST BE FIRST TO AVOID ROUTE CONFLICTS
 router.get("/qpayBankAccountsView", async (req, res, next) => {
   try {
@@ -1933,10 +1935,8 @@ router.get("/qpayBankAccounts", tokenShalgakh, async (req, res, next) => {
 // Callback routes were moved to the top for priority and public access
 
 
-// Callback route for multiple invoice payments
-router.get(
-  "/qpayNekhemjlekhMultipleCallback/:baiguullagiinId/:invoiceIds",
-  async (req, res, next) => {
+// Implementation for multiple callback
+async function qpayNekhemjlekhMultipleCallback(req, res, next) {
     try {
       const { db } = require("zevbackv2");
       const nekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
@@ -2650,7 +2650,6 @@ router.get(
     } catch (err) {
       next(err);
     }
-  },
-);
+}
 
 module.exports = router;
