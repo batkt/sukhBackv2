@@ -254,7 +254,7 @@ const serveMedegdelImage = (req, res, next) => {
 app.use("/wallet", walletRoute);
 app.use(cameraRoute);
 app.use(neeyeRoute);
-app.use("/api", walletQpayRoute);
+app.use(walletQpayRoute);
 app.use(baiguullagaRoute);
 app.use(ajiltanRoute);
 app.use(licenseRoute);
