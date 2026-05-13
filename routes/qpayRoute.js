@@ -16,7 +16,19 @@ const {
   qpayShalgay,
 } = require("quickqpaypackvSukh");
 
-router.get("/qpayTulye/:baiguullagiinId/:barilgiinId/:dugaar", qpayTulye);
+// PUBLIC CALLBACK ROUTES (MUST BE AT THE TOP)
+router.get("/api/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
+router.post("/api/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
+
+router.get(
+  "/api/qpayNekhemjlekhMultipleCallback/:baiguullagiinId/:invoiceIds",
+  qpayNekhemjlekhMultipleCallback
+);
+router.post(
+  "/api/qpayNekhemjlekhMultipleCallback/:baiguullagiinId/:invoiceIds",
+  qpayNekhemjlekhMultipleCallback
+);
+
 
 // BANK ACCOUNT ENDPOINT - MUST BE FIRST TO AVOID ROUTE CONFLICTS
 router.get("/qpayBankAccountsView", async (req, res, next) => {
@@ -1918,8 +1930,8 @@ router.get("/qpayBankAccounts", tokenShalgakh, async (req, res, next) => {
   }
 });
 
-router.get("/api/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
-router.post("/api/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
+// Callback routes were moved to the top for priority and public access
+
 
 // Callback route for multiple invoice payments
 router.get(
