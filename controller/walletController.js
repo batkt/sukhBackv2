@@ -356,54 +356,31 @@ exports.walletBillingBills = asyncHandler(async (req, res, next) => {
     );
 
     // Ensure all bills are properly sanitized (double-check)
-    // Enrich with local status
-    const WalletInvoice = require("../models/walletInvoice");
-    const WalletPayment = require("../models/walletPayment");
-    const WalletInvoiceModel = WalletInvoice(db.erunkhiiKholbolt);
-    const WalletPaymentModel = WalletPayment(db.erunkhiiKholbolt);
+    // NOTE: Do NOT enrich with local paid status here.
+    // Local mappings can be stale and incorrectly lock/show bills as paid.
 
-    const enrichedData = await Promise.all(
-      data.map(async (bill) => {
-        const sanitized = {};
-        for (const key in bill) {
-          if (bill.hasOwnProperty(key)) {
-            const value = bill[key];
-            if (value === null || value === undefined) {
-              sanitized[key] = "";
-            } else if (Array.isArray(value)) {
-              sanitized[key] = value.map((item) =>
-                item === null || item === undefined ? "" : item,
-              );
-            } else {
-              sanitized[key] = value;
-            }
+    const enrichedData = data.map((bill) => {
+      const sanitized = {};
+      for (const key in bill) {
+        if (bill.hasOwnProperty(key)) {
+          const value = bill[key];
+          if (value === null || value === undefined) {
+            sanitized[key] = "";
+          } else if (Array.isArray(value)) {
+            sanitized[key] = value.map((item) =>
+              item === null || item === undefined ? "" : item,
+            );
+          } else {
+            sanitized[key] = value;
           }
         }
-
-        // Check if this specific bill is linked to a PAID local invoice
-        const billId = sanitized.billId || sanitized.id;
-        if (billId) {
-          const linkedInvoice = await WalletInvoiceModel.findOne({
-            billIds: billId,
-          })
-            .sort({ createdAt: -1 })
-            .lean();
-          if (linkedInvoice && linkedInvoice.walletPaymentId) {
-            const localPayment = await WalletPaymentModel.findOne({
-              paymentId: linkedInvoice.walletPaymentId,
-              status: "PAID",
-            }).lean();
-            if (localPayment) {
-              sanitized.isLocallyPaid = true;
-              sanitized.localPaymentId = localPayment.qpayPaymentId;
-              sanitized.localPaymentDate = localPayment.createdAt;
-            }
-          }
-        }
-
-        return sanitized;
-      }),
-    );
+      }
+      // Explicitly neutralize stale local paid decorations.
+      sanitized.isLocallyPaid = false;
+      sanitized.localPaymentId = "";
+      sanitized.localPaymentDate = "";
+      return sanitized;
+    });
 
     res.status(200).json({
       success: true,
