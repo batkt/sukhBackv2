@@ -112,7 +112,7 @@ router.get("/qpayBankAccountsView", async (req, res, next) => {
 });
 
 router.get(
-  "/api/qpaycallback/:baiguullagiinId/:zakhialgiinDugaar",
+  "/qpaycallback/:baiguullagiinId/:zakhialgiinDugaar",
   async (req, res, next) => {
     try {
       const { db } = require("zevbackv2");
@@ -207,7 +207,7 @@ router.get(
   },
 );
 router.get(
-  "/api/qpaycallbackGadaaSticker/:baiguullagiinId/:barilgiinId/:mashiniiDugaar/:cameraIP/:zakhialgiinDugaar",
+  "/qpaycallbackGadaaSticker/:baiguullagiinId/:barilgiinId/:mashiniiDugaar/:cameraIP/:zakhialgiinDugaar",
   async (req, res, next) => {
     try {
       const { db } = require("zevbackv2");
@@ -1055,7 +1055,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
       req.body.tailbar = tailbar;
       var callback_url =
         process.env.UNDSEN_SERVER +
-        "/api/qpaycallback/" +
+        "/qpaycallback/" +
         req.body.baiguullagiinId +
         "/" +
         req.body?.zakhialgiinDugaar;
@@ -1066,7 +1066,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
       ) {
         callback_url =
           process.env.UNDSEN_SERVER +
-          "/api/qpaycallbackGadaaSticker/" +
+          "/qpaycallbackGadaaSticker/" +
           req.body.baiguullagiinId +
           "/" +
           req.body.barilgiinId.toString() +
@@ -1144,7 +1144,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
         const invoiceIdsString = invoiceIds.join(",");
         callback_url =
           process.env.UNDSEN_SERVER +
-          "/api/qpayNekhemjlekhMultipleCallback/" +
+          "/qpayNekhemjlekhMultipleCallback/" +
           req.body.baiguullagiinId.toString() +
           "/" +
           invoiceIdsString;
@@ -1175,7 +1175,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
         // Single invoice payment (existing logic)
         callback_url =
           process.env.UNDSEN_SERVER +
-          "/api/qpayNekhemjlekhCallback/" +
+          "/qpayNekhemjlekhCallback/" +
           req.body.baiguullagiinId.toString() +
           "/" +
           req.body.nekhemjlekhiinId.toString();
@@ -1918,21 +1918,13 @@ router.get("/qpayBankAccounts", tokenShalgakh, async (req, res, next) => {
   }
 });
 
-router.get("/api/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
-router.post("/api/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
+router.get("/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
+router.post("/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
 
 // Callback route for multiple invoice payments
 router.get(
-  "/api/qpayNekhemjlekhMultipleCallback/:baiguullagiinId/:invoiceIds",
-  qpayNekhemjlekhMultipleCallback
-);
-router.post(
-  "/api/qpayNekhemjlekhMultipleCallback/:baiguullagiinId/:invoiceIds",
-  qpayNekhemjlekhMultipleCallback
-);
-
-// Inline implementation for multiple callback if not exported
-async function qpayNekhemjlekhMultipleCallback(req, res, next) {
+  "/qpayNekhemjlekhMultipleCallback/:baiguullagiinId/:invoiceIds",
+  async (req, res, next) => {
     try {
       const { db } = require("zevbackv2");
       const nekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
@@ -2646,6 +2638,7 @@ async function qpayNekhemjlekhMultipleCallback(req, res, next) {
     } catch (err) {
       next(err);
     }
-}
+  },
+);
 
 module.exports = router;
