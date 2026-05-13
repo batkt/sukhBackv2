@@ -1175,7 +1175,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
         // Single invoice payment (existing logic)
         callback_url =
           process.env.UNDSEN_SERVER +
-          "/qpayNekhemjlekhCallback/" +
+          "/api/qpayNekhemjlekhCallback/" +
           req.body.baiguullagiinId.toString() +
           "/" +
           req.body.nekhemjlekhiinId.toString();
@@ -1918,8 +1918,8 @@ router.get("/qpayBankAccounts", tokenShalgakh, async (req, res, next) => {
   }
 });
 
-router.get("/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
-router.post("/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
+router.get("/api/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
+router.post("/api/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
 
 // Callback route for multiple invoice payments
 router.get(
