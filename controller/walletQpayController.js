@@ -168,35 +168,51 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
     } catch (err) {
       console.error("❌ [WALLET QPAY] Wallet invoice creation failed:", err.message);
 
-      const errMsg = (err.message || "").toLowerCase();
       // --- FALLBACK: If bills are already in another invoice ---
       if (errMsg.includes("билл өөр нэхэмжлэлээр төлөлт хийгдэж байна")) {
-        console.log("🔍 [WALLET QPAY] Searching for existing pending invoice due to bill overlap...");
+        console.log("🔍 [WALLET QPAY] Bill overlap detected. Checking for existing invoice to re-sync or cancel...");
         try {
           // Search for a local WalletInvoice that contains at least one of these bills
           const existingInvoice = await WalletInvoice(db.erunkhiiKholbolt).findOne({
-            userId: userPhone,
+            userId: walletUserId,
             billingId: billingId,
             billIds: { $in: billIds }
           }).sort({ createdAt: -1 });
 
           if (existingInvoice) {
-            walletInvoiceId = existingInvoice.walletInvoiceId;
-            console.log(`✅ [WALLET QPAY] Found existing invoice: ${walletInvoiceId}`);
-          } else {
-            // Fallback to any recent invoice for this billingId
-            const lastInvoice = await WalletInvoice(db.erunkhiiKholbolt).findOne({
-              userId: userPhone,
-              billingId: billingId
-            }).sort({ createdAt: -1 });
-            
-            if (lastInvoice) {
-              walletInvoiceId = lastInvoice.walletInvoiceId;
-              console.log(`✅ [WALLET QPAY] Found most recent invoice for billing: ${walletInvoiceId}`);
+            // Check if it's the EXACT same set of bills. 
+            // If they are different (e.g. user selected 1 bill, but existing covers 5), we MUST cancel the old one.
+            const existingBillIds = existingInvoice.billIds || [];
+            const isExactMatch = existingBillIds.length === billIds.length && 
+                                 billIds.every(id => existingBillIds.includes(id));
+
+            if (isExactMatch) {
+              walletInvoiceId = existingInvoice.walletInvoiceId;
+              console.log(`✅ [WALLET QPAY] Exact match found. Reusing invoice: ${walletInvoiceId}`);
+            } else {
+              console.log(`⚠️ [WALLET QPAY] Mismatch: New bills [${billIds.length}] vs Existing [${existingBillIds.length}]. Canceling old invoice: ${existingInvoice.walletInvoiceId}`);
+              
+              // 1. Cancel in Wallet API
+              try {
+                await walletApiService.cancelInvoice(walletUserId, existingInvoice.walletInvoiceId);
+              } catch (cErr) {
+                console.warn("⚠️ [WALLET QPAY] Cancel API failed (might be already cancelled):", cErr.message);
+              }
+
+              // 2. Retry creation with the specific bills
+              walletInvoiceResult = await walletApiService.createInvoice(walletUserId, invoiceData);
+              walletInvoiceId = walletInvoiceResult.invoiceId;
+              console.log(`✅ [WALLET QPAY] New specific invoice created after cancel: ${walletInvoiceId}`);
+              
+              // 3. Update local metadata
+              await WalletInvoice(db.erunkhiiKholbolt).updateOne(
+                { walletInvoiceId: existingInvoice.walletInvoiceId },
+                { $set: { walletInvoiceId, billIds, totalAmount: walletInvoiceResult.invoiceTotal } }
+              );
             }
           }
-        } catch (searchErr) {
-          console.error("❌ [WALLET QPAY] Failed to search for existing invoice:", searchErr.message);
+        } catch (subErr) {
+          console.error("❌ [WALLET QPAY] Failed to resolve bill overlap:", subErr.message);
         }
       }
 
@@ -283,7 +299,7 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
   // Callback URL — wallet-specific callback
   const callback_url =
     process.env.UNDSEN_SERVER +
-    "/walletQpay/callback/" +
+    "/api/walletQpay/callback/" +
     baiguullagiinId +
     "/" +
     walletPaymentId;
