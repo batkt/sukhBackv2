@@ -1175,7 +1175,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
         // Single invoice payment (existing logic)
         callback_url =
           process.env.UNDSEN_SERVER +
-          "/qpayNekhemjlekhCallback/" +
+          "/api/qpayNekhemjlekhCallback/" +
           req.body.baiguullagiinId.toString() +
           "/" +
           req.body.nekhemjlekhiinId.toString();
