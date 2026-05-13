@@ -2203,7 +2203,11 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
       orshinSuugch.toots.length > 0
     ) {
       const ownOrgToots = orshinSuugch.toots.filter(
-        (t) => t.source === "OWN_ORG" && t.baiguullagiinId && t.barilgiinId,
+        (t) => 
+          t.source === "OWN_ORG" && 
+          t.baiguullagiinId && 
+          t.barilgiinId && 
+          String(t.baiguullagiinId) !== String(CENTRALIZED_ORG_ID),
       );
 
       for (const tootEntry of ownOrgToots) {
@@ -2487,7 +2491,11 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
           // Continue with next toot if this one fails
         }
       }
-    } else if (orshinSuugch.baiguullagiinId && orshinSuugch.barilgiinId) {
+    } else if (
+      orshinSuugch.baiguullagiinId && 
+      orshinSuugch.barilgiinId && 
+      String(orshinSuugch.baiguullagiinId) !== String(CENTRALIZED_ORG_ID)
+    ) {
       // Backward compatibility: if toots array is empty but old fields exist, create geree for primary toot
       try {
         const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(
@@ -3128,7 +3136,11 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
       orshinSuugch.toots.length > 0
     ) {
       const ownOrgToots = orshinSuugch.toots.filter(
-        (t) => t.source === "OWN_ORG" && t.baiguullagiinId && t.barilgiinId,
+        (t) => 
+          t.source === "OWN_ORG" && 
+          t.baiguullagiinId && 
+          t.barilgiinId && 
+          String(t.baiguullagiinId) !== String(CENTRALIZED_ORG_ID),
       );
 
       for (const tootEntry of ownOrgToots) {
@@ -3392,7 +3404,11 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
           // Continue with next toot if this one fails
         }
       }
-    } else if (orshinSuugch.baiguullagiinId && orshinSuugch.barilgiinId) {
+    } else if (
+      orshinSuugch.baiguullagiinId && 
+      orshinSuugch.barilgiinId && 
+      String(orshinSuugch.baiguullagiinId) !== String(CENTRALIZED_ORG_ID)
+    ) {
       // Backward compatibility: if toots array is empty but old fields exist, create geree for primary toot
       try {
         const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(
@@ -5296,6 +5312,13 @@ exports.syncResidentContracts = async function syncResidentContracts(
   const invoiceService = require("../services/invoiceService");
 
   const baiguullagiinId = baiguullaga._id.toString();
+  
+  // Safeguard: Never sync or create residential contracts for the centralized wallet organization
+  if (baiguullagiinId === String(CENTRALIZED_ORG_ID)) {
+    console.log(`[SYNC] Skipping contract sync for centralized wallet org: ${baiguullagiinId}`);
+    return;
+  }
+
   const barilgiinId = req.body.barilgiinId || orshinSuugch.barilgiinId;
 
   const tootsToProcess =
