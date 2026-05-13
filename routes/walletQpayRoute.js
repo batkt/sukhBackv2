@@ -39,7 +39,6 @@ router.post(
  */
 router.get(
   "/walletQpay/check/:baiguullagiinId/:walletPaymentId",
-  tokenShalgakh,
   walletQpayController.walletQpayCheck
 );
 
