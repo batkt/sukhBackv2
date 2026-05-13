@@ -693,22 +693,43 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
       
     // Parallelize paid-status lookups for performance
     const payments = await Promise.all(rawInvoices.map(async (p) => {
-       // Search local QPay records by all possible identifiers
-       const qpayObject = await QuickQpayObject(db.kholboltuud.find(k => String(k.baiguullagiinId) === String(p.baiguullagiinId))).findOne({
-         $or: [
-           { walletPaymentId: p.walletInvoiceId },
-           { zakhialgiinDugaar: p.zakhialgiinDugaar }
-         ]
-       }).select('tulsunEsekh updatedAt').lean();
-       
-       return {
-         ...p,
-         // Ensure paymentId is present for the Flutter model parser
-         paymentId: p.walletInvoiceId,
-         invoiceNo: p.zakhialgiinDugaar || p.walletInvoiceId,
-         tulsunEsekh: qpayObject?.tulsunEsekh || false,
-         updatedAt: qpayObject?.updatedAt || p.updatedAt
-       };
+        const tukhainKholbolt = db.kholboltuud.find(k => String(k.baiguullagiinId) === String(p.baiguullagiinId));
+        if (!tukhainKholbolt) return { ...p, paymentId: p.walletInvoiceId };
+
+        const qpayObject = await QuickQpayObject(tukhainKholbolt).findOne({
+          $or: [
+            { walletPaymentId: p.walletPaymentId || p.walletInvoiceId },
+            { zakhialgiinDugaar: p.zakhialgiinDugaar }
+          ]
+        }).select('tulsunEsekh updatedAt qpay.amount').lean();
+        
+        let walletStatus = "UNKNOWN";
+        const isPaidLocally = qpayObject?.tulsunEsekh || false;
+
+        // Perform a live reconciliation check for recent PAID payments to find "stuck" ones
+        if (isPaidLocally) {
+          try {
+            // Only check Wallet API for payments from the last 3 days to save performance
+            const isRecent = p.createdAt && (new Date() - new Date(p.createdAt) < 3 * 24 * 60 * 60 * 1000);
+            if (isRecent) {
+              const walletData = await walletApiService.getPayment(userPhone, p.walletPaymentId);
+              walletStatus = walletData?.paymentStatus || "PENDING";
+            }
+          } catch (e) {
+            walletStatus = "API_ERROR";
+          }
+        }
+
+        return {
+          ...p,
+          paymentId: p.walletPaymentId || p.walletInvoiceId,
+          invoiceNo: p.zakhialgiinDugaar || p.walletInvoiceId,
+          tulsunEsekh: isPaidLocally,
+          walletStatus: walletStatus, // This helps identify "PAID locally but PENDING in Wallet"
+          isStuck: isPaidLocally && (walletStatus === "PENDING" || walletStatus === "NEW"),
+          updatedAt: qpayObject?.updatedAt || p.updatedAt,
+          amount: qpayObject?.qpay?.amount || p.totalAmount
+        };
     }));
       
     res.status(200).json({
