@@ -211,6 +211,36 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
                 { $set: { walletInvoiceId, billIds, totalAmount: walletInvoiceResult.invoiceTotal } }
               );
             }
+          } else {
+            // Local metadata may be missing while Wallet API still keeps an old pending invoice.
+            // Resolve overlap directly from Wallet API payments, cancel stale invoices, then retry.
+            console.log("⚠️ [WALLET QPAY] No local overlap metadata found. Trying Wallet API cleanup...");
+            const billingPayments = await walletApiService.getBillingPayments(walletUserId, billingId);
+            const overlapCandidates = (billingPayments || []).filter((p) => {
+              const st = String(p.paymentStatus || "").toUpperCase();
+              // Keep terminal paid/refunded untouched; cancel only active blockers.
+              return st === "NEW" || st === "PENDING";
+            });
+
+            for (const candidate of overlapCandidates) {
+              const candidateInvoiceId = candidate.invoiceId || candidate.walletInvoiceId;
+              if (!candidateInvoiceId) continue;
+              try {
+                console.log(`🧹 [WALLET QPAY] Canceling stale invoice ${candidateInvoiceId} status=${candidate.paymentStatus}`);
+                await walletApiService.cancelInvoice(walletUserId, candidateInvoiceId);
+              } catch (cancelErr) {
+                console.warn(`⚠️ [WALLET QPAY] Could not cancel stale invoice ${candidateInvoiceId}: ${cancelErr.message}`);
+              }
+            }
+
+            // Retry create after cleanup
+            try {
+              walletInvoiceResult = await walletApiService.createInvoice(walletUserId, invoiceData);
+              walletInvoiceId = walletInvoiceResult.invoiceId;
+              console.log(`✅ [WALLET QPAY] Created invoice after Wallet API cleanup: ${walletInvoiceId}`);
+            } catch (retryErr) {
+              console.warn(`⚠️ [WALLET QPAY] Retry createInvoice after cleanup failed: ${retryErr.message}`);
+            }
           }
         } catch (subErr) {
           console.error("❌ [WALLET QPAY] Failed to resolve bill overlap:", subErr.message);
