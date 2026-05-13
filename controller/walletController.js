@@ -1227,18 +1227,19 @@ exports.walletUserEdit = asyncHandler(async (req, res, next) => {
 exports.walletChatCreate = asyncHandler(async (req, res, next) => {
   try {
     console.log("📥 [WALLET CHAT CREATE] Body:", req.body);
-    const { userId } = await getUserIdFromToken(req);
+    const { utas } = await getUserIdFromToken(req);
     const { paymentId, objectId, reason, Subject, description } = req.body;
     console.log("📥 [WALLET CHAT CREATE] Extracted:", { paymentId, objectId, reason, Subject, description });
 
     if ((!paymentId && !objectId) || !reason) {
       throw new aldaa(
         "Төлбөрийн ID (эсвэл Объектын ID) болон шалтгаан заавал бөглөх шаардлагатай!",
+        400
       );
     }
 
     const result = await walletApiService.createChat(
-      userId,
+      utas,
       paymentId,
       reason,
       objectId,
@@ -1256,14 +1257,14 @@ exports.walletChatCreate = asyncHandler(async (req, res, next) => {
 
 exports.walletChatGet = asyncHandler(async (req, res, next) => {
   try {
-    const { userId } = await getUserIdFromToken(req);
+    const { utas } = await getUserIdFromToken(req);
     const { chatId } = req.params;
 
     if (!chatId) {
       throw new aldaa("Чатын ID заавал бөглөх шаардлагатай!");
     }
 
-    const result = await walletApiService.getChat(userId, chatId);
+    const result = await walletApiService.getChat(utas, chatId);
     res.status(200).json({
       success: true,
       data: result,
@@ -1275,14 +1276,14 @@ exports.walletChatGet = asyncHandler(async (req, res, next) => {
 
 exports.walletChatGetByObject = asyncHandler(async (req, res, next) => {
   try {
-    const { userId } = await getUserIdFromToken(req);
+    const { utas } = await getUserIdFromToken(req);
     const { objectId } = req.params;
 
     if (!objectId) {
       throw new aldaa("Объектын ID заавал бөглөх шаардлагатай!");
     }
 
-    const result = await walletApiService.getChatByObject(userId, objectId);
+    const result = await walletApiService.getChatByObject(utas, objectId);
     res.status(200).json({
       success: true,
       data: result,
@@ -1294,7 +1295,7 @@ exports.walletChatGetByObject = asyncHandler(async (req, res, next) => {
 
 exports.walletChatSendMessage = asyncHandler(async (req, res, next) => {
   try {
-    const { userId } = await getUserIdFromToken(req);
+    const { utas } = await getUserIdFromToken(req);
     const { chatId } = req.params;
     const { message } = req.body;
 
@@ -1302,7 +1303,7 @@ exports.walletChatSendMessage = asyncHandler(async (req, res, next) => {
       throw new aldaa("Чатын ID болон мессеж заавал бөглөх шаардлагатай!");
     }
 
-    const result = await walletApiService.sendMessage(userId, chatId, message);
+    const result = await walletApiService.sendMessage(utas, chatId, message);
     res.status(200).json({
       success: true,
       data: result,
@@ -1313,8 +1314,8 @@ exports.walletChatSendMessage = asyncHandler(async (req, res, next) => {
 });
 exports.walletNotificationsGet = asyncHandler(async (req, res, next) => {
   try {
-    const { userId } = await getUserIdFromToken(req);
-    const result = await walletApiService.getNotifications(userId);
+    const { utas } = await getUserIdFromToken(req);
+    const result = await walletApiService.getNotifications(utas);
     res.status(200).json({
       success: true,
       data: result,

@@ -1295,8 +1295,8 @@ async function createChat(userId, paymentId, reason, objectId, subject, descript
     const payload = { reason };
     if (paymentId) payload.paymentId = paymentId;
     if (objectId) payload.objectId = objectId;
-    // if (subject) payload.Subject = subject;
-    // if (description) payload.description = description;
+    if (subject) payload.Subject = subject;
+    if (description) payload.description = description;
 
     console.log("📤 [WALLET API] createChat Payload:", JSON.stringify(payload));
     console.log("📤 [WALLET API] userId:", userId);
