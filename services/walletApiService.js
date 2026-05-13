@@ -1367,7 +1367,7 @@ async function getChatByObject(userId, objectId) {
 async function sendMessage(userId, chatId, message) {
   try {
     const token = await getWalletServiceToken();
-    const response = await axios.put(
+    const response = await axios.post(
       `${WALLET_API_BASE_URL}/api/chat/${chatId}`,
       { message },
       {
