@@ -16,20 +16,6 @@ const {
   qpayShalgay,
 } = require("quickqpaypackvSukh");
 
-// PUBLIC CALLBACK ROUTES (MUST BE AT THE TOP)
-router.get("/api/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
-router.post("/api/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
-
-router.get(
-  "/api/qpayNekhemjlekhMultipleCallback/:baiguullagiinId/:invoiceIds",
-  qpayNekhemjlekhMultipleCallback
-);
-router.post(
-  "/api/qpayNekhemjlekhMultipleCallback/:baiguullagiinId/:invoiceIds",
-  qpayNekhemjlekhMultipleCallback
-);
-
-
 router.get("/qpayTulye/:baiguullagiinId/:barilgiinId/:dugaar", qpayTulye);
 
 // BANK ACCOUNT ENDPOINT - MUST BE FIRST TO AVOID ROUTE CONFLICTS
@@ -1189,7 +1175,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
         // Single invoice payment (existing logic)
         callback_url =
           process.env.UNDSEN_SERVER +
-          "/api/qpayNekhemjlekhCallback/" +
+          "/qpayNekhemjlekhCallback/" +
           req.body.baiguullagiinId.toString() +
           "/" +
           req.body.nekhemjlekhiinId.toString();
@@ -1587,47 +1573,7 @@ router.post("/qpayShalgay", tokenShalgakh, async (req, res, next) => {
 
     const khariu = await qpayShalgay(req.body, tukhainBaaziinKholbolt);
     console.log(`✅ [QPAY-SHALGAY] Success: status=${khariu.invoice_status || khariu.tuluv || "UNKNOWN"}`);
-    
-    // If PAID, trigger local sync to mark as paid in our DB
-    if ((khariu.invoice_status === 'PAID' || khariu.tuluv === 'PAID') && tukhainBaaziinKholbolt) {
-      try {
-        const { QuickQpayObject } = require("quickqpaypackvSukh");
-        const qp = await QuickQpayObject(tukhainBaaziinKholbolt).findOne({ 
-          invoice_id: req.body.invoice_id 
-        }).lean();
-
-        if (qp && qp.sukhNekhemjlekh?.nekhemjlekhiinId) {
-          const nId = qp.sukhNekhemjlekh.nekhemjlekhiinId;
-          console.log(`📡 [QPAY-SHALGAY] PAID status detected. Triggering sync for invoice: ${nId}`);
-          
-          // We use the already exported callback controller logic
-          // Mocking req/res to call it
-          const { qpayNekhemjlekhCallback } = require("../controller/qpayController");
-          const mockReq = {
-            params: {
-              baiguullagiinId: baiguullagiinId,
-              nekhemjlekhiinId: nId
-            },
-            query: {
-               qpay_payment_id: khariu.payments?.[0]?.transactions?.[0]?.id
-            },
-            app: req.app
-          };
-          const mockRes = {
-            sendStatus: (code) => console.log(`📡 [QPAY-SHALGAY] Sync callback finished with code: ${code}`),
-            status: (code) => ({ send: (msg) => console.log(`📡 [QPAY-SHALGAY] Sync callback status ${code}: ${msg}`) })
-          };
-          
-          // Run it non-blocking
-          qpayNekhemjlekhCallback(mockReq, mockRes, next).catch(e => {
-            console.error(`❌ [QPAY-SHALGAY] Sync error: ${e.message}`);
-          });
-        }
-      } catch (syncErr) {
-        console.error(`❌ [QPAY-SHALGAY] Auto-sync failed: ${syncErr.message}`);
-      }
-    }
-
+    console.log(`📊 [QPAY-SHALGAY] Full Response: ${JSON.stringify(khariu)}`);
     res.send(khariu);
   } catch (err) {
     // If QPay API itself returns 500, try to fall back to DB invoice status
@@ -1932,11 +1878,13 @@ router.get("/qpayBankAccounts", tokenShalgakh, async (req, res, next) => {
   }
 });
 
-// Callback routes were moved to the top for priority and public access
+router.get("/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
+router.post("/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
 
-
-// Implementation for multiple callback
-async function qpayNekhemjlekhMultipleCallback(req, res, next) {
+// Callback route for multiple invoice payments
+router.get(
+  "/qpayNekhemjlekhMultipleCallback/:baiguullagiinId/:invoiceIds",
+  async (req, res, next) => {
     try {
       const { db } = require("zevbackv2");
       const nekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
@@ -2650,6 +2598,7 @@ async function qpayNekhemjlekhMultipleCallback(req, res, next) {
     } catch (err) {
       next(err);
     }
-}
+  },
+);
 
 module.exports = router;
