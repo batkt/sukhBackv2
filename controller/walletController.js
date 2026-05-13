@@ -274,7 +274,6 @@ exports.walletBillingList = asyncHandler(async (req, res, next) => {
 
 exports.walletBillingBills = asyncHandler(async (req, res, next) => {
   try {
-    // For billing endpoints, Wallet-Service requires phone number as userId, not walletUserId
     const { db } = require("zevbackv2");
     const jwt = require("jsonwebtoken");
     const token = req.headers.authorization.split(" ")[1];
@@ -287,36 +286,74 @@ exports.walletBillingBills = asyncHandler(async (req, res, next) => {
       throw new aldaa("Хэрэглэгч олдсонгүй!");
     }
 
-    // Use phone number for this endpoint (Wallet-Service requirement)
-    const userId = orshinSuugch.utas;
-
     const { billingId } = req.params;
 
     if (!billingId) {
       throw new aldaa("Биллингийн ID заавал бөглөх шаардлагатай!");
     }
 
-    // Verify user exists in Wallet API before making the call
-    // getUserInfo also needs phone number
-    try {
-      const walletUserInfo = await walletApiService.getUserInfo(userId);
-      if (!walletUserInfo || !walletUserInfo.userId) {
-        throw new aldaa(
-          "Хэтэвчний системд бүртгэлгүй байна. Эхлээд нэвтэрнэ үү.",
+    // Try all candidate identifiers because some wallet records are keyed by UUID,
+    // others by phone. This prevents empty bill list for valid billings.
+    const walletToot =
+      orshinSuugch.toots &&
+      orshinSuugch.toots.find((t) => t.source === "WALLET_API" && t.walletUserId);
+    const candidateUserIds = Array.from(
+      new Set(
+        [
+          walletToot ? walletToot.walletUserId : null,
+          orshinSuugch.walletUserId,
+          orshinSuugch.utas,
+        ].filter(Boolean),
+      ),
+    );
+
+    console.log(
+      `🔎 [WALLET BILLING BILLS] billingId=${billingId} candidateUserIds=${JSON.stringify(candidateUserIds)}`,
+    );
+
+    let data = [];
+    let successfulUserId = null;
+    for (const candidateUserId of candidateUserIds) {
+      try {
+        const bills = await walletApiService.getBillingBills(candidateUserId, billingId);
+        const list = Array.isArray(bills) ? bills : [];
+        console.log(
+          `🔎 [WALLET BILLING BILLS] candidate=${candidateUserId} count=${list.length}`,
+        );
+        if (list.length > 0) {
+          successfulUserId = candidateUserId;
+          data = list;
+          break;
+        }
+      } catch (candidateErr) {
+        console.warn(
+          `⚠️ [WALLET BILLING BILLS] candidate failed: ${candidateUserId} -> ${candidateErr.message}`,
         );
       }
-    } catch (userCheckError) {
-      console.error(
-        "❌ [WALLET BILLING BILLS] User not found in Wallet API:",
-        userCheckError.message,
-      );
-      throw new aldaa(
-        "Хэтэвчний системд бүртгэлгүй байна. Эхлээд нэвтэрнэ үү.",
-      );
     }
 
-    const bills = await walletApiService.getBillingBills(userId, billingId);
-    const data = Array.isArray(bills) ? bills : [];
+    // As a fallback, merge all successful non-empty responses to avoid dropping bills.
+    if (data.length == 0) {
+      const merged = [];
+      const seenBillIds = new Set();
+      for (const candidateUserId of candidateUserIds) {
+        try {
+          const bills = await walletApiService.getBillingBills(candidateUserId, billingId);
+          const list = Array.isArray(bills) ? bills : [];
+          for (const b of list) {
+            const billKey = b.billId || b.id || `${b.billNo || ""}_${b.billPeriod || ""}`;
+            if (seenBillIds.has(billKey)) continue;
+            seenBillIds.add(billKey);
+            merged.push(b);
+          }
+        } catch (_) {}
+      }
+      data = merged;
+    }
+
+    console.log(
+      `📊 [WALLET BILLING BILLS] finalCount=${data.length} sourceUserId=${successfulUserId || "merged/none"}`,
+    );
 
     // Ensure all bills are properly sanitized (double-check)
     // Enrich with local status
