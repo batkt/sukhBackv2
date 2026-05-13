@@ -273,7 +273,7 @@ app.get("/api/medegdel/:baiguullagiinId/:ner", serveMedegdelImage);
 app.get("/:baiguullagiinId/:ner", serveMedegdelImage);
 app.use(msgRoute);
 app.use(nekhemjlekhRoute);
-app.use(qpayRoute);
+app.use("/api", qpayRoute);
 app.use(tailanRoute);
 app.use(pdfRoute);
 app.use(mailRoute);

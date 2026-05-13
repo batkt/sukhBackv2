@@ -1055,7 +1055,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
       req.body.tailbar = tailbar;
       var callback_url =
         process.env.UNDSEN_SERVER +
-        "/qpaycallback/" +
+        "/api/qpaycallback/" +
         req.body.baiguullagiinId +
         "/" +
         req.body?.zakhialgiinDugaar;
@@ -1066,7 +1066,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
       ) {
         callback_url =
           process.env.UNDSEN_SERVER +
-          "/qpaycallbackGadaaSticker/" +
+          "/api/qpaycallbackGadaaSticker/" +
           req.body.baiguullagiinId +
           "/" +
           req.body.barilgiinId.toString() +
@@ -1144,7 +1144,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
         const invoiceIdsString = invoiceIds.join(",");
         callback_url =
           process.env.UNDSEN_SERVER +
-          "/qpayNekhemjlekhMultipleCallback/" +
+          "/api/qpayNekhemjlekhMultipleCallback/" +
           req.body.baiguullagiinId.toString() +
           "/" +
           invoiceIdsString;
@@ -1175,7 +1175,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
         // Single invoice payment (existing logic)
         callback_url =
           process.env.UNDSEN_SERVER +
-          "/qpayNekhemjlekhCallback/" +
+          "/api/qpayNekhemjlekhCallback/" +
           req.body.baiguullagiinId.toString() +
           "/" +
           req.body.nekhemjlekhiinId.toString();
