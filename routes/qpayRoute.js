@@ -1160,6 +1160,9 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
                const invBalance = await guilgeeService.getBalance(kholbolt, { nekhemjlekhId: invId });
                if (invBalance > 0) totalActualBalance += invBalance;
              }
+
+             // Round to 2 decimals to avoid floating point "dirty" numbers (e.g. 1.009999999)
+             totalActualBalance = Math.round(totalActualBalance * 100) / 100;
              
              const requestedDun = parseFloat(req.body.dun || 0);
              if (totalActualBalance < requestedDun && totalActualBalance >= 0) {
@@ -1186,7 +1189,11 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
             const inv = await NekhemjlekhModel.findById(req.body.nekhemjlekhiinId).lean();
             if (inv && inv.gereeniiId) {
               const guilgeeService = require("../services/guilgeeService");
-              const currentBalance = await guilgeeService.getBalance(kholbolt, { gereeniiId: inv.gereeniiId });
+              let currentBalance = await guilgeeService.getBalance(kholbolt, { gereeniiId: inv.gereeniiId });
+              
+              // Round to 2 decimals
+              currentBalance = Math.round(currentBalance * 100) / 100;
+              
               const requestedDun = parseFloat(req.body.dun || 0);
               if (currentBalance < requestedDun && currentBalance >= 0) {
                 console.log(`⚖️ [QPAY-GARGAYA] Overpayment prevention: Overriding ${requestedDun} with ${currentBalance}`);
@@ -1872,6 +1879,7 @@ router.get("/qpayBankAccounts", tokenShalgakh, async (req, res, next) => {
 });
 
 router.get("/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
+router.post("/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
 
 // Callback route for multiple invoice payments
 router.get(
