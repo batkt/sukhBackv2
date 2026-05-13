@@ -467,6 +467,8 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
   const { db } = require("zevbackv2");
   const { baiguullagiinId, walletPaymentId: searchId } = req.params;
 
+  console.log(`🔍 [WALLET QPAY CHECK] Polling: baiguullagiinId=${baiguullagiinId}, searchId=${searchId}`);
+
   const tukhainBaaziinKholbolt = db.kholboltuud.find(
     (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
   );
@@ -558,15 +560,41 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
   // Otherwise check QPay status
   if (qpayObject.invoice_id) {
     try {
-      const checkResult = await qpayShalgay(
-        { invoice_id: qpayObject.invoice_id },
-        tukhainBaaziinKholbolt
-      );
-      const isPaid = checkResult?.payments?.some(
-        (p) => p.payment_status === "PAID" || p.status === "PAID"
-      );
+      let isPaid = false;
+      let checkResult = null;
+
+      // ── TESTING BACKDOOR: Bypass real QPay check if ?forcePaid=true ──
+      if (req.query.forcePaid === "true" || req.query.test === "true") {
+        console.log(`🧪 [WALLET QPAY CHECK] TEST MODE: Forcing PAID status for ${walletPaymentId}`);
+        isPaid = true;
+      } else {
+        checkResult = await qpayShalgay(
+          { invoice_id: qpayObject.invoice_id },
+          tukhainBaaziinKholbolt
+        );
+
+        if (checkResult) {
+          console.log(`🔍 [WALLET QPAY CHECK] Raw QPay Result:`, JSON.stringify(checkResult));
+          isPaid = 
+            checkResult.invoice_status === "PAID" || 
+            checkResult.payments?.some(
+              (p) => p.payment_status === "PAID" || p.status === "PAID"
+            );
+        }
+      }
+
       if (isPaid) {
-        console.log(`✅ [WALLET QPAY CHECK] Detected payment for ${walletPaymentId}`);
+        console.log(`✅ [WALLET QPAY CHECK] Status is PAID for ${walletPaymentId}`);
+        
+        if (req.query.dryRun === "true") {
+          console.log(`🧪 [WALLET QPAY CHECK] DRY RUN: Skipping settlement and sync.`);
+          return res.json({
+            success: true,
+            status: "PAID (DRY RUN)",
+            checkResult
+          });
+        }
+        
         const io = req.app.get("socketio");
         await settleWalletPayment(
           qpayObject,
@@ -1177,20 +1205,19 @@ async function settleWalletPayment(
         { invoice_id: qpayObject.invoice_id },
         tukhainBaaziinKholbolt
       );
-      if (checkResult?.payments?.[0]) {
-        const payment = checkResult.payments[0];
-        // Only override if not provided in request
-        if (!extraData.qpayPaymentId && !qpayPaymentIdFromRequest) {
-           // If we don't have a specific payment_id from callback, check if checkResult has one
-           // However, usually invoice_id is what's used if no specific transaction is found
-        }
-        
+      
+      const payment = checkResult?.payments?.[0];
+      if (payment) {
         if (payment.transactions?.[0]) {
           const trx = payment.transactions[0];
           if (!extraData.trxNo) trxNo = trx.id || trxNo;
           if (!extraData.trxDate) trxDate = trx.settlement_date || trx.date || trxDate;
           if (!extraData.amount) trxAmount = trx.amount || trxAmount;
         }
+      } else if (checkResult?.invoice_status === "PAID") {
+        // Fallback for invoice types that don't return a payments array
+        if (!extraData.trxNo) trxNo = qpayObject.legacy_id || checkResult.id || trxNo;
+        if (!extraData.trxDate) trxDate = checkResult.invoice_status_date || trxDate;
       }
     } catch (checkErr) {
       console.error(
