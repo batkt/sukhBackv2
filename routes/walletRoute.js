@@ -25,6 +25,7 @@ const {
   walletChatGet,
   walletChatGetByObject,
   walletChatSendMessage,
+  walletNotificationsGet,
 } = require("../controller/walletController");
 
 router.get("/billers", tokenShalgakh, walletBillers);
