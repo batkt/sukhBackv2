@@ -30,6 +30,7 @@ const medegdelSchema = new Schema(
     repliedBy: String, // Admin/employee ID who replied
     zurag: String, // Path to attached image (e.g. baiguullagiinId/chat-xxx.jpg)
     duu: String, // Voice message path (e.g. baiguullagiinId/chat-xxx.webm)
+    chatId: String, // External Wallet/BPay chat ID
   },
   {
     timestamps: true,

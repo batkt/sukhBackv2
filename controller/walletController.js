@@ -1224,6 +1224,8 @@ exports.walletUserEdit = asyncHandler(async (req, res, next) => {
     next(err);
   }
 });
+const Medegdel = require("../models/medegdel");
+
 exports.walletChatCreate = asyncHandler(async (req, res, next) => {
   try {
     const { utas } = await getUserIdFromToken(req);
@@ -1242,6 +1244,34 @@ exports.walletChatCreate = asyncHandler(async (req, res, next) => {
       reason,
       objectId
     );
+
+    // PERSISTENCE: Store a local record of the Wallet Chat in our Medegdel collection
+    // This allows admins to see these requests in the web dashboard.
+    try {
+      const { db } = require("zevbackv2");
+      const orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt).findOne({ utas });
+      
+      if (orshinSuugch && result.chatId) {
+        await Medegdel(db.erunkhiiKholbolt).create({
+          baiguullagiinId: orshinSuugch.baiguullagiinId,
+          barilgiinId: orshinSuugch.barilgiinId,
+          ognoo: new Date(),
+          title: Subject || "Төлбөрийн тусламж",
+          message: reason,
+          orshinSuugchId: orshinSuugch._id,
+          orshinSuugchNer: orshinSuugch.ner,
+          orshinSuugchUtas: orshinSuugch.utas,
+          turul: "wallet_chat",
+          chatId: result.chatId,
+          status: "pending",
+          tailbar: description || "Wallet Support Chat started"
+        });
+      }
+    } catch (dbErr) {
+      console.error("⚠️ [WALLET CHAT STORE] Failed to save local record:", dbErr.message);
+      // We don't fail the request if local storage fails, as the Wallet Chat was successfully created
+    }
+
     res.status(200).json({
       success: true,
       data: result,
