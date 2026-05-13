@@ -697,6 +697,7 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
   const orshinSuugch = await getOrshinSuugchFromToken(req);
   const userPhone = orshinSuugch?.utas;
   const walletIdentifier = await getWalletIdentifier(orshinSuugch);
+  const orshinSuugchId = orshinSuugch?._id?.toString();
   
   if (!userPhone && !walletIdentifier) {
     throw new aldaa("Хэрэглэгчийн утас олдсонгүй. Нэвтрэх шаардлагатай.");
@@ -704,14 +705,34 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
 
   try {
     const userIds = Array.from(new Set([userPhone, walletIdentifier].filter(Boolean)));
+    const query = {
+      $or: [
+        { userId: { $in: userIds } },
+        ...(orshinSuugchId ? [{ orshinSuugchId }] : []),
+      ],
+    };
+
     const rawInvoices = await WalletInvoice(db.erunkhiiKholbolt)
-      .find({ userId: { $in: userIds } })
+      .find(query)
       .sort({ createdAt: -1 })
-      .limit(50)
+      .limit(120)
       .lean();
+
+    // Deduplicate repeated metadata rows for same walletPaymentId/invoice
+    const seen = new Set();
+    const dedupedInvoices = [];
+    for (const inv of rawInvoices) {
+      const dedupeKey =
+        inv.walletPaymentId ||
+        inv.walletInvoiceId ||
+        `${inv.zakhialgiinDugaar || ""}_${inv.billingId || ""}_${(inv.billIds || []).join(",")}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      dedupedInvoices.push(inv);
+    }
       
     // Parallelize paid-status lookups for performance
-    const payments = await Promise.all(rawInvoices.map(async (p) => {
+    const payments = await Promise.all(dedupedInvoices.map(async (p) => {
         const tukhainKholbolt = db.kholboltuud.find(k => String(k.baiguullagiinId) === String(p.baiguullagiinId));
         if (!tukhainKholbolt) return { ...p, paymentId: p.walletInvoiceId };
 
