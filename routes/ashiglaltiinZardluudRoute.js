@@ -8,6 +8,14 @@ const OrshinSuugch = require("../models/orshinSuugch");
 const Geree = require("../models/geree");
 const ZaaltUnshlalt = require("../models/zaaltUnshlalt");
 
+// Middleware to increase default pagination limit to 50
+router.get("/ashiglaltiinZardluud", (req, res, next) => {
+  if (req.query && !req.query.khuudasniiKhemjee) {
+    req.query.khuudasniiKhemjee = 50;
+  }
+  next();
+});
+
 // CRUD routes
 crud(router, "ashiglaltiinZardluud", ashiglaltiinZardluud, UstsanBarimt);
 
