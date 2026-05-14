@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { tokenShalgakh, crud, UstsanBarimt } = require("zevbackv2");
+const { tokenShalgakh, crud, UstsanBarimt, khuudaslalt } = require("zevbackv2");
 const mongoose = require("mongoose");
 const ashiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
 const Baiguullaga = require("../models/baiguullaga");
@@ -8,15 +8,48 @@ const OrshinSuugch = require("../models/orshinSuugch");
 const Geree = require("../models/geree");
 const ZaaltUnshlalt = require("../models/zaaltUnshlalt");
 
-// Middleware to increase default pagination limit to 50
-router.get("/ashiglaltiinZardluud", (req, res, next) => {
-  if (req.query && !req.query.khuudasniiKhemjee) {
-    req.query.khuudasniiKhemjee = 50;
+// Manual GET route to enforce pagination limit of 50
+router.get("/ashiglaltiinZardluud", async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const body = req.query;
+
+    // Parse JSON strings if they are passed as strings
+    if (!!body?.query) body.query = JSON.parse(body.query);
+    if (!!body?.order) body.order = JSON.parse(body.order);
+    
+    // Force pagination limit to 50
+    body.khuudasniiKhemjee = 50;
+    if (!!body?.khuudasniiDugaar) body.khuudasniiDugaar = Number(body.khuudasniiDugaar);
+
+    // Determine the connection (organization context)
+    const baiguullagiinId = req.query.baiguullagiinId || (body.query && body.query.baiguullagiinId);
+    const tukhainBaaziinKholbolt = db.kholboltuud.find(
+      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
+    );
+
+    if (!tukhainBaaziinKholbolt) {
+      return res.status(404).send({
+        success: false,
+        message: "Organization connection not found",
+      });
+    }
+
+    // Call khuudaslalt helper with the correct model and body
+    khuudaslalt(ashiglaltiinZardluud(tukhainBaaziinKholbolt), body)
+      .then((result) => {
+        // Sort results newest first if possible (though khuudaslalt usually handles sort from body.order)
+        res.send(result);
+      })
+      .catch((err) => {
+        next(err);
+      });
+  } catch (error) {
+    next(error);
   }
-  next();
 });
 
-// CRUD routes
+// CRUD routes (other methods like POST, PUT, DELETE will be handled by crud helper)
 crud(router, "ashiglaltiinZardluud", ashiglaltiinZardluud, UstsanBarimt);
 
 // GET route with turul filter
