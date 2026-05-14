@@ -51,14 +51,14 @@ router.get("/ashiglaltiinZardluudAvya", async (req, res, next) => {
       filter.barilgiinId = barilgiinId;
     }
 
-    // Filter by turul if provided (Дурын or Тогтмол)
+    // Filter by turul if provided (Дурын or Тогтмол) - case-insensitive
     if (turul) {
-      filter.turul = turul;
+      filter.turul = { $regex: new RegExp(`^${turul}$`, "i") };
     }
 
-    const zardluud = await ashiglaltiinZardluud(tukhainBaaziinKholbolt).find(
-      filter
-    );
+    const zardluud = await ashiglaltiinZardluud(tukhainBaaziinKholbolt)
+      .find(filter)
+      .sort({ createdAt: -1 });
 
     res.send({
       success: true,
