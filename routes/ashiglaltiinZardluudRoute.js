@@ -12,38 +12,40 @@ const ZaaltUnshlalt = require("../models/zaaltUnshlalt");
 router.get("/ashiglaltiinZardluud", async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
-    const body = req.query;
-
-    // Parse JSON strings if they are passed as strings
-    if (!!body?.query) body.query = JSON.parse(body.query);
-    if (!!body?.order) body.order = JSON.parse(body.order);
+    const queryParams = req.query || {};
     
-    // Force pagination limit to 50
-    body.khuudasniiKhemjee = 50;
-    if (!!body?.khuudasniiDugaar) body.khuudasniiDugaar = Number(body.khuudasniiDugaar);
+    // Parse parameters
+    let filter = queryParams.query ? (typeof queryParams.query === 'string' ? JSON.parse(queryParams.query) : queryParams.query) : {};
+    let sort = queryParams.order ? (typeof queryParams.order === 'string' ? JSON.parse(queryParams.order) : queryParams.order) : { createdAt: -1 };
+    let page = Number(queryParams.khuudasniiDugaar) || 1;
+    let limit = 50; // FORCE TO 50
 
-    // Determine the connection (organization context)
-    const baiguullagiinId = req.query.baiguullagiinId || (body.query && body.query.baiguullagiinId);
-    const tukhainBaaziinKholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
-    );
+    // Get connection
+    const baiguullagiinId = queryParams.baiguullagiinId || filter.baiguullagiinId;
+    const kholbolt = db.kholboltuud.find(k => String(k.baiguullagiinId) === String(baiguullagiinId));
 
-    if (!tukhainBaaziinKholbolt) {
-      return res.status(404).send({
-        success: false,
-        message: "Organization connection not found",
-      });
+    if (!kholbolt) {
+      return res.status(404).send({ success: false, message: "Organization connection not found" });
     }
 
-    // Call khuudaslalt helper with the correct model and body
-    khuudaslalt(ashiglaltiinZardluud(tukhainBaaziinKholbolt), body)
-      .then((result) => {
-        // Sort results newest first if possible (though khuudaslalt usually handles sort from body.order)
-        res.send(result);
-      })
-      .catch((err) => {
-        next(err);
-      });
+    const Model = ashiglaltiinZardluud(kholbolt);
+    
+    // Perform manual count and find
+    const [jagsaalt, niitMur] = await Promise.all([
+      Model.find(filter).sort(sort).skip((page - 1) * limit).limit(limit).lean(),
+      Model.countDocuments(filter)
+    ]);
+
+    const niitKhuudas = Math.ceil(niitMur / limit);
+
+    // Send response in exact same format as CRUD helper
+    res.send({
+      khuudasniiDugaar: page,
+      khuudasniiKhemjee: limit,
+      jagsaalt,
+      niitMur,
+      niitKhuudas
+    });
   } catch (error) {
     next(error);
   }
