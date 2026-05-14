@@ -8,51 +8,19 @@ const OrshinSuugch = require("../models/orshinSuugch");
 const Geree = require("../models/geree");
 const ZaaltUnshlalt = require("../models/zaaltUnshlalt");
 
-// Manual GET route to enforce pagination limit of 50
-router.get("/ashiglaltiinZardluud", async (req, res, next) => {
-  try {
-    const { db } = require("zevbackv2");
-    const queryParams = req.query || {};
-    
-    // Parse parameters
-    let filter = queryParams.query ? (typeof queryParams.query === 'string' ? JSON.parse(queryParams.query) : queryParams.query) : {};
-    let sort = queryParams.order ? (typeof queryParams.order === 'string' ? JSON.parse(queryParams.order) : queryParams.order) : { createdAt: -1 };
-    let page = Number(queryParams.khuudasniiDugaar) || 1;
-    let limit = 50; // FORCE TO 50
-
-    // Get connection
-    const baiguullagiinId = queryParams.baiguullagiinId || filter.baiguullagiinId;
-    const kholbolt = db.kholboltuud.find(k => String(k.baiguullagiinId) === String(baiguullagiinId));
-
-    if (!kholbolt) {
-      return res.status(404).send({ success: false, message: "Organization connection not found" });
+// CRUD routes with pagination middleware as 5th argument
+crud(
+  router,
+  "ashiglaltiinZardluud",
+  ashiglaltiinZardluud,
+  UstsanBarimt,
+  (req, res, next) => {
+    if (req.method === "GET" && !req.query.khuudasniiKhemjee) {
+      req.query.khuudasniiKhemjee = 50;
     }
-
-    const Model = ashiglaltiinZardluud(kholbolt);
-    
-    // Perform manual count and find
-    const [jagsaalt, niitMur] = await Promise.all([
-      Model.find(filter).sort(sort).skip((page - 1) * limit).limit(limit).lean(),
-      Model.countDocuments(filter)
-    ]);
-
-    const niitKhuudas = Math.ceil(niitMur / limit);
-
-    // Send response in exact same format as CRUD helper
-    res.send({
-      khuudasniiDugaar: page,
-      khuudasniiKhemjee: limit,
-      jagsaalt,
-      niitMur,
-      niitKhuudas
-    });
-  } catch (error) {
-    next(error);
+    next();
   }
-});
-
-// CRUD routes (other methods like POST, PUT, DELETE will be handled by crud helper)
-crud(router, "ashiglaltiinZardluud", ashiglaltiinZardluud, UstsanBarimt);
+);
 
 // GET route with turul filter
 router.get("/ashiglaltiinZardluudAvya", async (req, res, next) => {
