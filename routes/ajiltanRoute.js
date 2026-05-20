@@ -17,10 +17,21 @@ const {
 router.get("/ajiltan", tokenShalgakh, async (req, res, next) => {
   try {
      const body = req.query;
-     if (!!body?.query) body.query = JSON.parse(body.query);
-     if (!!body?.order) body.order = JSON.parse(body.order);
+     if (!!body?.query) {
+       if (typeof body.query === "string") {
+         body.query = JSON.parse(body.query);
+       }
+     } else {
+       body.query = {};
+     }
+
+     // Force exclude Admin and SuperAdmin from employee listing
+     body.query["erkh"] = { $nin: ["Admin", "SuperAdmin"] };
+
+     if (!!body?.order && typeof body.order === "string") {
+       body.order = JSON.parse(body.order);
+     }
      if (body.barilgiinId) {
-       if (!body.query) body.query = {};
        body.query["barilguud"] = body.barilgiinId;
      }
      khuudaslalt(Ajiltan(db.erunkhiiKholbolt), body).then(res.send.bind(res)).catch(next);
@@ -54,16 +65,32 @@ crudWithFile(
       const { db } = require("zevbackv2");
       var ajiltanModel = Ajiltan(db.erunkhiiKholbolt);
 
-      // For DELETE requests, pre-fetch the employee to get baiguullagiinId before deletion
+      // For DELETE requests, pre-fetch the employee and block Admin/SuperAdmin deletions
       if (req.method === "DELETE" && req.params.id) {
         var ObjectId = require("mongodb").ObjectId;
         try {
           var ajiltanDoc = await ajiltanModel.findOne({ _id: ObjectId(req.params.id) });
           if (ajiltanDoc) {
+            if (ajiltanDoc.erkh === "Admin" || ajiltanDoc.erkh === "SuperAdmin") {
+              throw new Error("Админ устгах боломжгүй!");
+            }
             req._deletedAjiltanBaiguullagaId = ajiltanDoc.baiguullagiinId;
           }
         } catch (e) {
-          // Ignore pre-fetch error to avoid blocking execution
+          return next(e);
+        }
+      }
+
+      // For PUT requests, block modifying Admin/SuperAdmin accounts via this route
+      if (req.method === "PUT" && req.params.id) {
+        var ObjectId = require("mongodb").ObjectId;
+        try {
+          var ajiltanDoc = await ajiltanModel.findOne({ _id: ObjectId(req.params.id) });
+          if (ajiltanDoc && (ajiltanDoc.erkh === "Admin" || ajiltanDoc.erkh === "SuperAdmin")) {
+            throw new Error("Админ засах боломжгүй!");
+          }
+        } catch (e) {
+          return next(e);
         }
       }
 
