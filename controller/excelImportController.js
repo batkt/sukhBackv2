@@ -958,23 +958,16 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     });
     headerRow.commit();
 
-    // Row 2: Color legend row — empty colored cells with hover comment
-    // Green section A2:G2 for required columns
-    worksheet.mergeCells('A2:G2');
-    const legendRequiredCell = worksheet.getCell('A2');
-    legendRequiredCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'C6EFCE' } };
-    legendRequiredCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-    legendRequiredCell.note = 'Энэ өнгө нь заавал бөглөх өнгө';
-
-    // Yellow section H2:N2 for optional columns
-    worksheet.mergeCells('H2:N2');
-    const legendOptionalCell = worksheet.getCell('H2');
-    legendOptionalCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEB9C' } };
-    legendOptionalCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-    legendOptionalCell.note = 'Энэ өнгө нь бөглөхгүй байж болно';
-
-    worksheet.getRow(2).height = 18;
-    worksheet.getRow(2).commit();
+    // Row 2: plain empty cells, each with a tooltip comment
+    const legendRow = worksheet.getRow(2);
+    headers.forEach((h, idx) => {
+      const colNum = idx + 1;
+      const cell = legendRow.getCell(colNum);
+      cell.note = requiredCols.includes(colNum)
+        ? 'Энэ өнгө нь заавал бөглөх өнгө'
+        : 'Энэ өнгө нь бөглөхгүй байж болно';
+    });
+    legendRow.commit();
 
     // Data validation for Orts (Column E) and Davkhar (Column F)
     // Start from row 3 (row 2 is the legend row)
@@ -2279,14 +2272,12 @@ exports.generateTootBurtgelExcelTemplate = asyncHandler(
         });
         headerRow.commit();
 
-        // Row 2: legend — empty colored cell with hover comment
-        worksheet.mergeCells('A2:B2');
-        const legendCell = worksheet.getCell('A2');
-        legendCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'C6EFCE' } };
-        legendCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-        legendCell.note = 'Энэ өнгө нь заавал бөглөх өнгө';
-        worksheet.getRow(2).height = 18;
-        worksheet.getRow(2).commit();
+        // Row 2: plain empty cells, each with a tooltip comment
+        const legendRow2 = worksheet.getRow(2);
+        ['Давхар', 'Тоот'].forEach((h, idx) => {
+          legendRow2.getCell(idx + 1).note = 'Энэ өнгө нь заавал бөглөх өнгө';
+        });
+        legendRow2.commit();
       });
 
       res.setHeader(
@@ -2663,16 +2654,12 @@ exports.generateInitialBalanceTemplate = asyncHandler(
       });
       headerRow.commit();
 
-      // Row 2: legend — empty colored cell with hover comment
-      const totalCols = headers.length;
-      const lastCol = String.fromCharCode(64 + totalCols); // e.g. 5 cols -> 'E'
-      worksheet.mergeCells(`A2:${lastCol}2`);
-      const legendCell = worksheet.getCell('A2');
-      legendCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'C6EFCE' } };
-      legendCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-      legendCell.note = 'Энэ өнгө нь заавал бөглөх өнгө';
-      worksheet.getRow(2).height = 18;
-      worksheet.getRow(2).commit();
+      // Row 2: plain empty cells, each with a tooltip comment
+      const legendRow2 = worksheet.getRow(2);
+      headers.forEach((h, idx) => {
+        legendRow2.getCell(idx + 1).note = 'Энэ өнгө нь заавал бөглөх өнгө';
+      });
+      legendRow2.commit();
 
       res.setHeader(
         "Content-Type",
