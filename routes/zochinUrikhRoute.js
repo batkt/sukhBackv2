@@ -1103,11 +1103,11 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
 
     const finalResQuery = resFilters.length > 1 ? { $and: resFilters } : resFilters[0];
 
-    const residents = await OrshinSuugch(db.erunkhiiKholbolt).find(finalResQuery).sort({ createdAt: -1 }).limit(limit).skip(skip).lean();
-    const residentTotal = await OrshinSuugch(db.erunkhiiKholbolt).countDocuments(finalResQuery);
-
+    // Fetch all matching residents without pagination to correctly merge and calculate niitMur
+    const allResidents = await OrshinSuugch(db.erunkhiiKholbolt).find(finalResQuery).sort({ createdAt: -1 }).lean();
+    
     // 3. Map residents to their parking records
-    const residentIds = residents.map(r => String(r._id));
+    const residentIds = allResidents.map(r => String(r._id));
     const parkingMap = {};
     
     const linkedParking = await Mashin(tukhainBaaziinKholbolt).find({
@@ -1118,10 +1118,12 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
         if (p.ezemshigchiinId) parkingMap[String(p.ezemshigchiinId)] = p;
     });
 
-    // 4. Merge Data
-    const mergedData = residents.map(resObj => {
+    // 4. Merge Data into a single full list
+    const fullMergedData = [];
+    
+    allResidents.forEach(resObj => {
         const p = parkingMap[String(resObj._id)];
-        return {
+        fullMergedData.push({
           _id: p?._id || resObj._id,
           ezemshigchiinId: resObj._id,
           createdAt: p?.createdAt || resObj.createdAt,
@@ -1139,10 +1141,10 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
           burtgesenAjiltaniiNer: p?.burtgesenAjiltaniiNer || resObj.burtgesenAjiltaniiNer || "-",
           zochinErkhiinToo: p?.zochinErkhiinToo,
           zochinTusBurUneguiMinut: p?.zochinTusBurUneguiMinut
-        };
+        });
     });
 
-    // 5. Add standalone cars (like Sukh/Staff)
+    // 5. Add standalone cars (like Sukh/Staff) or cars matching search term not covered by resident search
     allParkingRecords.forEach(p => {
         // Skip cars linked to inactive/cancelled residents (already handled or should be hidden)
         if (p.ezemshigchiinId && !activeResidentIdSet.has(String(p.ezemshigchiinId))) {
@@ -1158,9 +1160,14 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
         // If orts filter is active, standalone cars (which have no orts) should be hidden
         if (req.query.orts) return;
 
-        const isAlreadyIn = mergedData.some(m => String(m._id) === String(p._id));
+        // Ensure we don't duplicate a car that is already covered by a resident
+        const isAlreadyIn = fullMergedData.some(m => 
+            (m.ezemshigchiinId && String(m.ezemshigchiinId) === String(p.ezemshigchiinId)) || 
+            String(m._id) === String(p._id)
+        );
+
         if (!isAlreadyIn) {
-            mergedData.push({
+            fullMergedData.push({
                 _id: p._id,
                 ezemshigchiinId: p.ezemshigchiinId || null,
                 createdAt: p.createdAt,
@@ -1182,10 +1189,16 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
         }
     });
 
+    // Sort combined data by createdAt descending
+    fullMergedData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    // 6. Paginate the merged data
+    const paginatedData = fullMergedData.slice(skip, skip + limit);
+
     res.status(200).json({
       success: true,
-      jagsaalt: mergedData,
-      niitMur: residentTotal + (allParkingRecords.length - linkedParking.length)
+      jagsaalt: paginatedData,
+      niitMur: fullMergedData.length
     });
     
   } catch (error) {
