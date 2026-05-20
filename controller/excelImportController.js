@@ -919,7 +919,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
       width: [15, 15, 12, 25, 10, 10, 10, 15, 20, 15, 22, 22, 15, 20][i] || 15,
     }));
 
-    // Style the header row
+    // Style the header row (Row 1)
     const headerRow = worksheet.getRow(1);
     headerRow.font = { bold: true, color: { argb: '000000' } };
 
@@ -941,7 +941,6 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
           bottom: { style: 'thin' },
           right: { style: 'thin' }
         };
-        cell.note = "Энэ өнгө нь заавал бөглөх өнгө";
       } else {
         // Yellow background for optional
         cell.fill = {
@@ -955,19 +954,41 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
           bottom: { style: 'thin' },
           right: { style: 'thin' }
         };
-        cell.note = "Энэ өнгө нь бөглөхгүй байж болно";
       }
     });
     headerRow.commit();
 
+    // Row 2: Color legend row
+    // Merge A2:G2 for required legend (green)
+    worksheet.mergeCells('A2:G2');
+    const legendRequiredCell = worksheet.getCell('A2');
+    legendRequiredCell.value = 'Энэ өнгө нь заавал бөглөх өнгө';
+    legendRequiredCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'C6EFCE' } };
+    legendRequiredCell.font = { italic: true, color: { argb: '375623' } };
+    legendRequiredCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    legendRequiredCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+    // Merge H2:N2 for optional legend (yellow)
+    worksheet.mergeCells('H2:N2');
+    const legendOptionalCell = worksheet.getCell('H2');
+    legendOptionalCell.value = 'Энэ өнгө нь бөглөхгүй байж болно';
+    legendOptionalCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEB9C' } };
+    legendOptionalCell.font = { italic: true, color: { argb: '7D6608' } };
+    legendOptionalCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    legendOptionalCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+    worksheet.getRow(2).height = 18;
+    worksheet.getRow(2).commit();
+
     // Data validation for Orts (Column E) and Davkhar (Column F)
+    // Start from row 3 (row 2 is the legend row)
     const ortsFormula = `"${ortsList.join(",")}"`;
     const davkharFormula =
       davkharList.length > 0 ? `"${davkharList.join(",")}"` : null;
 
-    // Apply to rows 2 to 2000
+    // Apply to rows 3 to 2000 (row 2 is legend)
     if (ortsFormula && ortsFormula.length < 255) {
-      worksheet.dataValidations.add("E2:E2000", {
+      worksheet.dataValidations.add("E3:E2000", {
         type: "list",
         allowBlank: true,
         formulae: [ortsFormula],
@@ -978,7 +999,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     }
 
     if (davkharFormula && davkharFormula.length < 255) {
-      worksheet.dataValidations.add("F2:F2000", {
+      worksheet.dataValidations.add("F3:F2000", {
         type: "list",
         allowBlank: true,
         formulae: [davkharFormula],
@@ -989,7 +1010,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     }
 
     // Data validation for Turul (Column H) - "Үндсэн", "Түр"
-    worksheet.dataValidations.add("H2:H2000", {
+    worksheet.dataValidations.add("H3:H2000", {
       type: "list",
       allowBlank: true,
       formulae: ['"Үндсэн,Түр"'],
@@ -999,7 +1020,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     });
 
     // Data validation for KhonogoorBodokh (Column M) - "Тийм", "Үгүй"
-    worksheet.dataValidations.add("M2:M2000", {
+    worksheet.dataValidations.add("M3:M2000", {
       type: "list",
       allowBlank: true,
       formulae: ['"Тийм,Үгүй"'],
@@ -1040,7 +1061,23 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    const data = XLSX.utils.sheet_to_json(worksheet, { raw: false });
+    // range: 1 tells sheet_to_json to use row 1 (0-indexed) as the header,
+    // which is actually the legend row (row 2 in Excel). Using defval keeps
+    // behaviour consistent. Instead, we read with header:1 to get all rows
+    // then manually skip the legend row (index 1 = Excel row 2).
+    const allRows = XLSX.utils.sheet_to_json(worksheet, { raw: false, header: 1 });
+    // Row 0 = headers (Excel row 1), Row 1 = legend (Excel row 2), Row 2+ = data
+    const headerRow0 = allRows[0] || [];
+    const dataRows = allRows.slice(2); // skip header + legend
+    const data = dataRows
+      .filter((r) => r.some((cell) => cell !== undefined && cell !== null && cell !== ""))
+      .map((r) => {
+        const obj = {};
+        headerRow0.forEach((key, idx) => {
+          if (key) obj[key] = r[idx] !== undefined ? r[idx] : "";
+        });
+        return obj;
+      });
 
     if (!data || data.length === 0) {
       throw new aldaa("Excel хоосон");
@@ -2228,7 +2265,7 @@ exports.generateTootBurtgelExcelTemplate = asyncHandler(
           { header: "Тоот", key: "apartment", width: 25 },
         ];
 
-        // Style the header
+        // Style the header (Row 1)
         const headerRow = worksheet.getRow(1);
         headerRow.font = { bold: true, color: { argb: "000000" } };
         headerRow.eachCell((cell) => {
@@ -2243,8 +2280,19 @@ exports.generateTootBurtgelExcelTemplate = asyncHandler(
             bottom: { style: "thin" },
             right: { style: "thin" },
           };
-          cell.note = "Энэ өнгө нь заавал бөглөх өнгө";
         });
+        headerRow.commit();
+
+        // Row 2: legend
+        worksheet.mergeCells('A2:B2');
+        const legendCell = worksheet.getCell('A2');
+        legendCell.value = 'Энэ өнгө нь заавал бөглөх өнгө';
+        legendCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'C6EFCE' } };
+        legendCell.font = { italic: true, color: { argb: '375623' } };
+        legendCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        legendCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        worksheet.getRow(2).height = 18;
+        worksheet.getRow(2).commit();
       });
 
       res.setHeader(
@@ -2359,7 +2407,14 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
         continue;
       }
 
-      const data = XLSX.utils.sheet_to_json(worksheet, { raw: false });
+      // Skip row 2 (legend): row 0 = headers, row 1 = legend, row 2+ = data
+      const headerKeys = rawRows[0] || [];
+      const dataRawRows = rawRows.slice(2).filter((r) => r.some((c) => c !== undefined && c !== null && c !== ""));
+      const data = dataRawRows.map((r) => {
+        const obj = {};
+        headerKeys.forEach((key, idx) => { if (key) obj[key] = r[idx] !== undefined ? r[idx] : ""; });
+        return obj;
+      });
 
       if (!data || data.length === 0) {
         continue;
@@ -2596,7 +2651,7 @@ exports.generateInitialBalanceTemplate = asyncHandler(
         width: [18, 22, 12, 18, 18][i] || 15,
       }));
 
-      // Style header
+      // Style header (Row 1)
       const headerRow = worksheet.getRow(1);
       headerRow.font = { bold: true };
       headerRow.eachCell((cell) => {
@@ -2611,8 +2666,21 @@ exports.generateInitialBalanceTemplate = asyncHandler(
           bottom: { style: "thin" },
           right: { style: "thin" },
         };
-        cell.note = "Энэ өнгө нь заавал бөглөх өнгө";
       });
+      headerRow.commit();
+
+      // Row 2: legend
+      const totalCols = headers.length;
+      const lastCol = String.fromCharCode(64 + totalCols); // e.g. 5 cols -> 'E'
+      worksheet.mergeCells(`A2:${lastCol}2`);
+      const legendCell = worksheet.getCell('A2');
+      legendCell.value = 'Энэ өнгө нь заавал бөглөх өнгө';
+      legendCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'C6EFCE' } };
+      legendCell.font = { italic: true, color: { argb: '375623' } };
+      legendCell.alignment = { vertical: 'middle', horizontal: 'center' };
+      legendCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      worksheet.getRow(2).height = 18;
+      worksheet.getRow(2).commit();
 
       res.setHeader(
         "Content-Type",
@@ -2647,7 +2715,15 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    const data = XLSX.utils.sheet_to_json(worksheet, { raw: false });
+    // Skip legend row: row 0 = headers, row 1 = legend, row 2+ = data
+    const allRowsIB = XLSX.utils.sheet_to_json(worksheet, { raw: false, header: 1 });
+    const headerRowIB = allRowsIB[0] || [];
+    const dataRowsIB = allRowsIB.slice(2).filter((r) => r.some((c) => c !== undefined && c !== null && c !== ""));
+    const data = dataRowsIB.map((r) => {
+      const obj = {};
+      headerRowIB.forEach((key, idx) => { if (key) obj[key] = r[idx] !== undefined ? r[idx] : ""; });
+      return obj;
+    });
 
     if (!data || data.length === 0) {
       throw new aldaa("Excel хоосон");
