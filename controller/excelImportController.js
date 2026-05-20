@@ -914,47 +914,84 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     let worksheet = workbook.addWorksheet("Оршин суугч бүртгэх");
 
     worksheet.columns = headers.map((h, i) => ({
-      header: h,
       key: h,
       width: [15, 15, 12, 25, 10, 10, 10, 15, 20, 15, 22, 22, 15, 20][i] || 15,
     }));
 
-    // Style the header row
-    const headerRow = worksheet.getRow(1);
-    headerRow.font = { bold: true, color: { argb: '000000' } };
+    // Row 1: Title Row
+    worksheet.mergeCells("A1:N1");
+    const titleRow = worksheet.getRow(1);
+    titleRow.getCell(1).value = "Оршин суугчдын бүртгэлийн загвар";
+    titleRow.getCell(1).font = { bold: true, size: 14, color: { argb: "FFFFFF" } };
+    titleRow.getCell(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "2F5597" } // Dark Blue Professional Background
+    };
+    titleRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+    titleRow.height = 35;
+
+    // Row 2: Required Color Legend Row
+    worksheet.mergeCells("A2:N2");
+    const legendRow1 = worksheet.getRow(2);
+    legendRow1.getCell(1).value = "Энэ өнгө нь заавал бөглөх өнгө";
+    legendRow1.getCell(1).font = { bold: true, size: 11, color: { argb: "274E13" } };
+    legendRow1.getCell(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "C6EFCE" } // Light Green Background
+    };
+    legendRow1.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+    legendRow1.height = 24;
+
+    // Row 3: Optional Color Legend Row
+    worksheet.mergeCells("A3:N3");
+    const legendRow2 = worksheet.getRow(3);
+    legendRow2.getCell(1).value = "Энэ өнгө нь бөглөхгүй байж болно";
+    legendRow2.getCell(1).font = { bold: true, size: 11, color: { argb: "7F6000" } };
+    legendRow2.getCell(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFEB9C" } // Light Yellow Background
+    };
+    legendRow2.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+    legendRow2.height = 24;
+
+    // Row 4: Styled Headers
+    const headerRow = worksheet.getRow(4);
+    headerRow.font = { bold: true, color: { argb: "000000" } };
+    headerRow.height = 26;
     
-    // Define required and optional columns
-    // Required: Ner(2), Utas(3), Orts(5), Davkhar(6), Toot(7)
+    // Define required columns (1-indexed)
     const requiredCols = [2, 3, 5, 6, 7];
     
-    headerRow.eachCell((cell, colNumber) => {
+    headers.forEach((h, i) => {
+      const colNumber = i + 1;
+      const cell = headerRow.getCell(colNumber);
+      cell.value = h;
+      
       if (requiredCols.includes(colNumber)) {
         // Green background for required
         cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'C6EFCE' } // Light Green
-        };
-        cell.border = {
-          top: { style: 'thin' },
-          left: { style: 'thin' },
-          bottom: { style: 'thin' },
-          right: { style: 'thin' }
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "C6EFCE" } // Light Green
         };
       } else {
         // Yellow background for optional
         cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFEB9C' } // Light Yellow
-        };
-        cell.border = {
-          top: { style: 'thin' },
-          left: { style: 'thin' },
-          bottom: { style: 'thin' },
-          right: { style: 'thin' }
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFEB9C" } // Light Yellow
         };
       }
+      cell.border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" }
+      };
+      cell.alignment = { vertical: "middle", horizontal: "center" };
     });
     headerRow.commit();
 
@@ -963,9 +1000,9 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     const davkharFormula =
       davkharList.length > 0 ? `"${davkharList.join(",")}"` : null;
 
-    // Apply to rows 2 to 2000
+    // Apply validation to rows 5 to 2000
     if (ortsFormula && ortsFormula.length < 255) {
-      worksheet.dataValidations.add("E2:E2000", {
+      worksheet.dataValidations.add("E5:E2000", {
         type: "list",
         allowBlank: true,
         formulae: [ortsFormula],
@@ -976,7 +1013,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     }
 
     if (davkharFormula && davkharFormula.length < 255) {
-      worksheet.dataValidations.add("F2:F2000", {
+      worksheet.dataValidations.add("F5:F2000", {
         type: "list",
         allowBlank: true,
         formulae: [davkharFormula],
@@ -987,7 +1024,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     }
 
     // Data validation for Turul (Column H) - "Үндсэн", "Түр"
-    worksheet.dataValidations.add("H2:H2000", {
+    worksheet.dataValidations.add("H5:H2000", {
       type: "list",
       allowBlank: true,
       formulae: ['"Үндсэн,Түр"'],
@@ -997,7 +1034,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     });
 
     // Data validation for KhonogoorBodokh (Column M) - "Тийм", "Үгүй"
-    worksheet.dataValidations.add("M2:M2000", {
+    worksheet.dataValidations.add("M5:M2000", {
       type: "list",
       allowBlank: true,
       formulae: ['"Тийм,Үгүй"'],
@@ -1038,7 +1075,19 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    const data = XLSX.utils.sheet_to_json(worksheet, { raw: false });
+    
+    // Dynamically identify the header row by searching the first 10 rows for "Нэр" and "Утас"
+    const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    let headerRowIndex = 0;
+    for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
+      const row = rawRows[r];
+      if (Array.isArray(row) && row.includes("Нэр") && row.includes("Утас")) {
+        headerRowIndex = r;
+        break;
+      }
+    }
+    
+    const data = XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex, raw: false });
 
     if (!data || data.length === 0) {
       throw new aldaa("Excel хоосон");
@@ -2222,26 +2271,58 @@ exports.generateTootBurtgelExcelTemplate = asyncHandler(
       ortsList.forEach((orts) => {
         const worksheet = workbook.addWorksheet(`Орц ${orts}`);
         worksheet.columns = [
-          { header: "Давхар", key: "floor", width: 15 },
-          { header: "Тоот", key: "apartment", width: 25 },
+          { key: "floor", width: 15 },
+          { key: "apartment", width: 25 },
         ];
 
-        // Style the header
-        const headerRow = worksheet.getRow(1);
-        headerRow.font = { bold: true, color: { argb: "000000" } };
-        headerRow.eachCell((cell) => {
+        // Row 1: Title Row
+        worksheet.mergeCells("A1:B1");
+        const titleRow = worksheet.getRow(1);
+        titleRow.getCell(1).value = `Тоот бүртгэх загвар (Орц ${orts})`;
+        titleRow.getCell(1).font = { bold: true, size: 12, color: { argb: "FFFFFF" } };
+        titleRow.getCell(1).fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "2F5597" } // Dark Blue
+        };
+        titleRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+        titleRow.height = 30;
+
+        // Row 2: Legend Row
+        worksheet.mergeCells("A2:B2");
+        const legendRow = worksheet.getRow(2);
+        legendRow.getCell(1).value = "Энэ өнгө нь заавал бөглөх өнгө";
+        legendRow.getCell(1).font = { bold: true, size: 10, color: { argb: "274E13" } };
+        legendRow.getCell(1).fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "C6EFCE" } // Light Green
+        };
+        legendRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+        legendRow.height = 22;
+
+        // Row 3: Headers Row
+        const headerRow = worksheet.getRow(3);
+        headerRow.height = 24;
+
+        headers.forEach((h, i) => {
+          const cell = headerRow.getCell(i + 1);
+          cell.value = h;
+          cell.font = { bold: true, color: { argb: "000000" } };
           cell.fill = {
             type: "pattern",
             pattern: "solid",
-            fgColor: { argb: "C6EFCE" }, // Green for required
+            fgColor: { argb: "C6EFCE" } // Light Green
           };
           cell.border = {
             top: { style: "thin" },
             left: { style: "thin" },
             bottom: { style: "thin" },
-            right: { style: "thin" },
+            right: { style: "thin" }
           };
+          cell.alignment = { vertical: "middle", horizontal: "center" };
         });
+        headerRow.commit();
       });
 
       res.setHeader(
@@ -2356,7 +2437,17 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
         continue;
       }
 
-      const data = XLSX.utils.sheet_to_json(worksheet, { raw: false });
+      // Dynamically identify the header row by searching the first 10 rows for "Давхар" and "Тоот"
+      let headerRowIndex = 0;
+      for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
+        const row = rawRows[r];
+        if (Array.isArray(row) && row.includes("Давхар") && row.includes("Тоот")) {
+          headerRowIndex = r;
+          break;
+        }
+      }
+
+      const data = XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex, raw: false });
 
       if (!data || data.length === 0) {
         continue;
@@ -2588,27 +2679,58 @@ exports.generateInitialBalanceTemplate = asyncHandler(
 
       const headers = ["Утас", "Гэрээний дугаар", "Тоот", "Эхний үлдэгдэл", "Огноо"];
       worksheet.columns = headers.map((h, i) => ({
-        header: h,
         key: h,
         width: [18, 22, 12, 18, 18][i] || 15,
       }));
 
-      // Style header
-      const headerRow = worksheet.getRow(1);
-      headerRow.font = { bold: true };
-      headerRow.eachCell((cell) => {
+      // Row 1: Title Row
+      worksheet.mergeCells("A1:E1");
+      const titleRow = worksheet.getRow(1);
+      titleRow.getCell(1).value = "Эхний үлдэгдэл оруулах загвар";
+      titleRow.getCell(1).font = { bold: true, size: 12, color: { argb: "FFFFFF" } };
+      titleRow.getCell(1).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "2F5597" } // Dark Blue
+      };
+      titleRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+      titleRow.height = 30;
+
+      // Row 2: Legend Row
+      worksheet.mergeCells("A2:E2");
+      const legendRow = worksheet.getRow(2);
+      legendRow.getCell(1).value = "Энэ өнгө нь заавал бөглөх өнгө";
+      legendRow.getCell(1).font = { bold: true, size: 10, color: { argb: "274E13" } };
+      legendRow.getCell(1).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "C6EFCE" } // Light Green
+      };
+      legendRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+      legendRow.height = 22;
+
+      // Row 3: Headers Row
+      const headerRow = worksheet.getRow(3);
+      headerRow.height = 24;
+
+      headers.forEach((h, i) => {
+        const cell = headerRow.getCell(i + 1);
+        cell.value = h;
+        cell.font = { bold: true, color: { argb: "000000" } };
         cell.fill = {
           type: "pattern",
           pattern: "solid",
-          fgColor: { argb: "C6EFCE" }, // All green for initial balance template
+          fgColor: { argb: "C6EFCE" } // Light Green
         };
         cell.border = {
           top: { style: "thin" },
           left: { style: "thin" },
           bottom: { style: "thin" },
-          right: { style: "thin" },
+          right: { style: "thin" }
         };
+        cell.alignment = { vertical: "middle", horizontal: "center" };
       });
+      headerRow.commit();
 
       res.setHeader(
         "Content-Type",
@@ -2643,7 +2765,19 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    const data = XLSX.utils.sheet_to_json(worksheet, { raw: false });
+    
+    // Dynamically identify the header row by searching the first 10 rows for "Эхний үлдэгдэл"
+    const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    let headerRowIndex = 0;
+    for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
+      const row = rawRows[r];
+      if (Array.isArray(row) && row.includes("Эхний үлдэгдэл")) {
+        headerRowIndex = r;
+        break;
+      }
+    }
+
+    const data = XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex, raw: false });
 
     if (!data || data.length === 0) {
       throw new aldaa("Excel хоосон");
