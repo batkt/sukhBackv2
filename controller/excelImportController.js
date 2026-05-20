@@ -914,37 +914,20 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     let worksheet = workbook.addWorksheet("Оршин суугч бүртгэх");
 
     worksheet.columns = headers.map((h, i) => ({
+      header: h,
       key: h,
       width: [15, 15, 12, 25, 10, 10, 10, 15, 20, 15, 22, 22, 15, 20][i] || 15,
     }));
 
-    // Row 1: Title Row
-    worksheet.mergeCells("A1:N1");
-    const titleRow = worksheet.getRow(1);
-    titleRow.getCell(1).value = "Оршин суугчдын бүртгэлийн загвар";
-    titleRow.getCell(1).font = { bold: true, size: 13, color: { argb: "FFFFFF" } };
-    titleRow.getCell(1).fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "2F5597" } // Dark Blue Professional Background
-    };
-    titleRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
-    titleRow.height = 32;
-
-    // Row 2: Styled Headers Row
-    const headerRow = worksheet.getRow(2);
+    // Style the header row
+    const headerRow = worksheet.getRow(1);
     headerRow.font = { bold: true, color: { argb: '000000' } };
-    headerRow.height = 25;
 
     // Define required and optional columns
     // Required: Ner(2), Utas(3), Orts(5), Davkhar(6), Toot(7)
     const requiredCols = [2, 3, 5, 6, 7];
 
-    headers.forEach((h, i) => {
-      const colNumber = i + 1;
-      const cell = headerRow.getCell(colNumber);
-      cell.value = h;
-
+    headerRow.eachCell((cell, colNumber) => {
       if (requiredCols.includes(colNumber)) {
         // Green background for required
         cell.fill = {
@@ -982,9 +965,9 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     const davkharFormula =
       davkharList.length > 0 ? `"${davkharList.join(",")}"` : null;
 
-    // Apply to rows 3 to 2000
+    // Apply to rows 2 to 2000
     if (ortsFormula && ortsFormula.length < 255) {
-      worksheet.dataValidations.add("E3:E2000", {
+      worksheet.dataValidations.add("E2:E2000", {
         type: "list",
         allowBlank: true,
         formulae: [ortsFormula],
@@ -995,7 +978,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     }
 
     if (davkharFormula && davkharFormula.length < 255) {
-      worksheet.dataValidations.add("F3:F2000", {
+      worksheet.dataValidations.add("F2:F2000", {
         type: "list",
         allowBlank: true,
         formulae: [davkharFormula],
@@ -1006,7 +989,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     }
 
     // Data validation for Turul (Column H) - "Үндсэн", "Түр"
-    worksheet.dataValidations.add("H3:H2000", {
+    worksheet.dataValidations.add("H2:H2000", {
       type: "list",
       allowBlank: true,
       formulae: ['"Үндсэн,Түр"'],
@@ -1016,7 +999,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     });
 
     // Data validation for KhonogoorBodokh (Column M) - "Тийм", "Үгүй"
-    worksheet.dataValidations.add("M3:M2000", {
+    worksheet.dataValidations.add("M2:M2000", {
       type: "list",
       allowBlank: true,
       formulae: ['"Тийм,Үгүй"'],
@@ -1057,19 +1040,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    
-    // Dynamically identify the header row by searching the first 10 rows for "Нэр" and "Утас"
-    const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-    let headerRowIndex = 0;
-    for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
-      const row = rawRows[r];
-      if (Array.isArray(row) && row.includes("Нэр") && row.includes("Утас")) {
-        headerRowIndex = r;
-        break;
-      }
-    }
-    
-    const data = XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex, raw: false });
+    const data = XLSX.utils.sheet_to_json(worksheet, { raw: false });
 
     if (!data || data.length === 0) {
       throw new aldaa("Excel хоосон");
@@ -2253,30 +2224,14 @@ exports.generateTootBurtgelExcelTemplate = asyncHandler(
       ortsList.forEach((orts) => {
         const worksheet = workbook.addWorksheet(`Орц ${orts}`);
         worksheet.columns = [
-          { key: "floor", width: 15 },
-          { key: "apartment", width: 25 },
+          { header: "Давхар", key: "floor", width: 15 },
+          { header: "Тоот", key: "apartment", width: 25 },
         ];
 
-        // Row 1: Title Row
-        worksheet.mergeCells("A1:B1");
-        const titleRow = worksheet.getRow(1);
-        titleRow.getCell(1).value = `Тоот бүртгэх загвар (Орц ${orts})`;
-        titleRow.getCell(1).font = { bold: true, size: 12, color: { argb: "FFFFFF" } };
-        titleRow.getCell(1).fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "2F5597" } // Dark Blue
-        };
-        titleRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
-        titleRow.height = 30;
-
-        // Row 2: Styled Header
-        const headerRow = worksheet.getRow(2);
-        headerRow.height = 24;
-        headers.forEach((h, i) => {
-          const cell = headerRow.getCell(i + 1);
-          cell.value = h;
-          cell.font = { bold: true, color: { argb: "000000" } };
+        // Style the header
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { bold: true, color: { argb: "000000" } };
+        headerRow.eachCell((cell) => {
           cell.fill = {
             type: "pattern",
             pattern: "solid",
@@ -2290,7 +2245,6 @@ exports.generateTootBurtgelExcelTemplate = asyncHandler(
           };
           cell.note = "Энэ өнгө нь заавал бөглөх өнгө";
         });
-        headerRow.commit();
       });
 
       res.setHeader(
@@ -2405,17 +2359,7 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
         continue;
       }
 
-      // Dynamically identify the header row by searching the first 10 rows for "Давхар" and "Тоот"
-      let headerRowIndex = 0;
-      for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
-        const row = rawRows[r];
-        if (Array.isArray(row) && row.includes("Давхар") && row.includes("Тоот")) {
-          headerRowIndex = r;
-          break;
-        }
-      }
-
-      const data = XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex, raw: false });
+      const data = XLSX.utils.sheet_to_json(worksheet, { raw: false });
 
       if (!data || data.length === 0) {
         continue;
@@ -2647,30 +2591,15 @@ exports.generateInitialBalanceTemplate = asyncHandler(
 
       const headers = ["Утас", "Гэрээний дугаар", "Тоот", "Эхний үлдэгдэл", "Огноо"];
       worksheet.columns = headers.map((h, i) => ({
+        header: h,
         key: h,
         width: [18, 22, 12, 18, 18][i] || 15,
       }));
 
-      // Row 1: Title Row
-      worksheet.mergeCells("A1:E1");
-      const titleRow = worksheet.getRow(1);
-      titleRow.getCell(1).value = "Эхний үлдэгдэл оруулах загвар";
-      titleRow.getCell(1).font = { bold: true, size: 12, color: { argb: "FFFFFF" } };
-      titleRow.getCell(1).fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "2F5597" } // Dark Blue
-      };
-      titleRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
-      titleRow.height = 30;
-
-      // Row 2: Styled Header
-      const headerRow = worksheet.getRow(2);
-      headerRow.height = 24;
-      headers.forEach((h, i) => {
-        const cell = headerRow.getCell(i + 1);
-        cell.value = h;
-        cell.font = { bold: true, color: { argb: "000000" } };
+      // Style header
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true };
+      headerRow.eachCell((cell) => {
         cell.fill = {
           type: "pattern",
           pattern: "solid",
@@ -2684,7 +2613,6 @@ exports.generateInitialBalanceTemplate = asyncHandler(
         };
         cell.note = "Энэ өнгө нь заавал бөглөх өнгө";
       });
-      headerRow.commit();
 
       res.setHeader(
         "Content-Type",
@@ -2719,19 +2647,7 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    
-    // Dynamically identify the header row by searching the first 10 rows for "Эхний үлдэгдэл"
-    const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-    let headerRowIndex = 0;
-    for (let r = 0; r < Math.min(rawRows.length, 10); r++) {
-      const row = rawRows[r];
-      if (Array.isArray(row) && row.includes("Эхний үлдэгдэл")) {
-        headerRowIndex = r;
-        break;
-      }
-    }
-
-    const data = XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex, raw: false });
+    const data = XLSX.utils.sheet_to_json(worksheet, { raw: false });
 
     if (!data || data.length === 0) {
       throw new aldaa("Excel хоосон");
