@@ -595,22 +595,34 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
       throw new aldaa("Байгууллагын ID хоосон!");
     }
 
-    // Build query
-    const query = { baiguullagiinId: String(baiguullagiinId) };
+    // Build query with $and to combine structural filters and dynamic filters
+    const query = {};
+    const structuralFilters = [];
 
-    // Add barilgiinId filter if provided
+    // 1. BaiguullagiinId filter
+    structuralFilters.push({
+      $or: [
+        { baiguullagiinId: String(baiguullagiinId) },
+        { "toots.baiguullagiinId": String(baiguullagiinId) },
+      ],
+    });
+
+    // 2. BarilgiinId filter if provided
     if (barilgiinId) {
-      // Consistent with orshinSuugch list route: look in top level OR toots array
-      query.$or = [
-        { barilgiinId: String(barilgiinId) },
-        { "toots.barilgiinId": String(barilgiinId) },
-      ];
+      structuralFilters.push({
+        $or: [
+          { barilgiinId: String(barilgiinId) },
+          { "toots.barilgiinId": String(barilgiinId) },
+        ],
+      });
     }
 
     // Apply additional filters if provided
     if (filters) {
       Object.assign(query, filters);
     }
+
+    query.$and = structuralFilters;
 
     // Fetch residents from erunkhiiKholbolt
     const orshinSuugchList = await OrshinSuugch(db.erunkhiiKholbolt)
@@ -639,10 +651,20 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
       duusakhOgnoo: item.duusakhOgnoo ? new Date(item.duusakhOgnoo).toISOString().split("T")[0] : "",
       bairniiNer: item.bairniiNer || "",
       duureg: item.duureg || "",
-      horoo:
-        typeof item.horoo === "object"
-          ? item.horoo?.ner || ""
-          : item.horoo || "",
+      horoo: (() => {
+        if (typeof item.horoo === "object" && item.horoo !== null) {
+          return item.horoo.ner || "";
+        }
+        if (typeof item.horoo === "string" && item.horoo.trim().startsWith("{")) {
+          try {
+            return JSON.parse(item.horoo).ner || item.horoo;
+          } catch (e) {
+            const match = item.horoo.match(/ner['"]?\s*:\s*['"]([^'"]+)['"]/);
+            return match ? match[1] : item.horoo;
+          }
+        }
+        return item.horoo || "";
+      })(),
       soh: item.soh || "",
       khonogoorBodokhEsekh: item.khonogoorBodokhEsekh ? "Тийм" : "Үгүй",
       bodokhKhonog: item.bodokhKhonog || 0,
