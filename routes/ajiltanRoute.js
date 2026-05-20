@@ -54,6 +54,26 @@ crudWithFile(
       const { db } = require("zevbackv2");
       var ajiltanModel = Ajiltan(db.erunkhiiKholbolt);
 
+      // Intercept res.send to emit socket event upon successful creation/update
+      if (!req._sendIntercepted) {
+        req._sendIntercepted = true;
+        const originalSend = res.send;
+        res.send = function (data) {
+          if (data === "Amjilttai") {
+            const io = req.app.get("socketio");
+            const baiguullagiinId = req.body.baiguullagiinId;
+            if (io && baiguullagiinId) {
+              const eventName = req.method === "POST" ? "ajiltan.created" : "ajiltan.updated";
+              io.emit("baiguullagiin" + baiguullagiinId, {
+                type: eventName,
+                data: {}
+              });
+            }
+          }
+          originalSend.apply(res, arguments);
+        };
+      }
+
       // Log albanTushaal if present in request body
       if (req.body?.albanTushaal !== undefined) {
       }
