@@ -2176,12 +2176,22 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
           // Update primary user fields ONLY if they are not already set
           // This prevents overwriting the user's registration name with a bill name (e.g. from a relative's unit)
           if (billingInfo.customerName && !orshinSuugch.ner) {
-            const nameParts = billingInfo.customerName.split(" ");
+        
+            const trimmedName = billingInfo.customerName.trim();
+            const nameParts = trimmedName.split(/\s+/);
+            
             if (nameParts.length >= 2) {
-              orshinSuugch.ovog = nameParts[0];
-              orshinSuugch.ner = nameParts.slice(1).join(" ");
+              
+              orshinSuugch.ner = nameParts[nameParts.length - 1];
+             
+              orshinSuugch.ovog = nameParts.slice(0, nameParts.length - 1).join(" ");
+            } else if (trimmedName.includes('.')) {
+              // Handle "Ч.Ганзориг" format
+              const dotParts = trimmedName.split('.');
+              orshinSuugch.ner = dotParts[dotParts.length - 1];
+              orshinSuugch.ovog = dotParts.slice(0, dotParts.length - 1).join(".") + ".";
             } else {
-              orshinSuugch.ner = billingInfo.customerName;
+              orshinSuugch.ner = trimmedName;
             }
           }
           if (billingInfo.customerAddress)
@@ -3676,12 +3686,19 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
           // Update user with billing data
           const updateData = {};
           if (billingInfo.customerName && !orshinSuugch.ner) {
-            const nameParts = billingInfo.customerName.split(" ");
+            // Strict name extraction: Mongolia convention is [Patronymic/Surname] [Given Name]
+            const trimmedName = billingInfo.customerName.trim();
+            const nameParts = trimmedName.split(/\s+/);
+            
             if (nameParts.length >= 2) {
-              updateData.ovog = nameParts[0];
-              updateData.ner = nameParts.slice(1).join(" ");
+              updateData.ner = nameParts[nameParts.length - 1];
+              updateData.ovog = nameParts.slice(0, nameParts.length - 1).join(" ");
+            } else if (trimmedName.includes('.')) {
+              const dotParts = trimmedName.split('.');
+              updateData.ner = dotParts[dotParts.length - 1];
+              updateData.ovog = dotParts.slice(0, dotParts.length - 1).join(".") + ".";
             } else {
-              updateData.ner = billingInfo.customerName;
+              updateData.ner = trimmedName;
             }
           }
           if (billingInfo.customerAddress) {
@@ -3837,13 +3854,20 @@ exports.walletBillingHavakh = asyncHandler(async (req, res, next) => {
 
     // 5. Update local OrshinSuugch and Centralized Org Sync
     const updateData = {};
-    if (billingInfo.customerName) {
-      const nameParts = billingInfo.customerName.split(" ");
+    if (billingInfo.customerName && !orshinSuugch.ner) {
+      // Strict name extraction: Mongolia convention is [Patronymic/Surname] [Given Name]
+      const trimmedName = billingInfo.customerName.trim();
+      const nameParts = trimmedName.split(/\s+/);
+      
       if (nameParts.length >= 2) {
-        updateData.ovog = nameParts[0];
-        updateData.ner = nameParts.slice(1).join(" ");
+        updateData.ner = nameParts[nameParts.length - 1];
+        updateData.ovog = nameParts.slice(0, nameParts.length - 1).join(" ");
+      } else if (trimmedName.includes('.')) {
+        const dotParts = trimmedName.split('.');
+        updateData.ner = dotParts[dotParts.length - 1];
+        updateData.ovog = dotParts.slice(0, dotParts.length - 1).join(".") + ".";
       } else {
-        updateData.ner = billingInfo.customerName;
+        updateData.ner = trimmedName;
       }
     }
     if (billingInfo.customerAddress) updateData.bairniiNer = billingInfo.customerAddress;
@@ -4880,18 +4904,17 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
       // Don't block deletion if audit logging fails
     }
 
-    // Clear the plate registration from the resident profile
-    orshinSuugch.mashiniiDugaar = "";
-    await orshinSuugch.save();
+    // Actually delete the orshinSuugch user account
+    await OrshinSuugchModel.findByIdAndDelete(userId);
 
-    console.log(`✅ [DELETE-RESIDENT] Resident ${userId} vehicle data cleared and contracts cancelled. Record preserved.`);
+    console.log(`✅ [DELETE-RESIDENT] Resident ${userId} vehicle data cleared, contracts cancelled and record deleted.`);
 
     res.status(200).json({
       success: true,
-      message: "Бүртгэл амжилттай цуцлагдлаа. Машины мэдээлэл устгагдсан.",
+      message: "Хэрэглэгчийн данс устгагдлаа.",
       data: {
         userId: userId,
-        status: "Cancelled"
+        status: "Deleted"
       },
     });
   } catch (error) {

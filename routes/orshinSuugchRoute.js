@@ -1009,6 +1009,10 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             syncData.orts = req.body.orts;
             invoiceUpdateData.orts = req.body.orts;
           }
+          if (req.body.mashiniiDugaar !== undefined) {
+            syncData.mashiniiDugaar = req.body.mashiniiDugaar;
+            mashinUpdateData.dugaar = req.body.mashiniiDugaar || "БҮРТГЭЛГҮЙ";
+          }
 
           // Add address location details if they match this org context
           // Since orshinSuugch might have different addresses in different orgs (toots array),
