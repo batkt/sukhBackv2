@@ -54,16 +54,32 @@ crudWithFile(
       const { db } = require("zevbackv2");
       var ajiltanModel = Ajiltan(db.erunkhiiKholbolt);
 
-      // Intercept res.send to emit socket event upon successful creation/update
+      // For DELETE requests, pre-fetch the employee to get baiguullagiinId before deletion
+      if (req.method === "DELETE" && req.params.id) {
+        var ObjectId = require("mongodb").ObjectId;
+        try {
+          var ajiltanDoc = await ajiltanModel.findOne({ _id: ObjectId(req.params.id) });
+          if (ajiltanDoc) {
+            req._deletedAjiltanBaiguullagaId = ajiltanDoc.baiguullagiinId;
+          }
+        } catch (e) {
+          // Ignore pre-fetch error to avoid blocking execution
+        }
+      }
+
+      // Intercept res.send to emit socket event upon successful database modifications
       if (!req._sendIntercepted) {
         req._sendIntercepted = true;
         const originalSend = res.send;
         res.send = function (data) {
-          if (data === "Amjilttai") {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
             const io = req.app.get("socketio");
-            const baiguullagiinId = req.body.baiguullagiinId;
+            const baiguullagiinId = req.body.baiguullagiinId || req._deletedAjiltanBaiguullagaId;
             if (io && baiguullagiinId) {
-              const eventName = req.method === "POST" ? "ajiltan.created" : "ajiltan.updated";
+              let eventName = "ajiltan.updated";
+              if (req.method === "POST") eventName = "ajiltan.created";
+              else if (req.method === "DELETE") eventName = "ajiltan.deleted";
+              
               io.emit("baiguullagiin" + baiguullagiinId, {
                 type: eventName,
                 data: {}
