@@ -16,6 +16,7 @@ const {
 const {
   khariltsagchUstgakh,
   khariltsagchTootUstgakh,
+  khariltsagchOorooUstgakh,
 } = require("../controller/khariltsagch");
 const aldaa = require("../components/aldaa");
 const session = require("../models/session");
