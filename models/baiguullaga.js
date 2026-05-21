@@ -58,6 +58,8 @@ const baiguullagaSchema = new Schema(
           orts: String,
           davkhar: [String],
           davkhariinToonuud: Schema.Types.Mixed,
+          davkhariinZogsoolnuud: Schema.Types.Mixed,
+          davkhariinAguulakhnuud: Schema.Types.Mixed,
           nuatTulukhEsekh: Boolean,
           zogsoolMsgIlgeekh: Boolean,
           tooluurAutomatTatakhToken: String,
@@ -327,32 +329,29 @@ function normalizeDavkhariinToonuudObject(obj) {
 function normalizeBarilguud(barilguud) {
   if (!barilguud || !Array.isArray(barilguud)) return;
   barilguud.forEach((barilga) => {
-    if (barilga.tokhirgoo && barilga.tokhirgoo.davkhariinToonuud) {
-      barilga.tokhirgoo.davkhariinToonuud = normalizeDavkhariinToonuudObject(
-        barilga.tokhirgoo.davkhariinToonuud
-      );
+    if (barilga.tokhirgoo) {
+      if (barilga.tokhirgoo.davkhariinToonuud) {
+        barilga.tokhirgoo.davkhariinToonuud = normalizeDavkhariinToonuudObject(barilga.tokhirgoo.davkhariinToonuud);
+      }
+      if (barilga.tokhirgoo.davkhariinZogsoolnuud) {
+        barilga.tokhirgoo.davkhariinZogsoolnuud = normalizeDavkhariinToonuudObject(barilga.tokhirgoo.davkhariinZogsoolnuud);
+      }
+      if (barilga.tokhirgoo.davkhariinAguulakhnuud) {
+        barilga.tokhirgoo.davkhariinAguulakhnuud = normalizeDavkhariinToonuudObject(barilga.tokhirgoo.davkhariinAguulakhnuud);
+      }
     }
   });
 }
 
 function validateDavkhariinToonuud(barilguud) {
-  if (!barilguud || !Array.isArray(barilguud)) {
-    return null; // No error
-  }
+  if (!barilguud || !Array.isArray(barilguud)) return null;
 
-  for (let barilgaIndex = 0; barilgaIndex < barilguud.length; barilgaIndex++) {
-    const barilga = barilguud[barilgaIndex];
-    if (!barilga.tokhirgoo || !barilga.tokhirgoo.davkhariinToonuud) {
-      continue;
-    }
-
-    const davkhariinToonuud = barilga.tokhirgoo.davkhariinToonuud;
+  const validateMap = (mapObj, typeName) => {
+    if (!mapObj || typeof mapObj !== 'object') return null;
     const tootMap = new Map();
-    for (const [floorKey, tootArray] of Object.entries(davkhariinToonuud)) {
-      if (!tootArray || !Array.isArray(tootArray)) {
-        continue;
-      }
-
+    for (const [floorKey, tootArray] of Object.entries(mapObj)) {
+      if (!tootArray || !Array.isArray(tootArray)) continue;
+      
       let orts = "1";
       let davkhar = "";
       if (String(floorKey).includes("::")) {
@@ -365,10 +364,7 @@ function validateDavkhariinToonuud(barilguud) {
 
       let tootList = [];
       if (typeof tootArray[0] === "string" && tootArray[0].includes(",")) {
-        tootList = tootArray[0]
-          .split(",")
-          .map((t) => t.trim())
-          .filter((t) => t);
+        tootList = tootArray[0].split(",").map((t) => t.trim()).filter((t) => t);
       } else {
         tootList = tootArray.map((t) => String(t).trim()).filter((t) => t);
       }
@@ -378,23 +374,30 @@ function validateDavkhariinToonuud(barilguud) {
         if (tootMap.has(compositeKey)) {
           const existingDavkhar = String(tootMap.get(compositeKey)).trim();
           const currentDavkhar = String(davkhar).trim();
-
-          // Only error if it's a DIFFERENT floor. If it's the same floor, it's just a duplicate entry/format.
           if (existingDavkhar !== currentDavkhar) {
-            console.error(
-              `❌ [VALIDATION FUNCTION] Duplicate toot found in same orts: "${toot}" in orts ${orts}, davkhar ${existingDavkhar} and ${currentDavkhar}`
-            );
-            return new Error(
-              `Тоот "${toot}" аль хэдийн ${orts}-р орцны ${existingDavkhar}-р давхарт байна. ${orts}-р орцны ${currentDavkhar}-р давхарт давхардсан тоот байж болохгүй!`
-            );
+            console.error(`❌ [VALIDATION FUNCTION] Duplicate ${typeName} found: "${toot}" in orts ${orts}, davkhar ${existingDavkhar} and ${currentDavkhar}`);
+            return new Error(`${typeName} "${toot}" аль хэдийн ${orts}-р орцны ${existingDavkhar}-р давхарт байна. ${orts}-р орцны ${currentDavkhar}-р давхарт давхардсан байж болохгүй!`);
           }
-          continue;
+        } else {
+          tootMap.set(compositeKey, davkhar);
         }
-        tootMap.set(compositeKey, davkhar);
       }
     }
+    return null;
+  };
+
+  for (let barilgaIndex = 0; barilgaIndex < barilguud.length; barilgaIndex++) {
+    const barilga = barilguud[barilgaIndex];
+    if (!barilga.tokhirgoo) continue;
+
+    let err = validateMap(barilga.tokhirgoo.davkhariinToonuud, "Тоот");
+    if (err) return err;
+    err = validateMap(barilga.tokhirgoo.davkhariinZogsoolnuud, "Зогсоол");
+    if (err) return err;
+    err = validateMap(barilga.tokhirgoo.davkhariinAguulakhnuud, "Агуулах");
+    if (err) return err;
   }
-  return null; // No error
+  return null;
 }
 
 baiguullagaSchema.pre("updateOne", function (next) {
@@ -420,7 +423,10 @@ baiguullagaSchema.pre("findOneAndUpdate", async function (next) {
       const setKeys = Object.keys(this._update.$set);
       const isDavkhariinToonuudUpdate = setKeys.some(
         (key) =>
-          key.includes("tokhirgoo.davkhariinToonuud") || key.includes("barilguud")
+          key.includes("tokhirgoo.davkhariinToonuud") || 
+          key.includes("tokhirgoo.davkhariinZogsoolnuud") || 
+          key.includes("tokhirgoo.davkhariinAguulakhnuud") || 
+          key.includes("barilguud")
       );
       if (isDavkhariinToonuudUpdate) {
         console.log(
@@ -448,12 +454,12 @@ baiguullagaSchema.pre("findOneAndUpdate", async function (next) {
               if (!isNaN(barilgaIndex) && mergedBarilguud[barilgaIndex]) {
                 if (
                   pathParts[2] === "tokhirgoo" &&
-                  pathParts[3] === "davkhariinToonuud"
+                  ["davkhariinToonuud", "davkhariinZogsoolnuud", "davkhariinAguulakhnuud"].includes(pathParts[3])
                 ) {
                   const normalizedValue = normalizeDavkhariinToonuudObject(value);
                   mergedBarilguud[barilgaIndex].tokhirgoo =
                     mergedBarilguud[barilgaIndex].tokhirgoo || {};
-                  mergedBarilguud[barilgaIndex].tokhirgoo.davkhariinToonuud =
+                  mergedBarilguud[barilgaIndex].tokhirgoo[pathParts[3]] =
                     normalizedValue;
                   // Update the actual $set value so it is saved in normalized form
                   this._update.$set[path] = normalizedValue;

@@ -4,7 +4,7 @@ const bcrypt = require("bcrypt");
 const Schema = mongoose.Schema;
 
 mongoose.pluralize(null);
-const orshinSuugchSchema = new Schema(
+const khariltsagchSchema = new Schema(
   {
     id: String,
     ner: String,
@@ -14,8 +14,8 @@ const orshinSuugchSchema = new Schema(
         toot: String, // Door number
         turul: {
           type: String,
-          enum: ["Орон сууц", "Гараж", "Агуулах"],
-          default: "Орон сууц"
+          enum: ["Гараж", "Агуулах"],
+          default: "Гараж"
         },
         source: {
           type: String,
@@ -108,18 +108,18 @@ const orshinSuugchSchema = new Schema(
   },
 );
 
-orshinSuugchSchema.index({ utas: 1 }, { unique: true, sparse: true });
-orshinSuugchSchema.index({ baiguullagiinId: 1 });
-orshinSuugchSchema.index({ "toots.walletUserId": 1 });
-orshinSuugchSchema.index({ "toots.toot": 1 });
-orshinSuugchSchema.index({ "toots.baiguullagiinId": 1 });
+khariltsagchSchema.index({ utas: 1 }, { unique: true, sparse: true });
+khariltsagchSchema.index({ baiguullagiinId: 1 });
+khariltsagchSchema.index({ "toots.walletUserId": 1 });
+khariltsagchSchema.index({ "toots.toot": 1 });
+khariltsagchSchema.index({ "toots.baiguullagiinId": 1 });
 
-orshinSuugchSchema.index({
+khariltsagchSchema.index({
   $nevtrekhNer: "text",
   mail: 1,
 });
 
-orshinSuugchSchema.methods.tokenUusgeye = function (
+khariltsagchSchema.methods.tokenUusgeye = function (
   duusakhOgnoo,
   salbaruud = null,
 ) {
@@ -141,7 +141,7 @@ orshinSuugchSchema.methods.tokenUusgeye = function (
   return token;
 };
 
-orshinSuugchSchema.methods.khugatsaaguiTokenUusgeye = function () {
+khariltsagchSchema.methods.khugatsaaguiTokenUusgeye = function () {
   const token = jwt.sign(
     {
       id: this._id,
@@ -154,7 +154,7 @@ orshinSuugchSchema.methods.khugatsaaguiTokenUusgeye = function () {
   return token;
 };
 
-orshinSuugchSchema.methods.zochinTokenUusgye = function (
+khariltsagchSchema.methods.zochinTokenUusgye = function (
   baiguullagiinId,
   gishuunEsekh,
 ) {
@@ -175,7 +175,7 @@ orshinSuugchSchema.methods.zochinTokenUusgye = function (
   return token;
 };
 
-orshinSuugchSchema.pre("save", async function (next) {
+khariltsagchSchema.pre("save", async function (next) {
   this.indexTalbar = this.nevtrekhNer;
 
   if (this.nuutsUg && !this.nuutsUg.startsWith("$2b$")) {
@@ -184,7 +184,7 @@ orshinSuugchSchema.pre("save", async function (next) {
   }
   if (!this.isNew) return next();
 
-  const OrshinSuugchModel = this.constructor;
+  const khariltsagchModel = this.constructor;
   const toCheck = [];
 
   // Top-level toot
@@ -253,7 +253,7 @@ orshinSuugchSchema.pre("save", async function (next) {
     if (orConditions.length > 0) {
       const query = { $or: orConditions };
       if (this._id) query._id = { $ne: this._id };
-      const existing = await OrshinSuugchModel.findOne(query);
+      const existing = await khariltsagchModel.findOne(query);
       if (existing) {
         return next(
           new Error("Энэ тоот дээр оршин суугч аль хэдийн бүртгэгдсэн байна."),
@@ -264,7 +264,7 @@ orshinSuugchSchema.pre("save", async function (next) {
   next();
 });
 
-orshinSuugchSchema.pre("updateOne", async function () {
+khariltsagchSchema.pre("updateOne", async function () {
   this.indexTalbar = this._update.nevtrekhNer;
 
   if (this._update.nuutsUg && !this._update.nuutsUg.startsWith("$2b$")) {
@@ -275,9 +275,9 @@ orshinSuugchSchema.pre("updateOne", async function () {
 
 // Add audit hooks for tracking changes
 const { addAuditHooks } = require("../utils/auditHooks");
-addAuditHooks(orshinSuugchSchema, "orshinSuugch");
+addAuditHooks(khariltsagchSchema, "khariltsagch");
 
-orshinSuugchSchema.methods.passwordShalgaya = async function (pass) {
+khariltsagchSchema.methods.passwordShalgaya = async function (pass) {
   return await bcrypt.compare(pass, this.nuutsUg);
 };
 
@@ -285,5 +285,5 @@ module.exports = function a(conn) {
   if (!conn || !conn.kholbolt)
     throw new Error("Холболтын мэдээлэл заавал бөглөх шаардлагатай!");
   conn = conn.kholbolt;
-  return conn.model("orshinSuugch", orshinSuugchSchema);
+  return conn.model("khariltsagch", khariltsagchSchema);
 };

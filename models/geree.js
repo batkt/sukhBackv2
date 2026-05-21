@@ -47,6 +47,7 @@ const gereeSchema = new Schema(
     davkhar: String,
     burtgesenAjiltan: String,
     orshinSuugchId: String,
+    khariltsagchId: String,
     baiguullagiinId: String,
     baiguullagiinNer: String,
     barilgiinId: String,
