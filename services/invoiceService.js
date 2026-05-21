@@ -7,7 +7,7 @@ const ZaaltUnshlalt = require("../models/zaaltUnshlalt");
 const guilgeeService = require("./guilgeeService");
 const { normalizeTurul } = require("../utils/zardalUtils");
 const NekhemjlekhCron = require("../models/cronSchedule");
-const { calculateNextDueDate } = require("../utils/dateUtils");
+const { calculateNextDueDate, calculateBillingCycleBounds } = require("../utils/dateUtils");
 
 async function calculateGereeCharges(kholbolt, geree, options = {}) {
   const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(geree.baiguullagiinId).lean();
@@ -121,15 +121,34 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     return { success: true, message: "No charges to bill", total: 0 };
   }
 
-  // 1. Get or Create the one unpaid invoice for the target month
+  // Fetch cron schedule early to determine exact billing cycle bounds
+  let cronDay = 1; // Default to 1st of month
+  let cronSchedule = null;
+  try {
+    cronSchedule = await NekhemjlekhCron(kholbolt).findOne({
+      baiguullagiinId: geree.baiguullagiinId,
+      $or: [
+        { barilgiinId: geree.barilgiinId },
+        { barilgiinId: null }
+      ]
+    }).sort({ barilgiinId: -1 }).lean(); // Prioritize building-specific schedule
+
+    if (cronSchedule && cronSchedule.nekhemjlekhUusgekhOgnoo) {
+      cronDay = cronSchedule.nekhemjlekhUusgekhOgnoo;
+    }
+  } catch (err) {
+    console.error("Error fetching cron schedule for cycle:", err);
+  }
+
   const billingDate = options.billingDate || new Date();
-  const startOfMonth = new Date(billingDate.getFullYear(), billingDate.getMonth(), 1);
-  const endOfMonth = new Date(billingDate.getFullYear(), billingDate.getMonth() + 1, 0, 23, 59, 59);
+  
+  // Use exact billing cycle bounds based on cron schedule day
+  const { startOfCycle, endOfCycle } = calculateBillingCycleBounds(cronDay, billingDate);
 
   let invoice = await NekhemjlekhiinTuukhModel.findOne({
     gereeniiId: geree._id.toString(),
     tuluv: "Төлөөгүй",
-    ognoo: { $gte: startOfMonth, $lte: endOfMonth }
+    ognoo: { $gte: startOfCycle, $lte: endOfCycle }
   }).sort({ ognoo: -1 });
 
   if (!invoice) {
@@ -146,21 +165,9 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
 
     let tulukhOgnoo = billingDate;
 
-    // Fetch cron schedule to determine due date based on billing cycle
-    try {
-      const cronSchedule = await NekhemjlekhCron(kholbolt).findOne({
-        baiguullagiinId: geree.baiguullagiinId,
-        $or: [
-          { barilgiinId: geree.barilgiinId },
-          { barilgiinId: null }
-        ]
-      }).sort({ barilgiinId: -1 }); // Prioritize building-specific schedule
-
-      if (cronSchedule && cronSchedule.nekhemjlekhUusgekhOgnoo) {
-        tulukhOgnoo = calculateNextDueDate(cronSchedule.nekhemjlekhUusgekhOgnoo, billingDate);
-      }
-    } catch (err) {
-      console.error("Error fetching cron schedule for due date:", err);
+    // Use previously fetched cronSchedule to determine due date
+    if (cronSchedule && cronSchedule.nekhemjlekhUusgekhOgnoo) {
+      tulukhOgnoo = calculateNextDueDate(cronSchedule.nekhemjlekhUusgekhOgnoo, billingDate);
     }
 
     invoice = new NekhemjlekhiinTuukhModel({
@@ -208,8 +215,8 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
         zardliinNer: c.ner,
         source: "nekhemjlekh",
         ognoo: {
-          $gte: startOfMonth,
-          $lte: endOfMonth
+          $gte: startOfCycle,
+          $lte: endOfCycle
         }
       });
 

@@ -31,14 +31,34 @@ async function gereeNeesNekhemjlekhUusgekh(
     const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
 
     const today = new Date();
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    
+    // Determine the exact billing cycle bounds from cronSchedule
+    const NekhemjlekhCron = require("../models/cronSchedule");
+    let cronDay = 1; // Default to 1st of month
+    try {
+      const schedule = await NekhemjlekhCron(kholbolt).findOne({
+        baiguullagiinId: geree.baiguullagiinId,
+        $or: [
+          { barilgiinId: geree.barilgiinId },
+          { barilgiinId: null }
+        ]
+      }).sort({ barilgiinId: -1 }).lean();
+      
+      if (schedule && schedule.nekhemjlekhUusgekhOgnoo) {
+        cronDay = schedule.nekhemjlekhUusgekhOgnoo;
+      }
+    } catch (err) {
+      console.error("Error fetching cron schedule for cycle:", err);
+    }
+
+    const { calculateBillingCycleBounds } = require("../utils/dateUtils");
+    const { startOfCycle, endOfCycle } = calculateBillingCycleBounds(cronDay, today);
 
     // 1. Check for duplicates if requested
     if (source === "automataar" || skipIfRecent) {
       const existing = await NekhemjlekhModel.findOne({
         gereeniiId: geree._id.toString(),
-        ognoo: { $gte: startOfMonth, $lte: endOfMonth },
+        ognoo: { $gte: startOfCycle, $lte: endOfCycle },
       }).lean();
 
       if (existing) {
