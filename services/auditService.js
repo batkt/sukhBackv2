@@ -113,7 +113,7 @@ function getUserAgentFromRequest(req) {
 /**
  * Compare two objects and return array of changes
  */
-function getChanges(oldDoc, newDoc, excludeFields = ["updatedAt", "__v", "_id"]) {
+function getChanges(oldDoc, newDoc, excludeFields = ["updatedAt", "__v", "_id", "globalUldegdel", "paymentHistory", "tulsunOgnoo", "tuluv"]) {
   const changes = [];
   const allKeys = new Set([...Object.keys(oldDoc || {}), ...Object.keys(newDoc || {})]);
 
@@ -129,8 +129,8 @@ function getChanges(oldDoc, newDoc, excludeFields = ["updatedAt", "__v", "_id"])
       changes.push({
         talbar: key,
         talbarNer: key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1').trim(),
-        umnukhUtga: oldValue !== null && oldValue !== undefined ? String(oldValue) : "",
-        shineUtga: newValue !== null && newValue !== undefined ? String(newValue) : "",
+        umnukhUtga: oldValue !== null && oldValue !== undefined ? (typeof oldValue === "object" ? JSON.stringify(oldValue) : String(oldValue)) : "",
+        shineUtga: newValue !== null && newValue !== undefined ? (typeof newValue === "object" ? JSON.stringify(newValue) : String(newValue)) : "",
         utganiiTurul: typeof newValue,
       });
     }
