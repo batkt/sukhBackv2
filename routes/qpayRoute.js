@@ -1154,7 +1154,11 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
             const guilgeeService = require("../services/guilgeeService");
             let totalActualBalance = 0;
             for (const invId of invoiceIds) {
-              const invBalance = await guilgeeService.getBalance(kholbolt, { nekhemjlekhId: invId });
+              const invoiceDoc = invoices.find(inv => String(inv._id) === String(invId));
+              let invBalance = await guilgeeService.getBalance(kholbolt, { nekhemjlekhId: invId });
+              if (invBalance <= 0 && invoiceDoc) {
+                invBalance = typeof invoiceDoc.uldegdel === "number" ? invoiceDoc.uldegdel : (invoiceDoc.niitTulbur || 0);
+              }
               if (invBalance > 0) totalActualBalance += invBalance;
             }
 
@@ -1162,7 +1166,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
             totalActualBalance = Math.round(totalActualBalance * 100) / 100;
 
             const requestedDun = parseFloat(req.body.dun || 0);
-            if (totalActualBalance < requestedDun && totalActualBalance >= 0) {
+            if (totalActualBalance < requestedDun && totalActualBalance > 0) {
               console.log(`⚖️ [QPAY-GARGAYA-MULTI] Overpayment prevention: Overriding ${requestedDun} with ${totalActualBalance}`);
               req.body.dun = totalActualBalance;
             }
@@ -1191,8 +1195,13 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
               // Round to 2 decimals
               currentBalance = Math.round(currentBalance * 100) / 100;
 
+              // Fallback to invoice's own balance if ledger balance is 0 or less
+              if (currentBalance <= 0 && inv) {
+                currentBalance = typeof inv.uldegdel === "number" ? inv.uldegdel : (inv.niitTulbur || 0);
+              }
+
               const requestedDun = parseFloat(req.body.dun || 0);
-              if (currentBalance < requestedDun && currentBalance >= 0) {
+              if (currentBalance < requestedDun && currentBalance > 0) {
                 console.log(`⚖️ [QPAY-GARGAYA] Overpayment prevention: Overriding ${requestedDun} with ${currentBalance}`);
                 req.body.dun = currentBalance;
               }
