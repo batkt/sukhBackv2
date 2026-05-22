@@ -1137,14 +1137,11 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
           req.body.dansniiDugaar = firstInvoice.dansniiDugaar;
         }
 
-        // For multiple invoices, use the barilgiinId from the first invoice
-        // The QpayKhariltsagch lookup below will handle getting the correct bank account
-
         // Create callback URL with comma-separated invoice IDs
         const invoiceIdsString = invoiceIds.join(",");
         callback_url =
           process.env.UNDSEN_SERVER +
-          "/qpayNekhemjlekhCallback/" +
+          "/api/qpayNekhemjlekhMultipleCallback/" +
           req.body.baiguullagiinId.toString() +
           "/" +
           invoiceIdsString;
@@ -1882,723 +1879,723 @@ router.get("/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNe
 router.post("/qpayNekhemjlekhCallback/:baiguullagiinId/:nekhemjlekhiinId", qpayNekhemjlekhCallback);
 
 // Callback route for multiple invoice payments
-router.get(
-  "/qpayNekhemjlekhMultipleCallback/:baiguullagiinId/:invoiceIds",
-  async (req, res, next) => {
-    try {
-      const { db } = require("zevbackv2");
-      const nekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
-      const Baiguullaga = require("../models/baiguullaga");
-      const Geree = require("../models/geree");
-      const BankniiGuilgee = require("../models/bankniiGuilgee");
-      // qpayShalgay and QuickQpayObject are already imported at the top
+const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const nekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+    const Baiguullaga = require("../models/baiguullaga");
+    const Geree = require("../models/geree");
+    const BankniiGuilgee = require("../models/bankniiGuilgee");
+    // qpayShalgay and QuickQpayObject are already imported at the top
 
-      const baiguullagiinId = req.params.baiguullagiinId;
-      const invoiceIdsString = req.params.invoiceIds;
-      const invoiceIds = invoiceIdsString.split(",").filter((id) => id.trim());
+    const baiguullagiinId = req.params.baiguullagiinId;
+    const invoiceIdsString = req.params.invoiceIds;
+    const invoiceIds = invoiceIdsString.split(",").filter((id) => id.trim());
 
-      if (invoiceIds.length === 0) {
-        return res.status(400).send("No invoice IDs provided");
+    if (invoiceIds.length === 0) {
+      return res.status(400).send("No invoice IDs provided");
+    }
+
+    const kholbolt = db.kholboltuud.find(
+      (a) => String(a.baiguullagiinId) === String(baiguullagiinId),
+    );
+
+    if (!kholbolt) {
+      return res.status(404).send("Organization not found");
+    }
+
+    // Convert invoice IDs to ObjectId if needed
+    const mongoose = require("mongoose");
+    const ObjectId = mongoose.Types.ObjectId;
+    const invoiceObjectIds = invoiceIds.map((id) => {
+      try {
+        return new ObjectId(id);
+      } catch (e) {
+        return id;
       }
+    });
 
-      const kholbolt = db.kholboltuud.find(
-        (a) => String(a.baiguullagiinId) === String(baiguullagiinId),
-      );
+    // Fetch all invoices
+    const invoices = await nekhemjlekhiinTuukh(kholbolt).find({
+      _id: { $in: invoiceObjectIds },
+    });
 
-      if (!kholbolt) {
-        return res.status(404).send("Organization not found");
-      }
+    if (invoices.length === 0) {
+      return res.status(404).send("Invoices not found");
+    }
 
-      // Convert invoice IDs to ObjectId if needed
-      const mongoose = require("mongoose");
-      const ObjectId = mongoose.Types.ObjectId;
-      const invoiceObjectIds = invoiceIds.map((id) => {
-        try {
-          return ObjectId(id);
-        } catch (e) {
-          return id;
+    // Mongo $in does not preserve URL order; QPay id may live on any row.
+    const invoiceWithQpay =
+      invoices.find((inv) => inv.qpayInvoiceId) || invoices[0];
+    const qpayInvoiceIdForApi = invoiceWithQpay?.qpayInvoiceId || null;
+
+    console.log("ℹ️ [QPAY MULTI CALLBACK] invoices + QPay id", {
+      baiguullagiinId,
+      nekhemjlekhiinIds: invoiceIds,
+      chosenForQpayShalgay: invoiceWithQpay?._id?.toString(),
+      qpayInvoiceIdForApi,
+    });
+
+    let paymentTransactionId = null;
+
+    if (qpayInvoiceIdForApi) {
+      try {
+        const khariu = await qpayShalgay(
+          {
+            invoice_id: qpayInvoiceIdForApi,
+            baiguullagiinId: String(baiguullagiinId),
+          },
+          kholbolt,
+        );
+
+        if (khariu?.payments?.[0]?.transactions?.[0]?.id) {
+          paymentTransactionId = khariu.payments[0].transactions[0].id;
         }
-      });
-
-      // Fetch all invoices
-      const invoices = await nekhemjlekhiinTuukh(kholbolt).find({
-        _id: { $in: invoiceObjectIds },
-      });
-
-      if (invoices.length === 0) {
-        return res.status(404).send("Invoices not found");
-      }
-
-      // Mongo $in does not preserve URL order; QPay id may live on any row.
-      const invoiceWithQpay =
-        invoices.find((inv) => inv.qpayInvoiceId) || invoices[0];
-      const qpayInvoiceIdForApi = invoiceWithQpay?.qpayInvoiceId || null;
-
-      console.log("ℹ️ [QPAY MULTI CALLBACK] invoices + QPay id", {
-        baiguullagiinId,
-        nekhemjlekhiinIds: invoiceIds,
-        chosenForQpayShalgay: invoiceWithQpay?._id?.toString(),
-        qpayInvoiceIdForApi,
-      });
-
-      let paymentTransactionId = null;
-
-      if (qpayInvoiceIdForApi) {
-        try {
-          const khariu = await qpayShalgay(
-            {
-              invoice_id: qpayInvoiceIdForApi,
-              baiguullagiinId: String(baiguullagiinId),
-            },
-            kholbolt,
-          );
-
-          if (khariu?.payments?.[0]?.transactions?.[0]?.id) {
-            paymentTransactionId = khariu.payments[0].transactions[0].id;
-          }
-          console.log("ℹ️ [QPAY MULTI CALLBACK] qpayShalgay", {
-            invoice_status: khariu?.invoice_status,
-            hasPayments: !!(khariu?.payments && khariu.payments.length),
-            paymentTransactionId,
-          });
-        } catch (err) {
-          console.error(
-            "❌ [QPAY MULTI CALLBACK] qpayShalgay failed:",
-            err.message,
-          );
-        }
-      } else {
-        console.warn(
-          "⚠️ [QPAY MULTI CALLBACK] no qpayInvoiceId on any invoice — cannot sync QPay payment id",
+        console.log("ℹ️ [QPAY MULTI CALLBACK] qpayShalgay", {
+          invoice_status: khariu?.invoice_status,
+          hasPayments: !!(khariu?.payments && khariu.payments.length),
+          paymentTransactionId,
+        });
+      } catch (err) {
+        console.error(
+          "❌ [QPAY MULTI CALLBACK] qpayShalgay failed:",
+          err.message,
         );
       }
+    } else {
+      console.warn(
+        "⚠️ [QPAY MULTI CALLBACK] no qpayInvoiceId on any invoice — cannot sync QPay payment id",
+      );
+    }
 
-      if (!paymentTransactionId && req.query.qpay_payment_id) {
-        paymentTransactionId = req.query.qpay_payment_id;
-      }
+    if (!paymentTransactionId && req.query.qpay_payment_id) {
+      paymentTransactionId = req.query.qpay_payment_id;
+    }
 
-      // Update all invoices as paid
-      const updatePromises = invoices.map(async (nekhemjlekh) => {
-        try {
-          if (nekhemjlekh.tuluv === "Төлсөн") {
-            return;
-          }
+    // Update all invoices as paid
+    const updatePromises = invoices.map(async (nekhemjlekh) => {
+      try {
+        if (nekhemjlekh.tuluv === "Төлсөн") {
+          return;
+        }
 
-          // Use findByIdAndUpdate to ensure the update is applied
-          const updatedInvoice = await nekhemjlekhiinTuukh(
-            kholbolt,
-          ).findByIdAndUpdate(
-            nekhemjlekh._id,
-            {
-              $set: (() => {
-                const multiPaidAmount = nekhemjlekh.niitTulbur || 0;
-                const multiCurrentUldegdel =
-                  typeof nekhemjlekh.uldegdel === "number" &&
-                    !isNaN(nekhemjlekh.uldegdel) &&
-                    nekhemjlekh.uldegdel > 0
-                    ? nekhemjlekh.uldegdel
-                    : multiPaidAmount;
-                const multiNewUldegdel = Math.max(
-                  0,
-                  multiCurrentUldegdel - multiPaidAmount,
-                );
-                const multiIsFullyPaid = multiNewUldegdel <= 0.01;
-                return {
-                  tuluv: multiIsFullyPaid ? "Төлсөн" : "Төлөөгүй",
-                  ...(paymentTransactionId && {
-                    qpayPaymentId: paymentTransactionId,
-                  }),
-                  // uldegdel removed
-                };
-              })(),
-              $push: {
-                paymentHistory: {
-                  ognoo: new Date(),
-                  dun: nekhemjlekh.niitTulbur || 0,
-                  turul: "төлөлт",
-                  guilgeeniiId:
-                    paymentTransactionId ||
-                    nekhemjlekh.qpayInvoiceId ||
-                    "unknown",
-                  tailbar: "QPay төлбөр (Олон нэхэмжлэх)",
-                },
+        // Use findByIdAndUpdate to ensure the update is applied
+        const updatedInvoice = await nekhemjlekhiinTuukh(
+          kholbolt,
+        ).findByIdAndUpdate(
+          nekhemjlekh._id,
+          {
+            $set: (() => {
+              const multiPaidAmount = nekhemjlekh.niitTulbur || 0;
+              const multiCurrentUldegdel =
+                typeof nekhemjlekh.uldegdel === "number" &&
+                  !isNaN(nekhemjlekh.uldegdel) &&
+                  nekhemjlekh.uldegdel > 0
+                  ? nekhemjlekh.uldegdel
+                  : multiPaidAmount;
+              const multiNewUldegdel = Math.max(
+                0,
+                multiCurrentUldegdel - multiPaidAmount,
+              );
+              const multiIsFullyPaid = multiNewUldegdel <= 0.01;
+              return {
+                tuluv: multiIsFullyPaid ? "Төлсөн" : "Төлөөгүй",
+                ...(paymentTransactionId && {
+                  qpayPaymentId: paymentTransactionId,
+                }),
+                // uldegdel removed
+              };
+            })(),
+            $push: {
+              paymentHistory: {
+                ognoo: new Date(),
+                dun: nekhemjlekh.niitTulbur || 0,
+                turul: "төлөлт",
+                guilgeeniiId:
+                  paymentTransactionId ||
+                  nekhemjlekh.qpayInvoiceId ||
+                  "unknown",
+                tailbar: "QPay төлбөр (Олон нэхэмжлэх)",
               },
             },
-            { new: true },
+          },
+          { new: true },
+        );
+
+        if (!updatedInvoice) {
+          return;
+        }
+
+        // Use the updated invoice for further operations
+        nekhemjlekh = updatedInvoice;
+
+        try {
+          const invFresh = await nekhemjlekhiinTuukh(kholbolt).findById(
+            nekhemjlekh._id,
+          );
+          if (invFresh) {
+            invFresh._skipTuluvRecalc = true;
+            await invFresh.save();
+          }
+        } catch (ekhniiSyncErr) {
+          console.error(
+            "[QPAY MULTI] ekhniiUldegdel sync save failed:",
+            ekhniiSyncErr.message,
+          );
+        }
+
+        // NOTE: Do NOT reset geree.ekhniiUldegdel to 0 here.
+        // The recalculation formula depends on it as a permanent charge component.
+        // invoiceCreationService prevents double-counting via existingEkhniiUldegdelInvoices check.
+
+        // Reset electricity readings to 0 if electricity invoice is paid
+        // User will upload new readings for next month
+        if (
+          nekhemjlekh.tsahilgaanNekhemjlekh &&
+          nekhemjlekh.tsahilgaanNekhemjlekh > 0
+        ) {
+          try {
+            const gereeForUpdate = await Geree(kholbolt).findById(
+              nekhemjlekh.gereeniiId,
+            );
+            if (gereeForUpdate) {
+              gereeForUpdate.umnukhZaalt = 0;
+              gereeForUpdate.suuliinZaalt = 0;
+              gereeForUpdate.zaaltTog = 0;
+              gereeForUpdate.zaaltUs = 0;
+              await gereeForUpdate.save();
+            }
+          } catch (zaaltError) { }
+        }
+
+        // Create bank payment record for each invoice
+        try {
+          const geree = await Geree(kholbolt)
+            .findById(nekhemjlekh.gereeniiId)
+            .lean();
+
+          if (geree) {
+            const bankGuilgee = new BankniiGuilgee(kholbolt)();
+
+            bankGuilgee.tranDate = new Date();
+            let invoicePaidAmount = 0;
+
+            // Priority 1: Try to get amount from local QPay record (the intended amount)
+            try {
+              const { QuickQpayObject } = require("quickqpaypackvSukh");
+              const QuickQpayModel = QuickQpayObject(kholbolt);
+              const qp = await QuickQpayModel.findOne({
+                $or: [
+                  { invoice_id: nekhemjlekh.qpayInvoiceId },
+                  { "sukhNekhemjlekh.nekhemjlekhiinId": nekhemjlekh._id.toString() }
+                ]
+              }).sort({ ognoo: -1 });
+
+              if (qp) {
+                invoicePaidAmount = parseFloat(qp.sukhNekhemjlekh?.pay_amount || qp.amount || qp.qpay?.amount || 0);
+              }
+            } catch (qpErr) { }
+
+            // Priority 2: Fallback to niitTulbur only if 0
+            if (invoicePaidAmount <= 0) {
+              invoicePaidAmount = nekhemjlekh.niitTulbur || 0;
+            }
+
+            // Priority 3: Fallback to ledger charge record if still 0
+            if (invoicePaidAmount <= 0) {
+              const chargeRecord = await GuilgeeAvlaguud(kholbolt).findOne({
+                nekhemjlekhId: nekhemjlekh._id.toString(),
+                dun: { $gt: 0 }
+              });
+              if (chargeRecord) {
+                invoicePaidAmount = chargeRecord.undsenDun || chargeRecord.dun || 0;
+              }
+            }
+
+            bankGuilgee.amount = invoicePaidAmount;
+            bankGuilgee.description = `QPay төлбөр (Олон нэхэмжлэх) - Гэрээ ${nekhemjlekh.gereeniiDugaar}`;
+            bankGuilgee.accName = nekhemjlekh.nekhemjlekhiinDansniiNer || "";
+            bankGuilgee.accNum = nekhemjlekh.nekhemjlekhiinDans || "";
+
+            bankGuilgee.record =
+              paymentTransactionId || nekhemjlekh.qpayInvoiceId || "";
+            bankGuilgee.tranId =
+              paymentTransactionId || nekhemjlekh.qpayInvoiceId || "";
+            bankGuilgee.balance = 0;
+            bankGuilgee.requestId = nekhemjlekh.qpayInvoiceId || "";
+
+            bankGuilgee.kholbosonGereeniiId = [nekhemjlekh.gereeniiId];
+            bankGuilgee.kholbosonTalbainId = geree?.talbainDugaar
+              ? [geree.talbainDugaar]
+              : [];
+            bankGuilgee.dansniiDugaar = nekhemjlekh.nekhemjlekhiinDans || "";
+            bankGuilgee.bank = nekhemjlekh.nekhemjlekhiinBank || "qpay";
+            bankGuilgee.baiguullagiinId = nekhemjlekh.baiguullagiinId;
+            bankGuilgee.barilgiinId = nekhemjlekh.barilgiinId || "";
+            bankGuilgee.kholbosonDun = invoicePaidAmount;
+            bankGuilgee.ebarimtAvsanEsekh = false;
+            bankGuilgee.drOrCr = "Credit";
+            bankGuilgee.tranCrnCode = "MNT";
+            bankGuilgee.exchRate = 1;
+            bankGuilgee.postDate = new Date();
+
+            bankGuilgee.indexTalbar = `${bankGuilgee.barilgiinId}${bankGuilgee.bank}${bankGuilgee.dansniiDugaar}${bankGuilgee.record}${bankGuilgee.amount}`;
+
+            await bankGuilgee.save();
+          }
+        } catch (bankErr) { }
+
+        // Record the QPay payment in the ledger
+        try {
+          const guilgeeService = require("../services/guilgeeService");
+          await guilgeeService.recordPayment(kholbolt, {
+            baiguullagiinId: String(nekhemjlekh.baiguullagiinId),
+            baiguullagiinNer: nekhemjlekh.baiguullagiinNer || "",
+            barilgiinId: nekhemjlekh.barilgiinId || "",
+            gereeniiId: String(nekhemjlekh.gereeniiId),
+            gereeniiDugaar: nekhemjlekh.gereeniiDugaar || "",
+            orshinSuugchId: nekhemjlekh.orshinSuugchId || "",
+            nekhemjlekhId: nekhemjlekh._id?.toString() || null,
+            ognoo: new Date(),
+            dun: invoicePaidAmount,
+            tailbar: `QPay төлбөр (Олон нэхэмжлэх) - ${nekhemjlekh.gereeniiDugaar || ""}`,
+            source: "nekhemjlekh",
+          });
+        } catch (ledgerErr) {
+          console.error("❌ [QPAY MULTI CALLBACK] Ledger error:", ledgerErr.message);
+        }
+
+        // Create ebarimt for each invoice
+        try {
+          const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(
+            updatedInvoice.baiguullagiinId,
           );
 
-          if (!updatedInvoice) {
-            return;
+          let tuxainSalbar = null;
+          if (updatedInvoice.barilgiinId && baiguullaga?.barilguud) {
+            tuxainSalbar = baiguullaga.barilguud.find(
+              (e) => e._id.toString() === String(updatedInvoice.barilgiinId),
+            )?.tokhirgoo;
           }
 
-          // Use the updated invoice for further operations
-          nekhemjlekh = updatedInvoice;
-
-          try {
-            const invFresh = await nekhemjlekhiinTuukh(kholbolt).findById(
-              nekhemjlekh._id,
-            );
-            if (invFresh) {
-              invFresh._skipTuluvRecalc = true;
-              await invFresh.save();
-            }
-          } catch (ekhniiSyncErr) {
-            console.error(
-              "[QPAY MULTI] ekhniiUldegdel sync save failed:",
-              ekhniiSyncErr.message,
-            );
+          if (!tuxainSalbar && baiguullaga?.barilguud?.length > 0) {
+            tuxainSalbar = baiguullaga.barilguud[0].tokhirgoo;
           }
 
-          // NOTE: Do NOT reset geree.ekhniiUldegdel to 0 here.
-          // The recalculation formula depends on it as a permanent charge component.
-          // invoiceCreationService prevents double-counting via existingEkhniiUldegdelInvoices check.
+          // Check both eBarimtAshiglakhEsekh and eBarimtShine for backward compatibility
+          const shouldCreateEbarimt =
+            tuxainSalbar &&
+            (tuxainSalbar.eBarimtAshiglakhEsekh || tuxainSalbar.eBarimtShine);
+          console.log("ℹ️ [QPAY MULTI CALLBACK] Ebarimt gate:", {
+            invoiceId: updatedInvoice._id?.toString(),
+            hasTokhirgoo: !!tuxainSalbar,
+            eBarimtAshiglakhEsekh: tuxainSalbar?.eBarimtAshiglakhEsekh,
+            eBarimtShine: tuxainSalbar?.eBarimtShine,
+            shouldCreateEbarimt,
+            hasMerchantTin: !!tuxainSalbar?.merchantTin,
+          });
 
-          // Reset electricity readings to 0 if electricity invoice is paid
-          // User will upload new readings for next month
-          if (
-            nekhemjlekh.tsahilgaanNekhemjlekh &&
-            nekhemjlekh.tsahilgaanNekhemjlekh > 0
-          ) {
-            try {
-              const gereeForUpdate = await Geree(kholbolt).findById(
-                nekhemjlekh.gereeniiId,
+          if (shouldCreateEbarimt) {
+            if (!tuxainSalbar.merchantTin) {
+              console.error(
+                "❌ [QPAY MULTI CALLBACK] Ebarimt skipped: merchantTin missing",
               );
-              if (gereeForUpdate) {
-                gereeForUpdate.umnukhZaalt = 0;
-                gereeForUpdate.suuliinZaalt = 0;
-                gereeForUpdate.zaaltTog = 0;
-                gereeForUpdate.zaaltUs = 0;
-                await gereeForUpdate.save();
-              }
-            } catch (zaaltError) { }
-          }
+            } else {
+              // Ebarimt API requires a 4-digit numeric district code
+              // Look up the code from tatvariinAlba using city name and district/horoo name
+              let ebarimtDistrictCode = null;
 
-          // Create bank payment record for each invoice
-          try {
-            const geree = await Geree(kholbolt)
-              .findById(nekhemjlekh.gereeniiId)
-              .lean();
-
-            if (geree) {
-              const bankGuilgee = new BankniiGuilgee(kholbolt)();
-
-              bankGuilgee.tranDate = new Date();
-              let invoicePaidAmount = 0;
-
-              // Priority 1: Try to get amount from local QPay record (the intended amount)
               try {
-                const { QuickQpayObject } = require("quickqpaypackvSukh");
-                const QuickQpayModel = QuickQpayObject(kholbolt);
-                const qp = await QuickQpayModel.findOne({
-                  $or: [
-                    { invoice_id: nekhemjlekh.qpayInvoiceId },
-                    { "sukhNekhemjlekh.nekhemjlekhiinId": nekhemjlekh._id.toString() }
-                  ]
-                }).sort({ ognoo: -1 });
-
-                if (qp) {
-                  invoicePaidAmount = parseFloat(qp.sukhNekhemjlekh?.pay_amount || qp.amount || qp.qpay?.amount || 0);
-                }
-              } catch (qpErr) { }
-
-              // Priority 2: Fallback to niitTulbur only if 0
-              if (invoicePaidAmount <= 0) {
-                invoicePaidAmount = nekhemjlekh.niitTulbur || 0;
-              }
-
-              // Priority 3: Fallback to ledger charge record if still 0
-              if (invoicePaidAmount <= 0) {
-                const chargeRecord = await GuilgeeAvlaguud(kholbolt).findOne({
-                  nekhemjlekhId: nekhemjlekh._id.toString(),
-                  dun: { $gt: 0 }
-                });
-                if (chargeRecord) {
-                  invoicePaidAmount = chargeRecord.undsenDun || chargeRecord.dun || 0;
-                }
-              }
-
-              bankGuilgee.amount = invoicePaidAmount;
-              bankGuilgee.description = `QPay төлбөр (Олон нэхэмжлэх) - Гэрээ ${nekhemjlekh.gereeniiDugaar}`;
-              bankGuilgee.accName = nekhemjlekh.nekhemjlekhiinDansniiNer || "";
-              bankGuilgee.accNum = nekhemjlekh.nekhemjlekhiinDans || "";
-
-              bankGuilgee.record =
-                paymentTransactionId || nekhemjlekh.qpayInvoiceId || "";
-              bankGuilgee.tranId =
-                paymentTransactionId || nekhemjlekh.qpayInvoiceId || "";
-              bankGuilgee.balance = 0;
-              bankGuilgee.requestId = nekhemjlekh.qpayInvoiceId || "";
-
-              bankGuilgee.kholbosonGereeniiId = [nekhemjlekh.gereeniiId];
-              bankGuilgee.kholbosonTalbainId = geree?.talbainDugaar
-                ? [geree.talbainDugaar]
-                : [];
-              bankGuilgee.dansniiDugaar = nekhemjlekh.nekhemjlekhiinDans || "";
-              bankGuilgee.bank = nekhemjlekh.nekhemjlekhiinBank || "qpay";
-              bankGuilgee.baiguullagiinId = nekhemjlekh.baiguullagiinId;
-              bankGuilgee.barilgiinId = nekhemjlekh.barilgiinId || "";
-              bankGuilgee.kholbosonDun = invoicePaidAmount;
-              bankGuilgee.ebarimtAvsanEsekh = false;
-              bankGuilgee.drOrCr = "Credit";
-              bankGuilgee.tranCrnCode = "MNT";
-              bankGuilgee.exchRate = 1;
-              bankGuilgee.postDate = new Date();
-
-              bankGuilgee.indexTalbar = `${bankGuilgee.barilgiinId}${bankGuilgee.bank}${bankGuilgee.dansniiDugaar}${bankGuilgee.record}${bankGuilgee.amount}`;
-
-              await bankGuilgee.save();
-            }
-          } catch (bankErr) { }
-
-          // Record the QPay payment in the ledger
-          try {
-            const guilgeeService = require("../services/guilgeeService");
-            await guilgeeService.recordPayment(kholbolt, {
-              baiguullagiinId: String(nekhemjlekh.baiguullagiinId),
-              baiguullagiinNer: nekhemjlekh.baiguullagiinNer || "",
-              barilgiinId: nekhemjlekh.barilgiinId || "",
-              gereeniiId: String(nekhemjlekh.gereeniiId),
-              gereeniiDugaar: nekhemjlekh.gereeniiDugaar || "",
-              orshinSuugchId: nekhemjlekh.orshinSuugchId || "",
-              nekhemjlekhId: nekhemjlekh._id?.toString() || null,
-              ognoo: new Date(),
-              dun: invoicePaidAmount,
-              tailbar: `QPay төлбөр (Олон нэхэмжлэх) - ${nekhemjlekh.gereeniiDugaar || ""}`,
-              source: "nekhemjlekh",
-            });
-          } catch (ledgerErr) {
-            console.error("❌ [QPAY MULTI CALLBACK] Ledger error:", ledgerErr.message);
-          }
-
-          // Create ebarimt for each invoice
-          try {
-            const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(
-              updatedInvoice.baiguullagiinId,
-            );
-
-            let tuxainSalbar = null;
-            if (updatedInvoice.barilgiinId && baiguullaga?.barilguud) {
-              tuxainSalbar = baiguullaga.barilguud.find(
-                (e) => e._id.toString() === String(updatedInvoice.barilgiinId),
-              )?.tokhirgoo;
-            }
-
-            if (!tuxainSalbar && baiguullaga?.barilguud?.length > 0) {
-              tuxainSalbar = baiguullaga.barilguud[0].tokhirgoo;
-            }
-
-            // Check both eBarimtAshiglakhEsekh and eBarimtShine for backward compatibility
-            const shouldCreateEbarimt =
-              tuxainSalbar &&
-              (tuxainSalbar.eBarimtAshiglakhEsekh || tuxainSalbar.eBarimtShine);
-            console.log("ℹ️ [QPAY MULTI CALLBACK] Ebarimt gate:", {
-              invoiceId: updatedInvoice._id?.toString(),
-              hasTokhirgoo: !!tuxainSalbar,
-              eBarimtAshiglakhEsekh: tuxainSalbar?.eBarimtAshiglakhEsekh,
-              eBarimtShine: tuxainSalbar?.eBarimtShine,
-              shouldCreateEbarimt,
-              hasMerchantTin: !!tuxainSalbar?.merchantTin,
-            });
-
-            if (shouldCreateEbarimt) {
-              if (!tuxainSalbar.merchantTin) {
-                console.error(
-                  "❌ [QPAY MULTI CALLBACK] Ebarimt skipped: merchantTin missing",
+                const TatvariinAlba = require("../models/tatvariinAlba");
+                const cityName =
+                  tuxainSalbar.EbarimtDuuregNer || tuxainSalbar.duuregNer;
+                const districtCodeString =
+                  tuxainSalbar.EbarimtDistrictCode ||
+                  tuxainSalbar.districtCode ||
+                  "";
+                console.log(
+                  "ℹ️ [QPAY MULTI CALLBACK] Ebarimt district lookup input:",
+                  {
+                    invoiceId: updatedInvoice._id?.toString(),
+                    cityName,
+                    districtCodeString,
+                    horooNameFromConfig:
+                      tuxainSalbar.EbarimtDHoroo?.ner ||
+                      tuxainSalbar.horoo?.ner ||
+                      null,
+                  },
                 );
-              } else {
-                // Ebarimt API requires a 4-digit numeric district code
-                // Look up the code from tatvariinAlba using city name and district/horoo name
-                let ebarimtDistrictCode = null;
 
-                try {
-                  const TatvariinAlba = require("../models/tatvariinAlba");
-                  const cityName =
-                    tuxainSalbar.EbarimtDuuregNer || tuxainSalbar.duuregNer;
-                  const districtCodeString =
-                    tuxainSalbar.EbarimtDistrictCode ||
-                    tuxainSalbar.districtCode ||
-                    "";
-                  console.log(
-                    "ℹ️ [QPAY MULTI CALLBACK] Ebarimt district lookup input:",
+                // Extract horoo/district name from the district code string
+                const horooName =
+                  tuxainSalbar.EbarimtDHoroo?.ner ||
+                  tuxainSalbar.horoo?.ner ||
+                  districtCodeString.replace(cityName, "").trim();
+
+                if (cityName && horooName) {
+                  // Find the city in tatvariinAlba - try exact match first, then case-insensitive
+                  let city = await TatvariinAlba(db.erunkhiiKholbolt).findOne(
+                    { ner: cityName },
+                  );
+
+                  // If not found, try case-insensitive search
+                  if (!city) {
+                    const allCities = await TatvariinAlba(
+                      db.erunkhiiKholbolt,
+                    ).find({});
+                    city = allCities.find(
+                      (c) =>
+                        c.ner &&
+                        c.ner.trim().toLowerCase() ===
+                        cityName.trim().toLowerCase(),
+                    );
+                    if (city) {
+                    }
+                  }
+
+                  if (city && city.kod) {
+                    // Find the district/horoo within the city - try exact match, then partial match
+                    let district = city.ded?.find(
+                      (d) =>
+                        d.ner === horooName || d.ner === horooName.trim(),
+                    );
+
+                    // If not found, try case-insensitive or partial match
+                    if (!district && city.ded) {
+                      district = city.ded.find((d) => {
+                        const dName = d.ner?.trim().toLowerCase() || "";
+                        const hName = horooName.trim().toLowerCase();
+                        return (
+                          dName === hName ||
+                          dName.includes(hName) ||
+                          hName.includes(dName)
+                        );
+                      });
+                      if (district) {
+                      }
+                    }
+
+                    if (district && district.kod) {
+                      // Combine city code + district code to create 4-digit code
+                      const cityCode = city.kod.padStart(2, "0");
+                      const districtCode = district.kod.padStart(2, "0");
+                      ebarimtDistrictCode = cityCode + districtCode;
+                    } else {
+                    }
+                  } else {
+                  }
+                }
+
+                // Fallback: try to extract 4-digit numeric code directly
+                if (!ebarimtDistrictCode) {
+                  const numericMatch = districtCodeString?.match(/\d{4}/);
+                  if (numericMatch) {
+                    ebarimtDistrictCode = numericMatch[0];
+                  } else if (/^\d{4}$/.test(districtCodeString)) {
+                    ebarimtDistrictCode = districtCodeString;
+                  }
+                }
+
+                if (
+                  !ebarimtDistrictCode ||
+                  !/^\d{4}$/.test(ebarimtDistrictCode)
+                ) {
+                  console.error(
+                    "❌ [QPAY MULTI CALLBACK] Ebarimt skipped: invalid district code",
                     {
                       invoiceId: updatedInvoice._id?.toString(),
-                      cityName,
-                      districtCodeString,
-                      horooNameFromConfig:
-                        tuxainSalbar.EbarimtDHoroo?.ner ||
-                        tuxainSalbar.horoo?.ner ||
-                        null,
+                      ebarimtDistrictCode,
+                    },
+                  );
+                } else {
+                  console.log(
+                    "✅ [QPAY MULTI CALLBACK] Ebarimt district code resolved",
+                    {
+                      invoiceId: updatedInvoice._id?.toString(),
+                      ebarimtDistrictCode,
+                    },
+                  );
+                  const {
+                    nekhemjlekheesEbarimtShineUusgye,
+                    ebarimtDuudya,
+                    autoApproveQr,
+                  } = require("./ebarimtRoute");
+                  const EbarimtShine = require("../models/ebarimtShine");
+
+                  const nuatTulukhEsekh = !!tuxainSalbar.nuatTulukhEsekh;
+
+                  const paidAmountForEbarimt =
+                    Number(
+                      updatedInvoice?.paymentHistory?.[
+                        (updatedInvoice?.paymentHistory?.length || 1) - 1
+                      ]?.dun,
+                    ) || 0;
+                  const ebarimtInvoice = {
+                    ...(typeof updatedInvoice.toObject === "function"
+                      ? updatedInvoice.toObject()
+                      : updatedInvoice),
+                    niitTulbur: paidAmountForEbarimt,
+                  };
+
+                  const ebarimt = await nekhemjlekheesEbarimtShineUusgye(
+                    ebarimtInvoice,
+                    updatedInvoice.register || "",
+                    "",
+                    tuxainSalbar.merchantTin,
+                    ebarimtDistrictCode,
+                    kholbolt,
+                    nuatTulukhEsekh,
+                  );
+                  console.log(
+                    "✅ [QPAY MULTI CALLBACK] Ebarimt object created",
+                    {
+                      invoiceId: updatedInvoice._id?.toString(),
+                      qpayPaymentId: paymentTransactionId || null,
+                      amountForEbarimt: paidAmountForEbarimt,
                     },
                   );
 
-                  // Extract horoo/district name from the district code string
-                  const horooName =
-                    tuxainSalbar.EbarimtDHoroo?.ner ||
-                    tuxainSalbar.horoo?.ner ||
-                    districtCodeString.replace(cityName, "").trim();
-
-                  if (cityName && horooName) {
-                    // Find the city in tatvariinAlba - try exact match first, then case-insensitive
-                    let city = await TatvariinAlba(db.erunkhiiKholbolt).findOne(
-                      { ner: cityName },
-                    );
-
-                    // If not found, try case-insensitive search
-                    if (!city) {
-                      const allCities = await TatvariinAlba(
-                        db.erunkhiiKholbolt,
-                      ).find({});
-                      city = allCities.find(
-                        (c) =>
-                          c.ner &&
-                          c.ner.trim().toLowerCase() ===
-                          cityName.trim().toLowerCase(),
+                  // The ebarimt object already has invoice data set in nekhemjlekheesEbarimtShineUusgye
+                  // ebarimtDuudya calls onFinish(body, ugugdul) where ugugdul is the ebarimt object
+                  var butsaakhMethod = async function (d, ebarimtObject) {
+                    try {
+                      console.log(
+                        "ℹ️ [QPAY MULTI CALLBACK] ebarimtDuudya response:",
+                        {
+                          status: d?.status || null,
+                          success: d?.success,
+                          message: d?.message || d?.error || null,
+                          receiptId: d?.id || null,
+                          invoiceId: ebarimtObject?.nekhemjlekhiinId || null,
+                        },
                       );
-                      if (city) {
-                      }
-                    }
-
-                    if (city && city.kod) {
-                      // Find the district/horoo within the city - try exact match, then partial match
-                      let district = city.ded?.find(
-                        (d) =>
-                          d.ner === horooName || d.ner === horooName.trim(),
-                      );
-
-                      // If not found, try case-insensitive or partial match
-                      if (!district && city.ded) {
-                        district = city.ded.find((d) => {
-                          const dName = d.ner?.trim().toLowerCase() || "";
-                          const hName = horooName.trim().toLowerCase();
-                          return (
-                            dName === hName ||
-                            dName.includes(hName) ||
-                            hName.includes(dName)
-                          );
-                        });
-                        if (district) {
-                        }
-                      }
-
-                      if (district && district.kod) {
-                        // Combine city code + district code to create 4-digit code
-                        const cityCode = city.kod.padStart(2, "0");
-                        const districtCode = district.kod.padStart(2, "0");
-                        ebarimtDistrictCode = cityCode + districtCode;
-                      } else {
-                      }
-                    } else {
-                    }
-                  }
-
-                  // Fallback: try to extract 4-digit numeric code directly
-                  if (!ebarimtDistrictCode) {
-                    const numericMatch = districtCodeString?.match(/\d{4}/);
-                    if (numericMatch) {
-                      ebarimtDistrictCode = numericMatch[0];
-                    } else if (/^\d{4}$/.test(districtCodeString)) {
-                      ebarimtDistrictCode = districtCodeString;
-                    }
-                  }
-
-                  if (
-                    !ebarimtDistrictCode ||
-                    !/^\d{4}$/.test(ebarimtDistrictCode)
-                  ) {
-                    console.error(
-                      "❌ [QPAY MULTI CALLBACK] Ebarimt skipped: invalid district code",
-                      {
-                        invoiceId: updatedInvoice._id?.toString(),
-                        ebarimtDistrictCode,
-                      },
-                    );
-                  } else {
-                    console.log(
-                      "✅ [QPAY MULTI CALLBACK] Ebarimt district code resolved",
-                      {
-                        invoiceId: updatedInvoice._id?.toString(),
-                        ebarimtDistrictCode,
-                      },
-                    );
-                    const {
-                      nekhemjlekheesEbarimtShineUusgye,
-                      ebarimtDuudya,
-                      autoApproveQr,
-                    } = require("./ebarimtRoute");
-                    const EbarimtShine = require("../models/ebarimtShine");
-
-                    const nuatTulukhEsekh = !!tuxainSalbar.nuatTulukhEsekh;
-
-                    const paidAmountForEbarimt =
-                      Number(
-                        updatedInvoice?.paymentHistory?.[
-                          (updatedInvoice?.paymentHistory?.length || 1) - 1
-                        ]?.dun,
-                      ) || 0;
-                    const ebarimtInvoice = {
-                      ...(typeof updatedInvoice.toObject === "function"
-                        ? updatedInvoice.toObject()
-                        : updatedInvoice),
-                      niitTulbur: paidAmountForEbarimt,
-                    };
-
-                    const ebarimt = await nekhemjlekheesEbarimtShineUusgye(
-                      ebarimtInvoice,
-                      updatedInvoice.register || "",
-                      "",
-                      tuxainSalbar.merchantTin,
-                      ebarimtDistrictCode,
-                      kholbolt,
-                      nuatTulukhEsekh,
-                    );
-                    console.log(
-                      "✅ [QPAY MULTI CALLBACK] Ebarimt object created",
-                      {
-                        invoiceId: updatedInvoice._id?.toString(),
-                        qpayPaymentId: paymentTransactionId || null,
-                        amountForEbarimt: paidAmountForEbarimt,
-                      },
-                    );
-
-                    // The ebarimt object already has invoice data set in nekhemjlekheesEbarimtShineUusgye
-                    // ebarimtDuudya calls onFinish(body, ugugdul) where ugugdul is the ebarimt object
-                    var butsaakhMethod = async function (d, ebarimtObject) {
-                      try {
-                        console.log(
-                          "ℹ️ [QPAY MULTI CALLBACK] ebarimtDuudya response:",
+                      if (d?.status != "SUCCESS" && !d.success) {
+                        console.error(
+                          "❌ [QPAY MULTI CALLBACK] Ebarimt provider returned non-success",
                           {
-                            status: d?.status || null,
+                            status: d?.status,
                             success: d?.success,
-                            message: d?.message || d?.error || null,
-                            receiptId: d?.id || null,
-                            invoiceId: ebarimtObject?.nekhemjlekhiinId || null,
+                            message: d?.message || null,
                           },
                         );
-                        if (d?.status != "SUCCESS" && !d.success) {
-                          console.error(
-                            "❌ [QPAY MULTI CALLBACK] Ebarimt provider returned non-success",
+                        return;
+                      }
+
+                      var shineBarimt = new EbarimtShine(kholbolt)(d);
+                      shineBarimt.nekhemjlekhiinId =
+                        ebarimtObject.nekhemjlekhiinId;
+                      shineBarimt.baiguullagiinId =
+                        ebarimtObject.baiguullagiinId;
+                      shineBarimt.barilgiinId = ebarimtObject.barilgiinId;
+                      shineBarimt.gereeniiDugaar =
+                        ebarimtObject.gereeniiDugaar;
+                      shineBarimt.utas = ebarimtObject.utas;
+                      shineBarimt.toot = ebarimtObject.toot;
+                      shineBarimt.status = d.status;
+                      shineBarimt.success = d.success;
+
+                      if (d.qrData) shineBarimt.qrData = d.qrData;
+                      if (d.lottery) shineBarimt.lottery = d.lottery;
+                      if (d.id) shineBarimt.receiptId = d.id;
+                      if (d.date) shineBarimt.date = d.date;
+
+                      shineBarimt
+                        .save()
+                        .then(async () => {
+                          console.log(
+                            "✅ [QPAY MULTI CALLBACK] EbarimtShine saved",
                             {
-                              status: d?.status,
-                              success: d?.success,
-                              message: d?.message || null,
+                              _id: shineBarimt._id?.toString(),
+                              receiptId: shineBarimt.receiptId || null,
+                              invoiceId: shineBarimt.nekhemjlekhiinId || null,
                             },
                           );
-                          return;
-                        }
-
-                        var shineBarimt = new EbarimtShine(kholbolt)(d);
-                        shineBarimt.nekhemjlekhiinId =
-                          ebarimtObject.nekhemjlekhiinId;
-                        shineBarimt.baiguullagiinId =
-                          ebarimtObject.baiguullagiinId;
-                        shineBarimt.barilgiinId = ebarimtObject.barilgiinId;
-                        shineBarimt.gereeniiDugaar =
-                          ebarimtObject.gereeniiDugaar;
-                        shineBarimt.utas = ebarimtObject.utas;
-                        shineBarimt.toot = ebarimtObject.toot;
-                        shineBarimt.status = d.status;
-                        shineBarimt.success = d.success;
-
-                        if (d.qrData) shineBarimt.qrData = d.qrData;
-                        if (d.lottery) shineBarimt.lottery = d.lottery;
-                        if (d.id) shineBarimt.receiptId = d.id;
-                        if (d.date) shineBarimt.date = d.date;
-
-                        shineBarimt
-                          .save()
-                          .then(async () => {
-                            console.log(
-                              "✅ [QPAY MULTI CALLBACK] EbarimtShine saved",
-                              {
-                                _id: shineBarimt._id?.toString(),
-                                receiptId: shineBarimt.receiptId || null,
-                                invoiceId: shineBarimt.nekhemjlekhiinId || null,
-                              },
-                            );
-                            // Update BankniiGuilgee record to reflect e-barimt status
-                            try {
-                              const BankniiGuilgee = require("../models/bankniiGuilgee");
-                              const recordId =
-                                ebarimtObject.qpayPaymentId ||
-                                ebarimtObject.qpayInvoiceId;
-                              if (recordId) {
-                                await BankniiGuilgee(kholbolt).updateMany(
-                                  {
-                                    record: recordId,
-                                    baiguullagiinId:
-                                      ebarimtObject.baiguullagiinId,
-                                  },
-                                  { $set: { ebarimtAvsanEsekh: true } },
-                                );
-                                console.log(
-                                  "✅ [QPAY MULTI CALLBACK] BankniiGuilgee ebarimtAvsanEsekh updated",
-                                  { recordId },
-                                );
-                              } else {
-                                console.log(
-                                  "ℹ️ [QPAY MULTI CALLBACK] No qpay recordId found for BankniiGuilgee update",
-                                  {
-                                    invoiceId:
-                                      ebarimtObject?.nekhemjlekhiinId || null,
-                                  },
-                                );
-                              }
-                            } catch (bankUpdateErr) {
-                              console.error(
-                                "❌ [QPAY MULTI CALLBACK] Error updating BankniiGuilgee ebarimtAvsanEsekh:",
-                                bankUpdateErr.message,
+                          // Update BankniiGuilgee record to reflect e-barimt status
+                          try {
+                            const BankniiGuilgee = require("../models/bankniiGuilgee");
+                            const recordId =
+                              ebarimtObject.qpayPaymentId ||
+                              ebarimtObject.qpayInvoiceId;
+                            if (recordId) {
+                              await BankniiGuilgee(kholbolt).updateMany(
+                                {
+                                  record: recordId,
+                                  baiguullagiinId:
+                                    ebarimtObject.baiguullagiinId,
+                                },
+                                { $set: { ebarimtAvsanEsekh: true } },
+                              );
+                              console.log(
+                                "✅ [QPAY MULTI CALLBACK] BankniiGuilgee ebarimtAvsanEsekh updated",
+                                { recordId },
+                              );
+                            } else {
+                              console.log(
+                                "ℹ️ [QPAY MULTI CALLBACK] No qpay recordId found for BankniiGuilgee update",
+                                {
+                                  invoiceId:
+                                    ebarimtObject?.nekhemjlekhiinId || null,
+                                },
                               );
                             }
-
-                            // Auto-approve QR for Easy Register if customerNo and qrData are available
-                            if (ebarimtObject.customerNo && d.qrData) {
-                              autoApproveQr(
-                                ebarimtObject.customerNo,
-                                d.qrData,
-                                baiguullagiinId,
-                                kholbolt,
-                              ).catch((err) => {
-                                // Non-critical error - don't fail the response
-                                console.log(
-                                  "Auto-approveQr failed (non-critical):",
-                                  err.message,
-                                );
-                              });
-                            }
-                          })
-                          .catch((saveErr) => {
+                          } catch (bankUpdateErr) {
                             console.error(
-                              "❌ [QPAY MULTI CALLBACK] Error saving EbarimtShine:",
-                              saveErr.message,
+                              "❌ [QPAY MULTI CALLBACK] Error updating BankniiGuilgee ebarimtAvsanEsekh:",
+                              bankUpdateErr.message,
                             );
-                          });
-                      } catch (err) {
-                        console.error(
-                          "❌ [QPAY MULTI CALLBACK] Error in butsaakhMethod:",
-                          err.message,
-                        );
-                      }
-                    };
+                          }
 
-                    // Attach QPay IDs to ebarimt metadata so they are available in butsaakhMethod
-                    // One nekhemjlekhiin row holds qpayInvoiceId; others still need the same UUID for provider/tax.
-                    ebarimt.qpayPaymentId = paymentTransactionId;
-                    ebarimt.qpayInvoiceId =
-                      updatedInvoice.qpayInvoiceId || qpayInvoiceIdForApi;
+                          // Auto-approve QR for Easy Register if customerNo and qrData are available
+                          if (ebarimtObject.customerNo && d.qrData) {
+                            autoApproveQr(
+                              ebarimtObject.customerNo,
+                              d.qrData,
+                              baiguullagiinId,
+                              kholbolt,
+                            ).catch((err) => {
+                              // Non-critical error - don't fail the response
+                              console.log(
+                                "Auto-approveQr failed (non-critical):",
+                                err.message,
+                              );
+                            });
+                          }
+                        })
+                        .catch((saveErr) => {
+                          console.error(
+                            "❌ [QPAY MULTI CALLBACK] Error saving EbarimtShine:",
+                            saveErr.message,
+                          );
+                        });
+                    } catch (err) {
+                      console.error(
+                        "❌ [QPAY MULTI CALLBACK] Error in butsaakhMethod:",
+                        err.message,
+                      );
+                    }
+                  };
 
-                    // ebarimtDuudya signature: (ugugdul, onFinish, next, shine)
-                    // The ebarimt object already contains invoice data, and it's passed as second param to onFinish
-                    console.log(
-                      "ℹ️ [QPAY MULTI CALLBACK] Calling ebarimtDuudya()",
-                      {
-                        invoiceId: updatedInvoice._id?.toString(),
-                        qpayPaymentId: ebarimt.qpayPaymentId || null,
-                        qpayInvoiceId: ebarimt.qpayInvoiceId || null,
-                      },
-                    );
-                    ebarimtDuudya(ebarimt, butsaakhMethod, null, true);
-                    console.log(
-                      "ℹ️ [QPAY MULTI CALLBACK] ebarimtDuudya() call finished (non-blocking)",
-                    );
-                  }
-                } catch (lookupError) {
-                  console.error(
-                    "❌ [QPAY MULTI CALLBACK] Ebarimt district lookup/create failed:",
-                    lookupError.message,
+                  // Attach QPay IDs to ebarimt metadata so they are available in butsaakhMethod
+                  // One nekhemjlekhiin row holds qpayInvoiceId; others still need the same UUID for provider/tax.
+                  ebarimt.qpayPaymentId = paymentTransactionId;
+                  ebarimt.qpayInvoiceId =
+                    updatedInvoice.qpayInvoiceId || qpayInvoiceIdForApi;
+
+                  // ebarimtDuudya signature: (ugugdul, onFinish, next, shine)
+                  // The ebarimt object already contains invoice data, and it's passed as second param to onFinish
+                  console.log(
+                    "ℹ️ [QPAY MULTI CALLBACK] Calling ebarimtDuudya()",
+                    {
+                      invoiceId: updatedInvoice._id?.toString(),
+                      qpayPaymentId: ebarimt.qpayPaymentId || null,
+                      qpayInvoiceId: ebarimt.qpayInvoiceId || null,
+                    },
+                  );
+                  ebarimtDuudya(ebarimt, butsaakhMethod, null, true);
+                  console.log(
+                    "ℹ️ [QPAY MULTI CALLBACK] ebarimtDuudya() call finished (non-blocking)",
                   );
                 }
+              } catch (lookupError) {
+                console.error(
+                  "❌ [QPAY MULTI CALLBACK] Ebarimt district lookup/create failed:",
+                  lookupError.message,
+                );
               }
-            } else {
-              console.log(
-                "ℹ️ [QPAY MULTI CALLBACK] Ebarimt skipped because feature flags are disabled",
-                { invoiceId: updatedInvoice._id?.toString() },
-              );
             }
-          } catch (ebarimtError) {
-            console.error(
-              "❌ [QPAY MULTI CALLBACK] Error in E-barimt block:",
-              ebarimtError.message,
-            );
-          }
-
-          // Emit socket event for each invoice
-          const ioNekh = req.app.get("socketio");
-          if (ioNekh) {
-            ioNekh.emit(
-              `nekhemjlekhPayment/${baiguullagiinId}/${updatedInvoice._id}`,
-              {
-                status: "success",
-                tuluv: "Төлсөн",
-                tulsunOgnoo: updatedInvoice.tulsunOgnoo,
-                paymentId: updatedInvoice.qpayPaymentId,
-              },
-            );
-          }
-        } catch (invoiceErr) {
-          console.error(
-            "❌ [QPAY MULTI CALLBACK] Invoice processing error:",
-            invoiceErr.message,
-          );
-        }
-      });
-
-      await Promise.all(updatePromises);
-
-      // QuickQpayObject: must use the real QPay invoice UUID (same as invoiceWithQpay), not invoices[0].
-      if (qpayInvoiceIdForApi) {
-        try {
-          const qpayPaidSet = {
-            tulsunEsekh: true,
-            invoice_status: "PAID",
-            invoice_status_date: new Date(),
-          };
-          let qpayObjUpdated = await QuickQpayObject(kholbolt).findOneAndUpdate(
-            { invoice_id: qpayInvoiceIdForApi },
-            { $set: qpayPaidSet },
-            { new: true },
-          );
-          if (!qpayObjUpdated) {
-            const idRegex = invoiceIds
-              .map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-              .join("|");
-            qpayObjUpdated = await QuickQpayObject(kholbolt).findOneAndUpdate(
-              {
-                baiguullagiinId: String(baiguullagiinId),
-                "qpay.callback_url": { $regex: idRegex },
-              },
-              { $set: qpayPaidSet },
-              { new: true, sort: { ognoo: -1 } },
-            );
-          }
-          if (qpayObjUpdated) {
-            console.log("✅ [QPAY MULTI CALLBACK] QuickQpayObject marked PAID", {
-              invoice_id: qpayInvoiceIdForApi,
-              _id: qpayObjUpdated._id?.toString(),
-            });
           } else {
-            console.error(
-              "❌ [QPAY MULTI CALLBACK] QuickQpayObject not found for invoice_id",
-              qpayInvoiceIdForApi,
+            console.log(
+              "ℹ️ [QPAY MULTI CALLBACK] Ebarimt skipped because feature flags are disabled",
+              { invoiceId: updatedInvoice._id?.toString() },
             );
           }
-        } catch (qpayUpdateErr) {
+        } catch (ebarimtError) {
           console.error(
-            "❌ [QPAY MULTI CALLBACK] Error updating QuickQpayObject:",
-            qpayUpdateErr.message,
+            "❌ [QPAY MULTI CALLBACK] Error in E-barimt block:",
+            ebarimtError.message,
           );
         }
-      }
 
-      const ioMulti = req.app.get("socketio");
-      if (ioMulti) {
-        ioMulti.emit(`tulburUpdated:${baiguullagiinId}`, {});
+        // Emit socket event for each invoice
+        const ioNekh = req.app.get("socketio");
+        if (ioNekh) {
+          ioNekh.emit(
+            `nekhemjlekhPayment/${baiguullagiinId}/${updatedInvoice._id}`,
+            {
+              status: "success",
+              tuluv: "Төлсөн",
+              tulsunOgnoo: updatedInvoice.tulsunOgnoo,
+              paymentId: updatedInvoice.qpayPaymentId,
+            },
+          );
+        }
+      } catch (invoiceErr) {
+        console.error(
+          "❌ [QPAY MULTI CALLBACK] Invoice processing error:",
+          invoiceErr.message,
+        );
       }
+    });
 
-      res.sendStatus(200);
-    } catch (err) {
-      next(err);
+    await Promise.all(updatePromises);
+
+    // QuickQpayObject: must use the real QPay invoice UUID (same as invoiceWithQpay), not invoices[0].
+    if (qpayInvoiceIdForApi) {
+      try {
+        const qpayPaidSet = {
+          tulsunEsekh: true,
+          invoice_status: "PAID",
+          invoice_status_date: new Date(),
+        };
+        let qpayObjUpdated = await QuickQpayObject(kholbolt).findOneAndUpdate(
+          { invoice_id: qpayInvoiceIdForApi },
+          { $set: qpayPaidSet },
+          { new: true },
+        );
+        if (!qpayObjUpdated) {
+          const idRegex = invoiceIds
+            .map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+            .join("|");
+          qpayObjUpdated = await QuickQpayObject(kholbolt).findOneAndUpdate(
+            {
+              baiguullagiinId: String(baiguullagiinId),
+              "qpay.callback_url": { $regex: idRegex },
+            },
+            { $set: qpayPaidSet },
+            { new: true, sort: { ognoo: -1 } },
+          );
+        }
+        if (qpayObjUpdated) {
+          console.log("✅ [QPAY MULTI CALLBACK] QuickQpayObject marked PAID", {
+            invoice_id: qpayInvoiceIdForApi,
+            _id: qpayObjUpdated._id?.toString(),
+          });
+        } else {
+          console.error(
+            "❌ [QPAY MULTI CALLBACK] QuickQpayObject not found for invoice_id",
+            qpayInvoiceIdForApi,
+          );
+        }
+      } catch (qpayUpdateErr) {
+        console.error(
+          "❌ [QPAY MULTI CALLBACK] Error updating QuickQpayObject:",
+          qpayUpdateErr.message,
+        );
+      }
     }
-  },
-);
+
+    const ioMulti = req.app.get("socketio");
+    if (ioMulti) {
+      ioMulti.emit(`tulburUpdated:${baiguullagiinId}`, {});
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    next(err);
+  }
+};
+router.get("/qpayNekhemjlekhMultipleCallback/:baiguullagiinId/:invoiceIds", qpayNekhemjlekhMultipleCallbackHandler);
+router.post("/qpayNekhemjlekhMultipleCallback/:baiguullagiinId/:invoiceIds", qpayNekhemjlekhMultipleCallbackHandler);
 
 module.exports = router;
+
