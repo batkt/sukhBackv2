@@ -2024,7 +2024,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
                   paymentTransactionId ||
                   nekhemjlekh.qpayInvoiceId ||
                   "unknown",
-                tailbar: "QPay төлбөр (Олон нэхэмжлэх)",
+                tailbar: "QPay төлбөр",
               },
             },
           },
@@ -2124,7 +2124,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
             }
 
             bankGuilgee.amount = invoicePaidAmount;
-            bankGuilgee.description = `QPay төлбөр (Олон нэхэмжлэх) - Гэрээ ${nekhemjlekh.gereeniiDugaar}`;
+            bankGuilgee.description = `QPay төлбөр - Гэрээ ${nekhemjlekh.gereeniiDugaar}`;
             bankGuilgee.accName = nekhemjlekh.nekhemjlekhiinDansniiNer || "";
             bankGuilgee.accNum = nekhemjlekh.nekhemjlekhiinDans || "";
 
@@ -2169,7 +2169,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
             nekhemjlekhId: nekhemjlekh._id?.toString() || null,
             ognoo: new Date(),
             dun: invoicePaidAmount,
-            tailbar: `QPay төлбөр (Олон нэхэмжлэх) - ${nekhemjlekh.gereeniiDugaar || ""}`,
+            tailbar: `QPay төлбөр - ${nekhemjlekh.gereeniiDugaar || ""}`,
             source: "nekhemjlekh",
           });
         } catch (ledgerErr) {
