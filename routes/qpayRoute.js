@@ -2077,6 +2077,8 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
           } catch (zaaltError) { }
         }
 
+        let invoicePaidAmount = 0;
+
         // Create bank payment record for each invoice
         try {
           const geree = await Geree(kholbolt)
@@ -2087,7 +2089,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
             const bankGuilgee = new BankniiGuilgee(kholbolt)();
 
             bankGuilgee.tranDate = new Date();
-            let invoicePaidAmount = 0;
+            invoicePaidAmount = 0;
 
             // Priority 1: Try to get amount from local QPay record (the intended amount)
             try {
