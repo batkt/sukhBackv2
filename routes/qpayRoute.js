@@ -411,9 +411,9 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
               .lean();
             if (orshinSuugch) {
               userPhoneNumber = orshinSuugch.utas;
-              
+
               // Determine correct Wallet API userId (UUID or phone)
-              const walletToot = orshinSuugch.toots && 
+              const walletToot = orshinSuugch.toots &&
                 orshinSuugch.toots.find(t => t.source === "WALLET_API" && t.walletUserId);
               walletUserIdToUse = walletToot ? walletToot.walletUserId : orshinSuugch.walletUserId;
               if (!walletUserIdToUse) walletUserIdToUse = userPhoneNumber;
@@ -1144,7 +1144,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
         const invoiceIdsString = invoiceIds.join(",");
         callback_url =
           process.env.UNDSEN_SERVER +
-          "/qpayNekhemjlekhMultipleCallback/" +
+          "/qpayNekhemjlekhCallback/" +
           req.body.baiguullagiinId.toString() +
           "/" +
           invoiceIdsString;
@@ -1154,23 +1154,23 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
           const { db } = require("zevbackv2");
           const kholbolt = db.kholboltuud.find(k => String(k.baiguullagiinId) === String(req.body.baiguullagiinId));
           if (kholbolt) {
-             const guilgeeService = require("../services/guilgeeService");
-             let totalActualBalance = 0;
-             for (const invId of invoiceIds) {
-               const invBalance = await guilgeeService.getBalance(kholbolt, { nekhemjlekhId: invId });
-               if (invBalance > 0) totalActualBalance += invBalance;
-             }
+            const guilgeeService = require("../services/guilgeeService");
+            let totalActualBalance = 0;
+            for (const invId of invoiceIds) {
+              const invBalance = await guilgeeService.getBalance(kholbolt, { nekhemjlekhId: invId });
+              if (invBalance > 0) totalActualBalance += invBalance;
+            }
 
-             // Round to 2 decimals to avoid floating point "dirty" numbers (e.g. 1.009999999)
-             totalActualBalance = Math.round(totalActualBalance * 100) / 100;
-             
-             const requestedDun = parseFloat(req.body.dun || 0);
-             if (totalActualBalance < requestedDun && totalActualBalance >= 0) {
-                console.log(`⚖️ [QPAY-GARGAYA-MULTI] Overpayment prevention: Overriding ${requestedDun} with ${totalActualBalance}`);
-                req.body.dun = totalActualBalance;
-             }
+            // Round to 2 decimals to avoid floating point "dirty" numbers (e.g. 1.009999999)
+            totalActualBalance = Math.round(totalActualBalance * 100) / 100;
+
+            const requestedDun = parseFloat(req.body.dun || 0);
+            if (totalActualBalance < requestedDun && totalActualBalance >= 0) {
+              console.log(`⚖️ [QPAY-GARGAYA-MULTI] Overpayment prevention: Overriding ${requestedDun} with ${totalActualBalance}`);
+              req.body.dun = totalActualBalance;
+            }
           }
-        } catch (multiVerifyErr) {}
+        } catch (multiVerifyErr) { }
       } else if (req.body.nekhemjlekhiinId) {
         // Single invoice payment (existing logic)
         callback_url =
@@ -1190,10 +1190,10 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
             if (inv && inv.gereeniiId) {
               const guilgeeService = require("../services/guilgeeService");
               let currentBalance = await guilgeeService.getBalance(kholbolt, { gereeniiId: inv.gereeniiId });
-              
+
               // Round to 2 decimals
               currentBalance = Math.round(currentBalance * 100) / 100;
-              
+
               const requestedDun = parseFloat(req.body.dun || 0);
               if (currentBalance < requestedDun && currentBalance >= 0) {
                 console.log(`⚖️ [QPAY-GARGAYA] Overpayment prevention: Overriding ${requestedDun} with ${currentBalance}`);
@@ -1201,7 +1201,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
               }
             }
           }
-        } catch (verifyErr) {}
+        } catch (verifyErr) { }
 
         if (!req.body.dun && req.body.tukhainBaaziinKholbolt) {
           // Trust the authoritative amount from frontend
@@ -1311,7 +1311,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
         console.error(' ❌ [QPAY_ERROR] Full error object:', qpayError);
         console.error(' ❌ [QPAY_ERROR] Message:', qpayError.message);
         if (qpayError.stack) console.error(' ❌ [QPAY_ERROR] Stack:', qpayError.stack);
-        
+
         // Enhanced error logging for QPay errors
         let errorBody = null;
         try {
@@ -1371,7 +1371,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
               qpayUrl: qpayUrl,
             },
           );
-        } catch (saveErr) {}
+        } catch (saveErr) { }
       } else if (req.body.nekhemjlekhiinId && khariu) {
         // Single invoice payment (existing logic)
         try {
@@ -1504,12 +1504,12 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
                 }
               };
 
-              updateNekhemjlekhData().catch((err) => {});
+              updateNekhemjlekhData().catch((err) => { });
             } else {
             }
           } else {
           }
-        } catch (saveErr) {}
+        } catch (saveErr) { }
       } else {
       }
 
@@ -1613,13 +1613,13 @@ router.post("/qpayShalgay", tokenShalgakh, async (req, res, next) => {
               paid_amount: isPaid ? qpayObj.qpay?.amount || 0 : 0,
               payments: isPaid
                 ? [
-                    {
-                      payment_status: "PAID",
-                      status: "PAID",
-                      amount: qpayObj.qpay?.amount || 0,
-                      transactions: [],
-                    },
-                  ]
+                  {
+                    payment_status: "PAID",
+                    status: "PAID",
+                    amount: qpayObj.qpay?.amount || 0,
+                    transactions: [],
+                  },
+                ]
                 : [],
             });
           }
@@ -1994,8 +1994,8 @@ router.get(
                 const multiPaidAmount = nekhemjlekh.niitTulbur || 0;
                 const multiCurrentUldegdel =
                   typeof nekhemjlekh.uldegdel === "number" &&
-                  !isNaN(nekhemjlekh.uldegdel) &&
-                  nekhemjlekh.uldegdel > 0
+                    !isNaN(nekhemjlekh.uldegdel) &&
+                    nekhemjlekh.uldegdel > 0
                     ? nekhemjlekh.uldegdel
                     : multiPaidAmount;
                 const multiNewUldegdel = Math.max(
@@ -2070,7 +2070,7 @@ router.get(
                 gereeForUpdate.zaaltUs = 0;
                 await gereeForUpdate.save();
               }
-            } catch (zaaltError) {}
+            } catch (zaaltError) { }
           }
 
           // Create bank payment record for each invoice
@@ -2095,11 +2095,11 @@ router.get(
                     { "sukhNekhemjlekh.nekhemjlekhiinId": nekhemjlekh._id.toString() }
                   ]
                 }).sort({ ognoo: -1 });
-                
+
                 if (qp) {
-                   invoicePaidAmount = parseFloat(qp.sukhNekhemjlekh?.pay_amount || qp.amount || qp.qpay?.amount || 0);
+                  invoicePaidAmount = parseFloat(qp.sukhNekhemjlekh?.pay_amount || qp.amount || qp.qpay?.amount || 0);
                 }
-              } catch (qpErr) {}
+              } catch (qpErr) { }
 
               // Priority 2: Fallback to niitTulbur only if 0
               if (invoicePaidAmount <= 0) {
@@ -2148,7 +2148,7 @@ router.get(
 
               await bankGuilgee.save();
             }
-          } catch (bankErr) {}
+          } catch (bankErr) { }
 
           // Record the QPay payment in the ledger
           try {
@@ -2252,7 +2252,7 @@ router.get(
                         (c) =>
                           c.ner &&
                           c.ner.trim().toLowerCase() ===
-                            cityName.trim().toLowerCase(),
+                          cityName.trim().toLowerCase(),
                       );
                       if (city) {
                       }
