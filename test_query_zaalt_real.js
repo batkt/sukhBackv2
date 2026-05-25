@@ -18,19 +18,19 @@ async function run() {
     }
 
     // Find GuilgeeAvlaguud for this geree
-    const Guilgee = db.collection("guilgeeavlaguuds");
+    const Guilgee = db.collection("guilgeeAvlaguud");
     const guilgees = await Guilgee.find({ gereeniiId: geree._id.toString() }).sort({ ognoo: -1 }).toArray();
     console.log("\n=== GUILGEE AVLAGUUD ===");
     console.log(JSON.stringify(guilgees, null, 2));
 
     // Find Invoices for this geree
-    const Nekhemjlekh = db.collection("nekhemjlekhiintuukhs");
+    const Nekhemjlekh = db.collection("nekhemjlekhiinTuukh");
     const invoices = await Nekhemjlekh.find({ gereeniiId: geree._id.toString() }).sort({ ognoo: -1 }).toArray();
     console.log("\n=== INVOICES ===");
     console.log(JSON.stringify(invoices, null, 2));
 
     // Find ZaaltUnshlalt for this geree
-    const Zaalt = db.collection("zaaltunshlalts");
+    const Zaalt = db.collection("zaaltUnshlalt");
     const zaalts = await Zaalt.find({ gereeniiId: geree._id.toString() }).sort({ importOgnoo: -1 }).toArray();
     console.log("\n=== ZAALT UNSHLALT ===");
     console.log(JSON.stringify(zaalts, null, 2));
