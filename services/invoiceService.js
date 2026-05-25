@@ -63,16 +63,37 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
 
     for (const z of zaaltZardluud) {
       let zaaltDun = 0;
-      const latestReading = await ZaaltUnshlalt(kholbolt).findOne({ gereeniiId: geree._id })
+      
+      console.log(`\n=================== [DEBUG CHARGES START] ===================`);
+      console.log(`[DEBUG] Contract: ${geree.gereeniiDugaar} (ID: ${geree._id})`);
+      console.log(`[DEBUG] Tenant DB: ${kholbolt?.databaseNer || kholbolt?.kholbolt?.db?.databaseName || "Unknown"}`);
+      console.log(`[DEBUG] Options: ${JSON.stringify(options)}`);
+      console.log(`[DEBUG] z.ner: "${z.ner}", z.tariff: ${z.tariff}, z.suuriKhuraamj: ${z.suuriKhuraamj}`);
+      
+      // Perform diagnostic queries to show why the lookup succeeds or fails
+      const qCorrect = await ZaaltUnshlalt(kholbolt).findOne({ gereeniiId: String(geree._id) })
         .sort({ importOgnoo: -1, unshlaltiinOgnoo: -1 }).lean();
+      const qMaster = await ZaaltUnshlalt(db.erunkhiiKholbolt).findOne({ gereeniiId: String(geree._id) })
+        .sort({ importOgnoo: -1, unshlaltiinOgnoo: -1 }).lean();
+      const qObjectId = await ZaaltUnshlalt(kholbolt).findOne({ gereeniiId: geree._id })
+        .sort({ importOgnoo: -1, unshlaltiinOgnoo: -1 }).lean();
+      
+      console.log(`[DEBUG] 1. Correct query (tenant db + String ID):`, qCorrect ? `FOUND (zaaltDun: ${qCorrect.zaaltDun}, zoruu: ${qCorrect.zoruu}, toot: ${qCorrect.toot})` : "null");
+      console.log(`[DEBUG] 2. Original query (master db + ObjectId ID):`, qMaster ? "FOUND" : "null (Master DB does not store reading data)");
+      console.log(`[DEBUG] 3. Intermediate query (tenant db + ObjectId ID):`, qObjectId ? "FOUND" : "null (Mongoose type mismatch: Schema has String, query has ObjectId)");
+      
+      const latestReading = qCorrect; // Use the correct one
 
       if (latestReading && latestReading.zaaltDun > 0) {
         zaaltDun = latestReading.zaaltDun;
+        console.log(`[DEBUG] RESULT: Using latestReading.zaaltDun = ${zaaltDun}`);
       } else {
         const zoruu = (options.suuliinZaalt || 0) - (options.umnukhZaalt || 0);
         const baseFee = Number(z.suuriKhuraamj || z.tariff || 0);
         zaaltDun = (zoruu * (kwhTariff || z.tariff || 0)) + baseFee;
+        console.log(`[DEBUG] RESULT: Fallback calculation used. zoruu = ${zoruu}, baseFee = ${baseFee}, zaaltDun = ${zaaltDun}`);
       }
+      console.log(`=================== [DEBUG CHARGES END] ===================\n`);
 
       if (zaaltDun > 0) {
         if (prorateFactor !== 1) {
@@ -140,6 +161,14 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     console.error("Error fetching cron schedule for cycle:", err);
   }
 
+  if (options.targetMonth && options.targetYear && !options.billingDate) {
+    options.billingDate = new Date(
+      Number(options.targetYear),
+      Number(options.targetMonth) - 1,
+      15
+    );
+    console.log(`[DEBUG] Converted targetMonth/targetYear to options.billingDate = ${options.billingDate.toISOString()}`);
+  }
   const billingDate = options.billingDate || new Date();
 
   // Use exact billing cycle bounds based on cron schedule day
