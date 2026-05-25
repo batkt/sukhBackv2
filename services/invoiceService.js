@@ -38,6 +38,51 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     });
   }
 
+  // --- ADDITIONAL NESTED GARAGES / STORAGES ---
+  if (Array.isArray(geree.nemeltTootnuud) && geree.nemeltTootnuud.length > 0) {
+    const garageEnabled = !!barilga?.tokhirgoo?.garsiinTolborEnabled;
+    const method = barilga?.tokhirgoo?.garsiinTolborArga || "Тогтмол";
+    const baseValue = Number(barilga?.tokhirgoo?.garsiinTolborUtga || 0);
+
+    for (const au of geree.nemeltTootnuud) {
+      // 1. Nest opening balance for additional unit if any
+      if (Number(au.ekhniiUldegdel) > 0) {
+        const label = au.turul === "Гараж" ? "Эхний үлдэгдэл (Гараж " : "Эхний үлдэгдэл (Агуулах ";
+        charges.push({
+          ner: `${label}${au.toot})`,
+          dun: Number(au.ekhniiUldegdel),
+          turul: "Авлага",
+          zardliinTurul: "Авлага",
+          isEkhniiUldegdel: true
+        });
+      }
+
+      // 2. Monthly constant payment for additional unit if garageEnabled is true
+      if (garageEnabled && (au.turul === "Гараж" || au.turul === "Агуулах")) {
+        let dun = baseValue;
+        if (method === "Тогтмол" && dun > 0) {
+          const isUnitProrating = au.khonogoorBodokhEsekh === true || au.khonogoorBodokhEsekh === "true";
+          const unitProrateDays = Number(au.bodokhKhonog) || 0;
+
+          const shouldProrateUnit = (isProratingEnabled || isUnitProrating) && isUnitProrating && unitProrateDays > 0;
+          if (shouldProrateUnit) {
+            const prorateFactorUnit = unitProrateDays / denominator;
+            dun = Math.round(dun * prorateFactorUnit);
+          }
+
+          const label = au.turul === "Гараж" ? "Зогсоолын төлбөр" : "Агуулахын төлбөр";
+          charges.push({
+            ner: `${label} (${au.toot})`,
+            dun: dun,
+            turul: au.turul, // "Гараж" or "Агуулах" as requested
+            zardliinTurul: au.turul,
+            tailbar: `${label} - ${au.toot}`,
+          });
+        }
+      }
+    }
+  }
+
   const isMeterCharge = (z) => {
     if (z.zaalt === true) return true;
     if (z.zardliinTurul === "Хувьсах") return true;
@@ -116,8 +161,12 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
 
       if (latestReading && latestReading.zaaltDun > 0) {
         zaaltDun = latestReading.zaaltDun;
+      } else if (z.dun > 0) {
+        zaaltDun = z.dun;
       } else {
-        const zoruu = (options.suuliinZaalt || 0) - (options.umnukhZaalt || 0);
+        const finalSuuliin = options.suuliinZaalt !== undefined ? options.suuliinZaalt : (geree.suuliinZaalt || 0);
+        const finalUmnukh = options.umnukhZaalt !== undefined ? options.umnukhZaalt : (geree.umnukhZaalt || 0);
+        const zoruu = finalSuuliin - finalUmnukh;
         const baseFee = Number(z.suuriKhuraamj || z.tariff || 0);
         zaaltDun = (zoruu * (kwhTariff || z.tariff || 0)) + baseFee;
       }
@@ -196,7 +245,6 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
 
   let invoice = await NekhemjlekhiinTuukhModel.findOne({
     gereeniiId: geree._id.toString(),
-    tuluv: "Төлөөгүй",
     ognoo: { $gte: startOfCycle, $lte: endOfCycle }
   }).sort({ ognoo: -1 });
 
@@ -270,6 +318,21 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
       });
 
       if (existingCharge) {
+        if (Number(existingCharge.dun) !== Number(c.dun)) {
+          await GuilgeeAvlaguudModel.updateOne(
+            { _id: existingCharge._id },
+            { $set: { 
+                dun: c.dun, 
+                undsenDun: c.dun, 
+                tulukhDun: c.dun,
+                nekhemjlekhId: invoice._id.toString()
+              } 
+            }
+          );
+          await guilgeeService.syncInvoicesStatus(kholbolt, geree._id.toString()).catch(err => {
+            console.error("❌ [LEDGER SYNC] syncInvoicesStatus failed after charge update:", err.message);
+          });
+        }
         continue;
       }
 
@@ -291,18 +354,76 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     }
 
     // 4.5. Reset pro-rating flags (one-time use)
-    if (geree.khonogoorBodokhEsekh) {
+    let resetRequired = false;
+    let updatedNemeltTootnuud = geree.nemeltTootnuud;
+    if (Array.isArray(geree.nemeltTootnuud)) {
+      updatedNemeltTootnuud = geree.nemeltTootnuud.map(au => {
+        if (au.khonogoorBodokhEsekh === true || au.khonogoorBodokhEsekh === "true") {
+          resetRequired = true;
+          return { ...au, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
+        }
+        return au;
+      });
+    }
+
+    if (geree.khonogoorBodokhEsekh || resetRequired) {
       const GereeModel = Geree(kholbolt);
       const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
+      const KhariltsagchModel = require("../models/khariltsagch")(db.erunkhiiKholbolt);
 
       await GereeModel.findByIdAndUpdate(geree._id, {
-        $set: { khonogoorBodokhEsekh: false, bodokhKhonog: 0 }
+        $set: { 
+          khonogoorBodokhEsekh: false, 
+          bodokhKhonog: 0,
+          ...(resetRequired ? { nemeltTootnuud: updatedNemeltTootnuud } : {})
+        }
       });
 
-      if (geree.orshinSuugchId) {
-        await OrshinSuugchModel.findByIdAndUpdate(geree.orshinSuugchId, {
-          $set: { khonogoorBodokhEsekh: false, bodokhKhonog: 0 }
-        });
+      const residentId = geree.orshinSuugchId || geree.khariltsagchId;
+      if (residentId) {
+        // Try resetting in OrshinSuugch
+        const resident = await OrshinSuugchModel.findById(residentId);
+        if (resident) {
+          let tootsChanged = false;
+          let newToots = (resident.toots || []).map(t => {
+            const match = t.khonogoorBodokhEsekh && (t.turul === "Гараж" || t.turul === "Агуулах");
+            if (match) {
+              tootsChanged = true;
+              return { ...t, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
+            }
+            return t;
+          });
+
+          await OrshinSuugchModel.findByIdAndUpdate(residentId, {
+            $set: { 
+              khonogoorBodokhEsekh: false, 
+              bodokhKhonog: 0,
+              ...(tootsChanged ? { toots: newToots } : {})
+            }
+          });
+        }
+
+        // Try resetting in Khariltsagch
+        const client = await KhariltsagchModel.findById(residentId);
+        if (client) {
+          let tootsChanged = false;
+          let newToots = (client.toots || []).map(t => {
+            const match = t.khonogoorBodokhEsekh && (t.turul === "Гараж" || t.turul === "Агуулах");
+            if (match) {
+              tootsChanged = true;
+              return { ...t, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
+            }
+            return t;
+          });
+
+          await KhariltsagchModel.findByIdAndUpdate(residentId, {
+            $set: { 
+              khonogoorBodokhEsekh: false, 
+              bodokhKhonog: 0,
+              ...(tootsChanged ? { toots: newToots } : {})
+            }
+          });
+        }
       }
     }
   }

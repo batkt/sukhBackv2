@@ -28,7 +28,8 @@ async function run() {
     // Keep only the correct 'Хувьсах' charge and filter out 'Энгийн' charge
     const originalLength = geree.zardluud.length;
     const cleanedZardluud = geree.zardluud.filter(z => {
-      if (z.ner === "Цахилгаан" && z.zardliinTurul === "Энгийн") {
+      const name = (z.ner || "").toLowerCase();
+      if (name.includes("цахилгаан") && z.zardliinTurul === "Энгийн" && !name.includes("дундын")) {
         return false; // Remove old manual charge
       }
       return true;
