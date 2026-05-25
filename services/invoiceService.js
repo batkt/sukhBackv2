@@ -12,15 +12,15 @@ const { calculateNextDueDate, calculateBillingCycleBounds } = require("../utils/
 async function calculateGereeCharges(kholbolt, geree, options = {}) {
   const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(geree.baiguullagiinId).lean();
   const barilga = baiguullaga?.barilguud?.find(b => String(b._id) === String(geree.barilgiinId));
-  
+
   const charges = [];
   const totalDaysInMonth = getDaysInMonth(options.billingDate || new Date());
-  const denominator = barilga?.tokhirgoo?.bodokhArga === "Тогтмол" 
+  const denominator = barilga?.tokhirgoo?.bodokhArga === "Тогтмол"
     ? (barilga.tokhirgoo.bodokhKhonog || 30)
     : totalDaysInMonth;
 
   const isProratingEnabled = !!barilga?.tokhirgoo?.bodokhArgaEnabled;
-  
+
   const shouldProrate = (isProratingEnabled || geree.khonogoorBodokhEsekh) && geree.khonogoorBodokhEsekh && geree.bodokhKhonog > 0;
   const prorateFactor = shouldProrate
     ? (geree.bodokhKhonog / denominator)
@@ -40,7 +40,7 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
   for (const z of fixedZardluud) {
     const isLift = (z.ner || "").toLowerCase().includes("лифт") || (z.zardliinTurul || "").toLowerCase() === "лифт";
     if (isLift && barilga?.tokhirgoo?.liftShalgaya?.choloolugdokhDavkhar?.includes(String(geree.davkhar))) {
-      continue; 
+      continue;
     }
 
     let dun = z.dun || z.tariff || 0;
@@ -63,7 +63,7 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
 
     for (const z of zaaltZardluud) {
       let zaaltDun = 0;
-      const latestReading = await ZaaltUnshlalt(kholbolt).findOne({ gereeniiId: String(geree._id) })
+      const latestReading = await ZaaltUnshlalt(kholbolt).findOne({ gereeniiId: geree._id })
         .sort({ importOgnoo: -1, unshlaltiinOgnoo: -1 }).lean();
 
       if (latestReading && latestReading.zaaltDun > 0) {
@@ -110,7 +110,7 @@ function getDaysInMonth(date) {
 async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
   const GereeModel = Geree(kholbolt);
   const NekhemjlekhiinTuukhModel = NekhemjlekhiinTuukh(kholbolt);
-  
+
   const geree = await GereeModel.findById(gereeId).lean();
   if (!geree) throw new Error("Contract not found");
 
@@ -140,15 +140,8 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     console.error("Error fetching cron schedule for cycle:", err);
   }
 
-  if (options.targetMonth && options.targetYear && !options.billingDate) {
-    options.billingDate = new Date(
-      Number(options.targetYear),
-      Number(options.targetMonth) - 1,
-      15
-    );
-  }
   const billingDate = options.billingDate || new Date();
-  
+
   // Use exact billing cycle bounds based on cron schedule day
   const { startOfCycle, endOfCycle } = calculateBillingCycleBounds(cronDay, billingDate);
 
@@ -160,7 +153,7 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
 
   if (!invoice) {
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    
+
     // Use atomic Dugaarlalt for unique invoice numbers
     const dugaarModel = Dugaarlalt(db.erunkhiiKholbolt);
     const dugaarObj = await dugaarModel.findOneAndUpdate(
@@ -195,8 +188,8 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
 
   // 2. Adopt any unlinked ledger items (orphans)
   await GuilgeeAvlaguudModel.updateMany(
-    { 
-      gereeniiId: geree._id.toString(), 
+    {
+      gereeniiId: geree._id.toString(),
       nekhemjlekhId: { $exists: false },
       dun: { $gt: 0 }
     },
