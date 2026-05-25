@@ -65,7 +65,7 @@ const upload = multer({
     // Accept Excel files
     if (
       file.mimetype ===
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
       file.mimetype === "application/vnd.ms-excel" ||
       file.originalname.endsWith(".xlsx") ||
       file.originalname.endsWith(".xls")
@@ -253,14 +253,14 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
           // Calculate current balances from ledger (guilgeeAvlaguud)
           const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(tukhainBaaziinKholbolt);
           const ledgerStats = await GuilgeeAvlaguudModel.aggregate([
-            { 
-              $match: { 
+            {
+              $match: {
                 baiguullagiinId: targetBaiguullagiinId,
                 $or: [
                   { gereeniiId: { $in: activeGereeIds } },
                   { gereeniiId: { $in: activeGereeObjectIds } }
                 ]
-              } 
+              }
             },
             {
               $group: {
@@ -321,7 +321,6 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
               const tootKey = `${resId}|${String(t.toot).trim()}`;
               const g = unitGereeMap[tootKey];
               if (g) {
-                console.log(`[DEBUG] Resident List: Unit ${tootKey} matched Geree (Balance: ${g.ekhniiUldegdel})`);
                 if (g.ekhniiUldegdel !== undefined) t.ekhniiUldegdel = g.ekhniiUldegdel;
                 if (g.suuliinZaalt !== undefined && g.suuliinZaalt > 0) {
                   t.tsahilgaaniiZaalt = g.suuliinZaalt;
@@ -410,7 +409,7 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
         if (tukhainBaaziinKholbolt) {
           try {
             const GereeModel = Geree(tukhainBaaziinKholbolt);
-            
+
             // Fetch all contracts for this resident to map to specific units
             const allGerees = await GereeModel.find({
               orshinSuugchId: result._id.toString(),
@@ -426,14 +425,14 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             // Calculate current balances from ledger (guilgeeAvlaguud)
             const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(tukhainBaaziinKholbolt);
             const ledgerStats = await GuilgeeAvlaguudModel.aggregate([
-              { 
-                $match: { 
+              {
+                $match: {
                   baiguullagiinId: String(result.baiguullagiinId),
                   $or: [
                     { gereeniiId: { $in: activeGereeIds } },
                     { gereeniiId: { $in: activeGereeObjectIds } }
                   ]
-                } 
+                }
               },
               {
                 $group: {
@@ -456,7 +455,7 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
               const gid = g._id.toString();
 
               g.dynamicUldegdel = balanceMap[gid] ?? g.ekhniiUldegdel ?? 0;
-              
+
               console.log(`[DEBUG] Resident Detail: Mapping Toot Key: "${tootKey}" to Geree ${g._id} (Balance: ${g.dynamicUldegdel})`);
               if (!unitGereeMap[tootKey] || g.tuluv === "Идэвхтэй") {
                 unitGereeMap[tootKey] = g;
@@ -498,7 +497,7 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
               } else if (authoritativeGeree.umnukhZaalt !== undefined) {
                 result.tsahilgaaniiZaalt = authoritativeGeree.umnukhZaalt;
               }
-              
+
               if (authoritativeGeree.toot) result.toot = authoritativeGeree.toot;
               if (authoritativeGeree.davkhar) result.davkhar = authoritativeGeree.davkhar;
               if (authoritativeGeree.khonogoorBodokhEsekh !== undefined) result.khonogoorBodokhEsekh = authoritativeGeree.khonogoorBodokhEsekh;
@@ -519,7 +518,7 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
 router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
   try {
     const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
-    
+
     // Map frontend 'units' to backend 'toots'
     if (req.body.units && Array.isArray(req.body.units)) {
       req.body.toots = req.body.units;
@@ -741,7 +740,7 @@ router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
 
               const defaultSettings =
                 buildingSettings &&
-                buildingSettings.zochinUrikhEsekh !== undefined
+                  buildingSettings.zochinUrikhEsekh !== undefined
                   ? buildingSettings
                   : orgSettings;
 
@@ -838,7 +837,7 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
     // Identify requester to protect sensitive fields on self-updates
     const requesterId = req.body.nevtersenAjiltniiToken?.id || req.body.nevtersenAjiltniiToken?.sub;
     const requesterRole = req.body.nevtersenAjiltniiToken?.erkh;
-    
+
     delete req.body.nevtersenAjiltniiToken;
     delete req.body.erunkhiiKholbolt;
     delete req.body.tukhainBaaziinKholbolt;
@@ -855,10 +854,10 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
     // Protection: Residents should NOT be able to change their own baiguullagiinId, barilgiinId, or linked toots array
     // This often happens when the frontend doesn't send them and a middleware injects 'null'.
     if (requesterRole === "OrshinSuugch" || (requesterId && String(requesterId) === String(req.params.id))) {
-       delete req.body.baiguullagiinId;
-       delete req.body.barilgiinId;
-       delete req.body.toots;
-       delete req.body.erkh;
+      delete req.body.baiguullagiinId;
+      delete req.body.barilgiinId;
+      delete req.body.toots;
+      delete req.body.erkh;
     }
 
     // Get old document before update for audit logging
@@ -1061,7 +1060,7 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
           // Use shared service to sync contracts for all units (create/reactivate/update)
           const syncService = require("../controller/orshinSuugch");
           const baiguullaga = await require("../models/baiguullaga")(db.erunkhiiKholbolt).findById(orgId);
-          
+
           if (baiguullaga) {
             await syncService.syncResidentContracts(
               result,
@@ -1072,21 +1071,21 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
           }
 
           // Sync to ledger if ekhniiUldegdel was updated
-            if (req.body.ekhniiUldegdel !== undefined || req.body.toots !== undefined) {
-              const activeGerees = await GereeModel.find({
-                orshinSuugchId: result._id.toString(),
-                tuluv: "Идэвхтэй",
-              });
-              const invoiceService = require("../services/invoiceService");
-              for (const g of activeGerees) {
-                await invoiceService.ensureEkhniiUldegdel(
-                  tukhainBaaziinKholbolt,
-                  g,
-                  {
-                    ajiltanId: req.ajiltan?._id,
-                    ajiltanNer: req.ajiltan?.ner,
-                  },
-                );
+          if (req.body.ekhniiUldegdel !== undefined || req.body.toots !== undefined) {
+            const activeGerees = await GereeModel.find({
+              orshinSuugchId: result._id.toString(),
+              tuluv: "Идэвхтэй",
+            });
+            const invoiceService = require("../services/invoiceService");
+            for (const g of activeGerees) {
+              await invoiceService.ensureEkhniiUldegdel(
+                tukhainBaaziinKholbolt,
+                g,
+                {
+                  ajiltanId: req.ajiltan?._id,
+                  ajiltanNer: req.ajiltan?.ner,
+                },
+              );
             }
           }
 
@@ -1106,7 +1105,7 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
                   ner: unit.ner || result.ner,
                   ovog: unit.ovog || result.ovog
                 };
-                
+
                 if (unit.tsahilgaaniiZaalt !== undefined) {
                   const zaalt = parseFloat(unit.tsahilgaaniiZaalt) || 0;
                   unitSyncData.suuliinZaalt = zaalt;
@@ -1124,10 +1123,10 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
 
                 if (Object.keys(unitSyncData).length > 0) {
                   await GereeModel.updateMany(
-                    { 
+                    {
                       orshinSuugchId: result._id.toString(),
                       toot: unit.toot,
-                      barilgiinId: unit.barilgiinId 
+                      barilgiinId: unit.barilgiinId
                     },
                     { $set: unitSyncData }
                   );
@@ -1188,15 +1187,15 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
       try {
         // Try to identify the user for Wallet API (prefer UUID, fallback to single phone string)
         const walletUserId = result.walletUserId || (Array.isArray(result.utas) ? result.utas[0] : result.utas);
-        
+
         if (walletUserId) {
           const syncData = {};
           if (req.body.mail !== undefined) syncData.email = req.body.mail;
           if (req.body.utas !== undefined) {
             syncData.phone = Array.isArray(req.body.utas) ? req.body.utas[0] : req.body.utas;
           }
-          
-           if (Object.keys(syncData).length > 0) {
+
+          if (Object.keys(syncData).length > 0) {
             const walletApiService = require("../services/walletApiService");
             await walletApiService.editUser(walletUserId, syncData).catch(err => {
               console.error("⚠️ [UPDATE] Wallet API sync failed:", err.message);
