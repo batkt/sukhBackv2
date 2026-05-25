@@ -10,10 +10,7 @@ const NekhemjlekhCron = require("../models/cronSchedule");
 const { calculateNextDueDate, calculateBillingCycleBounds } = require("../utils/dateUtils");
 
 async function calculateGereeCharges(kholbolt, geree, options = {}) {
-  console.log(`\n=================== [DEBUG CALCULATE START] ===================`);
-  console.log(`[DEBUG] Contract: ${geree.gereeniiDugaar} (ID: ${geree._id})`);
-  console.log(`[DEBUG] zardluud:`, JSON.stringify(geree.zardluud || []));
-  console.log(`=================== [DEBUG CALCULATE END] ===================\n`);
+
 
   const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(geree.baiguullagiinId).lean();
   const barilga = baiguullaga?.barilguud?.find(b => String(b._id) === String(geree.barilgiinId));
