@@ -82,6 +82,11 @@ const gereeSchema = new Schema(
         suuriKhuraamj: String,
         nuatNemekhEsekh: Boolean,
         ognoonuud: [Date],
+        zaalt: { type: Boolean, default: false },
+        zaaltTariff: Number,
+        zaaltDefaultDun: Number,
+        zaaltTariffTiers: Schema.Types.Mixed,
+        zaaltCalculation: Schema.Types.Mixed,
       },
     ],
     segmentuud: [
