@@ -63,7 +63,7 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
 
     for (const z of zaaltZardluud) {
       let zaaltDun = 0;
-      const latestReading = await ZaaltUnshlalt(db.erunkhiiKholbolt).findOne({ gereeniiId: geree._id })
+      const latestReading = await ZaaltUnshlalt(kholbolt).findOne({ gereeniiId: geree._id })
         .sort({ importOgnoo: -1, unshlaltiinOgnoo: -1 }).lean();
 
       if (latestReading && latestReading.zaaltDun > 0) {

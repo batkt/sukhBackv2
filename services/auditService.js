@@ -17,6 +17,7 @@ async function getAjiltanFromRequest(req, db) {
         ner: token.ner,
         nevtrekhNer: token.nevtrekhNer,
         baiguullagiinId: token.baiguullagiinId,
+        isOrshinSuugch: false,
       };
     }
 
@@ -28,6 +29,7 @@ async function getAjiltanFromRequest(req, db) {
         ner: token.ner,
         nevtrekhNer: token.nevtrekhNer || token.utas,
         baiguullagiinId: token.baiguullagiinId,
+        isOrshinSuugch: true,
       };
     }
 
@@ -54,6 +56,7 @@ async function getAjiltanFromRequest(req, db) {
             ner: ajiltan.ner,
             nevtrekhNer: ajiltan.nevtrekhNer,
             baiguullagiinId: ajiltan.baiguullagiinId,
+            isOrshinSuugch: false,
           };
         }
 
@@ -70,6 +73,7 @@ async function getAjiltanFromRequest(req, db) {
             ner: orshinSuugch.ner,
             nevtrekhNer: orshinSuugch.utas,
             baiguullagiinId: orshinSuugch.baiguullagiinId,
+            isOrshinSuugch: true,
           };
         }
       }
@@ -145,8 +149,8 @@ function getChanges(oldDoc, newDoc, excludeFields = ["updatedAt", "__v", "_id", 
 async function logEdit(req, db, modelName, documentId, oldDoc, newDoc, additionalContext = {}) {
   try {
     const ajiltan = await getAjiltanFromRequest(req, db);
-    if (!ajiltan) {
-      // No user logged in - skip logging silently
+    if (!ajiltan || ajiltan.isOrshinSuugch) {
+      // No user logged in or user is orshinSuugch - skip logging silently
       return;
     }
 
@@ -246,8 +250,8 @@ async function logDelete(
 ) {
   try {
     const ajiltan = await getAjiltanFromRequest(req, db);
-    if (!ajiltan) {
-      // No user logged in - skip logging silently
+    if (!ajiltan || ajiltan.isOrshinSuugch) {
+      // No user logged in or user is orshinSuugch - skip logging silently
       return;
     }
 

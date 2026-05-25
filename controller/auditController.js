@@ -80,8 +80,28 @@ exports.getZasakhTuukh = asyncHandler(async (req, res, next) => {
     return dateB - dateA;
   });
 
-  const niitMur = legacyCount + newCount;
-  const paginated = combined.slice(skip, skip + Number(khuudasniiKhemjee));
+  // Filter out records made by orshinSuugch (residents)
+  const uniqueModifierIds = [...new Set(combined.map(r => r.ajiltniiId).filter(Boolean))];
+  let residentIds = new Set();
+  if (uniqueModifierIds.length > 0) {
+    try {
+      const OrshinSuugch = require("../models/orshinSuugch");
+      const residents = await OrshinSuugch(db.erunkhiiKholbolt)
+        .find({ _id: { $in: uniqueModifierIds } })
+        .select("_id")
+        .lean();
+      residentIds = new Set(residents.map(r => r._id.toString()));
+    } catch (err) {
+      console.error("⚠️ [AUDIT] Error fetching residents for filtering:", err.message);
+    }
+  }
+
+  const filteredCombined = combined.filter(
+    record => !residentIds.has(record.ajiltniiId?.toString())
+  );
+
+  const niitMur = filteredCombined.length;
+  const paginated = filteredCombined.slice(skip, skip + Number(khuudasniiKhemjee));
   const niitKhuudas = Math.ceil(niitMur / Number(khuudasniiKhemjee));
 
   res.json({
@@ -192,13 +212,37 @@ exports.getDocumentHistory = asyncHandler(async (req, res, next) => {
     (a, b) => new Date(b.ognoo || b.createdAt) - new Date(a.ognoo || a.createdAt)
   );
 
+  // Filter out records made by orshinSuugch (residents)
+  const uniqueModifierIds = [...new Set(allHistory.map(r => r.ajiltniiId).filter(Boolean))];
+  let residentIds = new Set();
+  if (uniqueModifierIds.length > 0) {
+    try {
+      const OrshinSuugch = require("../models/orshinSuugch");
+      const residents = await OrshinSuugch(db.erunkhiiKholbolt)
+        .find({ _id: { $in: uniqueModifierIds } })
+        .select("_id")
+        .lean();
+      residentIds = new Set(residents.map(r => r._id.toString()));
+    } catch (err) {
+      console.error("⚠️ [AUDIT] Error fetching residents for filtering:", err.message);
+    }
+  }
+
+  const filteredHistory = allHistory.filter(
+    record => !residentIds.has(record.ajiltniiId?.toString())
+  );
+
+  const deletedIds = new Set(deletes.map(d => d._id.toString()));
+  const filteredEdits = filteredHistory.filter(r => !deletedIds.has(r._id.toString()));
+  const filteredDeletes = filteredHistory.filter(r => deletedIds.has(r._id.toString()));
+
   res.json({
     success: true,
-    data: allHistory,
+    data: filteredHistory,
     summary: {
-      totalEdits: legacyEdits.length + newEdits.length,
-      totalDeletes: deletes.length,
-      totalHistory: allHistory.length,
+      totalEdits: filteredEdits.length,
+      totalDeletes: filteredDeletes.length,
+      totalHistory: filteredHistory.length,
     },
   });
 });
