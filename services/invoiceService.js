@@ -226,7 +226,6 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
         gereeniiId: geree._id.toString(),
         zardliinNer: c.ner,
         source: "nekhemjlekh",
-        nekhemjlekhId: invoice._id.toString(),
         ognoo: {
           $gte: startOfCycle,
           $lte: endOfCycle
