@@ -50,7 +50,7 @@ async function run() {
     
     // Initialize core connection for zevbackv2 models inside standalone script
     const zevbackv2 = require("zevbackv2");
-    zevbackv2.db.erunkhiiKholbolt = mongoose.connection;
+    zevbackv2.db.erunkhiiKholbolt = { kholbolt: mongoose.connection };
 
     const kholbolt = { kholbolt: db };
 
