@@ -63,7 +63,7 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
 
     for (const z of zaaltZardluud) {
       let zaaltDun = 0;
-      const latestReading = await ZaaltUnshlalt(kholbolt).findOne({ gereeniiId: geree._id })
+      const latestReading = await ZaaltUnshlalt(kholbolt).findOne({ gereeniiId: String(geree._id) })
         .sort({ importOgnoo: -1, unshlaltiinOgnoo: -1 }).lean();
 
       if (latestReading && latestReading.zaaltDun > 0) {
@@ -140,6 +140,13 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     console.error("Error fetching cron schedule for cycle:", err);
   }
 
+  if (options.targetMonth && options.targetYear && !options.billingDate) {
+    options.billingDate = new Date(
+      Number(options.targetYear),
+      Number(options.targetMonth) - 1,
+      15
+    );
+  }
   const billingDate = options.billingDate || new Date();
   
   // Use exact billing cycle bounds based on cron schedule day
