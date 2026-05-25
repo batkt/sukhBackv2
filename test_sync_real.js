@@ -47,6 +47,11 @@ async function run() {
     console.log("\n=== STEP 3: RE-GENERATING INVOICE AND SYNCING LEDGER ===");
     // Now trigger the invoice service to recalculate and sync ledger charges
     const invoiceService = require("./services/invoiceService");
+    
+    // Initialize core connection for zevbackv2 models inside standalone script
+    const zevbackv2 = require("zevbackv2");
+    zevbackv2.db.erunkhiiKholbolt = mongoose.connection;
+
     const kholbolt = { kholbolt: db };
 
     const result = await invoiceService.createInvoiceForContract(kholbolt, geree._id.toString(), {
