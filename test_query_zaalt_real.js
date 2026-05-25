@@ -6,34 +6,29 @@ async function run() {
     await mongoose.connect(process.env.MONGODB_URI);
     const db = mongoose.connection.useDb("nairamdalSukh");
     
-    // Find Geree
     const Geree = db.collection("geree");
-    const geree = await Geree.findOne({ gereeniiDugaar: "ГД-71811549" });
-    console.log("=== GEREE ===");
-    console.log(JSON.stringify(geree, null, 2));
+    const OrshinSuugch = db.collection("orshinSuugch");
+    const Guilgee = db.collection("guilgeeAvlaguud");
 
-    if (!geree) {
-      console.log("Geree not found!");
-      return;
+    const geree = await Geree.findOne({ gereeniiDugaar: "ГД-71811549" });
+    console.log("=== GEREE EKHNII ULDEGDEL ===");
+    console.log("Geree ekhniiUldegdel:", geree ? geree.ekhniiUldegdel : "None");
+    console.log("Geree orshinSuugchId:", geree ? geree.orshinSuugchId : "None");
+
+    if (geree && geree.orshinSuugchId) {
+      const suugch = await OrshinSuugch.findOne({ _id: new mongoose.Types.ObjectId(geree.orshinSuugchId) });
+      console.log("\n=== ORSHIN SUUGCH DETAILS ===");
+      console.log("OrshinSuugch ekhniiUldegdel:", suugch ? suugch.ekhniiUldegdel : "None");
+      console.log("OrshinSuugch toots:", suugch ? JSON.stringify(suugch.toots, null, 2) : "None");
     }
 
-    // Find GuilgeeAvlaguud for this geree
-    const Guilgee = db.collection("guilgeeAvlaguud");
-    const guilgees = await Guilgee.find({ gereeniiId: geree._id.toString() }).sort({ ognoo: -1 }).toArray();
-    console.log("\n=== GUILGEE AVLAGUUD ===");
-    console.log(JSON.stringify(guilgees, null, 2));
+    const ekhniiGuilgees = await Guilgee.find({ 
+      gereeniiId: geree ? geree._id.toString() : "",
+      ekhniiUldegdelEsekh: true
+    }).toArray();
 
-    // Find Invoices for this geree
-    const Nekhemjlekh = db.collection("nekhemjlekhiinTuukh");
-    const invoices = await Nekhemjlekh.find({ gereeniiId: geree._id.toString() }).sort({ ognoo: -1 }).toArray();
-    console.log("\n=== INVOICES ===");
-    console.log(JSON.stringify(invoices, null, 2));
-
-    // Find ZaaltUnshlalt for this geree
-    const Zaalt = db.collection("zaaltUnshlalt");
-    const zaalts = await Zaalt.find({ gereeniiId: geree._id.toString() }).sort({ importOgnoo: -1 }).toArray();
-    console.log("\n=== ZAALT UNSHLALT ===");
-    console.log(JSON.stringify(zaalts, null, 2));
+    console.log("\n=== LEDGER EKHNII ULDEGDEL CHARGES ===");
+    console.log(JSON.stringify(ekhniiGuilgees, null, 2));
 
   } catch (err) {
     console.error(err);
