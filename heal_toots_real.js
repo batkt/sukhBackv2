@@ -12,9 +12,11 @@ async function run() {
     const Nekhemjlekh = db.collection("nekhemjlekhiinTuukh");
 
     const toots = ["54", "116", "126", "155", "41"];
+    const startOfMay = new Date("2026-05-01T00:00:00.000Z");
+    const endOfMay = new Date("2026-05-31T23:59:59.999Z");
     const targetBillingDate = new Date("2026-05-25T00:00:00.000Z");
 
-    console.log(`\n=== STARTING HEALING PROCESS FOR TOOTS: ${toots.join(", ")} ===\n`);
+    console.log(`\n=== STARTING COMPREHENSIVE HEALING & DEDUPLICATION FOR TOOTS: ${toots.join(", ")} ===\n`);
 
     for (const tootNum of toots) {
       console.log(`--------------------------------------------------`);
@@ -36,16 +38,14 @@ async function run() {
       if (electricityCharges.length > 1) {
         console.log(`⚠️ Found duplicate electricity charges in contract! Count: ${electricityCharges.length}`);
         
-        // Find if there is a correct dynamic one (Хувьсах) and a duplicate manual one (Энгийн)
         const hasVariable = electricityCharges.some(z => z.zardliinTurul === "Хувьсах");
         if (hasVariable) {
           console.log("Removing duplicate manual 'Энгийн' electricity charges and keeping the dynamic 'Хувьсах' one...");
           
-          // Filter out any "Цахилгаан" that is "Энгийн" if we have a "Хувьсах" one
           const cleanedZardluud = zardluud.filter(z => {
             const isElectricity = (z.ner || "").trim().toLowerCase() === "цахилгаан";
             if (isElectricity && z.zardliinTurul === "Энгийн") {
-              console.log(`-> Removed: ${z.ner} (Tariff: ${z.tariff}, Type: ${z.zardliinTurul})`);
+              console.log(`-> Removed from contract model: ${z.ner} (Tariff: ${z.tariff}, Type: ${z.zardliinTurul})`);
               return false;
             }
             return true;
@@ -57,14 +57,51 @@ async function run() {
           );
           console.log(`✅ Cleaned up contract zardluud.`);
         } else {
-          console.log("No dynamic 'Хувьсах' charge found among duplicates. Skipping automatic removal to avoid losing data.");
+          console.log("No dynamic 'Хувьсах' charge found among duplicates. Skipping automatic removal.");
         }
       } else {
         console.log(`✅ No duplicate electricity charges in contract.`);
       }
 
-      // 3. Re-generate invoice and sync ledger
-      console.log(`Re-generating invoice and syncing ledger charges for May 2026...`);
+      // 3. Find and handle duplicate invoices in the May 2026 cycle
+      const invoices = await Nekhemjlekh.find({
+        gereeniiId: geree._id.toString(),
+        ognoo: { $gte: startOfMay, $lte: endOfMay }
+      }).sort({ ognoo: 1, createdAt: 1 }).toArray(); // Sort oldest first
+
+      let primaryInvoice = null;
+
+      if (invoices.length > 0) {
+        console.log(`ℹ️ Found ${invoices.length} invoice(s) for May 2026 cycle.`);
+        primaryInvoice = invoices[0];
+        console.log(`Primary Invoice to KEEP: ${primaryInvoice.nekhemjlekhiinDugaar} (ID: ${primaryInvoice._id}, Date: ${new Date(primaryInvoice.ognoo).toLocaleDateString()}, Status: ${primaryInvoice.tuluv})`);
+
+        if (invoices.length > 1) {
+          console.log(`⚠️ Cleaning up duplicate invoices...`);
+          const duplicateInvoices = invoices.slice(1);
+          for (const dup of duplicateInvoices) {
+            console.log(`-> Deleting duplicate invoice: ${dup.nekhemjlekhiinDugaar} (ID: ${dup._id}, Date: ${new Date(dup.ognoo).toLocaleDateString()})`);
+            await Nekhemjlekh.deleteOne({ _id: dup._id });
+
+            // Delete any ledger entries tied to this duplicate invoice
+            const delLedgerResult = await Guilgee.deleteMany({ nekhemjlekhId: dup._id.toString() });
+            console.log(`   Deleted ${delLedgerResult.deletedCount} ledger entries tied to duplicate invoice.`);
+          }
+        }
+      }
+
+      // 4. Clean up any redundant ledger charges (source: "nekhemjlekh") for May to avoid duplication
+      // We will let createInvoiceForContract re-record everything cleanly
+      console.log("Clearing all 'nekhemjlekh' source ledger charges for May to allow clean re-sync...");
+      const delLedgerResult = await Guilgee.deleteMany({
+        gereeniiId: geree._id.toString(),
+        source: "nekhemjlekh",
+        ognoo: { $gte: startOfMay, $lte: endOfMay }
+      });
+      console.log(`Deleted ${delLedgerResult.deletedCount} old ledger charges.`);
+
+      // 5. Re-generate invoice and sync ledger
+      console.log(`Re-generating invoice and syncing ledger charges...`);
       const invoiceService = require("./services/invoiceService");
       const zevbackv2 = require("zevbackv2");
       zevbackv2.db.erunkhiiKholbolt = { kholbolt: mongoose.connection };
@@ -76,23 +113,20 @@ async function run() {
 
       console.log("Sync Result:", syncResult);
 
-      // 4. Verify updated ledger
+      // 6. Verify updated ledger
       const remainingGuilgees = await Guilgee.find({ 
         gereeniiId: geree._id.toString(),
-        ognoo: {
-          $gte: new Date("2026-05-01T00:00:00.000Z"),
-          $lte: new Date("2026-05-31T23:59:59.000Z")
-        }
+        ognoo: { $gte: startOfMay, $lte: endOfMay }
       }).sort({ ognoo: -1 }).toArray();
 
-      console.log(`\nVerified Ledger Charges for May 2026:`);
+      console.log(`\nVerified Ledger State for May 2026:`);
       remainingGuilgees.forEach(g => {
         console.log(`- ${g.zardliinNer}: ${g.dun} (${g.source}) [Date: ${new Date(g.ognoo).toLocaleDateString()}]`);
       });
       console.log(`--------------------------------------------------\n`);
     }
 
-    console.log("🎉 Healing process completed successfully!");
+    console.log("🎉 Healing and deduplication process completed successfully!");
 
   } catch (err) {
     console.error("❌ Error running healing script:", err);
