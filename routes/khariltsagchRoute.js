@@ -297,7 +297,6 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
               const tootKey = `${resId}|${String(t.toot).trim()}`;
               const g = unitGereeMap[tootKey];
               if (g) {
-                console.log(`[DEBUG] Resident List: Unit ${tootKey} matched Geree (Balance: ${g.ekhniiUldegdel})`);
                 if (g.ekhniiUldegdel !== undefined) t.ekhniiUldegdel = g.ekhniiUldegdel;
                 if (g.suuliinZaalt !== undefined && g.suuliinZaalt > 0) {
                   t.tsahilgaaniiZaalt = g.suuliinZaalt;
