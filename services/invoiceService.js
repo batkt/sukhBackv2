@@ -116,7 +116,8 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
   const GereeModel = Geree(kholbolt);
   const NekhemjlekhiinTuukhModel = NekhemjlekhiinTuukh(kholbolt);
 
-  const geree = await GereeModel.findById(gereeId).lean();
+  const mongoose = require("mongoose");
+  const geree = await GereeModel.collection.findOne({ _id: new mongoose.Types.ObjectId(gereeId) });
   if (!geree) throw new Error("Contract not found");
 
   const { charges, total } = await calculateGereeCharges(kholbolt, geree, options);
@@ -233,7 +234,6 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
       });
 
       if (existingCharge) {
-        console.log(`Skipping duplicate charge: ${c.ner} for this month`);
         continue;
       }
 

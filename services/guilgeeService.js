@@ -116,7 +116,7 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
     const NekhemjlekhModel = require("../models/nekhemjlekhiinTuukh")(kholbolt);
     const GuilgeeModel = require("../models/guilgeeAvlaguud")(kholbolt);
 
-    console.log(`🔍 [LEDGER SYNC] Starting sync for contract: ${gereeniiId}`);
+
 
     // 1. Get all ledger entries for this contract
     const allLedger = await GuilgeeModel.find({ gereeniiId: gereeniiId }).lean();
@@ -138,7 +138,6 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
       .sort({ ognoo: 1 })
       .lean();
 
-    console.log(`ℹ️ [LEDGER SYNC] Stats: TotalPayments=${totalPayments}, LooseCharges=${looseCharges}, AvailableForInvoices=${availableFunds}, InvoicesCount=${invoices.length}`);
 
     for (const inv of invoices) {
       // Amount for this specific invoice = sum of positive dun linked to it in ledger
@@ -166,10 +165,9 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
       if (isPaid) {
         availableFunds -= targetAmount;
       } else {
-        availableFunds = 0; 
+        availableFunds = 0;
       }
     }
-    console.log(`🏁 [LEDGER SYNC] Sync completed for contract: ${gereeniiId}. Remaining credit: ${availableFunds.toFixed(2)}`);
   } catch (err) {
     console.error("❌ [LEDGER SYNC] Error in syncInvoicesStatus:", err.message, err.stack);
   }
