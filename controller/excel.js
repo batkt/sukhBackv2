@@ -1707,6 +1707,48 @@ exports.zaaltExcelTatya = asyncHandler(async (req, res, next) => {
 
         await zaaltUnshlalt.save();
 
+        // Automatically sync unpaid invoice/ledger charges for the target billing cycle
+        let cronDay = 1;
+        try {
+          const NekhemjlekhCron = require("../models/cronSchedule");
+          const cronSchedule = await NekhemjlekhCron(tukhainBaaziinKholbolt).findOne({
+            baiguullagiinId: baiguullagiinId,
+            $or: [
+              { barilgiinId: barilgiinId },
+              { barilgiinId: null }
+            ]
+          }).sort({ barilgiinId: -1 }).lean();
+
+          if (cronSchedule && cronSchedule.nekhemjlekhUusgekhOgnoo) {
+            cronDay = cronSchedule.nekhemjlekhUusgekhOgnoo;
+          }
+        } catch (err) {
+          console.error("Error fetching cron schedule for cycle in zaaltExcelTatya:", err);
+        }
+
+        try {
+          const { calculateBillingCycleBounds } = require("../utils/dateUtils");
+          const { startOfCycle, endOfCycle } = calculateBillingCycleBounds(cronDay, new Date(ognoo));
+
+          const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+          const existingUnpaidInvoice = await NekhemjlekhiinTuukh(tukhainBaaziinKholbolt).findOne({
+            gereeniiId: geree._id.toString(),
+            tuluv: "Төлөөгүй",
+            ognoo: { $gte: startOfCycle, $lte: endOfCycle }
+          }).lean();
+
+          if (existingUnpaidInvoice) {
+            const invoiceService = require("../services/invoiceService");
+            await invoiceService.createInvoiceForContract(tukhainBaaziinKholbolt, geree._id.toString(), {
+              billingDate: new Date(ognoo),
+              ajiltanNer: req.nevtersenAjiltniiToken?.ner || "Систем",
+              ajiltanId: req.nevtersenAjiltniiToken?.id || ""
+            });
+          }
+        } catch (err) {
+          console.error(`Failed to automatically sync invoice for Geree ${geree._id}:`, err);
+        }
+
         results.success.push({
           row: rowNumber,
           gereeniiDugaar: gereeniiDugaar,
