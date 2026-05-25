@@ -6,29 +6,28 @@ async function run() {
     await mongoose.connect(process.env.MONGODB_URI);
     const db = mongoose.connection.useDb("nairamdalSukh");
     
-    const Geree = db.collection("geree");
-    const OrshinSuugch = db.collection("orshinSuugch");
-    const Guilgee = db.collection("guilgeeAvlaguud");
-
-    const geree = await Geree.findOne({ gereeniiDugaar: "ГД-71811549" });
-    console.log("=== GEREE EKHNII ULDEGDEL ===");
-    console.log("Geree ekhniiUldegdel:", geree ? geree.ekhniiUldegdel : "None");
-    console.log("Geree orshinSuugchId:", geree ? geree.orshinSuugchId : "None");
-
-    if (geree && geree.orshinSuugchId) {
-      const suugch = await OrshinSuugch.findOne({ _id: new mongoose.Types.ObjectId(geree.orshinSuugchId) });
-      console.log("\n=== ORSHIN SUUGCH DETAILS ===");
-      console.log("OrshinSuugch ekhniiUldegdel:", suugch ? suugch.ekhniiUldegdel : "None");
-      console.log("OrshinSuugch toots:", suugch ? JSON.stringify(suugch.toots, null, 2) : "None");
+    const collections = await db.db.listCollections().toArray();
+    
+    console.log("=== SEARCHING FOR 599933.38 ===");
+    for (const collInfo of collections) {
+      const collName = collInfo.name;
+      const coll = db.collection(collName);
+      
+      const match = await coll.findOne({
+        $or: [
+          { dun: 599933.38 },
+          { undsenDun: 599933.38 },
+          { tulukhDun: 599933.38 },
+          { ekhniiUldegdel: 599933.38 },
+          { niitTulbur: 599933.38 }
+        ]
+      });
+      
+      if (match) {
+        console.log(`\nFound in collection: ${collName}`);
+        console.log(JSON.stringify(match, null, 2));
+      }
     }
-
-    const ekhniiGuilgees = await Guilgee.find({ 
-      gereeniiId: geree ? geree._id.toString() : "",
-      ekhniiUldegdelEsekh: true
-    }).toArray();
-
-    console.log("\n=== LEDGER EKHNII ULDEGDEL CHARGES ===");
-    console.log(JSON.stringify(ekhniiGuilgees, null, 2));
 
   } catch (err) {
     console.error(err);
