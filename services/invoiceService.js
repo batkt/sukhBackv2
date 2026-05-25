@@ -41,7 +41,54 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     });
   }
 
-  const fixedZardluud = (geree.zardluud || []).filter(z => !z.zaalt);
+  const isMeterCharge = (z) => {
+    if (z.zaalt === true) return true;
+    if (z.zardliinTurul === "Хувьсах") return true;
+
+    // Robust detection fallback for main resident electricity charge
+    const nameLower = (z.ner || "").toLowerCase();
+    if (
+      nameLower.includes("цахилгаан") &&
+      !nameLower.includes("дундын") &&
+      !nameLower.includes("өмчлөл") &&
+      !nameLower.includes("нийтийн") &&
+      !nameLower.includes("ерөнхий") &&
+      !nameLower.includes("гадна") &&
+      !nameLower.includes("гэрэлтүүлэг") &&
+      !nameLower.includes("шат")
+    ) {
+      if (z.tariffUsgeer === "кВт" || z.zardliinTurul === "Хувьсах") {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Separate and deduplicate meter charges by name, prioritizing "Хувьсах" or "zaalt === true"
+  const rawZaaltZardluud = (geree.zardluud || []).filter(isMeterCharge);
+  const zaaltMap = new Map();
+  for (const z of rawZaaltZardluud) {
+    const key = (z.ner || "").trim().toLowerCase();
+    const existing = zaaltMap.get(key);
+    if (!existing || z.zardliinTurul === "Хувьсах" || z.zaalt === true) {
+      zaaltMap.set(key, z);
+    }
+  }
+  const zaaltZardluud = Array.from(zaaltMap.values());
+  const meterNames = new Set(zaaltMap.keys());
+
+  // Deduplicate and filter fixed charges, excluding any duplicates that share a name with a meter charge
+  const rawFixedZardluud = (geree.zardluud || []).filter(z => !isMeterCharge(z));
+  const fixedMap = new Map();
+  for (const z of rawFixedZardluud) {
+    const key = (z.ner || "").trim().toLowerCase();
+    if (meterNames.has(key)) continue; // Suppress duplicate fixed charge since a proper variable meter charge exists
+    if (!fixedMap.has(key)) {
+      fixedMap.set(key, z);
+    }
+  }
+  const fixedZardluud = Array.from(fixedMap.values());
+
   for (const z of fixedZardluud) {
     const isLift = (z.ner || "").toLowerCase().includes("лифт") || (z.zardliinTurul || "").toLowerCase() === "лифт";
     if (isLift && barilga?.tokhirgoo?.liftShalgaya?.choloolugdokhDavkhar?.includes(String(geree.davkhar))) {
@@ -61,7 +108,6 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     });
   }
 
-  const zaaltZardluud = (geree.zardluud || []).filter(z => z.zaalt);
   if (zaaltZardluud.length > 0) {
     const orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt).findById(geree.orshinSuugchId).select("tsahilgaaniiZaalt").lean();
     const kwhTariff = orshinSuugch?.tsahilgaaniiZaalt || 0;
@@ -146,13 +192,6 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     console.error("Error fetching cron schedule for cycle:", err);
   }
 
-  if (options.targetMonth && options.targetYear && !options.billingDate) {
-    options.billingDate = new Date(
-      Number(options.targetYear),
-      Number(options.targetMonth) - 1,
-      15
-    );
-  }
   const billingDate = options.billingDate || new Date();
 
   // Use exact billing cycle bounds based on cron schedule day

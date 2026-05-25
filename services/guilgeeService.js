@@ -152,7 +152,6 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
       const newStatus = isPaid ? "Төлсөн" : "Төлөөгүй";
       const newUldegdel = isPaid ? 0 : Math.max(0, targetAmount - availableFunds);
 
-      console.log(`   - Inv ${inv.nekhemjlekhiinDugaar} (${inv.ognoo.toISOString().split('T')[0]}): Target=${targetAmount}, Status=${newStatus}, Uldegdel=${newUldegdel}`);
 
       // Update the invoice with new status AND uldegdel
       // We update regardless of status change to ensure uldegdel is consistent
