@@ -10,65 +10,44 @@ async function run() {
     const Nekhemjlekh = db.collection("nekhemjlekhiinTuukh");
     const Guilgee = db.collection("guilgeeAvlaguud");
 
-    const geree = await Geree.findOne({ gereeniiDugaar: "ГД-71811549" });
-    if (!geree) {
-      console.log("Contract not found!");
+    const contractDugaar = "ГД-71848318"; // Toot 166 contract
+    const targetGeree = await Geree.findOne({ gereeniiDugaar: contractDugaar });
+
+    if (!targetGeree) {
+      console.log(`Contract ${contractDugaar} not found!`);
       return;
     }
 
-    console.log("=== STEP 1: CLEANING UP DUPLICATE EMPTY INVOICES ===");
-    // Delete the empty duplicate invoice created on May 25
-    const deleteDuplicateResult = await Nekhemjlekh.deleteMany({
-      gereeniiId: geree._id.toString(),
-      nekhemjlekhiinDugaar: "НЭХ-20260525-0001"
+    console.log(`=== STEP 1: RESETTING EKHNII ULDEGDEL ON CONTRACT ${contractDugaar} ===`);
+    const resetGereeResult = await Geree.updateOne(
+      { _id: targetGeree._id },
+      { $set: { ekhniiUldegdel: 0 } }
+    );
+    console.log(`Contract reset: matched ${resetGereeResult.matchedCount}, modified ${resetGereeResult.modifiedCount}`);
+
+    console.log("\n=== STEP 2: COMPLETELY DELETING 599,933.38 LEDGER CHARGE ===");
+    const deleteGuilgeeResult = await Guilgee.deleteMany({
+      gereeniiId: targetGeree._id.toString(),
+      dun: 599933.38
     });
-    console.log(`Deleted duplicate empty invoices: ${deleteDuplicateResult.deletedCount}`);
+    console.log(`Deleted ledger starting balance documents: ${deleteGuilgeeResult.deletedCount}`);
 
-    console.log("\n=== STEP 2: REMOVING DUPLICATE ЦАХИЛГААН CHARGES IN GEREE ===");
-    // Keep only the correct 'Хувьсах' charge and filter out 'Энгийн' charge
-    const originalLength = geree.zardluud.length;
-    const cleanedZardluud = geree.zardluud.filter(z => {
-      const name = (z.ner || "").toLowerCase();
-      if (name.includes("цахилгаан") && z.zardliinTurul === "Энгийн" && !name.includes("дундын")) {
-        return false; // Remove old manual charge
-      }
-      return true;
-    });
-
-    if (cleanedZardluud.length !== originalLength) {
-      await Geree.updateOne(
-        { _id: geree._id },
-        { $set: { zardluud: cleanedZardluud } }
-      );
-      console.log(`Cleaned up duplicate 'Цахилгаан' from contract zardluud.`);
-    } else {
-      console.log("No duplicate 'Цахилгаан' in contract zardluud.");
-    }
-
-    console.log("\n=== STEP 3: RE-GENERATING INVOICE AND SYNCING LEDGER ===");
-    // Now trigger the invoice service to recalculate and sync ledger charges
+    console.log("\n=== STEP 3: RE-SYNCING INVOICES AND LEDGER CHARGES ===");
     const invoiceService = require("./services/invoiceService");
-    
-    // Initialize core connection for zevbackv2 models inside standalone script
     const zevbackv2 = require("zevbackv2");
     zevbackv2.db.erunkhiiKholbolt = { kholbolt: mongoose.connection };
 
     const kholbolt = { kholbolt: db };
-
-    const result = await invoiceService.createInvoiceForContract(kholbolt, geree._id.toString(), {
-      billingDate: new Date("2026-05-19T17:01:01.126Z")
+    const syncResult = await invoiceService.createInvoiceForContract(kholbolt, targetGeree._id.toString(), {
+      billingDate: new Date("2026-05-25T00:00:00.000Z")
     });
+    console.log("Sync result:", syncResult);
 
-    console.log("Sync result:", result);
-
-    // Find the updated Guilgee entries to verify
-    const guilgees = await Guilgee.find({ 
-      gereeniiId: geree._id.toString(),
-      zardliinNer: "Цахилгаан"
-    }).toArray();
-
-    console.log("\n=== VERIFIED LEDGER CHARGES FOR ЦАХИЛГААН ===");
-    console.log(JSON.stringify(guilgees, null, 2));
+    console.log("\n=== STEP 4: VERIFYING UPDATED LEDGER FOR TOOT 166 ===");
+    const remainingGuilgees = await Guilgee.find({ 
+      gereeniiId: targetGeree._id.toString() 
+    }).sort({ ognoo: -1 }).toArray();
+    console.log(JSON.stringify(remainingGuilgees, null, 2));
 
   } catch (err) {
     console.error(err);
