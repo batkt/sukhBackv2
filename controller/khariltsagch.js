@@ -49,7 +49,8 @@ exports.khariltsagchTootUstgakh = asyncHandler(async (req, res, next) => {
 
 exports.updateDavkharWithToot = async function (baiguullaga, barilgiinId, davkhar, toot, kholbolt) {};
 
-exports.syncResidentContracts = async function (resident, baiguullaga, kholbolt, req) {};
+const orshinSuugchController = require("./orshinSuugch");
+exports.syncResidentContracts = orshinSuugchController.syncResidentContracts;
 
 /**
  * Self-delete khariltsagch and all related data

@@ -14,8 +14,8 @@ const khariltsagchSchema = new Schema(
         toot: String, // Door number
         turul: {
           type: String,
-          enum: ["Гараж", "Агуулах"],
-          default: "Гараж"
+          enum: ["Орон сууц", "Гараж", "Агуулах"],
+          default: "Орон сууц"
         },
         source: {
           type: String,

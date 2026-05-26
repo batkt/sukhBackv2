@@ -5359,12 +5359,36 @@ exports.syncResidentContracts = async function syncResidentContracts(
               soh: req.body.soh || orshinSuugch.soh || "",
               bairniiNer:
                 orshinSuugch.bairniiNer || req.body.bairniiNer || "",
+              turul: "Орон сууц",
             },
           ]
         : [];
 
+  const allToots = tootsToProcess || [];
+  let mainUnits = allToots.filter(t => t.turul !== "Гараж" && t.turul !== "Агуулах");
+  let additionalUnits = allToots.filter(t => t.turul === "Гараж" || t.turul === "Агуулах");
+
+  const isKhariltsagch = !!(
+    req &&
+    (
+      (req.originalUrl && req.originalUrl.toLowerCase().includes("khariltsagch")) ||
+      (req.url && req.url.toLowerCase().includes("khariltsagch"))
+    )
+  );
+
+  if (mainUnits.length === 0 && additionalUnits.length > 0) {
+    if (isKhariltsagch) {
+      // For customers (khariltsagch), promote the first additional unit to a main unit so a contract is created
+      mainUnits = [additionalUnits[0]];
+      additionalUnits = additionalUnits.slice(1);
+    } else {
+      // For residents (orshinSuugch), do NOT promote. Garages and warehouses should not get contracts of their own.
+      // mainUnits remains empty, meaning no contract will be created.
+    }
+  }
+
   let anyReactivated = false;
-  console.log(`[SYNC] Processing ${tootsToProcess.length} units for resident ${orshinSuugch.ner} in org ${baiguullagiinId}`);
+  console.log(`[SYNC] Processing main units: ${mainUnits.length}, additional units: ${additionalUnits.length} for resident ${orshinSuugch.ner} in org ${baiguullagiinId}`);
 
   // 1. Identify all active contracts for this resident in this organization
   const allActiveGerees = await GereeModel.find({
@@ -5372,12 +5396,12 @@ exports.syncResidentContracts = async function syncResidentContracts(
     tuluv: "Идэвхтэй"
   }).sort({ createdAt: -1 }).lean();
 
-  // 2. Create a set of "Valid Unit Keys" for this organization
+  // 2. Create a set of "Valid Unit Keys" for this organization (only main units get active contracts)
   const validUnitKeys = new Set();
   const uniqueToots = [];
   const processedKeys = new Set();
 
-  (tootsToProcess || []).forEach(t => {
+  (mainUnits || []).forEach(t => {
     const entryOrgId = t.baiguullagiinId ? String(t.baiguullagiinId) : null;
     if (!entryOrgId || entryOrgId === baiguullagiinId) {
       const bId = t.barilgiinId || barilgiinId;
@@ -5394,7 +5418,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
   });
 
   // 3. Cancel contracts that are no longer associated with this resident
-  // OR are duplicates for the same unit
+  // OR are duplicates for the same unit (includes old standalone garage/storage contracts)
   const activeKeysFound = new Set();
   for (const g of allActiveGerees) {
     const key = `${String(g.barilgiinId)}|${String(g.toot).trim()}`;
@@ -5403,7 +5427,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
     const isDuplicate = activeKeysFound.has(key);
 
     if (isInvalid || isDuplicate) {
-      const reason = isInvalid ? "Тоот өөрчлөгдсөн" : "Давхардсан гэрээ цэвэрлэгээ";
+      const reason = isInvalid ? "Тоот өөрчлөгдсөн эсвэл нэгдсэн гэрээ рүү шилжсэн" : "Давхардсан гэрээ цэвэрлэгээ";
       console.log(`🚫 [SYNC] Cancelling contract ${g.gereeniiDugaar} for unit ${g.toot} (${reason})`);
       await GereeModel.findByIdAndUpdate(g._id, {
         $set: { 
@@ -5447,8 +5471,24 @@ exports.syncResidentContracts = async function syncResidentContracts(
       orshinSuugchId: orshinSuugch._id.toString(),
     });
 
+    const currentAuData = additionalUnits
+      .filter(au => String(au.barilgiinId || barilgiinId) === String(currentBarilgiinId))
+      .map(au => ({
+        toot: au.toot,
+        turul: au.turul,
+        davkhar: au.davkhar || "",
+        orts: au.orts || "1",
+        ekhniiUldegdel: au.ekhniiUldegdel || 0,
+        tsahilgaaniiZaalt: au.tsahilgaaniiZaalt || 0,
+        khonogoorBodokhEsekh: au.khonogoorBodokhEsekh || false,
+        bodokhKhonog: au.bodokhKhonog || 0,
+      }));
+
     if (existingActiveGeree) {
-      // Already has an active contract, update its details if needed but skip creation
+      // Already has an active contract, update its details and additional units list
+      await GereeModel.findByIdAndUpdate(existingActiveGeree._id, {
+        $set: { nemeltTootnuud: currentAuData }
+      });
       continue;
     }
 
@@ -5586,6 +5626,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
             : orshinSuugch.tsahilgaaniiZaalt || 0,
         zaaltTog: 0,
         zaaltUs: 0,
+        nemeltTootnuud: currentAuData,
       };
 
       if (req.body.tailbar || orshinSuugch.tailbar) {
@@ -5612,7 +5653,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
       let horooToot =
         targetBarilgaForToot?.tokhirgoo?.horoo || tootEntry.horoo || {};
       if (typeof horooToot === "string")
-        horooToot = { ner: horooToot, kod: horooToot };
+         horooToot = { ner: horooToot, kod: horooToot };
       const sohToot =
         targetBarilgaForToot?.tokhirgoo?.sohNer || tootEntry.soh || "";
 
@@ -5685,6 +5726,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
             : Number(req.body.bodokhKhonog) || 0,
         segmentuud: [],
         khungulultuud: [],
+        nemeltTootnuud: currentAuData,
       };
 
       const newGeree = new require("../models/geree")(tukhainBaaziinKholbolt)(

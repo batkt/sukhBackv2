@@ -589,123 +589,22 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
           );
 
           if (baiguullaga && targetBarilga) {
+            const syncService = require("../controller/orshinSuugch");
+            await syncService.syncResidentContracts(
+              result,
+              baiguullaga,
+              tukhainBaaziinKholbolt,
+              req
+            );
+            
+            // Fetch the newly created active contract to pass down to subsequent hooks (like invoice/guest settings if needed)
             const GereeModel = Geree(tukhainBaaziinKholbolt);
-
-            // Check if active contract already exists for this unit/resident
-            let geree = await GereeModel.findOne({
+            var geree = await GereeModel.findOne({
               khariltsagchId: result._id.toString(),
               barilgiinId: String(barilgiinId),
-              toot: result.toot || req.body.toot,
-              tuluv: { $ne: "Цуцалсан" },
+              tuluv: "Идэвхтэй"
             });
-
-            if (!geree) {
-              console.log(
-                `📋 [AUTO-GEREE] Creating contract for ${result.ner} (Toot: ${result.toot || req.body.toot})`,
-              );
-
-              const ashiglaltiinZardluudData =
-                targetBarilga.tokhirgoo?.ashiglaltiinZardluud || [];
-              const liftShalgayaData = targetBarilga.tokhirgoo?.liftShalgaya;
-              const choloolugdokhDavkhar =
-                liftShalgayaData?.choloolugdokhDavkhar || [];
-
-              const zardluudArray = ashiglaltiinZardluudData.map((zardal) => ({
-                ner: zardal.ner,
-                turul: zardal.turul,
-                zardliinTurul: zardal.zardliinTurul,
-                tariff: zardal.tariff,
-                tariffUsgeer: zardal.tariffUsgeer || "",
-                tulukhDun: 0,
-                dun: zardal.dun || 0,
-                bodokhArga: zardal.bodokhArga || "",
-                tseverUsDun: zardal.tseverUsDun || 0,
-                bokhirUsDun: zardal.bokhirUsDun || 0,
-                usKhalaasniiDun: zardal.usKhalaasniiDun || 0,
-                tsakhilgaanUrjver: zardal.tsakhilgaanUrjver || 1,
-                tsakhilgaanChadal: zardal.tsakhilgaanChadal || 0,
-                tsakhilgaanDemjikh: zardal.tsakhilgaanDemjikh || 0,
-                suuriKhuraamj: zardal.suuriKhuraamj || 0,
-                nuatNemekhEsekh: zardal.nuatNemekhEsekh || false,
-                ognoonuud: zardal.ognoonuud || [],
-                barilgiinId: zardal.barilgiinId || String(barilgiinId) || "",
-              }));
-
-              const niitTulbur = ashiglaltiinZardluudData.reduce(
-                (total, zardal) => {
-                  const tariff = zardal.tariff || 0;
-                  const isLiftItem =
-                    zardal.zardliinTurul && zardal.zardliinTurul === "Лифт";
-                  if (
-                    isLiftItem &&
-                    result.davkhar &&
-                    choloolugdokhDavkhar.includes(result.davkhar)
-                  ) {
-                    return total;
-                  }
-                  return total + tariff;
-                },
-                0,
-              );
-
-              const contractData = {
-                gereeniiDugaar: `ГД-${Date.now().toString().slice(-8)}`,
-                gereeniiOgnoo: new Date(),
-                turul: "Үндсэн",
-                tuluv: "Идэвхтэй",
-                ovog: result.ovog || "",
-                ner: result.ner,
-                utas: Array.isArray(result.utas) ? result.utas : [result.utas],
-                mail: result.mail || "",
-                baiguullagiinId: baiguullaga._id,
-                baiguullagiinNer: baiguullaga.ner,
-                barilgiinId: String(barilgiinId),
-                tulukhOgnoo: new Date(),
-                ashiglaltiinZardal: niitTulbur,
-                niitTulbur: niitTulbur,
-                toot: result.toot || req.body.toot || "",
-                davkhar: result.davkhar || "",
-                bairNer: targetBarilga.ner || "",
-                sukhBairshil: `${targetBarilga.tokhirgoo?.duuregNer || ""}, ${targetBarilga.tokhirgoo?.horoo?.ner || ""}, ${targetBarilga.tokhirgoo?.sohNer || ""}`,
-                duureg: targetBarilga.tokhirgoo?.duuregNer || "",
-                horoo: targetBarilga.tokhirgoo?.horoo || {},
-                sohNer: targetBarilga.tokhirgoo?.sohNer || "",
-                orts: result.orts || "",
-                burtgesenAjiltan: req.body.nevtersenAjiltniiToken?.id,
-                khariltsagchId: result._id.toString(),
-                temdeglel: "Вэбээс гар аргаар үүссэн гэрээ",
-                actOgnoo: new Date(),
-                baritsaaniiUldegdel: 0,
-                ekhniiUldegdel: result.ekhniiUldegdel || 0,
-                umnukhZaalt: result.tsahilgaaniiZaalt || 0,
-                suuliinZaalt: result.tsahilgaaniiZaalt || 0,
-                khonogoorBodokhEsekh: result.khonogoorBodokhEsekh || false,
-                bodokhKhonog: result.bodokhKhonog || 0,
-                zardluud: zardluudArray,
-                segmentuud: [],
-                khungulultuud: [],
-              };
-
-              geree = new GereeModel(contractData);
-              await geree.save();
-              console.log(
-                `✅ [AUTO-GEREE] Contract created: ${geree.gereeniiDugaar}`,
-              );
-
-              // Update davkhar with toot if provided (sync building config)
-              if (result.toot && result.davkhar) {
-                const {
-                  updateDavkharWithToot,
-                } = require("../controller/khariltsagch");
-                await updateDavkharWithToot(
-                  baiguullaga,
-                  barilgiinId,
-                  result.davkhar,
-                  result.toot,
-                  tukhainBaaziinKholbolt,
-                );
-              }
-            }
+          }
 
             // --- AUTO CREATE GUEST SETTINGS (khariltsagchMashin) ---
             // Moved OUTSIDE if(!geree) to ensure all new residents get settings
@@ -794,7 +693,6 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
                 );
               }
             }
-          }
         }
       }
     } catch (autoErr) {

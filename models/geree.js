@@ -95,6 +95,18 @@ const gereeSchema = new Schema(
         utga: String,
       },
     ],
+    nemeltTootnuud: [
+      {
+        toot: String,
+        turul: String,
+        orts: String,
+        davkhar: String,
+        ekhniiUldegdel: Number,
+        tsahilgaaniiZaalt: Number,
+        khonogoorBodokhEsekh: Boolean,
+        bodokhKhonog: Number,
+      }
+    ],
     gereeniiTuukhuud: {
       type: [Schema.Types.Mixed],
       select: false,
