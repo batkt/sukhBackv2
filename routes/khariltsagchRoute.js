@@ -303,8 +303,6 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
                 } else if (g.umnukhZaalt !== undefined) {
                   t.tsahilgaaniiZaalt = g.umnukhZaalt;
                 }
-              } else {
-                console.log(`[DEBUG] Resident List: Unit ${tootKey} has no matching Geree`);
               }
             });
           }
@@ -391,8 +389,6 @@ router.get("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
               khariltsagchId: result._id.toString(),
             }).lean();
 
-            console.log(`[DEBUG] Resident Detail: Found ${allGerees.length} contracts for resident ${result._id}`);
-
             const activeGereeIds = allGerees.map((g) => g._id.toString());
             const activeGereeObjectIds = activeGereeIds.map(id => {
               try { return new mongoose.Types.ObjectId(id); } catch (e) { return null; }
@@ -432,7 +428,6 @@ router.get("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
 
               g.dynamicUldegdel = balanceMap[gid] ?? g.ekhniiUldegdel ?? 0;
 
-              console.log(`[DEBUG] Resident Detail: Mapping Toot Key: "${tootKey}" to Geree ${g._id} (Balance: ${g.dynamicUldegdel})`);
               if (!unitGereeMap[tootKey] || g.tuluv === "Идэвхтэй") {
                 unitGereeMap[tootKey] = g;
               }
@@ -443,7 +438,6 @@ router.get("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
               result.toots.forEach((t) => {
                 const currentToot = String(t.toot || "").trim();
                 const g = unitGereeMap[currentToot];
-                console.log(`[DEBUG] Resident Detail: Checking unit "${currentToot}" -> Found Match: ${!!g}`);
                 if (g) {
                   if (g.dynamicUldegdel !== undefined) {
                     t.ekhniiUldegdel = g.dynamicUldegdel;

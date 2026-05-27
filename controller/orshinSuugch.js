@@ -251,8 +251,6 @@ exports.updateDavkharWithToot = async function updateDavkharWithToot(
       const davkharPath = `barilguud.${barilgaIndex}.tokhirgoo.davkhar`;
       const toonuudPath = `barilguud.${barilgaIndex}.tokhirgoo.davkhariinToonuud`;
 
-      console.log(`🔍 [TRACE-UPDATE] Updating Baiguullaga ${freshBaiguullaga._id} for floor ${floorKey}. New list: ${tootList.join(",")}`);
-
       await BaiguullagaModel.findByIdAndUpdate(
         freshBaiguullaga._id,
         {
@@ -5338,7 +5336,6 @@ exports.syncResidentContracts = async function syncResidentContracts(
   
   // Safeguard: Never sync or create residential contracts for the centralized wallet organization
   if (baiguullagiinId === String(CENTRALIZED_ORG_ID)) {
-    console.log(`[SYNC] Skipping contract sync for centralized wallet org: ${baiguullagiinId}`);
     return;
   }
 
@@ -5388,7 +5385,6 @@ exports.syncResidentContracts = async function syncResidentContracts(
   }
 
   let anyReactivated = false;
-  console.log(`[SYNC] Processing main units: ${mainUnits.length}, additional units: ${additionalUnits.length} for resident ${orshinSuugch.ner} in org ${baiguullagiinId}`);
 
   // 1. Identify all active contracts for this resident in this organization
   const allActiveGerees = await GereeModel.find({
@@ -5408,10 +5404,9 @@ exports.syncResidentContracts = async function syncResidentContracts(
       if (bId) {
         const key = `${String(bId)}|${String(t.toot).trim()}`;
         if (!processedKeys.has(key)) {
-           processedKeys.add(key);
+            processedKeys.add(key);
            uniqueToots.push(t);
            validUnitKeys.add(key);
-           console.log(`[SYNC] Registered valid unit key: ${key}`);
         }
       }
     }
@@ -5428,7 +5423,6 @@ exports.syncResidentContracts = async function syncResidentContracts(
 
     if (isInvalid || isDuplicate) {
       const reason = isInvalid ? "Тоот өөрчлөгдсөн эсвэл нэгдсэн гэрээ рүү шилжсэн" : "Давхардсан гэрээ цэвэрлэгээ";
-      console.log(`🚫 [SYNC] Cancelling contract ${g.gereeniiDugaar} for unit ${g.toot} (${reason})`);
       await GereeModel.findByIdAndUpdate(g._id, {
         $set: { 
           tuluv: "Цуцалсан", 
@@ -5445,8 +5439,6 @@ exports.syncResidentContracts = async function syncResidentContracts(
     // Only process units that belong to the current organization context
     const entryOrgId = tootEntry.baiguullagiinId ? String(tootEntry.baiguullagiinId) : null;
     
-    console.log(`[SYNC] Checking unit ${tootEntry.toot} (Org: ${entryOrgId}) against context ${baiguullagiinId}`);
-
     // If the unit association has an org ID, it MUST match the current one
     if (entryOrgId && entryOrgId !== baiguullagiinId) {
       continue;
@@ -5459,7 +5451,6 @@ exports.syncResidentContracts = async function syncResidentContracts(
 
     const currentBarilgiinId = tootEntry.barilgiinId || barilgiinId;
     if (!currentBarilgiinId) {
-      console.log(`[SYNC] Skipping unit ${tootEntry.toot} - No barilgiinId found`);
       continue;
     }
 
