@@ -74,9 +74,9 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
           charges.push({
             ner: `${label} (${au.toot})`,
             dun: dun,
-            turul: au.turul, // "Гараж" or "Агуулах" as requested
+            turul: "avlaga",
             zardliinTurul: au.turul,
-            tailbar: `${label} - ${au.toot}`,
+            tailbar: au.turul === "Гараж" ? "Зогсоол" : "Агуулах",
           });
         }
       }
@@ -343,8 +343,9 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
         nekhemjlekhId: invoice._id.toString(),
         dun: c.dun,
         zardliinNer: c.ner,
-        tailbar: c.ner,
+        tailbar: c.tailbar || c.ner,
         zardliinTurul: c.zardliinTurul,
+        turul: c.turul || geree.turul || "avlaga",
         ognoo: options.billingDate || new Date(),
         source: c.isEkhniiUldegdel ? "geree" : "nekhemjlekh",
         ekhniiUldegdelEsekh: !!c.isEkhniiUldegdel,
