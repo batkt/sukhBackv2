@@ -57,10 +57,21 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
         });
       }
 
-      // 2. Monthly constant payment for additional unit if garageEnabled is true
-      if (garageEnabled && (au.turul === "Гараж" || au.turul === "Агуулах")) {
-        let dun = baseValue;
-        if (method === "Тогтмол" && dun > 0) {
+      // 2. Monthly constant payment for additional unit if enabled
+      const isGarage = au.turul === "Гараж";
+      const isStorage = au.turul === "Агуулах";
+
+      const storageEnabled = !!barilga?.tokhirgoo?.aguulakhTolborEnabled;
+      const storageMethod = barilga?.tokhirgoo?.aguulakhTolborArga || "Тогтмол";
+      const storageBaseValue = Number(barilga?.tokhirgoo?.aguulakhTolborUtga || 0);
+
+      const isEnabled = isGarage ? garageEnabled : isStorage ? storageEnabled : false;
+      const currentMethod = isGarage ? method : storageMethod;
+      const currentBaseValue = isGarage ? baseValue : storageBaseValue;
+
+      if (isEnabled && (isGarage || isStorage)) {
+        let dun = currentBaseValue;
+        if (currentMethod === "Тогтмол" && dun > 0) {
           const isUnitProrating = au.khonogoorBodokhEsekh === true || au.khonogoorBodokhEsekh === "true";
           const unitProrateDays = Number(au.bodokhKhonog) || 0;
 
@@ -70,13 +81,13 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
             dun = Math.round(dun * prorateFactorUnit);
           }
 
-          const label = au.turul === "Гараж" ? "Зогсоолын төлбөр" : "Агуулахын төлбөр";
+          const label = isGarage ? "Зогсоолын төлбөр" : "Агуулахын төлбөр";
           charges.push({
             ner: `${label} (${au.toot})`,
             dun: dun,
             turul: "avlaga",
             zardliinTurul: au.turul,
-            tailbar: au.turul === "Гараж" ? "Зогсоол" : "Агуулах",
+            tailbar: isGarage ? "Зогсоол" : "Агуулах",
           });
         }
       }

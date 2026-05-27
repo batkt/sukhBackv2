@@ -104,6 +104,13 @@ const baiguullagaSchema = new Schema(
             default: 30,
           },
 
+          garsiinTolborEnabled: Boolean,
+          garsiinTolborArga: String,
+          garsiinTolborUtga: Number,
+          aguulakhTolborEnabled: Boolean,
+          aguulakhTolborArga: String,
+          aguulakhTolborUtga: Number,
+
           liftShalgaya: {
             choloolugdokhDavkhar: [String],
           },
@@ -218,6 +225,12 @@ const baiguullagaSchema = new Schema(
         type: Number,
         default: 30,
       },
+      garsiinTolborEnabled: Boolean,
+      garsiinTolborArga: String,
+      garsiinTolborUtga: Number,
+      aguulakhTolborEnabled: Boolean,
+      aguulakhTolborArga: String,
+      aguulakhTolborUtga: Number,
     },
     erkhuud: [
       {
