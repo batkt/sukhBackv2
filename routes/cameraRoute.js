@@ -1,23 +1,15 @@
 const express = require("express");
 const router = express.Router();
-const { v4: uuidv4 } = require("uuid");
+const axios = require("axios");
 
-// Global map to track pending WebRTC signaling requests
+// Keep the global map and handleWebRTCAnswer function to prevent any import errors in index.js
 const pendingSignaling = new Map();
+router.handleWebRTCAnswer = (data) => {
+    // Left empty for backwards compatibility in index.js
+};
 
-/**
- * WebRTC Signaling Route
- * Bridges the browser's SDP offer to the local PC worker via Socket.io
- * Now uses a path parameter for barilgiinId to avoid query string issues.
- */
 // Common handler for camera streaming proxy
 async function handleCameraProxy(req, res) {
-    // Enable explicit CORS headers mapping dynamically to request origin
-    res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-
     try {
         const { rtsp, url, sdp64 } = req.body;
         const { barilgiinId } = req.params;
@@ -133,41 +125,8 @@ async function handleCameraProxy(req, res) {
     }
 }
 
-// Handle CORS OPTIONS preflight explicitly
-router.options("/camera/stream/:barilgiinId/stream", (req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    return res.status(200).end();
-});
-
-router.options("/camera/stream/:barilgiinId/answer", (req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    return res.status(200).end();
-});
-
 // Register both path endpoints for maximum compatibility
 router.post("/camera/stream/:barilgiinId/stream", handleCameraProxy);
 router.post("/camera/stream/:barilgiinId/answer", handleCameraProxy);
-
-router.handleWebRTCAnswer = (data) => {
-    const { correlationId, sdpAnswer, error } = data;
-    const pending = pendingSignaling.get(correlationId);
-    
-    if (pending) {
-        clearTimeout(pending.timeout);
-        pendingSignaling.delete(correlationId);
-        
-        if (error) {
-            // Logic to handle error if needed
-        } else {
-            pending.resolve(sdpAnswer);
-        }
-    }
-};
 
 module.exports = router;
