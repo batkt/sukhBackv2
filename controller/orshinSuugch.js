@@ -4307,7 +4307,7 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
   }
 });
 
-exports.msgIlgeeye = function msgIlgeeye(
+function msgIlgeeye(
   jagsaalt,
   key,
   dugaar,
@@ -4394,7 +4394,9 @@ exports.msgIlgeeye = function msgIlgeeye(
   } catch (err) {
     console.error("[msgIlgeeye] Unexpected error:", err);
   }
-};
+}
+
+exports.msgIlgeeye = msgIlgeeye;
 
 exports.utasBatalgaajuulakhLogin = asyncHandler(async (req, res, next) => {
   try {
