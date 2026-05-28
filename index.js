@@ -140,7 +140,7 @@ process.on("uncaughtException", (err) => {
 
 app.use(
   cors({
-    origin: (origin, callback) => callback(null, true),
+    origin: true,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: [
@@ -394,8 +394,7 @@ async function automataarNekhemjlekhUusgekh() {
 
         if (gereenuud.length === 0) {
           console.log(
-            `ℹ️  ${
-              baiguullaga.ner
+            `ℹ️  ${baiguullaga.ner
             }-д идэвхтэй гэрээ олдсонгүй (нийт: ${await Geree(
               tukhainBaaziinKholbolt,
             ).countDocuments({
