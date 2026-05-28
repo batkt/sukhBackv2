@@ -22,7 +22,8 @@ exports.khariltsagchUstgakh = asyncHandler(async (req, res, next) => {
 // Remove specific toot from khariltsagch
 exports.khariltsagchTootUstgakh = asyncHandler(async (req, res, next) => {
   try {
-    const { id, baiguullagiinId, barilgiinId, toot } = req.body;
+    const id = req.body.id || req.body.residentId;
+    const { baiguullagiinId, barilgiinId, toot } = req.body;
     const khariltsagchModel = khariltsagch(db.erunkhiiKholbolt);
     
     const user = await khariltsagchModel.findById(id);
@@ -33,9 +34,9 @@ exports.khariltsagchTootUstgakh = asyncHandler(async (req, res, next) => {
     if (user.toots && user.toots.length > 0) {
       user.toots = user.toots.filter((t) => {
         return !(
-          t.baiguullagiinId === baiguullagiinId &&
-          t.barilgiinId === barilgiinId &&
-          t.toot === toot
+          String(t.baiguullagiinId) === String(baiguullagiinId) &&
+          String(t.toot).trim() === String(toot).trim() &&
+          (!barilgiinId || String(t.barilgiinId) === String(barilgiinId))
         );
       });
       await user.save();
