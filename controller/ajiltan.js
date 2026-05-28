@@ -457,33 +457,40 @@ function msgIlgeeye(
   baiguullagiinId,
 ) {
   try {
-    url =
-      process.env.MSG_SERVER +
-      "/send" +
-      "?key=" +
-      key +
-      "&from=" +
-      dugaar +
-      "&to=" +
-      jagsaalt[index].to.toString() +
-      "&text=" +
-      jagsaalt[index].text.toString();
-    url =
-      process.env.MSG_SERVER +
-      "/send" +
-      "?key=" +
-      key +
-      "&from=" +
-      dugaar +
-      "&to=" +
-      jagsaalt[index].to.toString() +
-      "&text=" +
-      jagsaalt[index].text.toString();
-    url = encodeURI(url);
-    request(url, { json: true }, (err1, res1, body) => {
-      if (err1) {
-        next(err1);
-      } else {
+    if (!jagsaalt || index >= jagsaalt.length) {
+      return;
+    }
+
+    let activeUrl = "https://api-text.callpro.mn/v1/sms/send";
+
+    const options = {
+      method: "POST",
+      url: activeUrl,
+      headers: {
+        "x-api-key": key,
+        "api-key": key,
+        "Authorization": `Bearer ${key}`,
+        "Content-Type": "application/json"
+      },
+      body: {
+        key: key,
+        from: dugaar,
+        to: jagsaalt[index].to.toString(),
+        text: jagsaalt[index].text.toString()
+      },
+      json: true
+    };
+
+    console.log(`[msgIlgeeye] Sending message [${index + 1}/${jagsaalt.length}] to: "${jagsaalt[index].to}"`);
+
+    request(options, (err1, res1, body) => {
+      console.log(`[msgIlgeeye] Response for ${jagsaalt[index].to}:`, {
+        error: err1?.message || null,
+        statusCode: res1?.statusCode,
+        body
+      });
+
+      if (!err1) {
         var msg = new MsgTuukh(tukhainBaaziinKholbolt)();
         msg.baiguullagiinId = baiguullagiinId;
         msg.dugaar = jagsaalt[index].to;
@@ -491,9 +498,14 @@ function msgIlgeeye(
         msg.msg = jagsaalt[index].text;
         msg.msgIlgeekhKey = key;
         msg.msgIlgeekhDugaar = dugaar;
-        msg.save();
+        msg.save().catch(() => {});
+
+        const responseRaw = Array.isArray(body) && body[0] ? body[0] : body;
+        if (Array.isArray(khariu)) {
+          khariu.push(responseRaw);
+        }
+
         if (jagsaalt.length > index + 1) {
-          khariu.push(body[0]);
           msgIlgeeye(
             jagsaalt,
             key,
@@ -503,13 +515,24 @@ function msgIlgeeye(
             tukhainBaaziinKholbolt,
             baiguullagiinId,
           );
-        } else {
-          khariu.push(body[0]);
+        }
+      } else {
+        console.error(`[msgIlgeeye] Failed to send SMS to ${jagsaalt[index].to}:`, err1.message);
+        if (jagsaalt.length > index + 1) {
+          msgIlgeeye(
+            jagsaalt,
+            key,
+            dugaar,
+            khariu,
+            index + 1,
+            tukhainBaaziinKholbolt,
+            baiguullagiinId,
+          );
         }
       }
     });
   } catch (err) {
-    next(err);
+    console.error("[msgIlgeeye] Unexpected error:", err);
   }
 }
 

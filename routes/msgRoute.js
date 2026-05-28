@@ -21,31 +21,63 @@ function msgIlgeeye(
   barilgiinId
 ) {
   try {
-    let url =
-      "https://api.messagepro.mn" +
-      "/send" +
-      "?key=" +
-      "aa8e588459fdd9b7ac0b809fc29cfae3" +
-      "&from=" +
-      "72002002" +
-      "&to=" +
-      jagsaalt[index].to.toString() +
-      "&text=" +
-      jagsaalt[index].text.toString();
+    if (!jagsaalt || index >= jagsaalt.length) {
+      if (res && !res.headersSent) {
+        res.send(khariu);
+      }
+      return;
+    }
 
-    url = encodeURI(url);
+    let activeUrl = "https://api-text.callpro.mn/v1/sms/send";
 
-    request(url, { json: true }, async (err1, response, body) => {
+    const options = {
+      method: "POST",
+      url: activeUrl,
+      headers: {
+        "x-api-key": key,
+        "api-key": key,
+        "Authorization": `Bearer ${key}`,
+        "Content-Type": "application/json"
+      },
+      body: {
+        key: key,
+        from: dugaar,
+        to: jagsaalt[index].to.toString(),
+        text: jagsaalt[index].text.toString()
+      },
+      json: true
+    };
+
+    console.log(`[msgIlgeeye] Sending message [${index + 1}/${jagsaalt.length}] to: "${jagsaalt[index].to}"`);
+
+    request(options, async (err1, response, body) => {
+      console.log(`[msgIlgeeye] Response for ${jagsaalt[index].to}:`, {
+        error: err1?.message || null,
+        statusCode: response?.statusCode,
+        body
+      });
+
       if (err1) {
-        next(err1);
-      } else if (response?.statusCode === 404 || body?.reason) {
-        // Handle error response from messagepro.mn
+        if (next) {
+          next(err1);
+        } else if (res && !res.headersSent) {
+          res.status(500).send({ message: "SMS sending failed", error: err1.message });
+        }
+        return;
+      }
+
+      if (response?.statusCode === 404 || (body && (body.reason || body.Result === "FAILED" || body.Result === "ERROR"))) {
         khariu.push({
           status: "ERROR",
-          message: body?.reason || "SMS илгээх үед алдаа гарлаа",
+          message: (body && (body.reason || body.Message || body.message || body.error)) || "SMS илгээх үед алдаа гарлаа",
         });
-        res.send(khariu);
-      } else {
+        if (res && !res.headersSent) {
+          res.send(khariu);
+        }
+        return;
+      }
+
+      try {
         const MsgTuukhModel = MsgTuukh(kholbolt);
         await MsgTuukhModel.create({
           baiguullagiinId: baiguullagiinId,
@@ -56,30 +88,35 @@ function msgIlgeeye(
           msgIlgeekhKey: key,
           msgIlgeekhDugaar: dugaar,
         });
+      } catch (dbErr) {
+        console.error("[msgIlgeeye] Database save error:", dbErr.message);
+      }
 
-        if (jagsaalt.length > index + 1) {
-          khariu.push(body[0]);
-          msgIlgeeye(
-            jagsaalt,
-            key,
-            dugaar,
-            khariu,
-            index + 1,
-            next,
-            req,
-            res,
-            kholbolt,
-            baiguullagiinId,
-            barilgiinId
-          );
-        } else {
-          khariu.push(body[0]);
+      const responseRaw = Array.isArray(body) && body[0] ? body[0] : body;
+      khariu.push(responseRaw || { Result: "SUCCESS", to: jagsaalt[index].to });
+
+      if (jagsaalt.length > index + 1) {
+        msgIlgeeye(
+          jagsaalt,
+          key,
+          dugaar,
+          khariu,
+          index + 1,
+          next,
+          req,
+          res,
+          kholbolt,
+          baiguullagiinId,
+          barilgiinId
+        );
+      } else {
+        if (res && !res.headersSent) {
           res.send(khariu);
         }
       }
     });
   } catch (err) {
-    next(err);
+    if (next) next(err);
   }
 }
 
