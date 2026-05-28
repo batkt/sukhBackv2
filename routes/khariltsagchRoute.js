@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 const khariltsagch = require("../models/khariltsagch");
 const Baiguullaga = require("../models/baiguullaga");
 const Geree = require("../models/geree");
