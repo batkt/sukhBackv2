@@ -15,9 +15,9 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
   console.log(`🔎 [calculateGereeCharges] nemeltTootnuud:`, JSON.stringify(geree.nemeltTootnuud));
 
   const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(geree.baiguullagiinId).lean();
-  const barilga = baiguullaga?.barilguud?.find(b => String(b._id) === String(geree.barilgiinId));
+  const barilga = baiguullaga && baiguullaga.barilguud && baiguullaga.barilguud.find(b => String(b._id) === String(geree.barilgiinId));
   const _tok = barilga && barilga.tokhirgoo;
-  console.log(`🔎 [calculateGereeCharges] barilgiinId: ${geree.barilgiinId}, barilga found: ${!!barilga}, garsiinTolborEnabled: ${_tok && _tok.garsiinTolborEnabled}, aguulakhTolborEnabled: ${_tok && _tok.aguulakhTolborEnabled}, garsiinTolborUtga: ${_tok && _tok.garsiinTolborUtga}`);
+  console.log("barilga found:", !!barilga, "garsiinTolborEnabled:", _tok && _tok.garsiinTolborEnabled, "garsiinTolborUtga:", _tok && _tok.garsiinTolborUtga);
 
   const charges = [];
   const totalDaysInMonth = getDaysInMonth(options.billingDate || new Date());
@@ -532,162 +532,163 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
       }
     }
 
-  // 4.5. Reset pro-rating flags (one-time use)
-  let resetRequired = false;
-  let updatedNemeltTootnuud = geree.nemeltTootnuud;
-  if (Array.isArray(geree.nemeltTootnuud)) {
-    updatedNemeltTootnuud = geree.nemeltTootnuud.map(au => {
-      if (au.khonogoorBodokhEsekh === true || au.khonogoorBodokhEsekh === "true") {
-        resetRequired = true;
-        return { ...au, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
-      }
-      return au;
-    });
-  }
+    // 4.5. Reset pro-rating flags (one-time use)
+    let resetRequired = false;
+    let updatedNemeltTootnuud = geree.nemeltTootnuud;
+    if (Array.isArray(geree.nemeltTootnuud)) {
+      updatedNemeltTootnuud = geree.nemeltTootnuud.map(au => {
+        if (au.khonogoorBodokhEsekh === true || au.khonogoorBodokhEsekh === "true") {
+          resetRequired = true;
+          return { ...au, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
+        }
+        return au;
+      });
+    }
 
-  if (geree.khonogoorBodokhEsekh || resetRequired) {
-    const GereeModel = Geree(kholbolt);
-    const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
-    const KhariltsagchModel = require("../models/khariltsagch")(db.erunkhiiKholbolt);
+    if (geree.khonogoorBodokhEsekh || resetRequired) {
+      const GereeModel = Geree(kholbolt);
+      const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
+      const KhariltsagchModel = require("../models/khariltsagch")(db.erunkhiiKholbolt);
 
-    await GereeModel.findByIdAndUpdate(geree._id, {
-      $set: {
-        khonogoorBodokhEsekh: false,
-        bodokhKhonog: 0,
-        ...(resetRequired ? { nemeltTootnuud: updatedNemeltTootnuud } : {})
-      }
-    });
+      await GereeModel.findByIdAndUpdate(geree._id, {
+        $set: {
+          khonogoorBodokhEsekh: false,
+          bodokhKhonog: 0,
+          ...(resetRequired ? { nemeltTootnuud: updatedNemeltTootnuud } : {})
+        }
+      });
 
-    const residentId = geree.orshinSuugchId || geree.khariltsagchId;
-    if (residentId) {
-      // Try resetting in OrshinSuugch
-      const resident = await OrshinSuugchModel.findById(residentId);
-      if (resident) {
-        let tootsChanged = false;
-        let newToots = (resident.toots || []).map(t => {
-          const match = t.khonogoorBodokhEsekh && (t.turul === "Гараж" || t.turul === "Агуулах");
-          if (match) {
-            tootsChanged = true;
-            return { ...t, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
-          }
-          return t;
-        });
+      const residentId = geree.orshinSuugchId || geree.khariltsagchId;
+      if (residentId) {
+        // Try resetting in OrshinSuugch
+        const resident = await OrshinSuugchModel.findById(residentId);
+        if (resident) {
+          let tootsChanged = false;
+          let newToots = (resident.toots || []).map(t => {
+            const match = t.khonogoorBodokhEsekh && (t.turul === "Гараж" || t.turul === "Агуулах");
+            if (match) {
+              tootsChanged = true;
+              return { ...t, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
+            }
+            return t;
+          });
 
-        await OrshinSuugchModel.findByIdAndUpdate(residentId, {
-          $set: {
-            khonogoorBodokhEsekh: false,
-            bodokhKhonog: 0,
-            ...(tootsChanged ? { toots: newToots } : {})
-          }
-        });
-      }
+          await OrshinSuugchModel.findByIdAndUpdate(residentId, {
+            $set: {
+              khonogoorBodokhEsekh: false,
+              bodokhKhonog: 0,
+              ...(tootsChanged ? { toots: newToots } : {})
+            }
+          });
+        }
 
-      // Try resetting in Khariltsagch
-      const client = await KhariltsagchModel.findById(residentId);
-      if (client) {
-        let tootsChanged = false;
-        let newToots = (client.toots || []).map(t => {
-          const match = t.khonogoorBodokhEsekh && (t.turul === "Гараж" || t.turul === "Агуулах");
-          if (match) {
-            tootsChanged = true;
-            return { ...t, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
-          }
-          return t;
-        });
+        // Try resetting in Khariltsagch
+        const client = await KhariltsagchModel.findById(residentId);
+        if (client) {
+          let tootsChanged = false;
+          let newToots = (client.toots || []).map(t => {
+            const match = t.khonogoorBodokhEsekh && (t.turul === "Гараж" || t.turul === "Агуулах");
+            if (match) {
+              tootsChanged = true;
+              return { ...t, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
+            }
+            return t;
+          });
 
-        await KhariltsagchModel.findByIdAndUpdate(residentId, {
-          $set: {
-            khonogoorBodokhEsekh: false,
-            bodokhKhonog: 0,
-            ...(tootsChanged ? { toots: newToots } : {})
-          }
-        });
+          await KhariltsagchModel.findByIdAndUpdate(residentId, {
+            $set: {
+              khonogoorBodokhEsekh: false,
+              bodokhKhonog: 0,
+              ...(tootsChanged ? { toots: newToots } : {})
+            }
+          });
+        }
       }
     }
+
+    // 5. Done. We no longer snapshot charges or totals into the invoice document.
+    // The ledger is the only source of truth.
+    return { success: true, invoiceId: invoice._id, status: invoice.tuluv };
   }
 
-  // 5. Done. We no longer snapshot charges or totals into the invoice document.
-  // The ledger is the only source of truth.
-  return { success: true, invoiceId: invoice._id, status: invoice.tuluv };
-}
+  async function ensureEkhniiUldegdel(kholbolt, geree, options = {}) {
+    const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
+    const guilgeeService = require("./guilgeeService");
 
-async function ensureEkhniiUldegdel(kholbolt, geree, options = {}) {
-  const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
-  const guilgeeService = require("./guilgeeService");
-
-  // 1. Calculate current ledger-based initial balance total
-  const rows = await GuilgeeAvlaguudModel.find({
-    gereeniiId: geree._id.toString(),
-    ekhniiUldegdelEsekh: true,
-  }).lean();
-
-  const currentTotal = rows.reduce((sum, r) => sum + (Number(r.undsenDun || r.tulukhDun || r.dun || r.undsenUne) || 0), 0);
-  const targetEkhnii = Number(geree.ekhniiUldegdel || 0);
-  const delta = Math.round((targetEkhnii - currentTotal) * 100) / 100;
-
-  if (Math.abs(delta) < 0.01) return true; // Already synced
-
-  // 2. Adjust ledger
-  if (rows.length > 0) {
-    // Update the first existing record with the delta
-    await GuilgeeAvlaguudModel.updateOne(
-      { _id: rows[0]._id },
-      { $inc: { undsenDun: delta, tulukhDun: delta } }
-    );
-  } else {
-    // Create a new record
-    const gereeObj = typeof geree.toObject === "function" ? geree.toObject() : geree;
-    await guilgeeService.recordCharge(kholbolt, {
-      ...gereeObj,
-      _id: undefined,
-      gereeniiId: String(geree._id),
-      baiguullagiinId: String(geree.baiguullagiinId || ""),
-      barilgiinId: String(geree.barilgiinId || ""),
-      dun: delta,
-      zardliinNer: "Эхний үлдэгдэл",
-      tailbar: "Системээс үүсгэсэн эхний үлдэгдэл",
-      zardliinTurul: "Энгийн",
-      ognoo: geree.gereeniiOgnoo || new Date(),
-      source: "geree",
+    // 1. Calculate current ledger-based initial balance total
+    const rows = await GuilgeeAvlaguudModel.find({
+      gereeniiId: geree._id.toString(),
       ekhniiUldegdelEsekh: true,
-      guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
-      guilgeeKhiisenAjiltniiId: options.ajiltanId || "System",
+    }).lean();
+
+    const currentTotal = rows.reduce((sum, r) => sum + (Number(r.undsenDun || r.tulukhDun || r.dun || r.undsenUne) || 0), 0);
+    const targetEkhnii = Number(geree.ekhniiUldegdel || 0);
+    const delta = Math.round((targetEkhnii - currentTotal) * 100) / 100;
+
+    if (Math.abs(delta) < 0.01) return true; // Already synced
+
+    // 2. Adjust ledger
+    if (rows.length > 0) {
+      // Update the first existing record with the delta
+      await GuilgeeAvlaguudModel.updateOne(
+        { _id: rows[0]._id },
+        { $inc: { undsenDun: delta, tulukhDun: delta } }
+      );
+    } else {
+      // Create a new record
+      const gereeObj = typeof geree.toObject === "function" ? geree.toObject() : geree;
+      await guilgeeService.recordCharge(kholbolt, {
+        ...gereeObj,
+        _id: undefined,
+        gereeniiId: String(geree._id),
+        baiguullagiinId: String(geree.baiguullagiinId || ""),
+        barilgiinId: String(geree.barilgiinId || ""),
+        dun: delta,
+        zardliinNer: "Эхний үлдэгдэл",
+        tailbar: "Системээс үүсгэсэн эхний үлдэгдэл",
+        zardliinTurul: "Энгийн",
+        ognoo: geree.gereeniiOgnoo || new Date(),
+        source: "geree",
+        ekhniiUldegdelEsekh: true,
+        guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
+        guilgeeKhiisenAjiltniiId: options.ajiltanId || "System",
+      });
+    }
+
+    return true;
+  }
+
+  async function ensureActiveInvoice(kholbolt, gereeId, options = {}) {
+    const NekhemjlekhiinTuukhModel = NekhemjlekhiinTuukh(kholbolt);
+    const GereeModel = Geree(kholbolt);
+
+    const unpaid = await NekhemjlekhiinTuukhModel.findOne({
+      gereeniiId: gereeId,
+      tuluv: "Төлөөгүй",
+    }).sort({ ognoo: -1, createdAt: -1 });
+
+    if (unpaid) return unpaid;
+
+    // If no unpaid invoice, create a new one to house any new debt
+    const geree = await GereeModel.findById(gereeId).lean();
+    if (!geree) return null;
+
+    const result = await createInvoiceForContract(kholbolt, gereeId, {
+      ...options,
+      forceEmpty: true, // Create even if only ekhniiUldegdel exists
+      billingDate: new Date()
     });
+
+    if (result.success) {
+      return await NekhemjlekhiinTuukhModel.findById(result.invoiceId);
+    }
+    return null;
   }
 
-  return true;
+  module.exports = {
+    calculateGereeCharges,
+    createInvoiceForContract,
+    ensureEkhniiUldegdel,
+    ensureActiveInvoice,
+  };
 }
-
-async function ensureActiveInvoice(kholbolt, gereeId, options = {}) {
-  const NekhemjlekhiinTuukhModel = NekhemjlekhiinTuukh(kholbolt);
-  const GereeModel = Geree(kholbolt);
-
-  const unpaid = await NekhemjlekhiinTuukhModel.findOne({
-    gereeniiId: gereeId,
-    tuluv: "Төлөөгүй",
-  }).sort({ ognoo: -1, createdAt: -1 });
-
-  if (unpaid) return unpaid;
-
-  // If no unpaid invoice, create a new one to house any new debt
-  const geree = await GereeModel.findById(gereeId).lean();
-  if (!geree) return null;
-
-  const result = await createInvoiceForContract(kholbolt, gereeId, {
-    ...options,
-    forceEmpty: true, // Create even if only ekhniiUldegdel exists
-    billingDate: new Date()
-  });
-
-  if (result.success) {
-    return await NekhemjlekhiinTuukhModel.findById(result.invoiceId);
-  }
-  return null;
-}
-
-module.exports = {
-  calculateGereeCharges,
-  createInvoiceForContract,
-  ensureEkhniiUldegdel,
-  ensureActiveInvoice,
-};
