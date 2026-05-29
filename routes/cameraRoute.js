@@ -31,7 +31,8 @@ router.post("/camera/stream/:barilgiinId/stream", async (req, res) => {
     const correlationId = uuidv4();
     const roomName = `gate-room-${barilgiinId}`;
 
-    console.log(`[Camera] 📡 Relaying WebRTC offer (ID: ${correlationId}) to room: ${roomName}`);
+    const room = io.sockets.adapter.rooms.get(roomName);
+    console.log(`[Camera] 📡 Relaying WebRTC offer (ID: ${correlationId}) to room: ${roomName} | sockets in room: ${room ? room.size : 0}`);
 
     const waitForAnswer = new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
