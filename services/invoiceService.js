@@ -16,6 +16,8 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
 
   const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(geree.baiguullagiinId).lean();
   const barilga = baiguullaga?.barilguud?.find(b => String(b._id) === String(geree.barilgiinId));
+  const _tok = barilga && barilga.tokhirgoo;
+  console.log(`🔎 [calculateGereeCharges] barilgiinId: ${geree.barilgiinId}, barilga found: ${!!barilga}, garsiinTolborEnabled: ${_tok && _tok.garsiinTolborEnabled}, aguulakhTolborEnabled: ${_tok && _tok.aguulakhTolborEnabled}, garsiinTolborUtga: ${_tok && _tok.garsiinTolborUtga}`);
 
   const charges = [];
   const totalDaysInMonth = getDaysInMonth(options.billingDate || new Date());
@@ -603,7 +605,6 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
       }
     }
   }
-}
 
   // 5. Done. We no longer snapshot charges or totals into the invoice document.
   // The ledger is the only source of truth.
