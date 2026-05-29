@@ -221,6 +221,9 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
 
     const filteredCharges = charges.filter((c) => {
       if (options.onlyGarage) {
+        if (isDedicatedGarage) {
+          return true;
+        }
         return (
           (c.ner || "").toLowerCase().includes("гараж") ||
           (c.ner || "").toLowerCase().includes("зогсоол") ||
@@ -231,6 +234,9 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
         );
       }
       if (options.onlyStorage) {
+        if (isDedicatedStorage) {
+          return true;
+        }
         return (
           (c.ner || "").toLowerCase().includes("агуулах") ||
           (c.zardliinTurul || "").toLowerCase().includes("агуулах") ||
@@ -238,6 +244,9 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
         );
       }
       // onlyGarageOrStorage fallback
+      if (isDedicatedGarage || isDedicatedStorage) {
+        return true;
+      }
       return (
         (c.ner || "").toLowerCase().includes("гараж") ||
         (c.ner || "").toLowerCase().includes("зогсоол") ||
