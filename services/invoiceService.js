@@ -47,7 +47,7 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     for (const au of geree.nemeltTootnuud) {
       // 1. Nest opening balance for additional unit if any
       if (Number(au.ekhniiUldegdel) > 0) {
-        const label = au.turul === "Гараж" ? "Эхний үлдэгдэл (Гараж " : "Эхний үлдэгдэл (Агуулах ";
+        const label = (au.turul === "Гараж" || au.turul === "Зогсоол") ? "Эхний үлдэгдэл (Гараж " : "Эхний үлдэгдэл (Агуулах ";
         charges.push({
           ner: `${label}${au.toot})`,
           dun: Number(au.ekhniiUldegdel),
@@ -58,7 +58,7 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
       }
 
       // 2. Monthly constant payment for additional unit if enabled
-      const isGarage = au.turul === "Гараж";
+      const isGarage = au.turul === "Гараж" || au.turul === "Зогсоол";
       const isStorage = au.turul === "Агуулах";
 
       const storageEnabled = !!barilga?.tokhirgoo?.aguulakhTolborEnabled;
@@ -208,7 +208,16 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
   }
 
   if (options.onlyGarageOrStorage) {
+    const contractType = (geree.turul || "").trim().toLowerCase();
+    const isDedicatedGarageOrStorageContract =
+      contractType === "гараж" ||
+      contractType === "зогсоол" ||
+      contractType === "агуулах";
+
     const filteredCharges = charges.filter((c) => {
+      if (isDedicatedGarageOrStorageContract) {
+        return true;
+      }
       const isGarageOrStorageCharge =
         (c.ner || "").toLowerCase().includes("гараж") ||
         (c.ner || "").toLowerCase().includes("зогсоол") ||
@@ -276,6 +285,10 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     gereeniiId: geree._id.toString(),
     ognoo: { $gte: startOfCycle, $lte: endOfCycle }
   }).sort({ ognoo: -1 });
+
+  if (invoice && !options.override) {
+    return { success: false, message: "Тухайн мөчлөгийн нэхэмжлэх аль хэдийн үүссэн байна." };
+  }
 
   if (!invoice) {
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");

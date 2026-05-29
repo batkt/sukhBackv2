@@ -5399,8 +5399,8 @@ exports.syncResidentContracts = async function syncResidentContracts(
         : [];
 
   const allToots = tootsToProcess || [];
-  let mainUnits = allToots.filter(t => t.turul !== "Гараж" && t.turul !== "Агуулах");
-  let additionalUnits = allToots.filter(t => t.turul === "Гараж" || t.turul === "Агуулах");
+  let mainUnits = allToots.filter(t => t.turul !== "Гараж" && t.turul !== "Зогсоол" && t.turul !== "Агуулах");
+  let additionalUnits = allToots.filter(t => t.turul === "Гараж" || t.turul === "Зогсоол" || t.turul === "Агуулах");
 
   const isKhariltsagch = !!(
     req &&
