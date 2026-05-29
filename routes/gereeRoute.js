@@ -112,8 +112,52 @@ router.use((req, res, next) => {
 });
 
 // Intercept manual receivable creation to ensure they get a nekhemjlekhId
+// and to prevent duplicate garage/storage avlaga within the same billing cycle.
 router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
-  const { gereeniiId, nekhemjlekhId, tukhainBaaziinKholbolt } = req.body;
+  const { gereeniiId, nekhemjlekhId, tukhainBaaziinKholbolt, tailbar, baiguullagiinId, barilgiinId } = req.body;
+
+  // --- Duplicate cycle check (garage / storage only) ---
+  const tailbarLower = (tailbar || "").toLowerCase();
+  const isGarage  = tailbarLower.includes("зогсоол");
+  const isStorage = tailbarLower.includes("агуулах");
+
+  if ((isGarage || isStorage) && gereeniiId && tukhainBaaziinKholbolt) {
+    try {
+      const NekhemjlekhCron = require("../models/cronSchedule");
+      const { calculateBillingCycleBounds } = require("../utils/dateUtils");
+
+      let cronDay = 1;
+      const cronSchedule = await NekhemjlekhCron(tukhainBaaziinKholbolt).findOne({
+        baiguullagiinId,
+        $or: [{ barilgiinId }, { barilgiinId: null }]
+      }).sort({ barilgiinId: -1 }).lean();
+      if (cronSchedule?.nekhemjlekhUusgekhOgnoo) {
+        cronDay = cronSchedule.nekhemjlekhUusgekhOgnoo;
+      }
+
+      const { startOfCycle, endOfCycle } = calculateBillingCycleBounds(cronDay, new Date());
+      const typeRegex = isGarage ? /зогсоол/i : /агуулах/i;
+
+      const existing = await GuilgeeAvlaguud(tukhainBaaziinKholbolt).findOne({
+        gereeniiId,
+        tailbar: typeRegex,
+        ognoo: { $gte: startOfCycle, $lte: endOfCycle },
+      }).lean();
+
+      if (existing) {
+        const typeLabel = isGarage ? "Зогсоол" : "Агуулах";
+        return res.status(409).json({
+          success: false,
+          error: `Энэ мөчлөгт ${typeLabel} авлага аль хэдийн бүртгэгдсэн байна.`,
+        });
+      }
+    } catch (err) {
+      console.error("Garage/storage duplicate check error:", err);
+      // Non-fatal: if check fails, proceed and let record be created
+    }
+  }
+
+  // --- Auto-link to active invoice ---
   if (!nekhemjlekhId && gereeniiId && tukhainBaaziinKholbolt) {
     try {
       const invoiceService = require("../services/invoiceService");
