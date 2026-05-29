@@ -277,7 +277,39 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
       console.log(`  [Filter onlyGarageOrStorage] Charge: "${c.ner}", type: "${c.zardliinTurul}" -> KEEP: ${keep}`);
       return keep;
     });
-    const total = filteredCharges.reduce((sum, c) => sum + c.dun, 0);
+    let total = filteredCharges.reduce((sum, c) => sum + c.dun, 0);
+
+    // Smart fallback: if onlyGarage returned nothing but the contract has storage charges,
+    // the frontend tab/nemeltTootnuud mismatch occurred — bill storage instead.
+    if (total === 0 && !isDedicatedGarage && !isDedicatedStorage && options.onlyGarage) {
+      const storageCharges = charges.filter((c) =>
+        (c.ner || "").toLowerCase().includes("агуулах") ||
+        (c.zardliinTurul || "").toLowerCase().includes("агуулах") ||
+        (c.tailbar || "").toLowerCase().includes("агуулах")
+      );
+      if (storageCharges.length > 0) {
+        console.log(`🔎 [calculateGereeCharges] onlyGarage returned empty but found storage charges — falling back to storage billing.`);
+        const storageTotal = storageCharges.reduce((sum, c) => sum + c.dun, 0);
+        return { charges: storageCharges, total: storageTotal };
+      }
+    }
+    // Smart fallback: if onlyStorage returned nothing but the contract has garage charges, bill garage instead.
+    if (total === 0 && !isDedicatedGarage && !isDedicatedStorage && options.onlyStorage) {
+      const garageCharges = charges.filter((c) =>
+        (c.ner || "").toLowerCase().includes("гараж") ||
+        (c.ner || "").toLowerCase().includes("зогсоол") ||
+        (c.zardliinTurul || "").toLowerCase().includes("гараж") ||
+        (c.zardliinTurul || "").toLowerCase().includes("зогсоол") ||
+        (c.tailbar || "").toLowerCase().includes("гараж") ||
+        (c.tailbar || "").toLowerCase().includes("зогсоол")
+      );
+      if (garageCharges.length > 0) {
+        console.log(`🔎 [calculateGereeCharges] onlyStorage returned empty but found garage charges — falling back to garage billing.`);
+        const garageTotal = garageCharges.reduce((sum, c) => sum + c.dun, 0);
+        return { charges: garageCharges, total: garageTotal };
+      }
+    }
+
     console.log(`🔎 [calculateGereeCharges] Final FILTERED charges:`, JSON.stringify(filteredCharges, null, 2), `Total: ${total}`);
     return { charges: filteredCharges, total };
   }
