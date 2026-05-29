@@ -497,7 +497,6 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
         console.error(`  [Charge Processing] ❌ ERROR recording charge for "${c.ner}":`, recErr.message, recErr.stack);
       }
     }
-  }
 
   // 4.5. Reset pro-rating flags (one-time use)
   let resetRequired = false;
@@ -574,10 +573,10 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
   }
 }
 
-// 5. Done. We no longer snapshot charges or totals into the invoice document.
-// The ledger is the only source of truth.
-return { success: true, invoiceId: invoice._id, status: invoice.tuluv };
-
+  // 5. Done. We no longer snapshot charges or totals into the invoice document.
+  // The ledger is the only source of truth.
+  return { success: true, invoiceId: invoice._id, status: invoice.tuluv };
+}
 
 async function ensureEkhniiUldegdel(kholbolt, geree, options = {}) {
   const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
