@@ -10,7 +10,9 @@ const NekhemjlekhCron = require("../models/cronSchedule");
 const { calculateNextDueDate, calculateBillingCycleBounds } = require("../utils/dateUtils");
 
 async function calculateGereeCharges(kholbolt, geree, options = {}) {
-
+  console.log(`🔎 [calculateGereeCharges] Starting calculation for gereeId: ${geree._id?.toString() || geree._id}, gereeniiDugaar: ${geree.gereeniiDugaar}`);
+  console.log(`🔎 [calculateGereeCharges] contractType: ${geree.turul}, options:`, JSON.stringify(options));
+  console.log(`🔎 [calculateGereeCharges] nemeltTootnuud:`, JSON.stringify(geree.nemeltTootnuud));
 
   const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(geree.baiguullagiinId).lean();
   const barilga = baiguullaga?.barilguud?.find(b => String(b._id) === String(geree.barilgiinId));
@@ -207,63 +209,81 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     }
   }
 
+  console.log(`🔎 [calculateGereeCharges] Raw computed charges before filtering:`, JSON.stringify(charges, null, 2));
+
   if (options.onlyGarage || options.onlyStorage || options.onlyGarageOrStorage) {
     const contractType = (geree.turul || "").trim().toLowerCase();
     const isDedicatedGarage = contractType === "гараж" || contractType === "зогсоол";
     const isDedicatedStorage = contractType === "агуулах";
 
+    console.log(`🔎 [calculateGereeCharges] Filtering active. isDedicatedGarage: ${isDedicatedGarage}, isDedicatedStorage: ${isDedicatedStorage}`);
+
     if (options.onlyGarage && isDedicatedStorage) {
+      console.log(`🔎 [calculateGereeCharges] onlyGarage requested but contract is Dedicated Storage. Returning empty.`);
       return { charges: [], total: 0 };
     }
     if (options.onlyStorage && isDedicatedGarage) {
+      console.log(`🔎 [calculateGereeCharges] onlyStorage requested but contract is Dedicated Garage. Returning empty.`);
       return { charges: [], total: 0 };
     }
 
     const filteredCharges = charges.filter((c) => {
+      let keep = false;
       if (options.onlyGarage) {
         if (isDedicatedGarage) {
-          return true;
+          keep = true;
+        } else {
+          keep = (
+            (c.ner || "").toLowerCase().includes("гараж") ||
+            (c.ner || "").toLowerCase().includes("зогсоол") ||
+            (c.zardliinTurul || "").toLowerCase().includes("гараж") ||
+            (c.zardliinTurul || "").toLowerCase().includes("зогсоол") ||
+            (c.tailbar || "").toLowerCase().includes("гараж") ||
+            (c.tailbar || "").toLowerCase().includes("зогсоол")
+          );
         }
-        return (
-          (c.ner || "").toLowerCase().includes("гараж") ||
-          (c.ner || "").toLowerCase().includes("зогсоол") ||
-          (c.zardliinTurul || "").toLowerCase().includes("гараж") ||
-          (c.zardliinTurul || "").toLowerCase().includes("зогсоол") ||
-          (c.tailbar || "").toLowerCase().includes("гараж") ||
-          (c.tailbar || "").toLowerCase().includes("зогсоол")
-        );
+        console.log(`  [Filter onlyGarage] Charge: "${c.ner}", type: "${c.zardliinTurul}" -> KEEP: ${keep}`);
+        return keep;
       }
       if (options.onlyStorage) {
         if (isDedicatedStorage) {
-          return true;
+          keep = true;
+        } else {
+          keep = (
+            (c.ner || "").toLowerCase().includes("агуулах") ||
+            (c.zardliinTurul || "").toLowerCase().includes("агуулах") ||
+            (c.tailbar || "").toLowerCase().includes("агуулах")
+          );
         }
-        return (
-          (c.ner || "").toLowerCase().includes("агуулах") ||
-          (c.zardliinTurul || "").toLowerCase().includes("агуулах") ||
-          (c.tailbar || "").toLowerCase().includes("агуулах")
-        );
+        console.log(`  [Filter onlyStorage] Charge: "${c.ner}", type: "${c.zardliinTurul}" -> KEEP: ${keep}`);
+        return keep;
       }
       // onlyGarageOrStorage fallback
       if (isDedicatedGarage || isDedicatedStorage) {
-        return true;
+        keep = true;
+      } else {
+        keep = (
+          (c.ner || "").toLowerCase().includes("гараж") ||
+          (c.ner || "").toLowerCase().includes("зогсоол") ||
+          (c.ner || "").toLowerCase().includes("агуулах") ||
+          (c.zardliinTurul || "").toLowerCase().includes("гараж") ||
+          (c.zardliinTurul || "").toLowerCase().includes("зогсоол") ||
+          (c.zardliinTurul || "").toLowerCase().includes("агуулах") ||
+          (c.tailbar || "").toLowerCase().includes("гараж") ||
+          (c.tailbar || "").toLowerCase().includes("зогсоол") ||
+          (c.tailbar || "").toLowerCase().includes("агуулах")
+        );
       }
-      return (
-        (c.ner || "").toLowerCase().includes("гараж") ||
-        (c.ner || "").toLowerCase().includes("зогсоол") ||
-        (c.ner || "").toLowerCase().includes("агуулах") ||
-        (c.zardliinTurul || "").toLowerCase().includes("гараж") ||
-        (c.zardliinTurul || "").toLowerCase().includes("зогсоол") ||
-        (c.zardliinTurul || "").toLowerCase().includes("агуулах") ||
-        (c.tailbar || "").toLowerCase().includes("гараж") ||
-        (c.tailbar || "").toLowerCase().includes("зогсоол") ||
-        (c.tailbar || "").toLowerCase().includes("агуулах")
-      );
+      console.log(`  [Filter onlyGarageOrStorage] Charge: "${c.ner}", type: "${c.zardliinTurul}" -> KEEP: ${keep}`);
+      return keep;
     });
     const total = filteredCharges.reduce((sum, c) => sum + c.dun, 0);
+    console.log(`🔎 [calculateGereeCharges] Final FILTERED charges:`, JSON.stringify(filteredCharges, null, 2), `Total: ${total}`);
     return { charges: filteredCharges, total };
   }
 
   const total = charges.reduce((sum, c) => sum + c.dun, 0);
+  console.log(`🔎 [calculateGereeCharges] Normal flow (no filter). Total: ${total}`);
   return { charges, total };
 }
 
@@ -272,12 +292,16 @@ function getDaysInMonth(date) {
 }
 
 async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
+  console.log(`🚀 [createInvoiceForContract] STARTED with gereeId: ${gereeId}, options:`, JSON.stringify(options));
   const GereeModel = Geree(kholbolt);
   const NekhemjlekhiinTuukhModel = NekhemjlekhiinTuukh(kholbolt);
 
   const mongoose = require("mongoose");
   const geree = await GereeModel.collection.findOne({ _id: new mongoose.Types.ObjectId(gereeId) });
-  if (!geree) throw new Error("Contract not found");
+  if (!geree) {
+    console.error(`❌ [createInvoiceForContract] Contract ${gereeId} NOT found in database!`);
+    throw new Error("Contract not found");
+  }
 
   const { charges, total } = await calculateGereeCharges(kholbolt, geree, options);
 
@@ -408,8 +432,13 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     ekhniiUldegdelEsekh: true
   });
   if (!options.skipCharges) {
+    console.log(`🚀 [createInvoiceForContract] Processing ${charges.length} charges for ledger saving...`);
     for (const c of charges) {
-      if (c.isEkhniiUldegdel && existingEkhnii) continue;
+      console.log(`  [Charge Processing] ner: "${c.ner}", dun: ${c.dun}, zardliinTurul: "${c.zardliinTurul}", isEkhniiUldegdel: ${!!c.isEkhniiUldegdel}`);
+      if (c.isEkhniiUldegdel && existingEkhnii) {
+        console.log(`  [Charge Processing] Skipping opening balance "${c.ner}" because existingEkhnii exists.`);
+        continue;
+      }
 
       const existingCharge = await GuilgeeAvlaguudModel.findOne({
         gereeniiId: geree._id.toString(),
@@ -422,7 +451,9 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
       });
 
       if (existingCharge) {
+        console.log(`  [Charge Processing] Found existing charge in this cycle (ID: ${existingCharge._id?.toString() || existingCharge._id}). Existing dun: ${existingCharge.dun}, new dun: ${c.dun}`);
         if (Number(existingCharge.dun) !== Number(c.dun)) {
+          console.log(`  [Charge Processing] Amounts differ. Updating existing charge ID: ${existingCharge._id} to dun: ${c.dun}`);
           await GuilgeeAvlaguudModel.updateOne(
             { _id: existingCharge._id },
             {
@@ -437,107 +468,116 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
           await guilgeeService.syncInvoicesStatus(kholbolt, geree._id.toString()).catch(err => {
             console.error("❌ [LEDGER SYNC] syncInvoicesStatus failed after charge update:", err.message);
           });
+        } else {
+          console.log(`  [Charge Processing] Amounts match. No update needed.`);
         }
         continue;
       }
 
-      await guilgeeService.recordCharge(kholbolt, {
-        ...geree,
-        _id: undefined,
-        gereeniiId: geree._id.toString(),
-        nekhemjlekhId: invoice._id.toString(),
-        dun: c.dun,
-        zardliinNer: c.ner,
-        tailbar: c.tailbar || c.ner,
-        zardliinTurul: c.zardliinTurul,
-        turul: c.turul || geree.turul || "avlaga",
-        ognoo: options.billingDate || new Date(),
-        source: c.isEkhniiUldegdel ? "geree" : "nekhemjlekh",
-        ekhniiUldegdelEsekh: !!c.isEkhniiUldegdel,
-        guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
-        guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.orshinSuugchId,
-      });
-    }
-
-    // 4.5. Reset pro-rating flags (one-time use)
-    let resetRequired = false;
-    let updatedNemeltTootnuud = geree.nemeltTootnuud;
-    if (Array.isArray(geree.nemeltTootnuud)) {
-      updatedNemeltTootnuud = geree.nemeltTootnuud.map(au => {
-        if (au.khonogoorBodokhEsekh === true || au.khonogoorBodokhEsekh === "true") {
-          resetRequired = true;
-          return { ...au, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
-        }
-        return au;
-      });
-    }
-
-    if (geree.khonogoorBodokhEsekh || resetRequired) {
-      const GereeModel = Geree(kholbolt);
-      const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
-      const KhariltsagchModel = require("../models/khariltsagch")(db.erunkhiiKholbolt);
-
-      await GereeModel.findByIdAndUpdate(geree._id, {
-        $set: {
-          khonogoorBodokhEsekh: false,
-          bodokhKhonog: 0,
-          ...(resetRequired ? { nemeltTootnuud: updatedNemeltTootnuud } : {})
-        }
-      });
-
-      const residentId = geree.orshinSuugchId || geree.khariltsagchId;
-      if (residentId) {
-        // Try resetting in OrshinSuugch
-        const resident = await OrshinSuugchModel.findById(residentId);
-        if (resident) {
-          let tootsChanged = false;
-          let newToots = (resident.toots || []).map(t => {
-            const match = t.khonogoorBodokhEsekh && (t.turul === "Гараж" || t.turul === "Агуулах");
-            if (match) {
-              tootsChanged = true;
-              return { ...t, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
-            }
-            return t;
-          });
-
-          await OrshinSuugchModel.findByIdAndUpdate(residentId, {
-            $set: {
-              khonogoorBodokhEsekh: false,
-              bodokhKhonog: 0,
-              ...(tootsChanged ? { toots: newToots } : {})
-            }
-          });
-        }
-
-        // Try resetting in Khariltsagch
-        const client = await KhariltsagchModel.findById(residentId);
-        if (client) {
-          let tootsChanged = false;
-          let newToots = (client.toots || []).map(t => {
-            const match = t.khonogoorBodokhEsekh && (t.turul === "Гараж" || t.turul === "Агуулах");
-            if (match) {
-              tootsChanged = true;
-              return { ...t, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
-            }
-            return t;
-          });
-
-          await KhariltsagchModel.findByIdAndUpdate(residentId, {
-            $set: {
-              khonogoorBodokhEsekh: false,
-              bodokhKhonog: 0,
-              ...(tootsChanged ? { toots: newToots } : {})
-            }
-          });
-        }
+      console.log(`  [Charge Processing] Calling guilgeeService.recordCharge for "${c.ner}", amount: ${c.dun}`);
+      try {
+        const savedCharge = await guilgeeService.recordCharge(kholbolt, {
+          ...geree,
+          _id: undefined,
+          gereeniiId: geree._id.toString(),
+          nekhemjlekhId: invoice._id.toString(),
+          dun: c.dun,
+          zardliinNer: c.ner,
+          tailbar: c.tailbar || c.ner,
+          zardliinTurul: c.zardliinTurul,
+          turul: c.turul || geree.turul || "avlaga",
+          ognoo: options.billingDate || new Date(),
+          source: c.isEkhniiUldegdel ? "geree" : "nekhemjlekh",
+          ekhniiUldegdelEsekh: !!c.isEkhniiUldegdel,
+          guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
+          guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.orshinSuugchId,
+        });
+        console.log(`  [Charge Processing] ✅ Saved new charge in ledger. ID: ${savedCharge?._id?.toString() || savedCharge?._id}`);
+      } catch (recErr) {
+        console.error(`  [Charge Processing] ❌ ERROR recording charge for "${c.ner}":`, recErr.message, recErr.stack);
       }
     }
   }
 
-  // 5. Done. We no longer snapshot charges or totals into the invoice document.
-  // The ledger is the only source of truth.
-  return { success: true, invoiceId: invoice._id, status: invoice.tuluv };
+  // 4.5. Reset pro-rating flags (one-time use)
+  let resetRequired = false;
+  let updatedNemeltTootnuud = geree.nemeltTootnuud;
+  if (Array.isArray(geree.nemeltTootnuud)) {
+    updatedNemeltTootnuud = geree.nemeltTootnuud.map(au => {
+      if (au.khonogoorBodokhEsekh === true || au.khonogoorBodokhEsekh === "true") {
+        resetRequired = true;
+        return { ...au, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
+      }
+      return au;
+    });
+  }
+
+  if (geree.khonogoorBodokhEsekh || resetRequired) {
+    const GereeModel = Geree(kholbolt);
+    const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
+    const KhariltsagchModel = require("../models/khariltsagch")(db.erunkhiiKholbolt);
+
+    await GereeModel.findByIdAndUpdate(geree._id, {
+      $set: {
+        khonogoorBodokhEsekh: false,
+        bodokhKhonog: 0,
+        ...(resetRequired ? { nemeltTootnuud: updatedNemeltTootnuud } : {})
+      }
+    });
+
+    const residentId = geree.orshinSuugchId || geree.khariltsagchId;
+    if (residentId) {
+      // Try resetting in OrshinSuugch
+      const resident = await OrshinSuugchModel.findById(residentId);
+      if (resident) {
+        let tootsChanged = false;
+        let newToots = (resident.toots || []).map(t => {
+          const match = t.khonogoorBodokhEsekh && (t.turul === "Гараж" || t.turul === "Агуулах");
+          if (match) {
+            tootsChanged = true;
+            return { ...t, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
+          }
+          return t;
+        });
+
+        await OrshinSuugchModel.findByIdAndUpdate(residentId, {
+          $set: {
+            khonogoorBodokhEsekh: false,
+            bodokhKhonog: 0,
+            ...(tootsChanged ? { toots: newToots } : {})
+          }
+        });
+      }
+
+      // Try resetting in Khariltsagch
+      const client = await KhariltsagchModel.findById(residentId);
+      if (client) {
+        let tootsChanged = false;
+        let newToots = (client.toots || []).map(t => {
+          const match = t.khonogoorBodokhEsekh && (t.turul === "Гараж" || t.turul === "Агуулах");
+          if (match) {
+            tootsChanged = true;
+            return { ...t, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
+          }
+          return t;
+        });
+
+        await KhariltsagchModel.findByIdAndUpdate(residentId, {
+          $set: {
+            khonogoorBodokhEsekh: false,
+            bodokhKhonog: 0,
+            ...(tootsChanged ? { toots: newToots } : {})
+          }
+        });
+      }
+    }
+  }
 }
+
+// 5. Done. We no longer snapshot charges or totals into the invoice document.
+// The ledger is the only source of truth.
+return { success: true, invoiceId: invoice._id, status: invoice.tuluv };
+
 
 async function ensureEkhniiUldegdel(kholbolt, geree, options = {}) {
   const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
