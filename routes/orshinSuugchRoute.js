@@ -395,13 +395,16 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
     let kholbolt = db.erunkhiiKholbolt;
 
     let result = await OrshinSuugch(kholbolt).findById(req.params.id);
+    console.log("[orshinSuugch:id] id=", req.params.id, "baiguullagiinId=", baiguullagiinId, "globalFound=", !!result);
     // Fallback: some residents are created in tenant DB, not global erunkhiiKholbolt
     if (!result && baiguullagiinId && db.kholboltuud) {
       const tenantKholbolt = db.kholboltuud.find(
         (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
       );
+      console.log("[orshinSuugch:id] tenantKholbolt found=", !!tenantKholbolt);
       if (tenantKholbolt) {
         result = await OrshinSuugch(tenantKholbolt).findById(req.params.id);
+        console.log("[orshinSuugch:id] tenantFound=", !!result, result?.ner);
         if (result) kholbolt = tenantKholbolt;
       }
     }
