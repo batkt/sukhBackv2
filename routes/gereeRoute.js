@@ -137,9 +137,11 @@ router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
 
       const { startOfCycle, endOfCycle } = calculateBillingCycleBounds(cronDay, new Date());
       const typeRegex = isGarage ? /зогсоол/i : /агуулах/i;
+      const toot = req.body.toot ? String(req.body.toot) : undefined;
 
       const existing = await GuilgeeAvlaguud(tukhainBaaziinKholbolt).findOne({
         gereeniiId,
+        ...(toot ? { toot } : {}),
         tailbar: typeRegex,
         ognoo: { $gte: startOfCycle, $lte: endOfCycle },
       }).lean();
