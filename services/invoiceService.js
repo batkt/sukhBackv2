@@ -207,6 +207,24 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     }
   }
 
+  if (options.onlyGarageOrStorage) {
+    const filteredCharges = charges.filter((c) => {
+      const isGarageOrStorageCharge =
+        (c.ner || "").toLowerCase().includes("гараж") ||
+        (c.ner || "").toLowerCase().includes("зогсоол") ||
+        (c.ner || "").toLowerCase().includes("агуулах") ||
+        (c.zardliinTurul || "").toLowerCase().includes("гараж") ||
+        (c.zardliinTurul || "").toLowerCase().includes("зогсоол") ||
+        (c.zardliinTurul || "").toLowerCase().includes("агуулах") ||
+        (c.tailbar || "").toLowerCase().includes("гараж") ||
+        (c.tailbar || "").toLowerCase().includes("зогсоол") ||
+        (c.tailbar || "").toLowerCase().includes("агуулах");
+      return isGarageOrStorageCharge;
+    });
+    const total = filteredCharges.reduce((sum, c) => sum + c.dun, 0);
+    return { charges: filteredCharges, total };
+  }
+
   const total = charges.reduce((sum, c) => sum + c.dun, 0);
   return { charges, total };
 }

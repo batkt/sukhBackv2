@@ -117,6 +117,7 @@ const manualSendInvoice = asyncHandler(async (req, res) => {
   const override = req.body.override;
   const targetMonth = first(req.body.targetMonth);
   const targetYear = first(req.body.targetYear);
+  const onlyGarageOrStorage = req.body.onlyGarageOrStorage;
 
   const ids = Array.isArray(gereeIds) ? gereeIds : (gereeId ? [gereeId] : []);
   
@@ -125,16 +126,16 @@ const manualSendInvoice = asyncHandler(async (req, res) => {
   }
 
   const result = await sendService.manualSendMassInvoices(baiguullagiinId, ids, override, {
-    targetMonth, targetYear
+    targetMonth, targetYear, onlyGarageOrStorage
   });
   emitUpdate(req, baiguullagiinId);
   res.status(result.success ? 200 : 400).json(result);
 });
 
 const manualSendMassInvoices = asyncHandler(async (req, res) => {
-  const { baiguullagiinId, gereeIds, override, targetMonth, targetYear } = req.body;
+  const { baiguullagiinId, gereeIds, override, targetMonth, targetYear, onlyGarageOrStorage } = req.body;
   const result = await sendService.manualSendMassInvoices(baiguullagiinId, gereeIds, override, {
-    targetMonth, targetYear
+    targetMonth, targetYear, onlyGarageOrStorage
   });
   emitUpdate(req, baiguullagiinId);
   res.status(result.success ? 200 : 400).json(result);
