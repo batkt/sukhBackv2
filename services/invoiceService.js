@@ -286,9 +286,6 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     ognoo: { $gte: startOfCycle, $lte: endOfCycle }
   }).sort({ ognoo: -1 });
 
-  // When adding only garage/storage charges, we can append to an existing invoice for this cycle.
-  // A dedicated garage/storage contract (turul === Зогсоол|Гараж|Агуулах) is treated like a
-  // normal invoice – check duplicate normally.
   const isDedicatedGarageContract =
     (geree.turul || "").toLowerCase() === "гараж" ||
     (geree.turul || "").toLowerCase() === "зогсоол" ||
@@ -371,12 +368,13 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
         if (Number(existingCharge.dun) !== Number(c.dun)) {
           await GuilgeeAvlaguudModel.updateOne(
             { _id: existingCharge._id },
-            { $set: { 
-                dun: c.dun, 
-                undsenDun: c.dun, 
+            {
+              $set: {
+                dun: c.dun,
+                undsenDun: c.dun,
                 tulukhDun: c.dun,
                 nekhemjlekhId: invoice._id.toString()
-              } 
+              }
             }
           );
           await guilgeeService.syncInvoicesStatus(kholbolt, geree._id.toString()).catch(err => {
@@ -423,8 +421,8 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
       const KhariltsagchModel = require("../models/khariltsagch")(db.erunkhiiKholbolt);
 
       await GereeModel.findByIdAndUpdate(geree._id, {
-        $set: { 
-          khonogoorBodokhEsekh: false, 
+        $set: {
+          khonogoorBodokhEsekh: false,
           bodokhKhonog: 0,
           ...(resetRequired ? { nemeltTootnuud: updatedNemeltTootnuud } : {})
         }
@@ -446,8 +444,8 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
           });
 
           await OrshinSuugchModel.findByIdAndUpdate(residentId, {
-            $set: { 
-              khonogoorBodokhEsekh: false, 
+            $set: {
+              khonogoorBodokhEsekh: false,
               bodokhKhonog: 0,
               ...(tootsChanged ? { toots: newToots } : {})
             }
@@ -468,8 +466,8 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
           });
 
           await KhariltsagchModel.findByIdAndUpdate(residentId, {
-            $set: { 
-              khonogoorBodokhEsekh: false, 
+            $set: {
+              khonogoorBodokhEsekh: false,
               bodokhKhonog: 0,
               ...(tootsChanged ? { toots: newToots } : {})
             }
