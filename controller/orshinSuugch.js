@@ -5521,11 +5521,26 @@ exports.syncResidentContracts = async function syncResidentContracts(
     }
 
     // Fetch building-specific tariffs
-    const ashiglaltiinZardluudData = await AshiglaltiinZardluud(
+    const allAshiglaltiinZardluudData = await AshiglaltiinZardluud(
       tukhainBaaziinKholbolt,
     ).find({
       baiguullagiinId: baiguullagiinId,
       barilgiinId: currentBarilgiinId,
+    });
+
+    const unitTurul = tootEntry.turul || "Орон сууц";
+    const ashiglaltiinZardluudData = allAshiglaltiinZardluudData.filter((zardal) => {
+      const name = (zardal.ner || "").toLowerCase();
+      const type = (zardal.zardliinTurul || "").toLowerCase();
+      if (unitTurul === "Гараж") {
+        return name.includes("гараж") || name.includes("зогсоол") || type.includes("гараж") || type.includes("зогсоол");
+      } else if (unitTurul === "Агуулах") {
+        return name.includes("агуулах") || type.includes("агуулах");
+      } else {
+        const isGarageOrStorage = name.includes("гараж") || name.includes("зогсоол") || name.includes("агуулах") ||
+                                  type.includes("гараж") || type.includes("зогсоол") || type.includes("агуулах");
+        return !isGarageOrStorage;
+      }
     });
 
     const targetBarilgaForToot = baiguullaga.barilguud?.find(
@@ -5764,8 +5779,8 @@ exports.syncResidentContracts = async function syncResidentContracts(
       finalGereeId = newGeree._id;
     }
 
-    // Create initial invoice
-    if (finalGereeId) {
+    // Create initial invoice (Only for residents, not for customers)
+    if (finalGereeId && !isKhariltsagch) {
       try {
         await invoiceService.createInvoiceForContract(
           tukhainBaaziinKholbolt,

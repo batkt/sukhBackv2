@@ -24,25 +24,105 @@ exports.khariltsagchTootUstgakh = asyncHandler(async (req, res, next) => {
   try {
     const id = req.body.id || req.body.residentId;
     const { baiguullagiinId, barilgiinId, toot } = req.body;
-    const khariltsagchModel = khariltsagch(db.erunkhiiKholbolt);
-    
-    const user = await khariltsagchModel.findById(id);
-    if (!user) {
-      return res.status(404).json({ success: false, message: "Олдсонгүй" });
+
+    if (!id || !baiguullagiinId || !toot) {
+      return res.status(400).json({ success: false, message: "id, baiguullagiinId, болон toot мэдээлэл заавал шаардлагатай!" });
     }
 
-    if (user.toots && user.toots.length > 0) {
-      user.toots = user.toots.filter((t) => {
-        return !(
-          String(t.baiguullagiinId) === String(baiguullagiinId) &&
-          String(t.toot).trim() === String(toot).trim() &&
-          (!barilgiinId || String(t.barilgiinId) === String(barilgiinId))
-        );
-      });
-      await user.save();
+    const khariltsagchModel = khariltsagch(db.erunkhiiKholbolt);
+    const user = await khariltsagchModel.findById(id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Харилцагч олдсонгүй!" });
     }
-    
-    res.json({ success: true, message: "Амжилттай хаслаа" });
+
+    if (!Array.isArray(user.toots) || user.toots.length === 0) {
+      return res.status(400).json({ success: false, message: "Устгах тоот олдсонгүй!" });
+    }
+
+    // 1. Filter out the target toot
+    const originalLength = user.toots.length;
+    const updatedToots = user.toots.filter((t) => {
+      const match =
+        String(t.baiguullagiinId) === String(baiguullagiinId) &&
+        String(t.toot).trim() === String(toot).trim() &&
+        (!barilgiinId || String(t.barilgiinId) === String(barilgiinId));
+      return !match;
+    });
+
+    if (updatedToots.length === originalLength) {
+      return res.status(400).json({ success: false, message: "Устгах тоот жагсаалтанд олдсонгүй!" });
+    }
+
+    // 2. Update top-level fields if the primary property was removed
+    const primaryMatch =
+      String(user.baiguullagiinId) === String(baiguullagiinId) &&
+      String(user.toot).trim() === String(toot).trim() &&
+      (!barilgiinId || String(user.barilgiinId) === String(barilgiinId));
+
+    if (primaryMatch) {
+      if (updatedToots.length > 0) {
+        // Shift to the next available property
+        const nextToot = updatedToots[0];
+        user.baiguullagiinId = nextToot.baiguullagiinId;
+        user.baiguullagiinNer =
+          nextToot.baiguullagiinNer && typeof nextToot.baiguullagiinNer === "object"
+            ? nextToot.baiguullagiinNer.ner
+            : nextToot.baiguullagiinNer;
+        user.barilgiinId = nextToot.barilgiinId;
+        user.bairniiNer =
+          nextToot.bairniiNer && typeof nextToot.bairniiNer === "object"
+            ? nextToot.bairniiNer.ner
+            : nextToot.bairniiNer;
+        user.toot = nextToot.toot;
+        user.davkhar = nextToot.davkhar;
+        user.orts = nextToot.orts;
+        user.duureg =
+          nextToot.duureg && typeof nextToot.duureg === "object"
+            ? nextToot.duureg.ner
+            : nextToot.duureg;
+        user.horoo =
+          nextToot.horoo && typeof nextToot.horoo === "object"
+            ? nextToot.horoo.ner
+            : nextToot.horoo;
+        user.soh =
+          nextToot.soh && typeof nextToot.soh === "object"
+            ? nextToot.soh.ner
+            : nextToot.soh;
+      } else {
+        // This was the last property - clear the fields but keep the user record
+        user.baiguullagiinId = undefined;
+        user.baiguullagiinNer = undefined;
+        user.barilgiinId = undefined;
+        user.bairniiNer = undefined;
+        user.toot = undefined;
+        user.davkhar = undefined;
+        user.orts = undefined;
+        user.duureg = undefined;
+        user.horoo = undefined;
+        user.soh = undefined;
+      }
+    }
+
+    user.toots = updatedToots;
+    await user.save();
+
+    // 3. Mark the corresponding contract as "Цуцалсан" (Cancelled)
+    const conn = db.kholboltuud.find(
+      (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+    );
+    if (conn) {
+      await Geree(conn).updateMany(
+        {
+          orshinSuugchId: String(id),
+          toot: String(toot).trim(),
+          ...(barilgiinId ? { barilgiinId: String(barilgiinId) } : {}),
+        },
+        { $set: { tuluv: "Цуцалсан", tsutsalsanOgnoo: new Date() } },
+      );
+    }
+
+    res.json({ success: true, message: "Амжилттай хаслаа", data: user });
   } catch (error) {
     next(error);
   }
