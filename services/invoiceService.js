@@ -372,10 +372,36 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
   );
 
 
-  await GuilgeeAvlaguudModel.deleteMany({
-    nekhemjlekhId: invoice._id.toString(),
-    source: "nekhemjlekh"
-  });
+  // Delete existing auto-generated charges for this invoice, scoped to type if partial billing
+  if (options.onlyGarage) {
+    // Only delete existing garage/parking charges — preserve storage entries
+    await GuilgeeAvlaguudModel.deleteMany({
+      nekhemjlekhId: invoice._id.toString(),
+      source: "nekhemjlekh",
+      $or: [
+        { zardliinTurul: { $in: ["Гараж", "Зогсоол"] } },
+        { tailbar: { $in: ["Гараж", "Зогсоол"] } },
+        { zardliinNer: /зогсоол|гараж/i }
+      ]
+    });
+  } else if (options.onlyStorage) {
+    // Only delete existing storage charges — preserve garage entries
+    await GuilgeeAvlaguudModel.deleteMany({
+      nekhemjlekhId: invoice._id.toString(),
+      source: "nekhemjlekh",
+      $or: [
+        { zardliinTurul: "Агуулах" },
+        { tailbar: "Агуулах" },
+        { zardliinNer: /агуулах/i }
+      ]
+    });
+  } else {
+    // Normal full billing — wipe all auto-generated charges and recreate
+    await GuilgeeAvlaguudModel.deleteMany({
+      nekhemjlekhId: invoice._id.toString(),
+      source: "nekhemjlekh"
+    });
+  }
 
   const existingEkhnii = await GuilgeeAvlaguudModel.findOne({
     gereeniiId: geree._id.toString(),
