@@ -207,18 +207,38 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     }
   }
 
-  if (options.onlyGarageOrStorage) {
+  if (options.onlyGarage || options.onlyStorage || options.onlyGarageOrStorage) {
     const contractType = (geree.turul || "").trim().toLowerCase();
-    const isDedicatedGarageOrStorageContract =
-      contractType === "гараж" ||
-      contractType === "зогсоол" ||
-      contractType === "агуулах";
+    const isDedicatedGarage = contractType === "гараж" || contractType === "зогсоол";
+    const isDedicatedStorage = contractType === "агуулах";
+
+    if (options.onlyGarage && isDedicatedStorage) {
+      return { charges: [], total: 0 };
+    }
+    if (options.onlyStorage && isDedicatedGarage) {
+      return { charges: [], total: 0 };
+    }
 
     const filteredCharges = charges.filter((c) => {
-      if (isDedicatedGarageOrStorageContract) {
-        return true;
+      if (options.onlyGarage) {
+        return (
+          (c.ner || "").toLowerCase().includes("гараж") ||
+          (c.ner || "").toLowerCase().includes("зогсоол") ||
+          (c.zardliinTurul || "").toLowerCase().includes("гараж") ||
+          (c.zardliinTurul || "").toLowerCase().includes("зогсоол") ||
+          (c.tailbar || "").toLowerCase().includes("гараж") ||
+          (c.tailbar || "").toLowerCase().includes("зогсоол")
+        );
       }
-      const isGarageOrStorageCharge =
+      if (options.onlyStorage) {
+        return (
+          (c.ner || "").toLowerCase().includes("агуулах") ||
+          (c.zardliinTurul || "").toLowerCase().includes("агуулах") ||
+          (c.tailbar || "").toLowerCase().includes("агуулах")
+        );
+      }
+      // onlyGarageOrStorage fallback
+      return (
         (c.ner || "").toLowerCase().includes("гараж") ||
         (c.ner || "").toLowerCase().includes("зогсоол") ||
         (c.ner || "").toLowerCase().includes("агуулах") ||
@@ -227,8 +247,8 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
         (c.zardliinTurul || "").toLowerCase().includes("агуулах") ||
         (c.tailbar || "").toLowerCase().includes("гараж") ||
         (c.tailbar || "").toLowerCase().includes("зогсоол") ||
-        (c.tailbar || "").toLowerCase().includes("агуулах");
-      return isGarageOrStorageCharge;
+        (c.tailbar || "").toLowerCase().includes("агуулах")
+      );
     });
     const total = filteredCharges.reduce((sum, c) => sum + c.dun, 0);
     return { charges: filteredCharges, total };
@@ -291,7 +311,9 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     (geree.turul || "").toLowerCase() === "зогсоол" ||
     (geree.turul || "").toLowerCase() === "агуулах";
 
-  if (invoice && !options.override && !(options.onlyGarageOrStorage && !isDedicatedGarageContract)) {
+  const isGarageOrStorageOption = !!(options.onlyGarage || options.onlyStorage || options.onlyGarageOrStorage);
+
+  if (invoice && !options.override && !(isGarageOrStorageOption && !isDedicatedGarageContract)) {
     return { success: false, message: "Тухайн мөчлөгийн нэхэмжлэх аль хэдийн үүссэн байна." };
   }
 
