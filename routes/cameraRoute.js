@@ -11,9 +11,10 @@ const pendingSignaling = new Map();
  * Now uses a path parameter for barilgiinId to avoid query string issues.
  */
 router.post("/camera/stream/:barilgiinId/stream", async (req, res) => {
-    const { rtsp, url, sdp64 } = req.body;
+    const { rtsp, url, sdp64: sdp64Body, data: dataField } = req.body;
     const { barilgiinId } = req.params;
     const rtspUrl = rtsp || url;
+    const sdp64 = sdp64Body || dataField;
 
     if (!barilgiinId) {
         return res.status(400).json({ error: "barilgiinId is required" });
