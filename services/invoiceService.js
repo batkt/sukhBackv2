@@ -286,7 +286,15 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     ognoo: { $gte: startOfCycle, $lte: endOfCycle }
   }).sort({ ognoo: -1 });
 
-  if (invoice && !options.override) {
+  // When adding only garage/storage charges, we can append to an existing invoice for this cycle.
+  // A dedicated garage/storage contract (turul === Зогсоол|Гараж|Агуулах) is treated like a
+  // normal invoice – check duplicate normally.
+  const isDedicatedGarageContract =
+    (geree.turul || "").toLowerCase() === "гараж" ||
+    (geree.turul || "").toLowerCase() === "зогсоол" ||
+    (geree.turul || "").toLowerCase() === "агуулах";
+
+  if (invoice && !options.override && !(options.onlyGarageOrStorage && !isDedicatedGarageContract)) {
     return { success: false, message: "Тухайн мөчлөгийн нэхэмжлэх аль хэдийн үүссэн байна." };
   }
 
