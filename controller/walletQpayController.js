@@ -24,11 +24,11 @@ async function getOrshinSuugchFromToken(req) {
   if (!req.headers.authorization) return null;
   const token = req.headers.authorization.split(" ")[1];
   if (!token) return null;
-  
+
   try {
     const tokenObject = jwt.verify(token, process.env.APP_SECRET);
     if (!tokenObject?.id || tokenObject.id === "zochin") return null;
-    
+
     // Check cache
     const cached = userCache.get(tokenObject.id);
     if (cached && (Date.now() - cached.timestamp < USER_CACHE_TTL)) {
@@ -38,11 +38,11 @@ async function getOrshinSuugchFromToken(req) {
     // Use full document instead of lean to allow access to all fields and potential save
     const orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt)
       .findById(tokenObject.id);
-    
+
     if (orshinSuugch) {
        userCache.set(tokenObject.id, { timestamp: Date.now(), data: orshinSuugch });
     }
-    
+
     return orshinSuugch || null;
   } catch {
     return null;
@@ -54,13 +54,13 @@ async function getOrshinSuugchFromToken(req) {
  */
 async function getWalletIdentifier(orshinSuugch) {
   if (!orshinSuugch) return null;
-  
+
   // 1. Search in toots for WALLET_API walletUserId
-  const walletToot = orshinSuugch.toots && 
+  const walletToot = orshinSuugch.toots &&
     orshinSuugch.toots.find(t => t.source === "WALLET_API" && t.walletUserId);
-  
+
   let walletUserId = walletToot ? walletToot.walletUserId : orshinSuugch.walletUserId;
-  
+
   // 2. Return UUID if found, otherwise phone
   return walletUserId || orshinSuugch.utas;
 }
@@ -88,7 +88,7 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
 
   /* ── 0. Resilient Org ID Lookup (Body -> Query -> Profile) ── */
   let baiguullagiinId = req.body.baiguullagiinId || req.query.baiguullagiinId;
-  
+
   // Parallelize user fetch and dugaarlalt lookup
   const [orshinSuugch] = await Promise.all([
      getOrshinSuugchFromToken(req),
@@ -96,7 +96,7 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
 
   if (!baiguullagiinId && orshinSuugch) {
     baiguullagiinId = orshinSuugch.baiguullagiinId;
-    
+
     // Fallback: If missing at top level, check the 'toots' array (multi-unit or lite user)
     if (!baiguullagiinId && Array.isArray(orshinSuugch.toots) && orshinSuugch.toots.length > 0) {
       baiguullagiinId = orshinSuugch.toots[0].baiguullagiinId;
@@ -142,7 +142,6 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
     try {
       walletInvoiceResult = await walletApiService.createInvoice(walletUserId, invoiceData);
       walletInvoiceId = walletInvoiceResult.invoiceId;
-      console.log(`✅ [WALLET QPAY] Wallet invoice created: ${walletInvoiceId}`);
 
       // Save wallet invoice metadata locally (only if not already exists)
       try {
@@ -163,15 +162,12 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
           });
         }
       } catch (saveErr) {
-        console.error("⚠️ [WALLET QPAY] Notice: Local metadata sync skipped:", saveErr.message);
+        // ignore local sync errors
       }
     } catch (err) {
-      console.error("❌ [WALLET QPAY] Wallet invoice creation failed:", err.message);
-
       const errMsg = (err.message || "").toLowerCase();
       // --- FALLBACK: If bills are already in another invoice ---
       if (errMsg.includes("билл өөр нэхэмжлэлээр төлөлт хийгдэж байна")) {
-        console.log("🔍 [WALLET QPAY] Bill overlap detected. Checking for existing invoice to re-sync or cancel...");
         try {
           // Search for a local WalletInvoice that contains at least one of these bills
           const existingInvoice = await WalletInvoice(db.erunkhiiKholbolt).findOne({
@@ -181,30 +177,26 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
           }).sort({ createdAt: -1 });
 
           if (existingInvoice) {
-            // Check if it's the EXACT same set of bills. 
+            // Check if it's the EXACT same set of bills.
             // If they are different (e.g. user selected 1 bill, but existing covers 5), we MUST cancel the old one.
             const existingBillIds = existingInvoice.billIds || [];
-            const isExactMatch = existingBillIds.length === billIds.length && 
+            const isExactMatch = existingBillIds.length === billIds.length &&
                                  billIds.every(id => existingBillIds.includes(id));
 
             if (isExactMatch) {
               walletInvoiceId = existingInvoice.walletInvoiceId;
-              console.log(`✅ [WALLET QPAY] Exact match found. Reusing invoice: ${walletInvoiceId}`);
             } else {
-              console.log(`⚠️ [WALLET QPAY] Mismatch: New bills [${billIds.length}] vs Existing [${existingBillIds.length}]. Canceling old invoice: ${existingInvoice.walletInvoiceId}`);
-              
               // 1. Cancel in Wallet API
               try {
                 await walletApiService.cancelInvoice(walletUserId, existingInvoice.walletInvoiceId);
               } catch (cErr) {
-                console.warn("⚠️ [WALLET QPAY] Cancel API failed (might be already cancelled):", cErr.message);
+                // ignore cancel errors
               }
 
               // 2. Retry creation with the specific bills
               walletInvoiceResult = await walletApiService.createInvoice(walletUserId, invoiceData);
               walletInvoiceId = walletInvoiceResult.invoiceId;
-              console.log(`✅ [WALLET QPAY] New specific invoice created after cancel: ${walletInvoiceId}`);
-              
+
               // 3. Update local metadata
               await WalletInvoice(db.erunkhiiKholbolt).updateOne(
                 { walletInvoiceId: existingInvoice.walletInvoiceId },
@@ -214,7 +206,6 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
           } else {
             // Local metadata may be missing while Wallet API still keeps an old pending invoice.
             // Resolve overlap directly from Wallet API payments, cancel stale invoices, then retry.
-            console.log("⚠️ [WALLET QPAY] No local overlap metadata found. Trying Wallet API cleanup...");
             const billingPayments = await walletApiService.getBillingPayments(walletUserId, billingId);
             const overlapCandidates = (billingPayments || []).filter((p) => {
               const st = String(p.paymentStatus || "").toUpperCase();
@@ -226,10 +217,9 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
               const candidateInvoiceId = candidate.invoiceId || candidate.walletInvoiceId;
               if (!candidateInvoiceId) continue;
               try {
-                console.log(`🧹 [WALLET QPAY] Canceling stale invoice ${candidateInvoiceId} status=${candidate.paymentStatus}`);
                 await walletApiService.cancelInvoice(walletUserId, candidateInvoiceId);
               } catch (cancelErr) {
-                console.warn(`⚠️ [WALLET QPAY] Could not cancel stale invoice ${candidateInvoiceId}: ${cancelErr.message}`);
+                // ignore
               }
             }
 
@@ -237,13 +227,12 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
             try {
               walletInvoiceResult = await walletApiService.createInvoice(walletUserId, invoiceData);
               walletInvoiceId = walletInvoiceResult.invoiceId;
-              console.log(`✅ [WALLET QPAY] Created invoice after Wallet API cleanup: ${walletInvoiceId}`);
             } catch (retryErr) {
-              console.warn(`⚠️ [WALLET QPAY] Retry createInvoice after cleanup failed: ${retryErr.message}`);
+              // ignore
             }
           }
         } catch (subErr) {
-          console.error("❌ [WALLET QPAY] Failed to resolve bill overlap:", subErr.message);
+          // ignore
         }
       }
 
@@ -263,10 +252,7 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
     walletPaymentResult = await walletApiService.createPayment(walletUserId, {
       invoiceId: walletInvoiceId,
     });
-    console.log(`✅ [WALLET QPAY] Wallet payment created: ${walletPaymentResult.paymentId}`);
   } catch (err) {
-    console.error("❌ [WALLET QPAY] Wallet payment creation failed:", err.message);
-    
     const errMsg = (err.message || "").toLowerCase();
     // --- FALLBACK: If payment already created for this invoice, try to fetch it ---
     if (errMsg.includes("нэхэмжлэхээр төлөлт үүссэн байна")) {
@@ -275,7 +261,6 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
           const existingPayment = payments.find(p => p.invoiceId === walletInvoiceId && p.paymentStatus !== 'CANCELLED');
           if (existingPayment) {
             walletPaymentResult = existingPayment;
-            console.log(`✅ [WALLET QPAY] Found existing payment: ${walletPaymentResult.paymentId}`);
           }
        } catch (pErr) {}
     }
@@ -334,28 +319,19 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
     baiguullagiinId +
     "/" +
     walletPaymentId;
-  
-  console.log(`🔗 [WALLET QPAY] Generated callback URL: ${callback_url}`);
 
   let qpayResult;
   try {
     qpayResult = await qpayGargaya(qpayBody, callback_url, tukhainBaaziinKholbolt);
-    
+
     // Check for ID in various possible formats (invoice_id, invoiceId, id)
     const resultId = qpayResult?.invoice_id || qpayResult?.invoiceId || qpayResult?.id;
 
     if (typeof qpayResult === "string" || !resultId) {
        const errorMsg = typeof qpayResult === "string" ? qpayResult : "QPay нэхэмжлэх үүсгэхэд алдаа гарлаа (QR дата олдсонгүй)";
-       console.error("❌ [WALLET QPAY] QPay error:", errorMsg);
-       if (typeof qpayResult === "object") {
-         console.log("🔍 [WALLET QPAY] QPay result object:", JSON.stringify(qpayResult));
-       }
        throw new Error(errorMsg);
     }
-    
-    console.log(`✅ [WALLET QPAY] QPay invoice created: ${resultId}`);
   } catch (qpayError) {
-    console.error("❌ [WALLET QPAY] QPay invoice creation failed:", qpayError.message);
     throw new aldaa(`QPay нэхэмжлэх үүсгэхэд алдаа: ${qpayError.message}`);
   }
 
@@ -370,16 +346,15 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
       source: "WALLET_QPAY",
     };
 
-    // If we have billing metadata from Step 3, it's already there. 
+    // If we have billing metadata from Step 3, it's already there.
     // If not (user provided invoiceId), we at least need this mapping for callback.
     await WalletInvoice(db.erunkhiiKholbolt).findOneAndUpdate(
       { walletInvoiceId: walletInvoiceId },
       { $set: updateData },
       { upsert: true, new: true }
     );
-    console.log(`✅ [WALLET QPAY] Synced mapping for callback: ${walletInvoiceId} -> ${walletPaymentId}`);
   } catch (saveErr) {
-    console.warn("⚠️ [WALLET QPAY] Failed to sync mapping:", saveErr.message);
+    // ignore
   }
 
   /* ── 7. Save order sequence number ── */
@@ -409,7 +384,7 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
       { new: true, strict: false }
     );
   } catch (tagErr) {
-    console.error("⚠️ [WALLET QPAY] Failed to tag QuickQpayObject:", tagErr.message);
+    // ignore
   }
 
   /* ── 8. Respond ── */
@@ -432,10 +407,6 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
 exports.walletQpayCallback = asyncHandler(async (req, res, next) => {
   const { db } = require("zevbackv2");
   const { baiguullagiinId, walletPaymentId } = req.params;
-
-  console.log(`📥 [WALLET QPAY CALLBACK] ENTERED - baiguullagiinId=${baiguullagiinId}, walletPaymentId=${walletPaymentId}`);
-  console.log(`📥 [WALLET QPAY CALLBACK] Query: ${JSON.stringify(req.query)}`);
-  console.log(`📥 [WALLET QPAY CALLBACK] Body: ${JSON.stringify(req.body)}`);
 
   const tukhainBaaziinKholbolt = db.kholboltuud.find(
     (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
@@ -465,28 +436,18 @@ exports.walletQpayCallback = asyncHandler(async (req, res, next) => {
       tulsunEsekh: true,
     });
     if (alreadyPaid) {
-      console.log("ℹ️ [WALLET QPAY CALLBACK] Already settled.");
       return res.sendStatus(200);
     }
-    console.error("❌ [WALLET QPAY CALLBACK] QuickQpayObject not found for walletPaymentId:", walletPaymentId);
     return res.status(404).send("Payment not found");
-  }
-
-  console.log(`💰 [QPAY CALLBACK] Hit for org=${baiguullagiinId}, paymentId=${walletPaymentId}`);
-  if (Object.keys(req.body).length > 0) {
-    console.log(`📦 [QPAY CALLBACK] Body:`, JSON.stringify(req.body));
-  }
-  if (Object.keys(req.query).length > 0) {
-    console.log(`❓ [QPAY CALLBACK] Query:`, JSON.stringify(req.query));
   }
 
   /* ── 2. Settle ── */
   const io = req.app.get("socketio");
-  
+
   // Extract all possible identifiers from query or body (support both snake_case and camelCase)
   const body = { ...req.query, ...req.body };
   const qpayPaymentIdReq = body.qpay_payment_id || body.payment_id || body.qpayPaymentId || null;
-  
+
   const extraData = {
     qpayPaymentId: qpayPaymentIdReq,
     trxNo: body.trxNo || body.trx_no || null,
@@ -513,8 +474,6 @@ exports.walletQpayCallback = asyncHandler(async (req, res, next) => {
 exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
   const { db } = require("zevbackv2");
   const { baiguullagiinId, walletPaymentId: searchId } = req.params;
-
-  console.log(`🔍 [WALLET QPAY CHECK] Polling: baiguullagiinId=${baiguullagiinId}, searchId=${searchId}`);
 
   const tukhainBaaziinKholbolt = db.kholboltuud.find(
     (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
@@ -561,19 +520,19 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
   if (qpayObject?.tulsunEsekh || !qpayObject) {
     let vatInformation = null;
     let paymentStatus = qpayObject?.tulsunEsekh ? "PAID" : "UNKNOWN";
-    
+
     try {
       const WalletInvoice = require("../models/walletInvoice");
       const walletInvoiceDoc = await WalletInvoice(db.erunkhiiKholbolt)
         .findOne({ walletPaymentId })
         .lean();
-      
+
       let userId = walletInvoiceDoc?.userId;
       if (!userId) {
          const orshinSuugch = await getOrshinSuugchFromToken(req);
          userId = await getWalletIdentifier(orshinSuugch);
       }
-      
+
       if (userId) {
          const pData = await walletApiService.getPayment(userId, walletPaymentId);
          vatInformation = pData?.vatInformation || null;
@@ -582,7 +541,7 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
          }
       }
     } catch (err) {
-      console.warn("⚠️ [WALLET QPAY CHECK] Wallet API check failed:", err.message);
+      // ignore
     }
 
     // If it's paid in Wallet API but not locally, and it belongs to a local object, we could settle it here
@@ -612,7 +571,6 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
 
       // ── TESTING BACKDOOR: Bypass real QPay check if ?forcePaid=true ──
       if (req.query.forcePaid === "true" || req.query.test === "true") {
-        console.log(`🧪 [WALLET QPAY CHECK] TEST MODE: Forcing PAID status for ${walletPaymentId}`);
         isPaid = true;
       } else {
         checkResult = await qpayShalgay(
@@ -621,9 +579,8 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
         );
 
         if (checkResult) {
-          console.log(`🔍 [WALLET QPAY CHECK] Raw QPay Result:`, JSON.stringify(checkResult));
-          isPaid = 
-            checkResult.invoice_status === "PAID" || 
+          isPaid =
+            checkResult.invoice_status === "PAID" ||
             checkResult.payments?.some(
               (p) => p.payment_status === "PAID" || p.status === "PAID"
             );
@@ -631,17 +588,14 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
       }
 
       if (isPaid) {
-        console.log(`✅ [WALLET QPAY CHECK] Status is PAID for ${walletPaymentId}`);
-        
         if (req.query.dryRun === "true") {
-          console.log(`🧪 [WALLET QPAY CHECK] DRY RUN: Skipping settlement and sync.`);
           return res.json({
             success: true,
             status: "PAID (DRY RUN)",
             checkResult
           });
         }
-        
+
         const io = req.app.get("socketio");
         await settleWalletPayment(
           qpayObject,
@@ -658,7 +612,7 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
           const walletInvoiceDoc = await WalletInvoice(db.erunkhiiKholbolt)
             .findOne({ walletPaymentId })
             .lean();
-            
+
           let userId = walletInvoiceDoc?.userId;
           if (!userId) {
              const orshinSuugch = await getOrshinSuugchFromToken(req);
@@ -669,12 +623,12 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
             walletPaymentData = await walletApiService.getPayment(userId, walletPaymentId);
           }
         } catch (fetchErr) {
-          console.error("⚠️ [WALLET QPAY CHECK] Could not fetch Wallet Payment Data for VAT:", fetchErr.message);
+          // ignore
         }
 
-        return res.json({ 
-          success: true, 
-          status: "PAID", 
+        return res.json({
+          success: true,
+          status: "PAID",
           walletPaymentId,
           vatInformation: walletPaymentData?.vatInformation || null
         });
@@ -693,10 +647,10 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
 // ──────────────────────────────────────────────────────
 exports.getWalletPayment = asyncHandler(async (req, res, next) => {
   const { paymentId } = req.params;
-  
+
   const orshinSuugch = await getOrshinSuugchFromToken(req);
   const walletUserId = await getWalletIdentifier(orshinSuugch);
-  
+
   if (!walletUserId) {
     throw new aldaa("Хэрэглэгчийн утас олдсонгүй. Нэвтрэх шаардлагатай.");
   }
@@ -706,13 +660,12 @@ exports.getWalletPayment = asyncHandler(async (req, res, next) => {
     if (!payment) {
       return res.status(404).json({ success: false, message: "Payment not found in Wallet API" });
     }
-    
+
     res.status(200).json({
       success: true,
       data: payment
     });
   } catch (err) {
-    console.error("❌ [WALLET QPAY] Error getting payment details:", err.message);
     throw new aldaa(`Төлбөрийн мэдээлэл авахад алдаа: ${err.message}`);
   }
 });
@@ -723,12 +676,12 @@ exports.getWalletPayment = asyncHandler(async (req, res, next) => {
 // ──────────────────────────────────────────────────────
 exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
   const { db } = require("zevbackv2");
-  
+
   const orshinSuugch = await getOrshinSuugchFromToken(req);
   const userPhone = orshinSuugch?.utas;
   const walletIdentifier = await getWalletIdentifier(orshinSuugch);
   const orshinSuugchId = orshinSuugch?._id?.toString();
-  
+
   if (!userPhone && !walletIdentifier) {
     throw new aldaa("Хэрэглэгчийн утас олдсонгүй. Нэвтрэх шаардлагатай.");
   }
@@ -741,17 +694,12 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
         ...(orshinSuugchId ? [{ orshinSuugchId }] : []),
       ],
     };
-    console.log(
-      `🔎 [WALLET QPAY LIST] userPhone=${userPhone || "-"} walletIdentifier=${walletIdentifier || "-"} orshinSuugchId=${orshinSuugchId || "-"}`
-    );
-    console.log(`🔎 [WALLET QPAY LIST] query userIds=${JSON.stringify(userIds)}`);
 
     const rawInvoices = await WalletInvoice(db.erunkhiiKholbolt)
       .find(query)
       .sort({ createdAt: -1 })
       .limit(120)
       .lean();
-    console.log(`🔎 [WALLET QPAY LIST] rawInvoices=${rawInvoices.length}`);
 
     // Deduplicate repeated metadata rows for same walletPaymentId/invoice
     const seen = new Set();
@@ -765,8 +713,7 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
       seen.add(dedupeKey);
       dedupedInvoices.push(inv);
     }
-    console.log(`🔎 [WALLET QPAY LIST] dedupedInvoices=${dedupedInvoices.length}`);
-      
+
     // Parallelize paid-status lookups for performance
     const payments = await Promise.all(dedupedInvoices.map(async (p) => {
         const tukhainKholbolt = db.kholboltuud.find(k => String(k.baiguullagiinId) === String(p.baiguullagiinId));
@@ -778,7 +725,7 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
             { zakhialgiinDugaar: p.zakhialgiinDugaar }
           ]
         }).select('tulsunEsekh updatedAt qpay.amount').lean();
-        
+
         let walletStatus = p.walletStatus || "UNKNOWN";
         const isPaidLocally = qpayObject?.tulsunEsekh || false;
 
@@ -796,14 +743,11 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
               const walletData = await walletApiService.getPayment(walletUserId, p.walletPaymentId);
               if (walletData?.paymentStatus) {
                 walletStatus = String(walletData.paymentStatus).toUpperCase();
-                console.log(
-                  `🔎 [WALLET QPAY LIST] liveStatus walletPaymentId=${p.walletPaymentId} status=${walletStatus}`
-                );
               }
             }
           }
         } catch (e) {
-          console.warn(`⚠️ [WALLET QPAY LIST] Wallet status check failed for ${p.walletPaymentId}: ${e.message}`);
+          // ignore
         }
 
         // Keep "stuck" visibility for locally PAID but API still not PAID.
@@ -863,23 +807,14 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
         ].filter(Boolean)
       )
     );
-    console.log(
-      `🔎 [WALLET QPAY LIST] fallbackUserIds=${JSON.stringify(fallbackUserIds)}`
-    );
 
     if (fallbackUserIds.length > 0) {
       for (const billingId of billingIds) {
         for (const fallbackUserId of fallbackUserIds) {
           try {
-            console.log(
-              `🔎 [WALLET QPAY LIST] fallback billingId=${billingId} walletUserId=${fallbackUserId}`
-            );
             const billingPayments = await walletApiService.getBillingPayments(
               fallbackUserId,
               billingId
-            );
-            console.log(
-              `🔎 [WALLET QPAY LIST] fallbackResult billingId=${billingId} userId=${fallbackUserId} count=${(billingPayments || []).length}`
             );
 
             for (const bp of billingPayments || []) {
@@ -908,14 +843,9 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
                 source: "WALLET_API_FALLBACK",
               });
               existingKeys.add(key);
-              console.log(
-                `✅ [WALLET QPAY LIST] mergedFallback paymentId=${key} status=${status} invoiceNo=${bp.invoiceNo || bp.invoiceId || "-"} userId=${fallbackUserId}`
-              );
             }
           } catch (fallbackErr) {
-            console.warn(
-              `⚠️ [WALLET QPAY LIST] billing payments fallback failed for billingId=${billingId}, userId=${fallbackUserId}: ${fallbackErr.message}`
-            );
+            // ignore
           }
         }
       }
@@ -924,21 +854,12 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
     mergedPayments.sort(
       (a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0)
     );
-    const statusCounts = mergedPayments.reduce((acc, item) => {
-      const s = String(item.walletStatus || "UNKNOWN").toUpperCase();
-      acc[s] = (acc[s] || 0) + 1;
-      return acc;
-    }, {});
-    console.log(
-      `📊 [WALLET QPAY LIST] finalCount=${mergedPayments.length} statusCounts=${JSON.stringify(statusCounts)}`
-    );
-      
+
     res.status(200).json({
       success: true,
       data: mergedPayments
     });
   } catch (err) {
-    console.error("❌ [WALLET QPAY] Error getting payment list:", err.message);
     throw new aldaa(`Төлбөрийн жагсаалт авахад алдаа: ${err.message}`);
   }
 });
@@ -951,8 +872,6 @@ exports.debugWalletCheck = asyncHandler(async (req, res, next) => {
   res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.set("Pragma", "no-cache");
   res.set("Expires", "0");
-
-  // console.log(`🔍 [WALLET CHECK] baiguullagiinId=${baiguullagiinId}, searchId=${searchId}`);
 
   const tukhainBaaziinKholbolt = db.kholboltuud.find(
     (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
@@ -1075,8 +994,6 @@ exports.debugBillCheck = asyncHandler(async (req, res, next) => {
   const { db } = require("zevbackv2");
   const { baiguullagiinId, billId } = req.params;
 
-  console.log(`🔍 [BILL CHECK] baiguullagiinId=${baiguullagiinId}, billId=${billId}`);
-
   const tukhainBaaziinKholbolt = db.kholboltuud.find(
     (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
   );
@@ -1092,7 +1009,7 @@ exports.debugBillCheck = asyncHandler(async (req, res, next) => {
       .sort({ createdAt: -1 })
       .lean();
   } catch (err) {
-    console.warn("⚠️ [BILL CHECK] Metadata lookup failed:", err.message);
+    // ignore
   }
 
   if (walletInvoices.length === 0) {
@@ -1141,8 +1058,6 @@ exports.debugEasyCheck = asyncHandler(async (req, res, next) => {
   const { db } = require("zevbackv2");
   const { baiguullagiinId, walletPaymentId } = req.params;
 
-  console.log(`🔍 [EASY CHECK] baiguullagiinId=${baiguullagiinId}, walletPaymentId=${walletPaymentId}`);
-
   const tukhainBaaziinKholbolt = db.kholboltuud.find(
     (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
   );
@@ -1158,7 +1073,7 @@ exports.debugEasyCheck = asyncHandler(async (req, res, next) => {
       .findOne({ walletPaymentId })
       .lean();
   } catch (err) {
-    console.warn("⚠️ [EASY CHECK] WalletInvoice lookup failed:", err.message);
+    // ignore
   }
 
   const orshinSuugchId = walletDoc?.orshinSuugchId || null;
@@ -1225,8 +1140,6 @@ exports.resyncWalletPayment = asyncHandler(async (req, res, next) => {
   const { db } = require("zevbackv2");
   const { baiguullagiinId, walletPaymentId } = req.params;
 
-  console.log(`🔄 [WALLET QPAY RESYNC] baiguullagiinId=${baiguullagiinId}, walletPaymentId=${walletPaymentId}`);
-
   const tukhainBaaziinKholbolt = db.kholboltuud.find(
     (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
   );
@@ -1275,7 +1188,7 @@ exports.resyncWalletPayment = asyncHandler(async (req, res, next) => {
         }
       }
     } catch (err) {
-      console.warn("⚠️ [WALLET QPAY RESYNC] QPay check failed:", err.message);
+      // ignore
     }
   }
 
@@ -1302,7 +1215,6 @@ exports.resyncWalletPayment = asyncHandler(async (req, res, next) => {
 
   if (needsSave) {
     await qpayObject.save();
-    console.log(`✅ [WALLET QPAY RESYNC] Marked PAID locally: ${qpayObject._id}`);
   }
 
   /* ── 4. Find userId from WalletInvoice ── */
@@ -1314,7 +1226,7 @@ exports.resyncWalletPayment = asyncHandler(async (req, res, next) => {
       .lean();
     userId = walletInvoiceDoc?.userId || null;
   } catch (err) {
-    console.warn("⚠️ [WALLET QPAY RESYNC] Error finding WalletInvoice:", err.message);
+    // ignore
   }
 
   if (!userId) {
@@ -1339,16 +1251,12 @@ exports.resyncWalletPayment = asyncHandler(async (req, res, next) => {
     receiverAccountName: bankAccount.account_name      || "",
   };
 
-  console.log(`📤 [WALLET QPAY RESYNC] Calling Wallet paidByQpay:`, JSON.stringify(paidByQpayData));
-
   let walletSyncResult = null;
   let walletSyncError = null;
   try {
     walletSyncResult = await walletApiService.updateQPayPayment(userId, walletPaymentId, paidByQpayData);
-    console.log(`✅ [WALLET QPAY RESYNC] Wallet paidByQpay success`);
   } catch (err) {
     walletSyncError = err.message;
-    console.error(`❌ [WALLET QPAY RESYNC] Wallet paidByQpay failed:`, err.message);
   }
 
   /* ── 6. Re-trigger ebarimt sync ── */
@@ -1357,7 +1265,7 @@ exports.resyncWalletPayment = asyncHandler(async (req, res, next) => {
     await handleWalletEbarimt(userId, walletPaymentId, baiguullagiinId, tukhainBaaziinKholbolt);
     ebarimtTriggered = true;
   } catch (err) {
-    console.error("❌ [WALLET QPAY RESYNC] Ebarimt re-sync failed:", err.message);
+    // ignore
   }
 
   res.json({
@@ -1393,13 +1301,7 @@ async function settleWalletPayment(
 ) {
   const { db } = require("zevbackv2");
   if (qpayObject.tulsunEsekh) {
-    console.log(`ℹ️ [WALLET QPAY] Payment ${qpayObject.walletPaymentId} already marked PAID. Skipping.`);
     return;
-  }
-
-  console.log(`🚀 [WALLET QPAY] Settling payment: ${qpayObject.walletPaymentId}`);
-  if (extraData && Object.keys(extraData).length > 0) {
-    console.log(`📝 [WALLET QPAY] Using extra data:`, JSON.stringify(extraData));
   }
 
   /* ── 1. Mark paid locally ── */
@@ -1415,7 +1317,7 @@ async function settleWalletPayment(
   // 2. qpayPaymentIdFromRequest
   // 3. qpayObject existing fields
   // 4. invoice_id (QR ID)
-  
+
   let qpayPaymentId = extraData.qpayPaymentId || qpayPaymentIdFromRequest || qpayObject.payment_id || qpayObject.invoice_id || "";
   let trxNo = extraData.trxNo || qpayObject.legacy_id || "";
   let trxDate = extraData.trxDate || new Date().toISOString();
@@ -1427,7 +1329,7 @@ async function settleWalletPayment(
         { invoice_id: qpayObject.invoice_id },
         tukhainBaaziinKholbolt
       );
-      
+
       const payment = checkResult?.payments?.[0];
       if (payment) {
         if (payment.transactions?.[0]) {
@@ -1442,10 +1344,7 @@ async function settleWalletPayment(
         if (!extraData.trxDate) trxDate = checkResult.invoice_status_date || trxDate;
       }
     } catch (checkErr) {
-      console.error(
-        "⚠️ [WALLET QPAY] QPay check failed during settlement:",
-        checkErr.message
-      );
+      // ignore
     }
   }
 
@@ -1466,7 +1365,7 @@ async function settleWalletPayment(
       .lean();
     userId = walletInvoiceDoc?.userId || null;
   } catch (err) {
-    console.warn("⚠️ [WALLET QPAY] Error finding WalletInvoice:", err.message);
+    // ignore
   }
 
   if (userId) {
@@ -1485,15 +1384,11 @@ async function settleWalletPayment(
         receiverAccountName: bankAccount.account_name || "",
       };
 
-      console.log(
-        `📤 [WALLET QPAY] Calling Wallet paidByQpay for paymentId=${walletPaymentId}`
-      );
       await walletApiService.updateQPayPayment(
         userId,
         walletPaymentId,
         paidByQpayData
       );
-      console.log(`✅ [WALLET QPAY] Wallet paidByQpay success`);
 
       // 3.5. Create official BankniiGuilgee record for AmarSukh accountants
       try {
@@ -1532,12 +1427,8 @@ async function settleWalletPayment(
         bankGuilgee.indexTalbar = `${bankGuilgee.barilgiinId}${bankGuilgee.bank}${bankGuilgee.dansniiDugaar}${bankGuilgee.record}${bankGuilgee.amount}`;
 
         await bankGuilgee.save();
-        console.log(`✅ [WALLET QPAY] BankniiGuilgee created: ${walletPaymentId}`);
       } catch (bankErr) {
-        console.error(
-          "❌ [WALLET QPAY] Error creating BankniiGuilgee:",
-          bankErr.message
-        );
+        // ignore
       }
 
       // 3.6. Sync E-barimt to local DB and Easy Register
@@ -1548,15 +1439,8 @@ async function settleWalletPayment(
         tukhainBaaziinKholbolt
       );
     } catch (walletErr) {
-      console.error(
-        "❌ [WALLET QPAY] Wallet paidByQpay failed:",
-        walletErr.message
-      );
+      // ignore
     }
-  } else {
-    console.warn(
-      "⚠️ [WALLET QPAY] Could not find userId for Wallet API call during settlement"
-    );
   }
 
   /* ── 4. Emit socket event ── */
@@ -1605,29 +1489,18 @@ async function autoApproveQr(
           body,
         },
         (err, res, resBody) => {
-          if (err || res?.statusCode >= 400) {
-            console.error(
-              "⚠️ [EASY REGISTER] Auto-approve error:",
-              err?.message || resBody?.error || res?.statusCode
-            );
-          } else {
-            console.log(
-              `✅ [EASY REGISTER] QR approved for customer: ${customerNo}`
-            );
-          }
           resolve(resBody);
         }
       );
     });
   } catch (err) {
-    console.error("⚠️ [EASY REGISTER] Helper error:", err.message);
     return null;
   }
 }
 
 async function getEbarimtTokenForEasy(baiguullagiinId, tukhainBaaziinKholbolt) {
   const { Token } = require("zevbackv2");
-  
+
   // Try existing token
   const tokenDoc = await Token(tukhainBaaziinKholbolt).findOne({
     turul: "ebarimt",
@@ -1663,7 +1536,7 @@ async function getEbarimtTokenForEasy(baiguullagiinId, tukhainBaaziinKholbolt) {
         if (err || !body?.access_token) {
           return reject(new Error("Failed to get Ebarimt token"));
         }
-        
+
         await Token(tukhainBaaziinKholbolt).updateOne(
           { turul: 'ebarimt', baiguullagiinId: baiguullagiinId },
           {
@@ -1674,7 +1547,7 @@ async function getEbarimtTokenForEasy(baiguullagiinId, tukhainBaaziinKholbolt) {
           },
           { upsert: true }
         );
-        
+
         resolve(body.access_token);
       }
     );
@@ -1699,18 +1572,12 @@ async function handleWalletEbarimt(
       payment = await walletApiService.getPayment(userId, walletPaymentId);
       if (payment?.vatInformation?.vatDdtd) break;
 
-      console.log(
-        `ℹ️ [WALLET EBARIMT] No VAT info for payment ${walletPaymentId}, retry ${retryCount}/${maxRetries}...`
-      );
       // Wait 3 seconds before next retry
       await new Promise((resolve) => setTimeout(resolve, 3000));
       retryCount++;
     }
 
     if (!payment?.vatInformation?.vatDdtd) {
-      console.log(
-        `ℹ️ [WALLET EBARIMT] Permanent skip: No VAT info for payment: ${walletPaymentId}`
-      );
       return;
     }
 
@@ -1721,7 +1588,6 @@ async function handleWalletEbarimt(
       id: vat.vatDdtd,
     });
     if (existing) {
-      console.log(`ℹ️ [WALLET EBARIMT] Already saved locally: ${vat.vatDdtd}`);
       return;
     }
 
@@ -1750,7 +1616,6 @@ async function handleWalletEbarimt(
     }
 
     await ebarimt.save();
-    console.log(`✅ [WALLET EBARIMT] Saved local ebarimt: ${vat.vatDdtd}`);
 
     // 2. Update BankniiGuilgee record to reflect e-barimt status
     try {
@@ -1760,10 +1625,7 @@ async function handleWalletEbarimt(
         { $set: { ebarimtAvsanEsekh: true } }
       );
     } catch (bankUpdateErr) {
-      console.error(
-        "❌ [WALLET EBARIMT] Error updating BankniiGuilgee ebarimt flag:",
-        bankUpdateErr.message
-      );
+      // ignore
     }
 
     // 3. Auto-approve to Easy Register
@@ -1795,20 +1657,15 @@ async function handleWalletEbarimt(
     }
 
     if (easyUser && easyUser.loginName) {
-      console.log(
-        `📦 [WALLET EBARIMT] Auto-approving for easyUser: ${easyUser.loginName} (regNo: ${easyUser.regNo})`
-      );
       await autoApproveQr(
         easyUser.loginName,
         vat.vatQrData,
         baiguullagiinId,
         tukhainBaaziinKholbolt
       );
-    } else {
-      console.log(`ℹ️ [WALLET EBARIMT] Easy Register Profile not found for this user. Skipping auto-approve.`);
     }
   } catch (err) {
-    console.error("❌ [WALLET EBARIMT] Error handling ebarimt:", err.message);
+    // ignore
   }
 }
 
@@ -1826,20 +1683,14 @@ exports.walletWebhook = asyncHandler(async (req, res, next) => {
     if (match) {
       objectId = match[1];
       objectType = "PAYMENT";
-      console.log(`ℹ️ [WALLET WEBHOOK] Auto-detected objectId=${objectId} from trxDescription`);
     }
-  }
-
-  console.log(`🔔 [WALLET WEBHOOK] Received notification: notificationId=${notificationId}, type=${objectType}, objectId=${objectId}`);
-  if (req.body && Object.keys(req.body).length > 0) {
-    console.log(`📦 [WALLET WEBHOOK] Raw Body:`, JSON.stringify(req.body));
   }
 
   // Process based on objectType
   if (objectType === "PAYMENT" && objectId) {
     try {
       // 1. Find the wallet invoice metadata in the main DB to identify the organization
-      let invoiceMetadata = await WalletInvoice(db.erunkhiiKholbolt).findOne({ 
+      let invoiceMetadata = await WalletInvoice(db.erunkhiiKholbolt).findOne({
         $or: [
           { walletPaymentId: objectId },
           { walletInvoiceId: objectId }
@@ -1848,12 +1699,10 @@ exports.walletWebhook = asyncHandler(async (req, res, next) => {
 
       // Fallback: If not found, it might be a race condition or an external payment
       if (!invoiceMetadata) {
-        console.log(`ℹ️ [WALLET WEBHOOK] Metadata not found for ${objectId}, trying fallback...`);
-        
         // Brief wait for race condition
         await new Promise(r => setTimeout(r, 2000));
-        
-        invoiceMetadata = await WalletInvoice(db.erunkhiiKholbolt).findOne({ 
+
+        invoiceMetadata = await WalletInvoice(db.erunkhiiKholbolt).findOne({
           $or: [
             { walletPaymentId: objectId },
             { walletInvoiceId: objectId }
@@ -1866,8 +1715,8 @@ exports.walletWebhook = asyncHandler(async (req, res, next) => {
             const paymentInfo = await walletApiService.getPayment(userId, objectId);
             if (paymentInfo && paymentInfo.billingId) {
                // Try to find ANY invoice for this billingId to get the baiguullagiinId
-               invoiceMetadata = await WalletInvoice(db.erunkhiiKholbolt).findOne({ 
-                 billingId: paymentInfo.billingId 
+               invoiceMetadata = await WalletInvoice(db.erunkhiiKholbolt).findOne({
+                 billingId: paymentInfo.billingId
                }).lean();
             }
           } catch (e) {}
@@ -1875,7 +1724,6 @@ exports.walletWebhook = asyncHandler(async (req, res, next) => {
       }
 
       if (!invoiceMetadata) {
-        console.warn(`⚠️ [WALLET WEBHOOK] Invoice metadata not found for objectId: ${objectId} (userId: ${userId || 'N/A'})`);
         return res.status(200).json({ success: true });
       }
 
@@ -1885,7 +1733,6 @@ exports.walletWebhook = asyncHandler(async (req, res, next) => {
       );
 
       if (!tukhainBaaziinKholbolt) {
-        console.error(`❌ [WALLET WEBHOOK] Connection not found for org: ${baiguullagiinId}`);
         return res.status(200).json({ success: true });
       }
 
@@ -1898,22 +1745,18 @@ exports.walletWebhook = asyncHandler(async (req, res, next) => {
       });
 
       if (!qpayObject) {
-        console.warn(`⚠️ [WALLET WEBHOOK] Qpay object not found for walletPaymentId: ${objectId}`);
         return res.status(200).json({ success: true });
       }
 
       if (qpayObject.tulsunEsekh) {
-        console.log(`ℹ️ [WALLET WEBHOOK] Payment ${objectId} is already marked as paid.`);
         return res.status(200).json({ success: true });
       }
 
       // 3. Verify status with Wallet API before settling (resilient check)
       const walletUserId = invoiceMetadata.userId || userId;
       const paymentInfo = await walletApiService.getPayment(walletUserId, objectId);
-      
+
       if (paymentInfo && (paymentInfo.paymentStatus === "PAID" || paymentInfo.paymentStatus === "SUCCESS")) {
-        console.log(`✅ [WALLET WEBHOOK] Wallet API confirms payment is PAID. Settling locally...`);
-        
         // Extract transaction info from Wallet API response if available
         const trx = paymentInfo.paymentTransactions?.[0] || {};
         const qpayPaymentId = paymentInfo.qpayPaymentId || qpayObject.invoice_id;
@@ -1927,17 +1770,10 @@ exports.walletWebhook = asyncHandler(async (req, res, next) => {
           req.app.get("socketio"),
           req.body
         );
-        
-        console.log(`✅ [WALLET WEBHOOK] Settlement completed for payment: ${objectId}`);
-      } else {
-        console.log(`ℹ️ [WALLET WEBHOOK] Wallet API status is ${paymentInfo?.paymentStatus || 'UNKNOWN'}. Skipping settlement.`);
       }
     } catch (err) {
-      console.error(`❌ [WALLET WEBHOOK] Error processing payment ${objectId}:`, err.message);
       // We still return 200 to acknowledge the webhook, but we log the error
     }
-  } else if (objectType === "CHAT") {
-     console.log(`💬 [WALLET WEBHOOK] Chat message notification received for objectId: ${objectId}`);
   }
 
   // Always return success 200 as per documentation to avoid retries from eBill
