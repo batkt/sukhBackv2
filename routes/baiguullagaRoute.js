@@ -28,20 +28,36 @@ router.get("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
       });
     }
 
+    const populateCameras = (org) => {
+      if (org && org.barilguud && Array.isArray(org.barilguud)) {
+        org.barilguud.forEach(b => {
+          if (b.cameruud && Array.isArray(b.cameruud)) {
+            b.cameruud.forEach(cam => {
+              if (!cam.ip) cam.ip = b.cameraIp || "";
+              if (!cam.port) cam.port = b.cameraPort || 554;
+              if (!cam.username) cam.username = b.cameraUsername || "admin";
+              if (!cam.password) cam.password = b.cameraPassword || "Admin123";
+            });
+          }
+        });
+      }
+      return org;
+    };
+
     // If barilgiinId is provided, filter barilguud to only include the matching barilga
     if (barilgiinId) {
       const filteredBarilga = baiguullaga.barilguud?.find(
         (b) => String(b._id) === String(barilgiinId),
       );
 
-      // Return baiguullaga with only the filtered barilga (or empty array if not found)
-      return res.json({
+      const result = {
         ...baiguullaga,
         barilguud: filteredBarilga ? [filteredBarilga] : [],
-      });
+      };
+      return res.json(populateCameras(result));
     }
 
-    res.json(baiguullaga);
+    res.json(populateCameras(baiguullaga));
   } catch (error) {
     next(error);
   }
