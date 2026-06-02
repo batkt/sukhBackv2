@@ -505,6 +505,27 @@ router.get("/ebarimtJagsaaltAvya", tokenShalgakh, async (req, res, next) => {
     if (req.query.merchantTin) body.query["merchantTin"] = req.query.merchantTin;
     if (req.query.districtCode) body.query["districtCode"] = req.query.districtCode;
 
+    if (req.query.ekhlekhOgnoo || req.query.duusakhOgnoo) {
+      body.query["createdAt"] = {};
+      if (req.query.ekhlekhOgnoo) {
+        const startDate = new Date(req.query.ekhlekhOgnoo);
+        startDate.setHours(0, 0, 0, 0);
+        body.query["createdAt"]["$gte"] = startDate;
+      }
+      if (req.query.duusakhOgnoo) {
+        const endDate = new Date(req.query.duusakhOgnoo);
+        endDate.setHours(23, 59, 59, 999);
+        body.query["createdAt"]["$lte"] = endDate;
+      }
+    }
+
+    if (!body.khuudasniiKhemjee) {
+      body.khuudasniiKhemjee = 5000;
+    }
+    if (!body.order) {
+      body.order = { createdAt: -1 };
+    }
+
     const shine = true;
 
     khuudaslalt(EbarimtShine(req.body.tukhainBaaziinKholbolt), body)
