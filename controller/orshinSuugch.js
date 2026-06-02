@@ -1398,9 +1398,12 @@ exports.validateOwnOrgToot = asyncHandler(async (req, res, next) => {
     });
 
     if (existingUserWithToot) {
+      const existingName = [existingUserWithToot.ovog, existingUserWithToot.ner].filter(Boolean).join(" ") ||
+        (Array.isArray(existingUserWithToot.utas) ? existingUserWithToot.utas[0] : existingUserWithToot.utas) || "";
       return res.status(400).json({
         success: false,
-        message: `(${tootToValidate}) тоот аль хэдийн хэрэглэгчид бүртгэгдсэн байна`,
+        message: `"${tootToValidate}" тоот дээр${existingName ? ` "${existingName}"` : ""} оршин суугч аль хэдийн бүртгэгдсэн байна.`,
+        aldaa: `"${tootToValidate}" тоот дээр${existingName ? ` "${existingName}"` : ""} оршин суугч аль хэдийн бүртгэгдсэн байна.`,
         valid: false,
         existingUser: {
           id: existingUserWithToot._id,

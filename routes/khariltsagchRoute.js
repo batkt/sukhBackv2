@@ -555,9 +555,11 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
       if (orConditions.length > 0) {
         const existing = await khariltsagchModel.findOne({ $or: orConditions });
         if (existing) {
+          const existingName = [existing.ovog, existing.ner].filter(Boolean).join(" ") ||
+            (Array.isArray(existing.utas) ? existing.utas[0] : existing.utas) || "";
           return res.status(400).json({
             success: false,
-            aldaa: "Энэ тоот дээр оршин суугч аль хэдийн бүртгэгдсэн байна.",
+            aldaa: `"${toot}" тоот дээр${existingName ? ` "${existingName}"` : ""} харилцагч аль хэдийн бүртгэгдсэн байна.`,
           });
         }
       }
@@ -794,9 +796,11 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
           $or: orConditions,
         });
         if (existing) {
+          const existingName = [existing.ovog, existing.ner].filter(Boolean).join(" ") ||
+            (Array.isArray(existing.utas) ? existing.utas[0] : existing.utas) || "";
           return res.status(400).json({
             success: false,
-            aldaa: "Энэ тоот дээр оршин суугч аль хэдийн бүртгэгдсэн байна.",
+            aldaa: `"${toot}" тоот дээр${existingName ? ` "${existingName}"` : ""} харилцагч аль хэдийн бүртгэгдсэн байна.`,
           });
         }
       }
