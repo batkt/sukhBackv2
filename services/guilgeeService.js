@@ -155,11 +155,15 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
 
       // Update the invoice with new status AND uldegdel
       // We update regardless of status change to ensure uldegdel is consistent
-      await NekhemjlekhModel.findByIdAndUpdate(inv._id, {
+      const updateData = {
         tuluv: newStatus,
         uldegdel: newUldegdel,
         tulsunOgnoo: isPaid ? new Date() : null,
-      });
+      };
+      if (invCharge > 0) {
+        updateData.niitTulbur = invCharge;
+      }
+      await NekhemjlekhModel.findByIdAndUpdate(inv._id, updateData);
 
       if (isPaid) {
         availableFunds -= targetAmount;

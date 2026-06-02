@@ -77,7 +77,7 @@ const guilgeeAvlaguudSchema = new Schema(
   }
 );
 
-guilgeeAvlaguudSchema.pre("save", function (next) {
+guilgeeAvlaguudSchema.pre("save", async function (next) {
   // If dun is provided, ensure it syncs to undsenDun/tulukhDun for receivables (positive)
   // or tulsunDun for payments (negative)
   if (typeof this.dun === "number" && this.dun !== 0) {
@@ -100,6 +100,26 @@ guilgeeAvlaguudSchema.pre("save", function (next) {
     // Ensure both are set
     if (!this.undsenDun || this.undsenDun === 0) this.undsenDun = this.tulukhDun || this.undsenUne || this.dun;
     if (!this.tulukhDun || this.tulukhDun === 0) this.tulukhDun = this.undsenDun || this.undsenUne || this.dun;
+  }
+
+  // Automatically ensure invoice association for manual charges
+  if (this.isNew && this.dun > 0 && !this.nekhemjlekhId && this.gereeniiId && this.baiguullagiinId) {
+    try {
+      const { db } = require("zevbackv2");
+      const kholbolt = db.kholboltuud.find(
+        (k) => String(k.baiguullagiinId) === String(this.baiguullagiinId)
+      );
+      if (kholbolt) {
+        const invoiceService = require("../services/invoiceService");
+        const activeInv = await invoiceService.ensureActiveInvoice(kholbolt, this.gereeniiId);
+        if (activeInv) {
+          this.nekhemjlekhId = activeInv._id.toString();
+          console.log(`✅ [LEDGER PRE-SAVE] Associated manual charge with invoice: ${this.nekhemjlekhId}`);
+        }
+      }
+    } catch (err) {
+      console.error("❌ [LEDGER PRE-SAVE] ensureActiveInvoice failed:", err.message);
+    }
   }
 
   next();
