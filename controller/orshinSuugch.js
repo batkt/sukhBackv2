@@ -5793,7 +5793,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
           finalGereeId,
           {
             billingDate: new Date(),
-            forceEmpty: false,
+            forceEmpty: true,
             ajiltanId: req.ajiltan?._id,
             ajiltanNer: req.ajiltan?.ner,
           },

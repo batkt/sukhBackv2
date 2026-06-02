@@ -16,10 +16,18 @@ async function main() {
   db.kholboltUusgey(
     app,
     process.env.MONGODB_URI ||
-      "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSukh?authSource=admin",
+    "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSukh?authSource=admin",
   );
 
-  await new Promise((r) => setTimeout(r, 4000));
+  console.log("Waiting 5000ms for DB connections...");
+  await new Promise((r) => setTimeout(r, 5000));
+
+  console.log("kholboltuud length:", db.kholboltuud ? db.kholboltuud.length : "undefined");
+  if (db.kholboltuud) {
+    db.kholboltuud.forEach((k, i) => {
+      console.log(`  [${i}] baiguullagiinId: ${k.baiguullagiinId}, dbName: ${k.kholbolt?.db?.databaseName}`);
+    });
+  }
 
   const kholboltEntry = getKholboltByBaiguullagiinId(BAIGUULLAGIIN_ID);
   if (!kholboltEntry) {
