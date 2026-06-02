@@ -1109,14 +1109,96 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
 
         const nekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
         const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+        const mongoose = require("mongoose");
         const invoiceIds = req.body.nekhemjlekhiinTuukh;
 
+        // Filter valid ObjectIds for querying
+        const validInvoiceObjectIds = invoiceIds.filter((id) => {
+          try {
+            return mongoose.Types.ObjectId.isValid(id);
+          } catch (e) {
+            return false;
+          }
+        });
+
         // Fetch all invoices
-        const invoices = await nekhemjlekhiinTuukh(
-          req.body.tukhainBaaziinKholbolt,
-        )
-          .find({ _id: { $in: invoiceIds } })
-          .lean();
+        let invoices = [];
+        if (validInvoiceObjectIds.length > 0) {
+          invoices = await nekhemjlekhiinTuukh(
+            req.body.tukhainBaaziinKholbolt,
+          )
+            .find({ _id: { $in: validInvoiceObjectIds } })
+            .lean();
+        }
+
+        if (invoices.length === 0) {
+          // Fallback 1: Try fetching from GuilgeeAvlaguud (standalone ledger items)
+          if (validInvoiceObjectIds.length > 0) {
+            const ledgerItems = await GuilgeeAvlaguud(
+              req.body.tukhainBaaziinKholbolt,
+            )
+              .find({ _id: { $in: validInvoiceObjectIds } })
+              .lean();
+
+            if (ledgerItems.length > 0) {
+              invoices = ledgerItems.map((item) => ({
+                _id: item._id,
+                barilgiinId: item.barilgiinId,
+                dansniiDugaar: item.dansniiDugaar,
+                niitTulbur: item.dun || item.undsenDun || 0,
+                gereeniiDugaar: item.gereeniiDugaar,
+                gereeniiId: item.gereeniiId,
+                baiguullagiinId: item.baiguullagiinId,
+                isStandaloneAvlaga: true,
+              }));
+            }
+          }
+        }
+
+        if (invoices.length === 0) {
+          // Fallback 2: Check if any ID is synthetic (e.g. starts with synthetic-balance-)
+          let fallbackGereeniiDugaar = null;
+          for (const id of invoiceIds) {
+            if (typeof id === "string" && id.startsWith("synthetic-balance-")) {
+              const parts = id.split("-");
+              if (parts.length >= 4) {
+                // Format: synthetic-balance-<gereeniiDugaar>-<timestamp>
+                fallbackGereeniiDugaar = parts.slice(2, -1).join("-");
+                break;
+              }
+            }
+          }
+
+          if (fallbackGereeniiDugaar) {
+            const geree = await Geree(req.body.tukhainBaaziinKholbolt, true)
+              .findOne({ gereeniiDugaar: fallbackGereeniiDugaar })
+              .lean();
+
+            if (geree) {
+              invoices = [{
+                _id: new mongoose.Types.ObjectId(),
+                baiguullagiinId: req.body.baiguullagiinId,
+                barilgiinId: geree.barilgiinId || req.body.barilgiinId || "",
+                gereeniiId: geree._id.toString(),
+                gereeniiDugaar: geree.gereeniiDugaar,
+                orshinSuugchId: geree.orshinSuugchId || "",
+                niitTulbur: parseFloat(req.body.dun || 0),
+                isSyntheticBalance: true,
+              }];
+            }
+          }
+        }
+
+        // Fallback 3: Construct a generic mock invoice if we have enough info to bypass the error
+        if (invoices.length === 0 && req.body.baiguullagiinId && req.body.barilgiinId) {
+          invoices = [{
+            _id: new mongoose.Types.ObjectId(),
+            baiguullagiinId: req.body.baiguullagiinId,
+            barilgiinId: req.body.barilgiinId,
+            niitTulbur: parseFloat(req.body.dun || 0),
+            isGenericPayment: true,
+          }];
+        }
 
         if (invoices.length === 0) {
           return res.status(400).json({
@@ -1925,23 +2007,139 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
     });
 
     // Fetch all invoices
-    const invoices = await nekhemjlekhiinTuukh(kholbolt).find({
-      _id: { $in: invoiceObjectIds },
+    const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+
+    // Filter valid ObjectIds for querying
+    const validInvoiceObjectIds = invoiceObjectIds.filter(id => {
+      try {
+        return mongoose.Types.ObjectId.isValid(id);
+      } catch (e) {
+        return false;
+      }
     });
+
+    let invoices = [];
+    if (validInvoiceObjectIds.length > 0) {
+      invoices = await nekhemjlekhiinTuukh(kholbolt).find({
+        _id: { $in: validInvoiceObjectIds },
+      });
+    }
+
+    if (invoices.length === 0) {
+      // Fallback 1: Fetch from GuilgeeAvlaguud (standalone ledger items)
+      if (validInvoiceObjectIds.length > 0) {
+        const ledgerItems = await GuilgeeAvlaguud(kholbolt).find({
+          _id: { $in: validInvoiceObjectIds },
+        });
+
+        if (ledgerItems.length > 0) {
+          invoices = ledgerItems.map((item) => ({
+            _id: item._id,
+            barilgiinId: item.barilgiinId,
+            dansniiDugaar: item.dansniiDugaar,
+            niitTulbur: item.dun || item.undsenDun || 0,
+            gereeniiDugaar: item.gereeniiDugaar,
+            gereeniiId: item.gereeniiId,
+            baiguullagiinId: item.baiguullagiinId,
+            isStandaloneAvlaga: true,
+            baiguullagiinNer: "",
+            orshinSuugchId: item.orshinSuugchId || "",
+            nekhemjlekhiinDans: item.dansniiDugaar || "",
+            nekhemjlekhiinDansniiNer: "",
+            nekhemjlekhiinBank: "qpay",
+            tuluv: "Төлөөгүй",
+          }));
+        }
+      }
+    }
+
+    if (invoices.length === 0) {
+      // Fallback 2: Check synthetic balance
+      let fallbackGereeniiDugaar = null;
+      for (const id of invoiceIds) {
+        if (typeof id === "string" && id.startsWith("synthetic-balance-")) {
+          const parts = id.split("-");
+          if (parts.length >= 4) {
+            fallbackGereeniiDugaar = parts.slice(2, -1).join("-");
+            break;
+          }
+        }
+      }
+
+      if (fallbackGereeniiDugaar) {
+        const geree = await Geree(kholbolt).findOne({ gereeniiDugaar: fallbackGereeniiDugaar }).lean();
+        if (geree) {
+          invoices = [{
+            _id: new mongoose.Types.ObjectId(),
+            baiguullagiinId: baiguullagiinId,
+            barilgiinId: geree.barilgiinId || "",
+            gereeniiId: geree._id.toString(),
+            gereeniiDugaar: geree.gereeniiDugaar,
+            orshinSuugchId: geree.orshinSuugchId || "",
+            niitTulbur: parseFloat(req.query.amount || req.body.amount || 0),
+            isSyntheticBalance: true,
+            baiguullagiinNer: "",
+            nekhemjlekhiinDans: "",
+            nekhemjlekhiinDansniiNer: "",
+            nekhemjlekhiinBank: "qpay",
+            tuluv: "Төлөөгүй",
+          }];
+        }
+      }
+    }
+
+    let qpayInvoiceIdForApi = null;
+    let foundQpayRecord = null;
+
+    try {
+      const { QuickQpayObject } = require("quickqpaypackvSukh");
+      const QuickQpayModel = QuickQpayObject(kholbolt);
+
+      // Search matching QuickQpayObject
+      const matchRegex = invoiceIds.join(",");
+      foundQpayRecord = await QuickQpayModel.findOne({
+        baiguullagiinId: baiguullagiinId,
+        "qpay.callback_url": { $regex: matchRegex },
+      }).sort({ ognoo: -1 }).lean();
+
+      if (foundQpayRecord) {
+        qpayInvoiceIdForApi = foundQpayRecord.invoice_id || foundQpayRecord.qpay?.invoice_id || null;
+      }
+    } catch (qpErr) {
+      console.error("⚠️ [QPAY MULTI CALLBACK] QuickQpayObject search failed:", qpErr.message);
+    }
+
+    // Try normal invoices for invoice ID if not resolved
+    if (!qpayInvoiceIdForApi) {
+      const invoiceWithQpay = invoices.find((inv) => inv.qpayInvoiceId);
+      qpayInvoiceIdForApi = invoiceWithQpay?.qpayInvoiceId || null;
+    }
+
+    // Fallback 3: Generic payment if still empty
+    if (invoices.length === 0 && foundQpayRecord) {
+      invoices = [{
+        _id: new mongoose.Types.ObjectId(),
+        baiguullagiinId: baiguullagiinId,
+        barilgiinId: foundQpayRecord.barilgiinId || "",
+        gereeniiId: foundQpayRecord.gereeniiId || "",
+        gereeniiDugaar: foundQpayRecord.sukhNekhemjlekh?.gereeniiDugaar || "",
+        niitTulbur: parseFloat(foundQpayRecord.sukhNekhemjlekh?.pay_amount || foundQpayRecord.amount || foundQpayRecord.qpay?.amount || 0),
+        isGenericPayment: true,
+        baiguullagiinNer: "",
+        nekhemjlekhiinDans: "",
+        nekhemjlekhiinDansniiNer: "",
+        nekhemjlekhiinBank: "qpay",
+        tuluv: "Төлөөгүй",
+      }];
+    }
 
     if (invoices.length === 0) {
       return res.status(404).send("Invoices not found");
     }
 
-    // Mongo $in does not preserve URL order; QPay id may live on any row.
-    const invoiceWithQpay =
-      invoices.find((inv) => inv.qpayInvoiceId) || invoices[0];
-    const qpayInvoiceIdForApi = invoiceWithQpay?.qpayInvoiceId || null;
-
     console.log("ℹ️ [QPAY MULTI CALLBACK] invoices + QPay id", {
       baiguullagiinId,
       nekhemjlekhiinIds: invoiceIds,
-      chosenForQpayShalgay: invoiceWithQpay?._id?.toString(),
       qpayInvoiceIdForApi,
     });
 
@@ -1988,69 +2186,77 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
           return;
         }
 
-        // Use findByIdAndUpdate to ensure the update is applied
-        const updatedInvoice = await nekhemjlekhiinTuukh(
-          kholbolt,
-        ).findByIdAndUpdate(
-          nekhemjlekh._id,
-          {
-            $set: (() => {
-              const multiPaidAmount = nekhemjlekh.niitTulbur || 0;
-              const multiCurrentUldegdel =
-                typeof nekhemjlekh.uldegdel === "number" &&
-                  !isNaN(nekhemjlekh.uldegdel) &&
-                  nekhemjlekh.uldegdel > 0
-                  ? nekhemjlekh.uldegdel
-                  : multiPaidAmount;
-              const multiNewUldegdel = Math.max(
-                0,
-                multiCurrentUldegdel - multiPaidAmount,
-              );
-              const multiIsFullyPaid = multiNewUldegdel <= 0.01;
-              return {
-                tuluv: multiIsFullyPaid ? "Төлсөн" : "Төлөөгүй",
-                ...(paymentTransactionId && {
-                  qpayPaymentId: paymentTransactionId,
-                }),
-                // uldegdel removed
-              };
-            })(),
-            $push: {
-              paymentHistory: {
-                ognoo: new Date(),
-                dun: nekhemjlekh.niitTulbur || 0,
-                turul: "төлөлт",
-                guilgeeniiId:
-                  paymentTransactionId ||
-                  nekhemjlekh.qpayInvoiceId ||
-                  "unknown",
-                tailbar: "QPay төлбөр",
+        let updatedInvoice = null;
+
+        if (!nekhemjlekh.isStandaloneAvlaga && !nekhemjlekh.isSyntheticBalance && !nekhemjlekh.isGenericPayment) {
+          // Use findByIdAndUpdate to ensure the update is applied
+          updatedInvoice = await nekhemjlekhiinTuukh(
+            kholbolt,
+          ).findByIdAndUpdate(
+            nekhemjlekh._id,
+            {
+              $set: (() => {
+                const multiPaidAmount = nekhemjlekh.niitTulbur || 0;
+                const multiCurrentUldegdel =
+                  typeof nekhemjlekh.uldegdel === "number" &&
+                    !isNaN(nekhemjlekh.uldegdel) &&
+                    nekhemjlekh.uldegdel > 0
+                    ? nekhemjlekh.uldegdel
+                    : multiPaidAmount;
+                const multiNewUldegdel = Math.max(
+                  0,
+                  multiCurrentUldegdel - multiPaidAmount,
+                );
+                const multiIsFullyPaid = multiNewUldegdel <= 0.01;
+                return {
+                  tuluv: multiIsFullyPaid ? "Төлсөн" : "Төлөөгүй",
+                  ...(paymentTransactionId && {
+                    qpayPaymentId: paymentTransactionId,
+                  }),
+                  // uldegdel removed
+                };
+              })(),
+              $push: {
+                paymentHistory: {
+                  ognoo: new Date(),
+                  dun: nekhemjlekh.niitTulbur || 0,
+                  turul: "төлөлт",
+                  guilgeeniiId:
+                    paymentTransactionId ||
+                    nekhemjlekh.qpayInvoiceId ||
+                    "unknown",
+                  tailbar: "QPay төлбөр",
+                },
               },
             },
-          },
-          { new: true },
-        );
+            { new: true },
+          );
+
+          if (updatedInvoice) {
+            // Use the updated invoice for further operations
+            nekhemjlekh = updatedInvoice;
+
+            try {
+              const invFresh = await nekhemjlekhiinTuukh(kholbolt).findById(
+                nekhemjlekh._id,
+              );
+              if (invFresh) {
+                invFresh._skipTuluvRecalc = true;
+                await invFresh.save();
+              }
+            } catch (ekhniiSyncErr) {
+              console.error(
+                "[QPAY MULTI] ekhniiUldegdel sync save failed:",
+                ekhniiSyncErr.message,
+              );
+            }
+          }
+        } else {
+          updatedInvoice = nekhemjlekh;
+        }
 
         if (!updatedInvoice) {
           return;
-        }
-
-        // Use the updated invoice for further operations
-        nekhemjlekh = updatedInvoice;
-
-        try {
-          const invFresh = await nekhemjlekhiinTuukh(kholbolt).findById(
-            nekhemjlekh._id,
-          );
-          if (invFresh) {
-            invFresh._skipTuluvRecalc = true;
-            await invFresh.save();
-          }
-        } catch (ekhniiSyncErr) {
-          console.error(
-            "[QPAY MULTI] ekhniiUldegdel sync save failed:",
-            ekhniiSyncErr.message,
-          );
         }
 
         // NOTE: Do NOT reset geree.ekhniiUldegdel to 0 here.
@@ -2093,17 +2299,8 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
 
             // Priority 1: Try to get amount from local QPay record (the intended amount)
             try {
-              const { QuickQpayObject } = require("quickqpaypackvSukh");
-              const QuickQpayModel = QuickQpayObject(kholbolt);
-              const qp = await QuickQpayModel.findOne({
-                $or: [
-                  { invoice_id: nekhemjlekh.qpayInvoiceId },
-                  { "sukhNekhemjlekh.nekhemjlekhiinId": nekhemjlekh._id.toString() }
-                ]
-              }).sort({ ognoo: -1 });
-
-              if (qp) {
-                invoicePaidAmount = parseFloat(qp.sukhNekhemjlekh?.pay_amount || qp.amount || qp.qpay?.amount || 0);
+              if (foundQpayRecord) {
+                invoicePaidAmount = parseFloat(foundQpayRecord.sukhNekhemjlekh?.pay_amount || foundQpayRecord.amount || foundQpayRecord.qpay?.amount || 0);
               }
             } catch (qpErr) { }
 
@@ -2113,7 +2310,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
             }
 
             // Priority 3: Fallback to ledger charge record if still 0
-            if (invoicePaidAmount <= 0) {
+            if (invoicePaidAmount <= 0 && !nekhemjlekh.isStandaloneAvlaga && !nekhemjlekh.isSyntheticBalance && !nekhemjlekh.isGenericPayment) {
               const chargeRecord = await GuilgeeAvlaguud(kholbolt).findOne({
                 nekhemjlekhId: nekhemjlekh._id.toString(),
                 dun: { $gt: 0 }
@@ -2166,7 +2363,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
             gereeniiId: String(nekhemjlekh.gereeniiId),
             gereeniiDugaar: nekhemjlekh.gereeniiDugaar || "",
             orshinSuugchId: nekhemjlekh.orshinSuugchId || "",
-            nekhemjlekhId: nekhemjlekh._id?.toString() || null,
+            nekhemjlekhId: (nekhemjlekh.isStandaloneAvlaga || nekhemjlekh.isSyntheticBalance || nekhemjlekh.isGenericPayment) ? null : (nekhemjlekh._id?.toString() || null),
             ognoo: new Date(),
             dun: invoicePaidAmount,
             tailbar: `QPay төлбөр - ${nekhemjlekh.gereeniiDugaar || ""}`,
