@@ -423,6 +423,32 @@ async function ensureActiveInvoice(kholbolt, gereeId, options = {}) {
   const geree = await GereeModel.findById(gereeId).lean();
   if (!geree) return null;
 
+  // Check if an invoice (paid or unpaid) exists in the current billing cycle
+  let cronDay = 1;
+  try {
+    const cronSchedule = await NekhemjlekhCron(kholbolt).findOne({
+      baiguullagiinId: geree.baiguullagiinId,
+      $or: [
+        { barilgiinId: geree.barilgiinId },
+        { barilgiinId: null }
+      ]
+    }).sort({ barilgiinId: -1 }).lean();
+
+    if (cronSchedule && cronSchedule.nekhemjlekhUusgekhOgnoo) {
+      cronDay = cronSchedule.nekhemjlekhUusgekhOgnoo;
+    }
+  } catch (err) {
+    console.error("Error fetching cron schedule for cycle check:", err);
+  }
+
+  const { startOfCycle, endOfCycle } = calculateBillingCycleBounds(cronDay, new Date());
+  const existingInCycle = await NekhemjlekhiinTuukhModel.findOne({
+    gereeniiId: gereeId,
+    ognoo: { $gte: startOfCycle, $lte: endOfCycle }
+  }).sort({ ognoo: -1 });
+
+  if (existingInCycle) return existingInCycle;
+
   const result = await createInvoiceForContract(kholbolt, gereeId, {
     ...options,
     forceEmpty: true,
