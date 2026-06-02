@@ -127,12 +127,12 @@ async function ebarimtDuudya(ugugdul, onFinish, next, shine = false, baiguullagi
       // baiguullagiinId "69159a06dd2ba5c30308b90f" uses TEST, others use IP
       // Get baiguullagiinId from parameter or from ugugdul if not provided
       const orgId = baiguullagiinId || ugugdul?.baiguullagiinId;
-      const shouldUseTest = orgId && String(orgId) === "69f06870687e1fcbab74be82";
-      
-      const baseUrl = shouldUseTest 
-        ? process.env.EBARIMTSHINE_TEST 
+      const shouldUseTest = orgId && String(orgId) === "69f3f56a2899d5fdc24251d1";
+
+      const baseUrl = shouldUseTest
+        ? process.env.EBARIMTSHINE_TEST
         : process.env.EBARIMTSHINE_IP;
-      
+
       var url = baseUrl + "rest/receipt";
       console.log("[EBARIMT] Sending receipt request", {
         orgId,
@@ -140,12 +140,12 @@ async function ebarimtDuudya(ugugdul, onFinish, next, shine = false, baiguullagi
         baseUrl: baseUrl || null,
         url,
       });
-      
+
       const plainUgugdul = typeof ugugdul.toObject === 'function' ? ugugdul.toObject() : JSON.parse(JSON.stringify(ugugdul));
-      
+
       // Ensure 'type' and 'districtCode' are correctly formatted
       if (!plainUgugdul.type && ugugdul.type) plainUgugdul.type = ugugdul.type;
-      
+
       let finalDistrictCode = String(plainUgugdul.districtCode || "").replace(/[^0-9]/g, "");
       if (finalDistrictCode.length < 4) finalDistrictCode = finalDistrictCode.padStart(4, "0");
       if (finalDistrictCode.length > 4) finalDistrictCode = finalDistrictCode.substring(0, 4);
@@ -153,14 +153,14 @@ async function ebarimtDuudya(ugugdul, onFinish, next, shine = false, baiguullagi
       plainUgugdul.districtCode = finalDistrictCode;
 
       console.log("[EBARIMT] Request Body:", JSON.stringify(plainUgugdul, null, 2));
-      
+
       request.post(url, { json: true, body: plainUgugdul }, (err, res1, body) => {
         if (err) {
           console.error("[EBARIMT] request.post error:", err.message, { url });
           if (next) next(err);
           return;
         }
-        
+
         console.log("[EBARIMT] receipt response", {
           statusCode: res1?.statusCode,
           hasBody: !!body,
@@ -168,7 +168,7 @@ async function ebarimtDuudya(ugugdul, onFinish, next, shine = false, baiguullagi
           bodySuccess: body?.success,
           bodyMessage: body?.message || body?.error || null,
         });
-        
+
         if (body && (body.error || body.message)) {
           console.error("[EBARIMT] receipt returned error/message", {
             error: body.error || null,
@@ -179,7 +179,7 @@ async function ebarimtDuudya(ugugdul, onFinish, next, shine = false, baiguullagi
             next(new Error(body.message || body.error || "E-barimt API error"));
           return;
         }
-        
+
         onFinish(body, ugugdul);
       });
     } else if (!!next) next(new Error("ИБаримт dll холболт хийгдээгүй байна!"));
@@ -384,7 +384,7 @@ async function autoApproveQr(customerNo, qrData, baiguullagiinId, tukhainBaaziin
 async function easyRegisterDuudya(method, path, body, next, onFinish, baiguullagiinId = null, tukhainBaaziinKholbolt = null, _retried = false) {
   try {
     const orgId = baiguullagiinId;
-    
+
     // Create a cache key for GET requests or specific POST requests like getProfile
     let cacheKey = null;
     if (method === "GET" || (method === "POST" && (path.includes("getProfile") || path.includes("info/foreigner")))) {
@@ -404,7 +404,7 @@ async function easyRegisterDuudya(method, path, body, next, onFinish, baiguullag
     } else {
       baseUrl = 'https://service.itc.gov.mn';
     }
-    
+
     if (process.env.EBARIMTSHINE_EASY_REGISTER_URL) {
       baseUrl = process.env.EBARIMTSHINE_EASY_REGISTER_URL;
     }
@@ -427,7 +427,7 @@ async function easyRegisterDuudya(method, path, body, next, onFinish, baiguullag
     } else {
       token = process.env.EBARIMTSHINE_TOKEN;
     }
-    
+
     const url = baseUrl + (path.startsWith('/') ? '' : '/') + path;
 
     const options = {
@@ -465,7 +465,7 @@ async function easyRegisterDuudya(method, path, body, next, onFinish, baiguullag
         }
         return easyRegisterDuudya(method, path, body, next, onFinish, baiguullagiinId, connectionObj, true);
       }
-      
+
       if ((res?.statusCode >= 400) || (resBody && resBody.error)) {
         if (next) {
           const msg = (resBody && (resBody.msg || resBody.error))
@@ -475,10 +475,10 @@ async function easyRegisterDuudya(method, path, body, next, onFinish, baiguullag
         }
         return;
       }
-      
+
       // Store in cache if successful
       if (cacheKey && resBody && !resBody.error) {
-         easyRegisterCache.set(cacheKey, { timestamp: Date.now(), data: resBody });
+        easyRegisterCache.set(cacheKey, { timestamp: Date.now(), data: resBody });
       }
 
       onFinish(resBody);
@@ -662,7 +662,7 @@ router.post(
         // Find saved Easy Register profile for this resident or contract
         const userFilter = { baiguullagiinId: req.body.baiguullagiinId, ustgasan: { $ne: true } };
         const residentId = nekhemjlekh.orshinSuugchiinId || (nekhemjlekh.medeelel && nekhemjlekh.medeelel.orshinSuugchiinId);
-        
+
         if (residentId) {
           userFilter.orshinSuugchiinId = residentId;
         } else if (nekhemjlekh.gereeniiId) {
@@ -813,7 +813,7 @@ router.post("/easyRegister/setReturnReceipt", tokenShalgakh, async (req, res, ne
 router.post("/easyRegister/user/search", tokenShalgakh, async (req, res, next) => {
   try {
     const { identity, phoneNum, customerNo, turul, passportNo, email } = req.body;
-    
+
     // High-level search cache check
     const searchKey = `search:${JSON.stringify({ identity, phoneNum, customerNo, turul, passportNo, email })}`;
     const cachedSearch = easyRegisterCache.get(searchKey);
@@ -823,7 +823,7 @@ router.post("/easyRegister/user/search", tokenShalgakh, async (req, res, next) =
     }
 
     console.log(`[EASY REGISTER] user/search: identity=${identity || ''}, phone=${phoneNum || ''}, customerNo=${customerNo || ''}, turul=${turul || 'consumer'}`);
-    
+
     const baiguullagiinId = req.body.baiguullagiinId;
     const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
 
@@ -858,7 +858,7 @@ router.post("/easyRegister/user/search", tokenShalgakh, async (req, res, next) =
       } else {
         profileBody.customerNo = searchPhoneOrCode;
       }
-      
+
       try {
         const profile = await callApi("POST", 'api/easy-register/rest/v1/getProfile', profileBody);
         if (profile && profile.loginName) {
@@ -878,7 +878,7 @@ router.post("/easyRegister/user/search", tokenShalgakh, async (req, res, next) =
 
     if (finalData) {
       const effectivePhone = phoneNum || (isNumericIdentity && searchPhoneOrCode.length === 8 ? searchPhoneOrCode : '') || finalData.phoneNum || '';
-      
+
       if (effectivePhone && !finalData.phoneNum) {
         finalData.phoneNum = effectivePhone;
       }
@@ -916,7 +916,7 @@ router.get("/easyRegister/user/list", copyQueryToBody, tokenShalgakh, async (req
     if (!body.query) body.query = {};
     body.query.baiguullagiinId = req.body.baiguullagiinId;
     body.query.ustgasan = { $ne: true };
-    
+
     // Filter by resident ID for security
     if (req.body.orshinSuugchiinId) {
       body.query.orshinSuugchiinId = req.body.orshinSuugchiinId;
@@ -1006,7 +1006,7 @@ router.get("/easyRegister/user/:id", copyQueryToBody, tokenShalgakh, async (req,
       baiguullagiinId: req.body.baiguullagiinId,
       ustgasan: { $ne: true }
     };
-    
+
     if (req.body.orshinSuugchiinId) {
       filter.orshinSuugchiinId = req.body.orshinSuugchiinId;
     }
