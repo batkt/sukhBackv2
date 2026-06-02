@@ -2456,12 +2456,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
 
                   const nuatTulukhEsekh = !!tuxainSalbar.nuatTulukhEsekh;
 
-                  const paidAmountForEbarimt =
-                    Number(
-                      updatedInvoice?.paymentHistory?.[
-                        (updatedInvoice?.paymentHistory?.length || 1) - 1
-                      ]?.dun,
-                    ) || 0;
+                  const paidAmountForEbarimt = Number(invoicePaidAmount) || 0;
                   const ebarimtInvoice = {
                     ...(typeof updatedInvoice.toObject === "function"
                       ? updatedInvoice.toObject()
