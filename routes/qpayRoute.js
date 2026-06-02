@@ -2366,7 +2366,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
             nekhemjlekhId: (nekhemjlekh.isStandaloneAvlaga || nekhemjlekh.isSyntheticBalance || nekhemjlekh.isGenericPayment) ? null : (nekhemjlekh._id?.toString() || null),
             ognoo: new Date(),
             dun: invoicePaidAmount,
-            tailbar: `QPay төлбөр - ${nekhemjlekh.gereeniiDugaar || ""}`,
+            tailbar: "QPay төлөлт",
             source: "nekhemjlekh",
           });
         } catch (ledgerErr) {
@@ -2410,99 +2410,23 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
               );
             } else {
               // Ebarimt API requires a 4-digit numeric district code
-              // Look up the code from tatvariinAlba using city name and district/horoo name
+              // Look up the code using resolveDistrictCode helper
               let ebarimtDistrictCode = null;
 
               try {
-                const TatvariinAlba = require("../models/tatvariinAlba");
-                const cityName =
-                  tuxainSalbar.EbarimtDuuregNer || tuxainSalbar.duuregNer;
-                const districtCodeString =
-                  tuxainSalbar.EbarimtDistrictCode ||
-                  tuxainSalbar.districtCode ||
-                  "";
-                console.log(
-                  "ℹ️ [QPAY MULTI CALLBACK] Ebarimt district lookup input:",
-                  {
-                    invoiceId: updatedInvoice._id?.toString(),
-                    cityName,
-                    districtCodeString,
-                    horooNameFromConfig:
-                      tuxainSalbar.EbarimtDHoroo?.ner ||
-                      tuxainSalbar.horoo?.ner ||
-                      null,
-                  },
+                const { resolveDistrictCode } = require("../lib/districtMapping");
+                ebarimtDistrictCode = await resolveDistrictCode(
+                  tuxainSalbar,
+                  db.erunkhiiKholbolt,
                 );
 
-                // Extract horoo/district name from the district code string
-                const horooName =
-                  tuxainSalbar.EbarimtDHoroo?.ner ||
-                  tuxainSalbar.horoo?.ner ||
-                  districtCodeString.replace(cityName, "").trim();
-
-                if (cityName && horooName) {
-                  // Find the city in tatvariinAlba - try exact match first, then case-insensitive
-                  let city = await TatvariinAlba(db.erunkhiiKholbolt).findOne(
-                    { ner: cityName },
-                  );
-
-                  // If not found, try case-insensitive search
-                  if (!city) {
-                    const allCities = await TatvariinAlba(
-                      db.erunkhiiKholbolt,
-                    ).find({});
-                    city = allCities.find(
-                      (c) =>
-                        c.ner &&
-                        c.ner.trim().toLowerCase() ===
-                        cityName.trim().toLowerCase(),
-                    );
-                    if (city) {
-                    }
-                  }
-
-                  if (city && city.kod) {
-                    // Find the district/horoo within the city - try exact match, then partial match
-                    let district = city.ded?.find(
-                      (d) =>
-                        d.ner === horooName || d.ner === horooName.trim(),
-                    );
-
-                    // If not found, try case-insensitive or partial match
-                    if (!district && city.ded) {
-                      district = city.ded.find((d) => {
-                        const dName = d.ner?.trim().toLowerCase() || "";
-                        const hName = horooName.trim().toLowerCase();
-                        return (
-                          dName === hName ||
-                          dName.includes(hName) ||
-                          hName.includes(dName)
-                        );
-                      });
-                      if (district) {
-                      }
-                    }
-
-                    if (district && district.kod) {
-                      // Combine city code + district code to create 4-digit code
-                      const cityCode = city.kod.padStart(2, "0");
-                      const districtCode = district.kod.padStart(2, "0");
-                      ebarimtDistrictCode = cityCode + districtCode;
-                    } else {
-                    }
-                  } else {
-                  }
-                }
-
-                // Fallback: try to extract 4-digit numeric code directly
-                if (!ebarimtDistrictCode) {
-                  const numericMatch = districtCodeString?.match(/\d{4}/);
-                  if (numericMatch) {
-                    ebarimtDistrictCode = numericMatch[0];
-                  } else if (/^\d{4}$/.test(districtCodeString)) {
-                    ebarimtDistrictCode = districtCodeString;
-                  }
-                }
+                console.log(
+                  "ℹ️ [QPAY MULTI CALLBACK] Ebarimt district lookup resolved:",
+                  {
+                    invoiceId: updatedInvoice._id?.toString(),
+                    ebarimtDistrictCode,
+                  },
+                );
 
                 if (
                   !ebarimtDistrictCode ||
