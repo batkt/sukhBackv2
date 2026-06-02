@@ -23,7 +23,7 @@ exports.khariltsagchUstgakh = asyncHandler(async (req, res, next) => {
 exports.khariltsagchTootUstgakh = asyncHandler(async (req, res, next) => {
   try {
     const id = req.body.id || req.body.residentId;
-    const { baiguullagiinId, barilgiinId, toot } = req.body;
+    const { baiguullagiinId, barilgiinId, toot, turul } = req.body;
 
     if (!id || !baiguullagiinId || !toot) {
       return res.status(400).json({ success: false, message: "id, baiguullagiinId, болон toot мэдээлэл заавал шаардлагатай!" });
@@ -46,7 +46,8 @@ exports.khariltsagchTootUstgakh = asyncHandler(async (req, res, next) => {
       const match =
         String(t.baiguullagiinId) === String(baiguullagiinId) &&
         String(t.toot).trim() === String(toot).trim() &&
-        (!barilgiinId || String(t.barilgiinId) === String(barilgiinId));
+        (!barilgiinId || String(t.barilgiinId) === String(barilgiinId)) &&
+        (!turul || String(t.turul || "Орон сууц").trim() === String(turul).trim());
       return !match;
     });
 

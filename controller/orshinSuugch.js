@@ -5250,7 +5250,7 @@ exports.getProfileByPhoneOrCustomer = asyncHandler(async (req, res, next) => {
 exports.orshinSuugchTootUstgakh = asyncHandler(async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
-    const { residentId, baiguullagiinId, barilgiinId, toot } = req.body;
+    const { residentId, baiguullagiinId, barilgiinId, toot, turul } = req.body;
 
     if (!residentId || !baiguullagiinId || !toot) {
       throw new aldaa("residentId, baiguullagiinId, болон toot мэдээлэл заавал шаардлагатай!");
@@ -5273,7 +5273,8 @@ exports.orshinSuugchTootUstgakh = asyncHandler(async (req, res, next) => {
       const match =
         String(t.baiguullagiinId) === String(baiguullagiinId) &&
         String(t.toot).trim() === String(toot).trim() &&
-        (!barilgiinId || String(t.barilgiinId) === String(barilgiinId));
+        (!barilgiinId || String(t.barilgiinId) === String(barilgiinId)) &&
+        (!turul || String(t.turul || "Орон сууц").trim() === String(turul).trim());
       return !match;
     });
 

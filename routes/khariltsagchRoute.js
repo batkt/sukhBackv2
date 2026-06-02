@@ -697,6 +697,14 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
 
     res.send(result);
   } catch (error) {
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern || {})[0] || "";
+      const label = field === "utas" ? "Утасны дугаар" : field || "Талбар";
+      return res.status(400).json({
+        success: false,
+        aldaa: `${label} аль хэдийн бүртгэгдсэн байна.`,
+      });
+    }
     next(error);
   }
 });
