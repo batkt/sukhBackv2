@@ -5631,6 +5631,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
         tuluv: "Идэвхтэй",
         gereeniiOgnoo: new Date(),
         orshinSuugchId: orshinSuugch._id.toString(),
+        ...(isKhariltsagch ? { khariltsagchId: orshinSuugch._id.toString() } : {}),
         zardluud: zardluudArray,
         niitTulbur: niitTulbur,
         ashiglaltiinZardal: 0,
@@ -5736,6 +5737,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
         sohNer: sohToot,
         burtgesenAjiltan: orshinSuugch._id,
         orshinSuugchId: orshinSuugch._id.toString(),
+        ...(isKhariltsagch ? { khariltsagchId: orshinSuugch._id.toString() } : {}),
         temdeglel:
           req.body.tailbar ||
           orshinSuugch.tailbar ||

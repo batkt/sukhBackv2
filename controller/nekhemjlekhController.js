@@ -73,6 +73,7 @@ async function gereeNeesNekhemjlekhUusgekh(
       {
         billingDate: today,
         ajiltanNer: source === "automataar" ? "Систем" : undefined,
+        forceEmpty: true,
       },
     );
 

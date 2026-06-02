@@ -366,7 +366,7 @@ exports.createGeree = asyncHandler(async (req, res) => {
       geree._id,
       {
         billingDate: new Date(),
-        forceEmpty: false,
+        forceEmpty: true,
         
         ajiltanId: req.ajiltan?._id,
         ajiltanNer: req.ajiltan?.ner,
