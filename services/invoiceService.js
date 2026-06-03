@@ -202,8 +202,12 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     ognoo: { $gte: startOfCycle, $lte: endOfCycle }
   }).sort({ ognoo: -1 });
 
+  if (invoice && invoice.tuluv === "Төлсөн" && !options.override) {
+    invoice = null;
+  }
+
   if (invoice && !options.override) {
-    return { success: false, message: "Тухайн мөчлөгийн нэхэмжлэх аль хэдийн үүссэн байна." };
+    return { success: false, message: "Тухайн сарын нэхэмжлэх аль хэдийн үүссэн байна." };
   }
 
   if (!invoice) {
