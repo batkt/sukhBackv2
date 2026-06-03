@@ -5503,8 +5503,6 @@ exports.syncResidentContracts = async function syncResidentContracts(
   }
 
   for (const tootEntry of uniqueToots) {
-    const isPrimaryUnit = String(tootEntry.toot).trim() === String(orshinSuugch.toot || "").trim();
-
     // Only process units that belong to the current organization context
     const entryOrgId = tootEntry.baiguullagiinId ? String(tootEntry.baiguullagiinId) : null;
 
@@ -5612,10 +5610,10 @@ exports.syncResidentContracts = async function syncResidentContracts(
     const isProratingEnabled = !!targetBarilgaForToot?.tokhirgoo?.bodokhArgaEnabled;
     const isUnitProrating = tootEntry.khonogoorBodokhEsekh !== undefined
       ? tootEntry.khonogoorBodokhEsekh
-      : (isPrimaryUnit ? (req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true") : false);
+      : (req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true");
     const unitProrateDays = tootEntry.bodokhKhonog !== undefined
       ? Number(tootEntry.bodokhKhonog)
-      : (isPrimaryUnit ? (Number(req.body.bodokhKhonog) || 0) : 0);
+      : (Number(req.body.bodokhKhonog) || 0);
 
     const shouldProrate = (isProratingEnabled || isUnitProrating) && isUnitProrating && unitProrateDays > 0;
 
@@ -5666,11 +5664,12 @@ exports.syncResidentContracts = async function syncResidentContracts(
         khonogoorBodokhEsekh:
           tootEntry.khonogoorBodokhEsekh !== undefined
             ? tootEntry.khonogoorBodokhEsekh
-            : (isPrimaryUnit ? (req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true" || orshinSuugch.khonogoorBodokhEsekh || false) : false),
+            : req.body.khonogoorBodokhEsekh === true ||
+            req.body.khonogoorBodokhEsekh === "true",
         bodokhKhonog:
           tootEntry.bodokhKhonog !== undefined
             ? Number(tootEntry.bodokhKhonog)
-            : (isPrimaryUnit ? (Number(req.body.bodokhKhonog) || Number(orshinSuugch.bodokhKhonog) || 0) : 0),
+            : Number(req.body.bodokhKhonog) || 0,
         ovog: req.body.ovog || orshinSuugch.ovog || existingCancelledGeree.ovog,
         ner: req.body.ner || orshinSuugch.ner || existingCancelledGeree.ner,
         register:
@@ -5694,11 +5693,11 @@ exports.syncResidentContracts = async function syncResidentContracts(
         umnukhZaalt:
           tootEntry.tsahilgaaniiZaalt !== undefined
             ? tootEntry.tsahilgaaniiZaalt
-            : (isPrimaryUnit ? (orshinSuugch.tsahilgaaniiZaalt || 0) : 0),
+            : orshinSuugch.tsahilgaaniiZaalt || 0,
         suuliinZaalt:
           tootEntry.tsahilgaaniiZaalt !== undefined
             ? tootEntry.tsahilgaaniiZaalt
-            : (isPrimaryUnit ? (orshinSuugch.tsahilgaaniiZaalt || 0) : 0),
+            : orshinSuugch.tsahilgaaniiZaalt || 0,
         zaaltTog: 0,
         zaaltUs: 0,
         nemeltTootnuud: currentAuData,
@@ -5711,10 +5710,8 @@ exports.syncResidentContracts = async function syncResidentContracts(
 
       if (tootEntry.ekhniiUldegdel !== undefined) {
         updateData.ekhniiUldegdel = parseFloat(tootEntry.ekhniiUldegdel) || 0;
-      } else if (isPrimaryUnit && (req.body.ekhniiUldegdel !== undefined || orshinSuugch.ekhniiUldegdel !== undefined)) {
-        updateData.ekhniiUldegdel = parseFloat(req.body.ekhniiUldegdel) || parseFloat(orshinSuugch.ekhniiUldegdel) || 0;
-      } else {
-        updateData.ekhniiUldegdel = 0;
+      } else if (req.body.ekhniiUldegdel !== undefined) {
+        updateData.ekhniiUldegdel = parseFloat(req.body.ekhniiUldegdel) || 0;
       }
 
       const updatedGeree = await GereeModel.findByIdAndUpdate(
@@ -5781,26 +5778,27 @@ exports.syncResidentContracts = async function syncResidentContracts(
         ekhniiUldegdel:
           tootEntry.ekhniiUldegdel !== undefined
             ? parseFloat(tootEntry.ekhniiUldegdel)
-            : (isPrimaryUnit ? (parseFloat(req.body.ekhniiUldegdel) || parseFloat(orshinSuugch.ekhniiUldegdel) || 0) : 0),
+            : parseFloat(req.body.ekhniiUldegdel) || 0,
         umnukhZaalt:
           tootEntry.tsahilgaaniiZaalt !== undefined
             ? parseFloat(tootEntry.tsahilgaaniiZaalt)
-            : (isPrimaryUnit ? (parseFloat(req.body.tsahilgaaniiZaalt) || parseFloat(orshinSuugch.tsahilgaaniiZaalt) || 0) : 0),
+            : orshinSuugch.tsahilgaaniiZaalt || 0,
         suuliinZaalt:
           tootEntry.tsahilgaaniiZaalt !== undefined
             ? parseFloat(tootEntry.tsahilgaaniiZaalt)
-            : (isPrimaryUnit ? (parseFloat(req.body.tsahilgaaniiZaalt) || parseFloat(orshinSuugch.tsahilgaaniiZaalt) || 0) : 0),
+            : orshinSuugch.tsahilgaaniiZaalt || 0,
         zaaltTog: 0,
         zaaltUs: 0,
         zardluud: zardluudArray,
         khonogoorBodokhEsekh:
           tootEntry.khonogoorBodokhEsekh !== undefined
             ? tootEntry.khonogoorBodokhEsekh
-            : (isPrimaryUnit ? (req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true" || orshinSuugch.khonogoorBodokhEsekh || false) : false),
+            : req.body.khonogoorBodokhEsekh === true ||
+            req.body.khonogoorBodokhEsekh === "true",
         bodokhKhonog:
           tootEntry.bodokhKhonog !== undefined
             ? Number(tootEntry.bodokhKhonog)
-            : (isPrimaryUnit ? (Number(req.body.bodokhKhonog) || Number(orshinSuugch.bodokhKhonog) || 0) : 0),
+            : Number(req.body.bodokhKhonog) || 0,
         segmentuud: [],
         khungulultuud: [],
         nemeltTootnuud: currentAuData,

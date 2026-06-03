@@ -930,16 +930,15 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
             }
           }
 
-          const primaryUnitSyncData = {};
           if (req.body.ekhniiUldegdel !== undefined && result.baiguullagiinId && result.baiguullagiinId.toString() === orgId) {
-            primaryUnitSyncData.ekhniiUldegdel = parseFloat(req.body.ekhniiUldegdel) || 0;
+            syncData.ekhniiUldegdel = parseFloat(req.body.ekhniiUldegdel) || 0;
           }
 
           if (req.body.khonogoorBodokhEsekh !== undefined) {
-            primaryUnitSyncData.khonogoorBodokhEsekh = req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true";
+            syncData.khonogoorBodokhEsekh = req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true";
           }
           if (req.body.bodokhKhonog !== undefined) {
-            primaryUnitSyncData.bodokhKhonog = Number(req.body.bodokhKhonog) || 0;
+            syncData.bodokhKhonog = Number(req.body.bodokhKhonog) || 0;
           }
 
           // Use shared service to sync contracts for all units (create/reactivate/update)
@@ -979,17 +978,6 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
             await GereeModel.updateMany(
               { khariltsagchId: result._id.toString() },
               { $set: syncData }
-            );
-          }
-
-          if (Object.keys(primaryUnitSyncData).length > 0) {
-            await GereeModel.updateMany(
-              {
-                khariltsagchId: result._id.toString(),
-                toot: result.toot,
-                barilgiinId: result.barilgiinId
-              },
-              { $set: primaryUnitSyncData }
             );
           }
 
