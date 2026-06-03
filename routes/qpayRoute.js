@@ -2284,10 +2284,11 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
         }
 
         let invoicePaidAmount = 0;
+        let geree = null;
 
         // Create bank payment record for each invoice
         try {
-          const geree = await Geree(kholbolt)
+          geree = await Geree(kholbolt)
             .findById(nekhemjlekh.gereeniiId)
             .lean();
 
@@ -2655,6 +2656,56 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
               paymentId: updatedInvoice.qpayPaymentId,
             },
           );
+
+          // Notify resident and admin panel
+          try {
+            const Medegdel = require("../models/medegdel");
+            if (geree?.orshinSuugchId) {
+              ioNekh.emit(`orshinSuugch${geree.orshinSuugchId}`, {
+                title: "Төлбөр амжилттай",
+                message: `Таны ${invoicePaidAmount.toLocaleString()}₮-ийн төлөлт амжилттай бүртгэгдлээ.`,
+                turul: "app",
+                baiguullagiinId,
+              });
+            }
+            ioNekh.emit("baiguullagiin" + baiguullagiinId, {
+              type: "qpayPayment",
+              data: {
+                toot: geree?.toot || updatedInvoice.toot || "",
+                ner: `${geree?.ovog || ""} ${geree?.ner || ""}`.trim() || "Оршин суугч",
+                amount: invoicePaidAmount,
+                baiguullagiinId,
+                barilgiinId: geree?.barilgiinId || updatedInvoice.barilgiinId || "",
+                gereeniiDugaar: geree?.gereeniiDugaar || updatedInvoice.gereeniiDugaar || "",
+              },
+            });
+            try {
+              const MedegdelModel = Medegdel(kholbolt);
+              const m = new MedegdelModel({
+                baiguullagiinId,
+                barilgiinId: geree?.barilgiinId || updatedInvoice.barilgiinId || "",
+                title: "QPay төлөлт",
+                message: `${geree?.toot || updatedInvoice.gereeniiDugaar || ""} тоот, ${geree?.ner || "Оршин суугч"} QPay-ээр ${invoicePaidAmount.toLocaleString()}₮ төллөө.`,
+                orshinSuugchId: geree?.orshinSuugchId || updatedInvoice.orshinSuugchId || "",
+                orshinSuugchNer: `${geree?.ovog || ""} ${geree?.ner || ""}`.trim() || "",
+                orshinSuugchUtas: (Array.isArray(geree?.utas) ? geree?.utas[0] : geree?.utas) || "",
+                gereeniiDugaar: geree?.gereeniiDugaar || updatedInvoice.gereeniiDugaar || "",
+                kharsanEsekh: false,
+                status: "pending",
+                turul: "medegdel",
+                ognoo: new Date(),
+              });
+              await m.save();
+              ioNekh.emit("baiguullagiin" + baiguullagiinId, {
+                type: "medegdelNew",
+                data: m.toObject ? m.toObject() : m,
+              });
+            } catch (medErr) {
+              console.error("⚠️ [QPAY MULTI CALLBACK] Failed to create web notification:", medErr.message);
+            }
+          } catch (notifErr) {
+            console.error("⚠️ [QPAY MULTI CALLBACK] Failed to send notifications:", notifErr.message);
+          }
         }
       } catch (invoiceErr) {
         console.error(
