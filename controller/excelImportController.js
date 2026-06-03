@@ -1200,18 +1200,34 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           const existingOrshinSuugch = await OrshinSuugch(
             db.erunkhiiKholbolt,
           ).findOne({
-            toot: userData.toot.trim(),
-            davkhar: userData.davkhar.trim(),
-            orts: userData.orts ? userData.orts.trim() : "",
             baiguullagiinId: baiguullaga._id,
+            $or: [
+              {
+                toot: userData.toot.trim(),
+                davkhar: userData.davkhar.trim(),
+                orts: userData.orts ? userData.orts.trim() : "",
+              },
+              {
+                toots: {
+                  $elemMatch: {
+                    toot: userData.toot.trim(),
+                    davkhar: userData.davkhar.trim(),
+                    orts: userData.orts ? userData.orts.trim() : "",
+                  }
+                }
+              }
+            ]
           });
 
           if (existingOrshinSuugch) {
-            if (userData.khonogoorBodokhEsekh !== undefined) {
-              existingOrshinSuugch.khonogoorBodokhEsekh = userData.khonogoorBodokhEsekh;
-            }
-            if (userData.bodokhKhonog !== undefined) {
-              existingOrshinSuugch.bodokhKhonog = userData.bodokhKhonog;
+            const isPrimaryUnit = String(userData.toot).trim() === String(existingOrshinSuugch.toot || "").trim();
+            if (isPrimaryUnit) {
+              if (userData.khonogoorBodokhEsekh !== undefined) {
+                existingOrshinSuugch.khonogoorBodokhEsekh = userData.khonogoorBodokhEsekh;
+              }
+              if (userData.bodokhKhonog !== undefined) {
+                existingOrshinSuugch.bodokhKhonog = userData.bodokhKhonog;
+              }
             }
 
             // Sync specifically the matching unit in toots array
@@ -1267,6 +1283,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                 const affectedGerees = await GereeModel.find({
                   orshinSuugchId: existingOrshinSuugch._id.toString(),
                   baiguullagiinId: String(baiguullaga._id),
+                  toot: userData.toot.trim(),
                   tuluv: "Идэвхтэй",
                 }).select("_id");
 
@@ -1765,16 +1782,18 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           }
         }
 
-        // Save opening balance to resident (standardized)
-        if (userData.ekhniiUldegdel) {
-          orshinSuugch.ekhniiUldegdel = Number(userData.ekhniiUldegdel) || 0;
-        }
-
-        if (userData.khonogoorBodokhEsekh !== undefined) {
-          orshinSuugch.khonogoorBodokhEsekh = userData.khonogoorBodokhEsekh;
-        }
-        if (userData.bodokhKhonog !== undefined) {
-          orshinSuugch.bodokhKhonog = userData.bodokhKhonog;
+        // Save opening balance to resident (standardized) - ONLY if primary unit
+        const isPrimaryUnit = !existingUser || String(userData.toot).trim() === String(orshinSuugch.toot || "").trim();
+        if (isPrimaryUnit) {
+          if (userData.ekhniiUldegdel !== undefined) {
+            orshinSuugch.ekhniiUldegdel = Number(userData.ekhniiUldegdel) || 0;
+          }
+          if (userData.khonogoorBodokhEsekh !== undefined) {
+            orshinSuugch.khonogoorBodokhEsekh = userData.khonogoorBodokhEsekh;
+          }
+          if (userData.bodokhKhonog !== undefined) {
+            orshinSuugch.bodokhKhonog = userData.bodokhKhonog;
+          }
         }
         await orshinSuugch.save();
 
@@ -1838,7 +1857,16 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             (t) => t.source === "OWN_ORG" && t.baiguullagiinId && t.barilgiinId,
           );
 
+          const currentTootRaw = userData.toot.trim();
+          const currentTootList = currentTootRaw
+            .split(",")
+            .map((t) => t.trim())
+            .filter((t) => t && t.length > 0);
+
           for (const tootEntry of ownOrgToots) {
+            if (!currentTootList.includes(tootEntry.toot)) {
+              continue;
+            }
             try {
               // Check if geree already exists for this specific toot (user + barilgiinId + toot combination)
               const GereeModel = Geree(tukhainBaaziinKholbolt);
@@ -1960,7 +1988,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                 niitTulbur: niitTulbur,
                 toot: tootEntry.toot,
                 davkhar: tootEntry.davkhar || "",
-                ekhniiUldegdel: Number(userData.ekhniiUldegdel) || 0,
+                ekhniiUldegdel: Number(tootEntry.ekhniiUldegdel) || 0,
                 bairNer: targetBarilgaForToot.ner || "",
                 sukhBairshil: `${duuregNer}, ${horooNer}, ${sohNer}`,
                 duureg: duuregNer,
@@ -1972,8 +2000,8 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                 temdeglel: `${userData.tailbar || "Excel файлаас автоматаар үүссэн гэрээ"} (Тоот: ${tootEntry.toot})`,
                 tailbar: userData.tailbar || tailbarFromZardluud || "",
                 actOgnoo: new Date(),
-                khonogoorBodokhEsekh: userData.khonogoorBodokhEsekh || false,
-                bodokhKhonog: userData.bodokhKhonog || 0,
+                khonogoorBodokhEsekh: tootEntry.khonogoorBodokhEsekh || false,
+                bodokhKhonog: tootEntry.bodokhKhonog || 0,
                 // ekhniiUldegdel removed
                 umnukhZaalt: userData.tsahilgaaniiZaalt || userData.initialMeterReading || 0,
                 suuliinZaalt: userData.tsahilgaaniiZaalt || userData.initialMeterReading || 0,

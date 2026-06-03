@@ -945,15 +945,16 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             }
           }
 
+          const primaryUnitSyncData = {};
           if (req.body.ekhniiUldegdel !== undefined && result.baiguullagiinId && result.baiguullagiinId.toString() === orgId) {
-            syncData.ekhniiUldegdel = parseFloat(req.body.ekhniiUldegdel) || 0;
+            primaryUnitSyncData.ekhniiUldegdel = parseFloat(req.body.ekhniiUldegdel) || 0;
           }
 
           if (req.body.khonogoorBodokhEsekh !== undefined) {
-            syncData.khonogoorBodokhEsekh = req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true";
+            primaryUnitSyncData.khonogoorBodokhEsekh = req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true";
           }
           if (req.body.bodokhKhonog !== undefined) {
-            syncData.bodokhKhonog = Number(req.body.bodokhKhonog) || 0;
+            primaryUnitSyncData.bodokhKhonog = Number(req.body.bodokhKhonog) || 0;
           }
 
           // Use shared service to sync contracts for all units (create/reactivate/update)
@@ -993,6 +994,18 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             await GereeModel.updateMany(
               { orshinSuugchId: result._id.toString() },
               { $set: syncData }
+            );
+          }
+
+          // 1b. Update primary unit's specific fields if modified at top level
+          if (Object.keys(primaryUnitSyncData).length > 0) {
+            await GereeModel.updateMany(
+              {
+                orshinSuugchId: result._id.toString(),
+                toot: result.toot,
+                barilgiinId: result.barilgiinId
+              },
+              { $set: primaryUnitSyncData }
             );
           }
 

@@ -596,7 +596,7 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
               tukhainBaaziinKholbolt,
               req
             );
-            
+
             // Fetch the newly created active contract to pass down to subsequent hooks (like invoice/guest settings if needed)
             const GereeModel = Geree(tukhainBaaziinKholbolt);
             var geree = await GereeModel.findOne({
@@ -606,93 +606,93 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
             });
           }
 
-            // --- AUTO CREATE GUEST SETTINGS (khariltsagchMashin) ---
-            // Moved OUTSIDE if(!geree) to ensure all new residents get settings
-            try {
-              const buildingSettings =
-                targetBarilga?.tokhirgoo?.zochinTokhirgoo;
-              const orgSettings = baiguullaga?.tokhirgoo?.zochinTokhirgoo;
+          // --- AUTO CREATE GUEST SETTINGS (khariltsagchMashin) ---
+          // Moved OUTSIDE if(!geree) to ensure all new residents get settings
+          try {
+            const buildingSettings =
+              targetBarilga?.tokhirgoo?.zochinTokhirgoo;
+            const orgSettings = baiguullaga?.tokhirgoo?.zochinTokhirgoo;
 
-              const defaultSettings =
-                buildingSettings &&
-                  buildingSettings.zochinUrikhEsekh !== undefined
-                  ? buildingSettings
-                  : orgSettings;
+            const defaultSettings =
+              buildingSettings &&
+                buildingSettings.zochinUrikhEsekh !== undefined
+                ? buildingSettings
+                : orgSettings;
 
-              console.log(
-                "🔍 [AUTO-ZOCHIN] Checking defaults for:",
-                result.ner,
-              );
-              console.log(
-                "🔍 [AUTO-ZOCHIN] Final Defaults Found:",
-                !!defaultSettings,
-              );
+            console.log(
+              "🔍 [AUTO-ZOCHIN] Checking defaults for:",
+              result.ner,
+            );
+            console.log(
+              "🔍 [AUTO-ZOCHIN] Final Defaults Found:",
+              !!defaultSettings,
+            );
 
-              if (defaultSettings) {
-                const Mashin = require("../models/mashin");
+            if (defaultSettings) {
+              const Mashin = require("../models/mashin");
 
-                // Check if settings already exist in organization database
-                const existingSettings = await Mashin(
-                  tukhainBaaziinKholbolt,
-                ).findOne({
+              // Check if settings already exist in organization database
+              const existingSettings = await Mashin(
+                tukhainBaaziinKholbolt,
+              ).findOne({
+                ezemshigchiinId: result._id.toString(),
+                zochinTurul: "Оршин суугч",
+              });
+
+              if (!existingSettings) {
+                console.log(
+                  `📋 [AUTO-ZOCHIN] Creating Mashin record for ${result.ner}. Quota: ${defaultSettings.zochinErkhiinToo}`,
+                );
+
+                const MashinModel = Mashin(tukhainBaaziinKholbolt);
+                const newMashin = new MashinModel({
                   ezemshigchiinId: result._id.toString(),
+                  ezemshigchiinNer: result.ner,
+                  ezemshigchiinUtas: result.utas,
+                  baiguullagiinId: baiguullagiinId.toString(),
+                  barilgiinId: barilgiinId.toString(),
+                  dugaar:
+                    req.body.mashiniiDugaar ||
+                    req.body.dugaar ||
+                    "БҮРТГЭЛГҮЙ",
+                  ezenToot: result.toot || req.body.toot || "",
+                  zochinUrikhEsekh:
+                    defaultSettings.zochinUrikhEsekh !== false,
                   zochinTurul: "Оршин суугч",
+                  zochinErkhiinToo: defaultSettings.zochinErkhiinToo || 0,
+                  zochinTusBurUneguiMinut:
+                    defaultSettings.zochinTusBurUneguiMinut || 0,
+                  zochinNiitUneguiMinut:
+                    defaultSettings.zochinNiitUneguiMinut || 0,
+                  zochinTailbar: defaultSettings.zochinTailbar || "",
+                  davtamjiinTurul:
+                    defaultSettings.davtamjiinTurul || "saraar",
+                  davtamjUtga: defaultSettings.davtamjUtga,
                 });
 
-                if (!existingSettings) {
-                  console.log(
-                    `📋 [AUTO-ZOCHIN] Creating Mashin record for ${result.ner}. Quota: ${defaultSettings.zochinErkhiinToo}`,
-                  );
-
-                  const MashinModel = Mashin(tukhainBaaziinKholbolt);
-                  const newMashin = new MashinModel({
-                    ezemshigchiinId: result._id.toString(),
-                    ezemshigchiinNer: result.ner,
-                    ezemshigchiinUtas: result.utas,
-                    baiguullagiinId: baiguullagiinId.toString(),
-                    barilgiinId: barilgiinId.toString(),
-                    dugaar:
-                      req.body.mashiniiDugaar ||
-                      req.body.dugaar ||
-                      "БҮРТГЭЛГҮЙ",
-                    ezenToot: result.toot || req.body.toot || "",
-                    zochinUrikhEsekh:
-                      defaultSettings.zochinUrikhEsekh !== false,
-                    zochinTurul: "Оршин суугч",
-                    zochinErkhiinToo: defaultSettings.zochinErkhiinToo || 0,
-                    zochinTusBurUneguiMinut:
-                      defaultSettings.zochinTusBurUneguiMinut || 0,
-                    zochinNiitUneguiMinut:
-                      defaultSettings.zochinNiitUneguiMinut || 0,
-                    zochinTailbar: defaultSettings.zochinTailbar || "",
-                    davtamjiinTurul:
-                      defaultSettings.davtamjiinTurul || "saraar",
-                    davtamjUtga: defaultSettings.davtamjUtga,
-                  });
-
-                  await newMashin.save();
-                  console.log(`✅ [AUTO-ZOCHIN] Mashin record created.`);
-                }
+                await newMashin.save();
+                console.log(`✅ [AUTO-ZOCHIN] Mashin record created.`);
               }
-            } catch (zochinErr) {
-              console.error("❌ [AUTO-ZOCHIN] Error:", zochinErr.message);
             }
+          } catch (zochinErr) {
+            console.error("❌ [AUTO-ZOCHIN] Error:", zochinErr.message);
+          }
 
-            // Always attempt to create initial invoice
-            if (geree) {
-              const invoiceResult = await gereeNeesNekhemjlekhUusgekh(
-                geree,
-                baiguullaga,
-                tukhainBaaziinKholbolt,
-                "automataar",
-                true,
+          // Always attempt to create initial invoice
+          if (geree) {
+            const invoiceResult = await gereeNeesNekhemjlekhUusgekh(
+              geree,
+              baiguullaga,
+              tukhainBaaziinKholbolt,
+              "automataar",
+              true,
+            );
+            if (invoiceResult.success) {
+              console.log(
+                `✅ [AUTO-INVOICE] Initial invoice created for ${result.ner}`,
               );
-              if (invoiceResult.success) {
-                console.log(
-                  `✅ [AUTO-INVOICE] Initial invoice created for ${result.ner}`,
-                );
-              }
             }
+          }
         }
       }
     } catch (autoErr) {
@@ -930,15 +930,16 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
             }
           }
 
+          const primaryUnitSyncData = {};
           if (req.body.ekhniiUldegdel !== undefined && result.baiguullagiinId && result.baiguullagiinId.toString() === orgId) {
-            syncData.ekhniiUldegdel = parseFloat(req.body.ekhniiUldegdel) || 0;
+            primaryUnitSyncData.ekhniiUldegdel = parseFloat(req.body.ekhniiUldegdel) || 0;
           }
 
           if (req.body.khonogoorBodokhEsekh !== undefined) {
-            syncData.khonogoorBodokhEsekh = req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true";
+            primaryUnitSyncData.khonogoorBodokhEsekh = req.body.khonogoorBodokhEsekh === true || req.body.khonogoorBodokhEsekh === "true";
           }
           if (req.body.bodokhKhonog !== undefined) {
-            syncData.bodokhKhonog = Number(req.body.bodokhKhonog) || 0;
+            primaryUnitSyncData.bodokhKhonog = Number(req.body.bodokhKhonog) || 0;
           }
 
           // Use shared service to sync contracts for all units (create/reactivate/update)
@@ -978,6 +979,17 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
             await GereeModel.updateMany(
               { khariltsagchId: result._id.toString() },
               { $set: syncData }
+            );
+          }
+
+          if (Object.keys(primaryUnitSyncData).length > 0) {
+            await GereeModel.updateMany(
+              {
+                khariltsagchId: result._id.toString(),
+                toot: result.toot,
+                barilgiinId: result.barilgiinId
+              },
+              { $set: primaryUnitSyncData }
             );
           }
 
