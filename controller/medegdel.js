@@ -824,7 +824,7 @@ exports.medegdelUserReply = asyncHandler(async (req, res, next) => {
 // Admin reply (web): create a reply in the thread and notify user (like app chat). At least one of message, zurag, or voiceUrl required.
 exports.medegdelAdminReply = asyncHandler(async (req, res, next) => {
   try {
-    const { parentId, message, zurag, voiceUrl } = req.body;
+    const { parentId, message, zurag, voiceUrl, ajiltanId } = req.body;
     const baiguullagiinId = req.body.baiguullagiinId;
     const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
     const hasMessage = typeof message === "string" && message.trim().length > 0;
@@ -919,7 +919,7 @@ exports.medegdelAdminReply = asyncHandler(async (req, res, next) => {
       }
     }
     if (io && root.baiguullagiinId) {
-      io.emit("baiguullagiin" + root.baiguullagiinId, { type: "medegdelAdminReply", data: replyObj });
+      io.emit("baiguullagiin" + root.baiguullagiinId, { type: "medegdelAdminReply", data: replyObj, sentBy: ajiltanId || null });
     }
 
     res.json({
