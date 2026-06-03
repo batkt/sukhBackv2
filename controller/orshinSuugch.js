@@ -1,5 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const OrshinSuugch = require("../models/orshinSuugch");
+const Khariltsagch = require("../models/khariltsagch");
 const Baiguullaga = require("../models/baiguullaga");
 const NevtreltiinTuukh = require("../models/nevtreltiinTuukh");
 const MsgTuukh = require("../models/msgTuukh");
@@ -175,7 +176,7 @@ exports.updateDavkharWithToot = async function updateDavkharWithToot(
     }
     const BaiguullagaModel = Baiguullaga(db.erunkhiiKholbolt);
     const freshBaiguullaga = await BaiguullagaModel.findById(baiguullaga._id);
-    
+
     if (!freshBaiguullaga) {
       console.error(`❌ [BURTGEY] Could not find baiguullaga ${baiguullaga._id} to update davkhar.`);
       return;
@@ -194,7 +195,7 @@ exports.updateDavkharWithToot = async function updateDavkharWithToot(
 
     const davkharStr = String(davkhar || "").trim();
     const ortsStr = String(orts || "1").trim();
-    
+
     // Ensure davkhar exists in davkharArray
     if (!davkharArray.includes(davkharStr)) {
       return;
@@ -202,7 +203,7 @@ exports.updateDavkharWithToot = async function updateDavkharWithToot(
 
     // Build the floor key: 'orts::davkhar'
     const floorKey = `${ortsStr}::${davkharStr}`;
-    
+
     if (!davkhariinToonuud[floorKey]) {
       davkhariinToonuud[floorKey] = [];
     }
@@ -210,7 +211,7 @@ exports.updateDavkharWithToot = async function updateDavkharWithToot(
     // Get existing toot list - handle both formats: ["101,102"] and ["101", "102"]
     const currentTootArray = davkhariinToonuud[floorKey];
     let tootList = [];
-    
+
     if (Array.isArray(currentTootArray) && currentTootArray.length > 0) {
       if (typeof currentTootArray[0] === "string" && currentTootArray[0].includes(",")) {
         // Comma-separated format
@@ -271,7 +272,7 @@ exports.updateDavkharWithToot = async function updateDavkharWithToot(
     // NOTE: liftShalgaya.choloolugdokhDavkhar should be configured manually by admin
     // It represents floors EXEMPT from lift charges, NOT all floors in the building
     // So we do NOT auto-calculate it when registering users
-  } catch (error) {}
+  } catch (error) { }
 };
 
 // Helper function to calculate liftShalgaya based on davkhar entries
@@ -338,14 +339,14 @@ exports.calculateLiftShalgaya = async function calculateLiftShalgaya(
       }
     } else {
     }
-  } catch (error) {}
+  } catch (error) { }
 };
 
 const activeProcessings = new Set();
 
 exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
   const phoneNumber = req.body.utas ? String(req.body.utas).trim() : null;
-  
+
   if (phoneNumber && activeProcessings.has(phoneNumber)) {
     return res.status(429).json({
       success: false,
@@ -416,7 +417,7 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
         // User doesn't exist in Wallet API, register them
         // Use provided email or empty string (frontend will handle email)
         const regEmail = email || "";
-        
+
 
         walletUserInfo = await walletApiService.registerUser(
           phoneNumber,
@@ -458,9 +459,9 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
       });
     }
 
-   
+
     if (!baiguullaga && req.body.bairniiNer) {
-      
+
       const allBaiguullaguud = await Baiguullaga(db.erunkhiiKholbolt).find({});
       for (const org of allBaiguullaguud) {
         const matchingBarilga = org.barilguud?.find(
@@ -478,9 +479,9 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
       }
     }
 
-    
+
     if (!baiguullaga && (req.body.duureg || req.body.horoo || req.body.soh)) {
-    
+
       const allBaiguullaguud = await Baiguullaga(db.erunkhiiKholbolt).find({});
       for (const org of allBaiguullaguud) {
         for (const barilga of org.barilguud || []) {
@@ -489,12 +490,12 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
             !req.body.duureg ||
             !tokhirgoo.duuregNer ||
             String(tokhirgoo.duuregNer).trim() ===
-              String(req.body.duureg).trim();
+            String(req.body.duureg).trim();
           const matchesHoroo =
             !req.body.horoo ||
             !tokhirgoo.horoo?.ner ||
             String(tokhirgoo.horoo.ner).trim() ===
-              String(req.body.horoo).trim();
+            String(req.body.horoo).trim();
           const matchesSoh =
             !req.body.soh ||
             !tokhirgoo.sohNer ||
@@ -521,13 +522,13 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
       );
     }
 
-  
+
     let barilgiinId =
       (req.body.barilgiinId && req.body.barilgiinId.toString().trim()) ||
       (req.body.barilgaId && req.body.barilgaId.toString().trim()) ||
       null;
 
-   
+
     if (barilgiinId && baiguullaga) {
       const providedBarilga = baiguullaga.barilguud?.find(
         (b) => String(b._id) === String(barilgiinId),
@@ -823,7 +824,7 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
       orshinSuugch = new OrshinSuugch(db.erunkhiiKholbolt)(userData);
     }
 
-   
+
     if (orshinSuugch.barilgiinId && barilgiinId) {
       const existingBarilgiinId = String(orshinSuugch.barilgiinId);
       const newBarilgiinId = String(barilgiinId);
@@ -857,18 +858,18 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
         }
         const sohNer = targetBarilga.tokhirgoo?.sohNer || req.body.soh || "";
 
-     
-        const unitsToProcess = Array.isArray(req.body.units) && req.body.units.length > 0 
-          ? req.body.units 
+
+        const unitsToProcess = Array.isArray(req.body.units) && req.body.units.length > 0
+          ? req.body.units
           : [{
-              toot: req.body.toot,
-              davkhar: determinedDavkhar || req.body.davkhar,
-              orts: req.body.orts || "1",
-              ekhniiUldegdel: req.body.ekhniiUldegdel,
-              tsahilgaaniiZaalt: req.body.tsahilgaaniiZaalt,
-              khonogoorBodokhEsekh: req.body.khonogoorBodokhEsekh,
-              bodokhKhonog: req.body.bodokhKhonog,
-            }];
+            toot: req.body.toot,
+            davkhar: determinedDavkhar || req.body.davkhar,
+            orts: req.body.orts || "1",
+            ekhniiUldegdel: req.body.ekhniiUldegdel,
+            tsahilgaaniiZaalt: req.body.tsahilgaaniiZaalt,
+            khonogoorBodokhEsekh: req.body.khonogoorBodokhEsekh,
+            bodokhKhonog: req.body.bodokhKhonog,
+          }];
 
         for (const unit of unitsToProcess) {
           if (!unit.toot) continue;
@@ -1161,7 +1162,7 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
           }
         }
       }
-    } catch (zochinErr) {}
+    } catch (zochinErr) { }
 
     try {
       if (tukhainBaaziinKholbolt && baiguullaga) {
@@ -1464,14 +1465,14 @@ exports.tootShalgaya = asyncHandler(async (req, res, next) => {
     const inputOrts = orts ? String(orts).trim() : null;
 
     // 1. Check primary address
-    const primaryMatch = 
+    const primaryMatch =
       String(orshinSuugch.toot || "").trim() === inputToot &&
       (!inputOrts || String(orshinSuugch.orts || "").trim() === inputOrts);
 
     // 2. Check toots array
-    const secondaryMatch = 
-      Array.isArray(orshinSuugch.toots) && 
-      orshinSuugch.toots.some(t => 
+    const secondaryMatch =
+      Array.isArray(orshinSuugch.toots) &&
+      orshinSuugch.toots.some(t =>
         String(t.toot || "").trim() === inputToot &&
         (!inputOrts || String(t.orts || "").trim() === inputOrts)
       );
@@ -1553,7 +1554,43 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
     ]);
 
     if (!orshinSuugch) {
-      throw new aldaa("Хэрэглэгч олдсонгүй!");
+      // Fallback: try Khariltsagch collection
+      const khariltsagch = await Khariltsagch(db.erunkhiiKholbolt)
+        .findOne({ utas: phoneNumber })
+        .select("+nuutsUg");
+
+      if (!khariltsagch) {
+        throw new aldaa("Хэрэглэгч олдсонгүй!");
+      }
+      if (!khariltsagch.nuutsUg) {
+        throw new aldaa("Нууц үг тохируулаагүй байна. Эхлээд бүртгүүлнэ үү.");
+      }
+      const khariltsagchPwOk = await khariltsagch.passwordShalgaya(providedPassword);
+      if (!khariltsagchPwOk) {
+        throw new aldaa("Нууц үг буруу байна!");
+      }
+
+      khariltsagch.currentSessionId = String(Date.now() + Math.random().toString(36).substring(2, 7));
+      await khariltsagch.save();
+
+      const khariltsagchToken = khariltsagch.tokenUusgeye();
+      const khariltsagchResponse = {
+        result: khariltsagch,
+        success: true,
+        token: khariltsagchToken,
+        isKhariltsagch: true,
+      };
+
+      if (khariltsagch.baiguullagiinId) {
+        const matchingKholbolt = db.kholboltuud.find(
+          (k) => k.baiguullagiinId === khariltsagch.baiguullagiinId.toString(),
+        );
+        if (matchingKholbolt) {
+          khariltsagchResponse.tukhainBaaziinKholbolt = matchingKholbolt.kholboltNer;
+        }
+      }
+
+      return res.status(200).json(khariltsagchResponse);
     }
 
     let walletUserId = walletUserInfo?.userId || null;
@@ -1561,7 +1598,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
     if (orshinSuugch && !walletUserId) {
 
       const emailToUse = orshinSuugch.mail || "";
-      
+
       try {
         const newWalletUser = await walletApiService.registerUser(phoneNumber, emailToUse);
         if (newWalletUser && newWalletUser.userId) {
@@ -1699,7 +1736,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
         if (baiguullaga && baiguullaga.ner && !userData.baiguullagiinNer) {
           userData.baiguullagiinNer = baiguullaga.ner;
         }
-      } catch (err) {}
+      } catch (err) { }
     }
 
     // Handle barilgiinId - check both barilgiinId and bairId (frontend might send either)
@@ -1787,78 +1824,57 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
         const davkharToValidate = (req.body.davkhar || "").trim();
         const ortsToValidate = (req.body.orts || "1").trim();
 
-        // Check if toot exists in davkhariinToonuud (available toots)
-        // Automatically determine orts and davkhar from toot
-        const davkhariinToonuud =
-          targetBarilga.tokhirgoo?.davkhariinToonuud || {};
+        // Check if toot exists across all unit maps: apartment, garage, storage
+        const mapsToSearch = [
+          { map: targetBarilga.tokhirgoo?.davkhariinToonuud || {}, turul: "Орон сууц" },
+          { map: targetBarilga.tokhirgoo?.davkhariinZogsoolnuud || {}, turul: "Гараж" },
+          { map: targetBarilga.tokhirgoo?.davkhariinAguulakhnuud || {}, turul: "Агуулах" },
+        ];
         let tootFound = false;
         let foundDavkhar = null;
         let foundOrts = null;
+        let foundTurul = "Орон сууц";
 
-        if (davkharToValidate) {
-          // If davkhar is provided, check specific floor
-          const floorKey = `${ortsToValidate}::${davkharToValidate}`;
-          const tootArray = davkhariinToonuud[floorKey];
-
-          if (tootArray && Array.isArray(tootArray) && tootArray.length > 0) {
-            let tootList = [];
-            if (
-              typeof tootArray[0] === "string" &&
-              tootArray[0].includes(",")
-            ) {
-              tootList = tootArray[0]
-                .split(",")
-                .map((t) => t.trim())
-                .filter((t) => t);
-            } else {
-              tootList = tootArray
-                .map((t) => String(t).trim())
-                .filter((t) => t);
+        const searchInMap = (map) => {
+          if (davkharToValidate) {
+            const floorKey = `${ortsToValidate}::${davkharToValidate}`;
+            const tootArray = map[floorKey];
+            if (tootArray && Array.isArray(tootArray) && tootArray.length > 0) {
+              let tootList = typeof tootArray[0] === "string" && tootArray[0].includes(",")
+                ? tootArray[0].split(",").map((t) => t.trim()).filter((t) => t)
+                : tootArray.map((t) => String(t).trim()).filter((t) => t);
+              if (tootList.includes(tootToValidate)) {
+                foundDavkhar = davkharToValidate;
+                foundOrts = ortsToValidate;
+                return true;
+              }
             }
-
-            if (tootList.includes(tootToValidate)) {
-              tootFound = true;
-              foundDavkhar = davkharToValidate;
-              foundOrts = ortsToValidate;
+          } else {
+            for (const [floorKey, tootArray] of Object.entries(map)) {
+              if (!floorKey.includes("::")) continue;
+              if (tootArray && Array.isArray(tootArray) && tootArray.length > 0) {
+                let tootList = typeof tootArray[0] === "string" && tootArray[0].includes(",")
+                  ? tootArray[0].split(",").map((t) => t.trim()).filter((t) => t)
+                  : tootArray.map((t) => String(t).trim()).filter((t) => t);
+                if (tootList.includes(tootToValidate)) {
+                  const parts = floorKey.split("::");
+                  if (parts.length === 2) {
+                    foundOrts = parts[0].trim();
+                    foundDavkhar = parts[1].trim();
+                  }
+                  return true;
+                }
+              }
             }
           }
-        } else {
-          // If davkhar not provided, search all floors
-          for (const [floorKey, tootArray] of Object.entries(
-            davkhariinToonuud,
-          )) {
-            // Skip invalid entries that don't have :: separator
-            if (!floorKey.includes("::")) {
-              continue;
-            }
+          return false;
+        };
 
-            if (tootArray && Array.isArray(tootArray) && tootArray.length > 0) {
-              let tootList = [];
-              if (
-                typeof tootArray[0] === "string" &&
-                tootArray[0].includes(",")
-              ) {
-                tootList = tootArray[0]
-                  .split(",")
-                  .map((t) => t.trim())
-                  .filter((t) => t);
-              } else {
-                tootList = tootArray
-                  .map((t) => String(t).trim())
-                  .filter((t) => t);
-              }
-
-              if (tootList.includes(tootToValidate)) {
-                tootFound = true;
-                // Extract orts and davkhar from floorKey (format: "orts::davkhar")
-                const parts = floorKey.split("::");
-                if (parts.length === 2) {
-                  foundOrts = parts[0].trim(); // orts (entrance)
-                  foundDavkhar = parts[1].trim(); // davkhar (floor)
-                }
-                break;
-              }
-            }
+        for (const { map, turul } of mapsToSearch) {
+          if (searchInMap(map)) {
+            tootFound = true;
+            foundTurul = turul;
+            break;
           }
         }
 
@@ -1879,6 +1895,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
         userData.newTootEntry = {
           toot: tootToValidate,
           source: "OWN_ORG",
+          turul: foundTurul,
           baiguullagiinId: req.body.baiguullagiinId,
           barilgiinId: ownOrgBarilgiinIdLogin, // Use the resolved barilgiinId (from barilgiinId or bairId)
           davkhar: finalDavkhar, // Auto-determined from toot
@@ -1989,7 +2006,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
         // Try to fetch bair name from Wallet API (optional, frontend should send it)
         try {
           // Note: We don't have a direct getBairById endpoint, so frontend should send bairName
-        } catch (error) {}
+        } catch (error) { }
       }
 
       if (walletBairName) {
@@ -2145,8 +2162,8 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
               const [billingByCustomer, billingList] = await Promise.all([
                 billingInfo.customerId
                   ? walletApiService
-                      .getBillingByCustomer(phoneNumber, billingInfo.customerId)
-                      .catch(() => null)
+                    .getBillingByCustomer(phoneNumber, billingInfo.customerId)
+                    .catch(() => null)
                   : null,
                 walletApiService.getBillingList(phoneNumber).catch(() => []),
               ]);
@@ -2163,7 +2180,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
                   billingInfo.billingId = matching.billingId;
                 }
               }
-            } catch (err) {}
+            } catch (err) { }
           }
 
           // Connect billing if needed
@@ -2177,14 +2194,14 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
           // Update primary user fields ONLY if they are not already set
           // This prevents overwriting the user's registration name with a bill name (e.g. from a relative's unit)
           if (billingInfo.customerName && !orshinSuugch.ner) {
-        
+
             const trimmedName = billingInfo.customerName.trim();
             const nameParts = trimmedName.split(/\s+/);
-            
+
             if (nameParts.length >= 2) {
-              
+
               orshinSuugch.ner = nameParts[nameParts.length - 1];
-             
+
               orshinSuugch.ovog = nameParts.slice(0, nameParts.length - 1).join(" ");
             } else if (trimmedName.includes('.')) {
               // Handle "Ч.Ганзориг" format
@@ -2204,7 +2221,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
 
           await orshinSuugch.save();
         }
-      } catch (billingError) {}
+      } catch (billingError) { }
     }
 
     // Create gerees for all OWN_ORG toots that don't have gerees yet
@@ -2214,10 +2231,10 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
       orshinSuugch.toots.length > 0
     ) {
       const ownOrgToots = orshinSuugch.toots.filter(
-        (t) => 
-          t.source === "OWN_ORG" && 
-          t.baiguullagiinId && 
-          t.barilgiinId && 
+        (t) =>
+          t.source === "OWN_ORG" &&
+          t.baiguullagiinId &&
+          t.barilgiinId &&
           String(t.baiguullagiinId) !== String(CENTRALIZED_ORG_ID),
       );
 
@@ -2476,8 +2493,8 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
               actOgnoo: new Date(),
               baritsaaniiUldegdel: 0,
               ekhniiUldegdel: tootEntry.ekhniiUldegdel ?? orshinSuugch.ekhniiUldegdel ?? 0,
-               khonogoorBodokhEsekh: tootEntry.khonogoorBodokhEsekh ?? orshinSuugch.khonogoorBodokhEsekh ?? false,
-               bodokhKhonog: tootEntry.bodokhKhonog ?? orshinSuugch.bodokhKhonog ?? 0,
+              khonogoorBodokhEsekh: tootEntry.khonogoorBodokhEsekh ?? orshinSuugch.khonogoorBodokhEsekh ?? false,
+              bodokhKhonog: tootEntry.bodokhKhonog ?? orshinSuugch.bodokhKhonog ?? 0,
               zardluud: zardluudArray,
               segmentuud: [],
               khungulultuud: [],
@@ -2503,8 +2520,8 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
         }
       }
     } else if (
-      orshinSuugch.baiguullagiinId && 
-      orshinSuugch.barilgiinId && 
+      orshinSuugch.baiguullagiinId &&
+      orshinSuugch.barilgiinId &&
       String(orshinSuugch.baiguullagiinId) !== String(CENTRALIZED_ORG_ID)
     ) {
       // Backward compatibility: if toots array is empty but old fields exist, create geree for primary toot
@@ -2670,7 +2687,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
                         "automataar",
                         true,
                       );
-                    } catch (invErr) {}
+                    } catch (invErr) { }
 
                     // Update davkhar with toot if provided
                     if (orshinSuugch.toot && orshinSuugch.davkhar) {
@@ -2786,7 +2803,7 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
         if (baiguullaga) {
           userData.baiguullagiinNer = baiguullaga.ner;
         }
-      } catch (error) {}
+      } catch (error) { }
     }
 
     // Handle barilgiinId - check both barilgiinId and bairId (frontend might send either)
@@ -3147,10 +3164,10 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
       orshinSuugch.toots.length > 0
     ) {
       const ownOrgToots = orshinSuugch.toots.filter(
-        (t) => 
-          t.source === "OWN_ORG" && 
-          t.baiguullagiinId && 
-          t.barilgiinId && 
+        (t) =>
+          t.source === "OWN_ORG" &&
+          t.baiguullagiinId &&
+          t.barilgiinId &&
           String(t.baiguullagiinId) !== String(CENTRALIZED_ORG_ID),
       );
 
@@ -3416,8 +3433,8 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
         }
       }
     } else if (
-      orshinSuugch.baiguullagiinId && 
-      orshinSuugch.barilgiinId && 
+      orshinSuugch.baiguullagiinId &&
+      orshinSuugch.barilgiinId &&
       String(orshinSuugch.baiguullagiinId) !== String(CENTRALIZED_ORG_ID)
     ) {
       // Backward compatibility: if toots array is empty but old fields exist, create geree for primary toot
@@ -3624,7 +3641,7 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
                         billingList[0].billingName || billingInfo.billingName;
                     }
                   }
-                } catch (listError) {}
+                } catch (listError) { }
               }
             } catch (customerBillingError) {
               // Try billing list as fallback
@@ -3642,7 +3659,7 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
                       matchingBilling.billingName || billingInfo.billingName;
                   }
                 }
-              } catch (listError) {}
+              } catch (listError) { }
             }
           }
 
@@ -3690,7 +3707,7 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
             // Strict name extraction: Mongolia convention is [Patronymic/Surname] [Given Name]
             const trimmedName = billingInfo.customerName.trim();
             const nameParts = trimmedName.split(/\s+/);
-            
+
             if (nameParts.length >= 2) {
               updateData.ner = nameParts[nameParts.length - 1];
               updateData.ovog = nameParts.slice(0, nameParts.length - 1).join(" ");
@@ -3794,7 +3811,7 @@ exports.walletBillingHavakh = asyncHandler(async (req, res, next) => {
     const requestedCustomerCode = req.body.customerCode || req.body.walletCustomerCode || null;
 
     let billingInfo = null;
-    
+
     // 1. Get Billing by Address
     const billingResponse = await walletApiService.getBillingByAddress(
       phoneNumber,
@@ -3828,7 +3845,7 @@ exports.walletBillingHavakh = asyncHandler(async (req, res, next) => {
           billingInfo.billerCode = byCustomer.billerCode || billingInfo.billerCode;
           billingInfo.billingName = byCustomer.billingName || billingInfo.billingName;
         }
-      } catch (err) {}
+      } catch (err) { }
     }
 
     // 4. Save/Connect Billing
@@ -3841,7 +3858,7 @@ exports.walletBillingHavakh = asyncHandler(async (req, res, next) => {
       };
       saveResult = await walletApiService.saveBilling(phoneNumber, billingData);
       billingConnected = true;
-      
+
       if (saveResult) {
         billingInfo.billingId = saveResult.billingId || billingInfo.billingId;
         billingInfo.billerCode = saveResult.billerCode || billingInfo.billerCode;
@@ -3859,7 +3876,7 @@ exports.walletBillingHavakh = asyncHandler(async (req, res, next) => {
       // Strict name extraction: Mongolia convention is [Patronymic/Surname] [Given Name]
       const trimmedName = billingInfo.customerName.trim();
       const nameParts = trimmedName.split(/\s+/);
-      
+
       if (nameParts.length >= 2) {
         updateData.ner = nameParts[nameParts.length - 1];
         updateData.ovog = nameParts.slice(0, nameParts.length - 1).join(" ");
@@ -3882,7 +3899,7 @@ exports.walletBillingHavakh = asyncHandler(async (req, res, next) => {
     try {
       let walletBairName = (billingInfo.customerAddress || "").trim();
       walletBairName = walletBairName.replace(/,\s*\d+\s*$/, "").replace(/\s+\d+\s*$/, "").trim();
-      
+
       if (walletBairName && bairId) {
         const barilgaResult = await findOrCreateBarilgaFromWallet(bairId, walletBairName);
         // Set centralized org as primary address ONLY if user doesn't have one or is already centralized
@@ -3891,7 +3908,7 @@ exports.walletBillingHavakh = asyncHandler(async (req, res, next) => {
           updateData.barilgiinId = barilgaResult.barilgiinId;
         }
       }
-    } catch (bErr) {}
+    } catch (bErr) { }
 
     // Sync toots array
     if (!orshinSuugch.toots) orshinSuugch.toots = [];
@@ -3913,9 +3930,9 @@ exports.walletBillingHavakh = asyncHandler(async (req, res, next) => {
       createdAt: new Date(),
     };
 
-    const existingIndex = orshinSuugch.toots.findIndex(t => 
-       t.source === "WALLET_API" && t.walletBairId === bairId && t.walletDoorNo === doorNo && 
-       (!t.walletCustomerId || !billingInfo.customerId || t.walletCustomerId === billingInfo.customerId)
+    const existingIndex = orshinSuugch.toots.findIndex(t =>
+      t.source === "WALLET_API" && t.walletBairId === bairId && t.walletDoorNo === doorNo &&
+      (!t.walletCustomerId || !billingInfo.customerId || t.walletCustomerId === billingInfo.customerId)
     );
 
     if (existingIndex >= 0) {
@@ -4021,7 +4038,7 @@ exports.dugaarBatalgaajuulya = asyncHandler(async (req, res, next) => {
     var msgIlgeekhDugaar = "72002002";
 
     const { baiguullagiinId, utas, purpose: purposeRaw } = req.body;
-    
+
     // Canonicalize purpose to match enum: ["password_reset", "registration", "login", "signup"]
     // We already added "signup" to the model enum, but we map common variations for robustness.
     let purpose = purposeRaw || "password_reset";
@@ -4361,7 +4378,7 @@ function msgIlgeeye(
         msg.msg = jagsaalt[index].text;
         msg.msgIlgeekhKey = key;
         msg.msgIlgeekhDugaar = dugaar;
-        msg.save().catch(() => {});
+        msg.save().catch(() => { });
 
         const responseRaw = Array.isArray(body) && body[0] ? body[0] : body;
         if (Array.isArray(khariu)) {
@@ -4405,7 +4422,7 @@ exports.utasBatalgaajuulakhLogin = asyncHandler(async (req, res, next) => {
   try {
     const { baiguullagiinId, utas, code } = req.body;
 
-    const ENABLE_LOGIN_SMS = false; 
+    const ENABLE_LOGIN_SMS = false;
 
     if (!ENABLE_LOGIN_SMS) {
       const { db } = require("zevbackv2");
@@ -4478,7 +4495,7 @@ exports.utasBatalgaajuulakhLogin = asyncHandler(async (req, res, next) => {
       baiguullagiinId,
       utas,
       code,
-      "login", 
+      "login",
     );
 
     if (!verificationResult.success) {
@@ -4512,7 +4529,7 @@ exports.dugaarBatalgaajuulakh = asyncHandler(async (req, res, next) => {
   try {
     const { baiguullagiinId, utas, code } = req.body;
     const purposeRaw = req.body.purpose || "password_reset";
-    
+
     // Canonicalize purpose for verification lookup
     let purpose = purposeRaw;
     if (purpose === "register" || purpose === "signup") purpose = "registration";
@@ -5017,11 +5034,11 @@ exports.walletAddressDetails = asyncHandler(async (req, res, next) => {
       const walletUserInfo = await walletApiService.getUserInfo(phoneNumber);
       if (!walletUserInfo || !walletUserInfo.userId) {
 
-        
+
         // Find existing record in our DB to get their email
         const orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt).findOne({ utas: phoneNumber });
         const emailToUse = orshinSuugch?.mail || "";
-        
+
         try {
           await walletApiService.registerUser(phoneNumber, emailToUse);
           console.log(`✅ [WALLET ADDRESS DETAILS] Auto-registered ${phoneNumber} with email: ${emailToUse}`);
@@ -5374,7 +5391,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
   const invoiceService = require("../services/invoiceService");
 
   const baiguullagiinId = baiguullaga._id.toString();
-  
+
   // Safeguard: Never sync or create residential contracts for the centralized wallet organization
   if (baiguullagiinId === String(CENTRALIZED_ORG_ID)) {
     return;
@@ -5387,19 +5404,19 @@ exports.syncResidentContracts = async function syncResidentContracts(
       ? orshinSuugch.toots
       : orshinSuugch.toot
         ? [
-            {
-              toot: orshinSuugch.toot,
-              barilgiinId: barilgiinId,
-              davkhar: orshinSuugch.davkhar || "",
-              orts: orshinSuugch.orts || "1",
-              duureg: req.body.duureg || orshinSuugch.duureg || "",
-              horoo: req.body.horoo || orshinSuugch.horoo || {},
-              soh: req.body.soh || orshinSuugch.soh || "",
-              bairniiNer:
-                orshinSuugch.bairniiNer || req.body.bairniiNer || "",
-              turul: "Орон сууц",
-            },
-          ]
+          {
+            toot: orshinSuugch.toot,
+            barilgiinId: barilgiinId,
+            davkhar: orshinSuugch.davkhar || "",
+            orts: orshinSuugch.orts || "1",
+            duureg: req.body.duureg || orshinSuugch.duureg || "",
+            horoo: req.body.horoo || orshinSuugch.horoo || {},
+            soh: req.body.soh || orshinSuugch.soh || "",
+            bairniiNer:
+              orshinSuugch.bairniiNer || req.body.bairniiNer || "",
+            turul: "Орон сууц",
+          },
+        ]
         : [];
 
   const allToots = tootsToProcess || [];
@@ -5445,9 +5462,9 @@ exports.syncResidentContracts = async function syncResidentContracts(
       if (bId) {
         const key = `${String(bId)}|${String(t.toot).trim()}`;
         if (!processedKeys.has(key)) {
-            processedKeys.add(key);
-           uniqueToots.push(t);
-           validUnitKeys.add(key);
+          processedKeys.add(key);
+          uniqueToots.push(t);
+          validUnitKeys.add(key);
         }
       }
     }
@@ -5458,15 +5475,15 @@ exports.syncResidentContracts = async function syncResidentContracts(
   const activeKeysFound = new Set();
   for (const g of allActiveGerees) {
     const key = `${String(g.barilgiinId)}|${String(g.toot).trim()}`;
-    
+
     const isInvalid = !validUnitKeys.has(key);
     const isDuplicate = activeKeysFound.has(key);
 
     if (isInvalid || isDuplicate) {
       const reason = isInvalid ? "Тоот өөрчлөгдсөн эсвэл нэгдсэн гэрээ рүү шилжсэн" : "Давхардсан гэрээ цэвэрлэгээ";
       await GereeModel.findByIdAndUpdate(g._id, {
-        $set: { 
-          tuluv: "Цуцалсан", 
+        $set: {
+          tuluv: "Цуцалсан",
           tsutsalsanOgnoo: new Date(),
           temdeglel: `Системээс автоматаар цуцлагдсан (${reason})`
         }
@@ -5479,12 +5496,12 @@ exports.syncResidentContracts = async function syncResidentContracts(
   for (const tootEntry of uniqueToots) {
     // Only process units that belong to the current organization context
     const entryOrgId = tootEntry.baiguullagiinId ? String(tootEntry.baiguullagiinId) : null;
-    
+
     // If the unit association has an org ID, it MUST match the current one
     if (entryOrgId && entryOrgId !== baiguullagiinId) {
       continue;
     }
-    
+
     // If it doesn't have an org ID, only process it if this is the resident's primary organization
     if (!entryOrgId && String(orshinSuugch.baiguullagiinId) !== baiguullagiinId) {
       continue;
@@ -5542,7 +5559,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
         return name.includes("агуулах") || type.includes("агуулах");
       } else {
         const isGarageOrStorage = name.includes("гараж") || name.includes("зогсоол") || name.includes("агуулах") ||
-                                  type.includes("гараж") || type.includes("зогсоол") || type.includes("агуулах");
+          type.includes("гараж") || type.includes("зогсоол") || type.includes("агуулах");
         return !isGarageOrStorage;
       }
     });
@@ -5590,7 +5607,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
       : (Number(req.body.bodokhKhonog) || 0);
 
     const shouldProrate = (isProratingEnabled || isUnitProrating) && isUnitProrating && unitProrateDays > 0;
-    
+
     const currentDate = new Date();
     const totalDaysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
     const denominator = targetBarilgaForToot?.tokhirgoo?.bodokhArga === "Тогтмол"
@@ -5639,7 +5656,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
           tootEntry.khonogoorBodokhEsekh !== undefined
             ? tootEntry.khonogoorBodokhEsekh
             : req.body.khonogoorBodokhEsekh === true ||
-              req.body.khonogoorBodokhEsekh === "true",
+            req.body.khonogoorBodokhEsekh === "true",
         bodokhKhonog:
           tootEntry.bodokhKhonog !== undefined
             ? Number(tootEntry.bodokhKhonog)
@@ -5701,7 +5718,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
       let horooToot =
         targetBarilgaForToot?.tokhirgoo?.horoo || tootEntry.horoo || {};
       if (typeof horooToot === "string")
-         horooToot = { ner: horooToot, kod: horooToot };
+        horooToot = { ner: horooToot, kod: horooToot };
       const sohToot =
         targetBarilgaForToot?.tokhirgoo?.sohNer || tootEntry.soh || "";
 
@@ -5768,7 +5785,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
           tootEntry.khonogoorBodokhEsekh !== undefined
             ? tootEntry.khonogoorBodokhEsekh
             : req.body.khonogoorBodokhEsekh === true ||
-              req.body.khonogoorBodokhEsekh === "true",
+            req.body.khonogoorBodokhEsekh === "true",
         bodokhKhonog:
           tootEntry.bodokhKhonog !== undefined
             ? Number(tootEntry.bodokhKhonog)
