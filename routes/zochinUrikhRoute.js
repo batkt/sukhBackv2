@@ -283,8 +283,6 @@ router.get("/zochinQuotaStatus", tokenShalgakh, async (req, res, next) => {
 
     if (!residentId) return res.status(401).send("Нэвтрэх шаардлагатай");
 
-    console.log(`🔍 [QUOTA] Looking for resident settings. User: ${residentId}, Org: ${baiguullagiinId}, Bldg: ${barilgiinId}`);
-
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');

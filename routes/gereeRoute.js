@@ -150,7 +150,7 @@ router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
         const typeLabel = isGarage ? "Зогсоол" : "Агуулах";
         return res.status(409).json({
           success: false,
-          error: `Энэ мөчлөгт ${typeLabel} авлага аль хэдийн бүртгэгдсэн байна.`,
+          error: `Энэ сард ${typeLabel} авлага аль хэдийн бүртгэгдсэн байна.`,
         });
       }
     } catch (err) {
