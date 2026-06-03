@@ -2633,11 +2633,11 @@ exports.generateInitialBalanceTemplate = asyncHandler(
       const workbook = new excel.Workbook();
       const worksheet = workbook.addWorksheet("Эхний үлдэгдэл");
 
-      const headers = ["Утас", "Гэрээний дугаар", "Тоот", "Эхний үлдэгдэл", "Огноо"];
+      const headers = ["Утас", "Гэрээний дугаар", "Тоот", "Эхний үлдэгдэл"];
       worksheet.columns = headers.map((h, i) => ({
         header: h,
         key: h,
-        width: [18, 22, 12, 18, 18][i] || 15,
+        width: [18, 22, 12, 18][i] || 15,
       }));
 
       // Style header (Row 1)
@@ -2698,10 +2698,20 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    // Skip legend row: row 0 = headers, row 1 = legend, row 2+ = data
     const allRowsIB = XLSX.utils.sheet_to_json(worksheet, { raw: false, header: 1 });
     const headerRowIB = allRowsIB[0] || [];
-    const dataRowsIB = allRowsIB.slice(2).filter((r) => r.some((c) => c !== undefined && c !== null && c !== ""));
+    
+    // Check if the second row (index 1) contains actual data or is it a legend/empty row
+    let startIndex = 1;
+    const secondRow = allRowsIB[1];
+    const isSecondRowEmpty = !secondRow || !secondRow.some(c => c !== undefined && c !== null && c !== "");
+    if (isSecondRowEmpty) {
+      startIndex = 2;
+    } else {
+      startIndex = 1;
+    }
+
+    const dataRowsIB = allRowsIB.slice(startIndex).filter((r) => r.some((c) => c !== undefined && c !== null && c !== ""));
     const data = dataRowsIB.map((r) => {
       const obj = {};
       headerRowIB.forEach((key, idx) => { if (key) obj[key] = r[idx] !== undefined ? r[idx] : ""; });
@@ -2730,7 +2740,13 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
       total: data.length,
     };
 
-    const importOgnoo = ognoo ? new Date(ognoo) : new Date();
+    let importOgnoo = new Date();
+    if (ognoo) {
+      const parsedDate = new Date(ognoo);
+      if (!isNaN(parsedDate.getTime())) {
+        importOgnoo = parsedDate;
+      }
+    }
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
@@ -2742,22 +2758,8 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
         const toot = row["Тоот"]?.toString().trim();
         const amount = parseExcelNumber(row["Эхний үлдэгдэл"]);
 
-        // Handle row-specific date
+        // Handle date using the importOgnoo from request body
         let rowOgnoo = importOgnoo;
-        if (row["Огноо"]) {
-          const parsedDate = new Date(row["Огноо"]);
-          // Check if it's a valid date and not an Excel serial number
-          if (!isNaN(parsedDate.getTime()) && String(row["Огноо"]).includes("-")) {
-            rowOgnoo = parsedDate;
-          } else {
-            // Might be an Excel serial number
-            const serial = parseFloat(row["Огноо"]);
-            if (!isNaN(serial)) {
-              // Convert Excel serial date to JS Date
-              rowOgnoo = new Date(Math.round((serial - 25569) * 86400 * 1000));
-            }
-          }
-        }
 
         if (isNaN(amount) || amount === 0) {
           results.failed.push({
