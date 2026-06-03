@@ -140,6 +140,16 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
 
 
     for (const inv of invoices) {
+      // Check if there are ANY ledger items (charges or payments) linked to this invoice
+      const linkedItems = allLedger.filter((r) => String(r.nekhemjlekhId || "") === String(inv._id));
+
+      if (linkedItems.length === 0) {
+        // If there are no ledger entries associated with this invoice, it is orphan/empty. Delete it.
+        await NekhemjlekhModel.findByIdAndDelete(inv._id);
+        console.log(`🗑️ [LEDGER SYNC] Deleted orphan empty invoice: ${inv._id}`);
+        continue;
+      }
+
       // Amount for this specific invoice = sum of positive dun linked to it in ledger
       const invCharge = allLedger
         .filter((r) => String(r.nekhemjlekhId || "") === String(inv._id) && (r.dun || 0) > 0)
