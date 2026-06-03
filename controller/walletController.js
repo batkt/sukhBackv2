@@ -3,6 +3,7 @@ const walletApiService = require("../services/walletApiService");
 const aldaa = require("../components/aldaa");
 const jwt = require("jsonwebtoken");
 const OrshinSuugch = require("../models/orshinSuugch");
+const Khariltsagch = require("../models/khariltsagch");
 
 async function getUserIdFromToken(req) {
   if (!req.headers.authorization) {
@@ -26,11 +27,14 @@ async function getUserIdFromToken(req) {
   }
 
   const { db } = require("zevbackv2");
-  const orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt).findById(
-    tokenObject.id,
-  );
+  let orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt).findById(tokenObject.id);
   if (!orshinSuugch) {
-    throw new aldaa("Хэрэглэгч олдсонгүй!");
+    const khariltsagch = await Khariltsagch(db.erunkhiiKholbolt).findById(tokenObject.id);
+    if (!khariltsagch) {
+      throw new aldaa("Хэрэглэгч олдсонгүй!");
+    }
+    // Return minimal wallet info for khariltsagch — no wallet account
+    return { userId: khariltsagch.walletUserId || khariltsagch.utas || null, utas: khariltsagch.utas };
   }
 
   // Wallet-Service expects walletUserId (UUID) in userId header, not phone number
