@@ -327,6 +327,8 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
                 } else if (g.umnukhZaalt !== undefined) {
                   t.tsahilgaaniiZaalt = g.umnukhZaalt;
                 }
+                if (g.khonogoorBodokhEsekh !== undefined) t.khonogoorBodokhEsekh = g.khonogoorBodokhEsekh;
+                if (g.bodokhKhonog !== undefined) t.bodokhKhonog = g.bodokhKhonog;
               }
             });
           }
@@ -372,6 +374,8 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
           // Sync contextually relevant fields from the contract
           if (authoritativeGeree.toot) mur.toot = authoritativeGeree.toot;
           if (authoritativeGeree.davkhar) mur.davkhar = authoritativeGeree.davkhar;
+          if (authoritativeGeree.khonogoorBodokhEsekh !== undefined) mur.khonogoorBodokhEsekh = authoritativeGeree.khonogoorBodokhEsekh;
+          if (authoritativeGeree.bodokhKhonog !== undefined) mur.bodokhKhonog = authoritativeGeree.bodokhKhonog;
         }
       });
     }

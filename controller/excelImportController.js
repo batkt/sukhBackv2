@@ -1178,7 +1178,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             row["Хоногоор бодох"] === true ||
             String(row["Хоногоор бодох"]).toLowerCase() === "true" ||
             String(row["Хоногоор бодох"]).toLowerCase() === "тийм",
-          bodokhKhonog: parseInt(row["Ирээдүйд ашиглах хоног"]) || parseInt(row["Ашиглах хоног"]) || 0,
+          bodokhKhonog: parseInt(row["Ирээдүйд ашиглах хоног"]) || parseInt(row["Ашиглах хоног"]) || parseInt(row["Эхний сарын ашиглах хоног"]) || 0,
         };
 
         // Check if this is an update-only row (only toot, davkhar, ekhniiUldegdel, and possibly tsahilgaaniiZaalt)
@@ -1207,13 +1207,11 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           });
 
           if (existingOrshinSuugch) {
-            // Update only ekhniiUldegdel and tsahilgaaniiZaalt
-            if (userData.ekhniiUldegdel !== undefined) {
-              existingOrshinSuugch.ekhniiUldegdel = userData.ekhniiUldegdel;
+            if (userData.khonogoorBodokhEsekh !== undefined) {
+              existingOrshinSuugch.khonogoorBodokhEsekh = userData.khonogoorBodokhEsekh;
             }
-            if (userData.tsahilgaaniiZaalt !== undefined) {
-              existingOrshinSuugch.tsahilgaaniiZaalt =
-                userData.tsahilgaaniiZaalt;
+            if (userData.bodokhKhonog !== undefined) {
+              existingOrshinSuugch.bodokhKhonog = userData.bodokhKhonog;
             }
 
             // Sync specifically the matching unit in toots array
@@ -1227,6 +1225,10 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                     t.ekhniiUldegdel = userData.ekhniiUldegdel;
                   if (userData.tsahilgaaniiZaalt !== undefined)
                     t.tsahilgaaniiZaalt = userData.tsahilgaaniiZaalt;
+                  if (userData.khonogoorBodokhEsekh !== undefined)
+                    t.khonogoorBodokhEsekh = userData.khonogoorBodokhEsekh;
+                  if (userData.bodokhKhonog !== undefined)
+                    t.bodokhKhonog = userData.bodokhKhonog;
                 }
               });
             }
@@ -1743,6 +1745,8 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
               bairniiNer: targetBarilga.ner || "",
               ekhniiUldegdel: userData.ekhniiUldegdel || 0,
               tsahilgaaniiZaalt: userData.tsahilgaaniiZaalt || 0,
+              khonogoorBodokhEsekh: userData.khonogoorBodokhEsekh || false,
+              bodokhKhonog: userData.bodokhKhonog || 0,
               createdAt: new Date(),
             };
 
