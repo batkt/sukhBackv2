@@ -359,7 +359,7 @@ router.get("/zochinQuotaStatus", tokenShalgakh, async (req, res, next) => {
     }
 
     if (!masterSetting && !buildingSettings) {
-      return res.send({ total: 0, used: 0, remaining: 0, success: false });
+      return res.send({ total: 0, used: 0, remaining: 0, hasRight: false, zochinUrikhEsekh: false, success: false });
     }
 
     // Merge logic: Final Effective Config
