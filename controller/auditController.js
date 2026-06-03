@@ -33,8 +33,9 @@ exports.getZasakhTuukh = asyncHandler(async (req, res, next) => {
   const matchNew = {};
 
   if (modelName) {
-    matchLegacy.modelName = modelName;
-    matchNew.classType = modelName;
+    const modelNameRegex = new RegExp(`^${modelName}$`, "i");
+    matchLegacy.modelName = modelNameRegex;
+    matchNew.classType = modelNameRegex;
   }
   if (documentId) {
     matchLegacy.documentId = documentId.toString();
