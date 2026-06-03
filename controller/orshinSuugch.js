@@ -4308,9 +4308,11 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
         });
       }
 
-      const urDun = await OrshinSuugch(db.erunkhiiKholbolt).findById(
-        tokenObject.id,
-      );
+      let urDun = await OrshinSuugch(db.erunkhiiKholbolt).findById(tokenObject.id);
+
+      if (!urDun) {
+        urDun = await Khariltsagch(db.erunkhiiKholbolt).findById(tokenObject.id);
+      }
 
       if (!urDun) {
         console.error(`❌ [Profile] User not found for ID: ${tokenObject.id}`);
