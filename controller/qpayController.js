@@ -141,10 +141,11 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     io.emit(`qpay/${baiguullagiinId}/${qpayBarimt.zakhialgiinDugaar}`);
     io.emit(`tulburUpdated:${baiguullagiinId}`, {});
 
-    // Targeted notification to the resident
+    // Targeted notification to the resident & admin panel
     try {
       const GereeModel = Geree(kholbolt);
-      const geree = await GereeModel.findById(qpayBarimt.gereeniiId);
+      const geree = await GereeModel.findById(qpayBarimt.gereeniiId).lean();
+      
       if (geree?.orshinSuugchId) {
         io.emit(`orshinSuugch${geree.orshinSuugchId}`, {
           title: "Төлбөр амжилттай",
@@ -153,8 +154,21 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
           baiguullagiinId
         });
       }
+
+      // Notify admin panel
+      io.emit("baiguullagiin" + baiguullagiinId, {
+        type: "qpayPayment",
+        data: {
+          toot: geree?.toot || qpayBarimt.toot || "",
+          ner: `${geree?.ovog || ""} ${geree?.ner || ""}`.trim() || qpayBarimt.ner || "Оршин суугч",
+          amount: amount,
+          baiguullagiinId: baiguullagiinId,
+          barilgiinId: geree?.barilgiinId || qpayBarimt.barilgiinId || "",
+          gereeniiDugaar: geree?.gereeniiDugaar || qpayBarimt.gereeniiDugaar || "",
+        }
+      });
     } catch (err) {
-      console.error("⚠️ [SOCKET] Failed to send resident notification:", err.message);
+      console.error("⚠️ [SOCKET] Failed to send resident or admin notification:", err.message);
     }
   }
 
@@ -362,10 +376,11 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
   if (io) {
     io.emit(`tulburUpdated:${baiguullagiinId}`, {});
 
-    // Targeted notification to the resident
+    // Targeted notification to the resident & admin panel
     try {
       const GereeModel = Geree(kholbolt);
-      const geree = await GereeModel.findById(nekhemjlekh.gereeniiId);
+      const geree = await GereeModel.findById(nekhemjlekh.gereeniiId).lean();
+      
       if (geree?.orshinSuugchId) {
         io.emit(`orshinSuugch${geree.orshinSuugchId}`, {
           title: "Төлбөр амжилттай",
@@ -374,8 +389,21 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
           baiguullagiinId
         });
       }
+
+      // Notify admin panel
+      io.emit("baiguullagiin" + baiguullagiinId, {
+        type: "qpayPayment",
+        data: {
+          toot: geree?.toot || nekhemjlekh.toot || "",
+          ner: `${geree?.ovog || ""} ${geree?.ner || ""}`.trim() || nekhemjlekh.ner || "Оршин суугч",
+          amount: paidAmount,
+          baiguullagiinId: baiguullagiinId,
+          barilgiinId: geree?.barilgiinId || nekhemjlekh.barilgiinId || "",
+          gereeniiDugaar: geree?.gereeniiDugaar || nekhemjlekh.gereeniiDugaar || "",
+        }
+      });
     } catch (err) {
-      console.error("⚠️ [SOCKET] Failed to send resident notification:", err.message);
+      console.error("⚠️ [SOCKET] Failed to send resident or admin notification:", err.message);
     }
   }
 
