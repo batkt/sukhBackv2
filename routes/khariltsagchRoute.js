@@ -566,6 +566,9 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
     }
 
     const result = new khariltsagchModel(req.body);
+    if (!result.nuutsUg) {
+      result.nuutsUg = "1234";
+    }
     await result.save();
     if (result != null) result.key = result._id;
 
