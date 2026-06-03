@@ -29,7 +29,7 @@ exports.medegdelUnreadCount = asyncHandler(async (req, res, next) => {
     const query = {
       baiguullagiinId: String(baiguullagiinId),
       status: "pending",
-      turul: { $in: ["sanal", "санал", "gomdol", "гомдол"] },
+      turul: { $in: ["sanal", "санал", "gomdol", "гомдол", "medegdel", "мэдэгдэл"] },
       kharsanEsekh: { $ne: true },
     };
     if (barilgiinId) query.barilgiinId = String(barilgiinId);
@@ -68,7 +68,7 @@ exports.medegdelUnreadList = asyncHandler(async (req, res, next) => {
 
     const baseQuery = {
       baiguullagiinId: String(baiguullagiinId),
-      turul: { $in: ["sanal", "санал", "gomdol", "гомдол"] },
+      turul: { $in: ["sanal", "санал", "gomdol", "гомдол", "medegdel", "мэдэгдэл"] },
     };
     if (barilgiinId) baseQuery.barilgiinId = String(barilgiinId);
 
