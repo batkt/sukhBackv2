@@ -1450,6 +1450,43 @@ async function settleWalletPayment(
       qpayPaymentId,
     });
   }
+
+  // Create and save web notification (turul: "medegdel")
+  try {
+    const Geree = require("../models/geree");
+    const Medegdel = require("../models/medegdel");
+
+    let geree = null;
+    if (qpayObject.gereeniiId) {
+      geree = await Geree(tukhainBaaziinKholbolt).findById(qpayObject.gereeniiId).lean();
+    }
+
+    const MedegdelModel = Medegdel(tukhainBaaziinKholbolt);
+    const m = new MedegdelModel({
+      baiguullagiinId,
+      barilgiinId: geree?.barilgiinId || qpayObject.barilgiinId || "",
+      title: "QPay төлөлт (Wallet)",
+      message: `${geree?.toot || qpayObject.talbainDugaar || ""} тоот, ${geree?.ner || "Оршин суугч"} QPay-ээр ${trxAmount.toLocaleString()}₮ төллөө.`,
+      orshinSuugchId: geree?.orshinSuugchId || qpayObject.orshinSuugchId || "",
+      orshinSuugchNer: `${geree?.ovog || ""} ${geree?.ner || ""}`.trim() || "",
+      orshinSuugchUtas: (Array.isArray(geree?.utas) ? geree?.utas[0] : geree?.utas) || "",
+      gereeniiDugaar: geree?.gereeniiDugaar || "",
+      kharsanEsekh: false,
+      status: "pending",
+      turul: "medegdel",
+      ognoo: new Date()
+    });
+    await m.save();
+
+    if (io) {
+      io.emit("baiguullagiin" + baiguullagiinId, {
+        type: "medegdelNew",
+        data: m.toObject ? m.toObject() : m
+      });
+    }
+  } catch (err) {
+    console.error("⚠️ [WALLET QPAY SETTLEMENT] Failed to create web notification:", err.message);
+  }
 }
 
 async function autoApproveQr(
