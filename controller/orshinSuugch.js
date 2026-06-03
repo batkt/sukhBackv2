@@ -1564,7 +1564,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
         throw new aldaa("Хэрэглэгч олдсонгүй!");
       }
       if (!khariltsagch.nuutsUg) {
-        throw new aldaa("Нууц үг тохируулаагүй байна. Эхлээд бүртгүүлнэ үү.");
+        throw new aldaa("Нууц үг тохируулаагүй байна. Нууц үгээ сэргээнэ үү.");
       }
       const khariltsagchPwOk = await khariltsagch.passwordShalgaya(providedPassword);
       if (!khariltsagchPwOk) {
@@ -4192,21 +4192,31 @@ exports.nuutsUgSergeeye = asyncHandler(async (req, res, next) => {
       });
     }
 
-    const orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt)
+    let orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt)
       .findOne({ utas: utas })
       .catch((err) => {
         next(err);
       });
 
+    // Also check Khariltsagch if not found as OrshinSuugch
+    let isKhariltsagch = false;
+    let khariltsagchUser = null;
     if (!orshinSuugch) {
+      khariltsagchUser = await Khariltsagch(db.erunkhiiKholbolt).findOne({ utas: utas });
+      if (khariltsagchUser) isKhariltsagch = true;
+    }
+
+    if (!orshinSuugch && !khariltsagchUser) {
       return res.status(404).json({
         success: false,
         message: "Энэ утасны дугаартай хэрэглэгч олдсонгүй!",
       });
     }
 
+    const activeUser = isKhariltsagch ? khariltsagchUser : orshinSuugch;
+
     const verificationResult = await verifyCodeHelper(
-      orshinSuugch.baiguullagiinId,
+      activeUser.baiguullagiinId,
       utas,
       code,
     );
@@ -4218,12 +4228,12 @@ exports.nuutsUgSergeeye = asyncHandler(async (req, res, next) => {
       });
     }
 
-    const oldPasswordHash = orshinSuugch.nuutsUg || null;
+    const oldPasswordHash = activeUser.nuutsUg || null;
     let passwordChanged = false;
 
     try {
-      orshinSuugch.nuutsUg = shineNuutsUg;
-      await orshinSuugch.save();
+      activeUser.nuutsUg = shineNuutsUg;
+      await activeUser.save();
     } catch (saveError) {
       return res.status(400).json({
         success: false,
@@ -4232,13 +4242,9 @@ exports.nuutsUgSergeeye = asyncHandler(async (req, res, next) => {
     }
 
     try {
-      const updatedUser = await OrshinSuugch(db.erunkhiiKholbolt)
-        .findById(orshinSuugch._id)
-        .select("+nuutsUg");
-
-      passwordChanged = oldPasswordHash
-        ? oldPasswordHash !== updatedUser.nuutsUg
-        : true;
+      const Model = isKhariltsagch ? Khariltsagch(db.erunkhiiKholbolt) : OrshinSuugch(db.erunkhiiKholbolt);
+      const updatedUser = await Model.findById(activeUser._id).select("+nuutsUg");
+      passwordChanged = oldPasswordHash ? oldPasswordHash !== updatedUser.nuutsUg : true;
     } catch (fetchError) {
       return res.status(400).json({
         success: false,
@@ -4252,7 +4258,7 @@ exports.nuutsUgSergeeye = asyncHandler(async (req, res, next) => {
       data: {
         step: 3,
         passwordChanged: passwordChanged,
-        userId: orshinSuugch._id.toString(),
+        userId: activeUser._id.toString(),
         userName: orshinSuugch.ner,
       },
     });
