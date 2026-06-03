@@ -1220,21 +1220,22 @@ exports.davhardsanOrshinSuugchShalgayy = asyncHandler(
 
       const phoneNumber = String(utas).trim();
 
-      // Check if resident already exists in the system
-      const existingUser = await OrshinSuugch(db.erunkhiiKholbolt)
-        .findOne({
-          utas: phoneNumber,
-        })
-        .lean();
+      // Check OrshinSuugch first, then Khariltsagch
+      const [existingUser, existingKhariltsagch] = await Promise.all([
+        OrshinSuugch(db.erunkhiiKholbolt).findOne({ utas: phoneNumber }).lean(),
+        Khariltsagch(db.erunkhiiKholbolt).findOne({ utas: phoneNumber }).lean(),
+      ]);
 
-      if (existingUser) {
+      const found = existingUser || existingKhariltsagch;
+
+      if (found) {
         return res.json({
           success: false,
           exists: true,
           message: "Энэ утасны дугаар аль хэдийн бүртгэгдсэн байна.",
           data: {
-            ner: existingUser.ner,
-            ovog: existingUser.ovog,
+            ner: found.ner,
+            ovog: found.ovog,
           },
         });
       }
