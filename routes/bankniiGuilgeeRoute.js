@@ -512,7 +512,7 @@ router.post("/bankniiKhuulgaTatajKhadgalya", tokenShalgakh, async (req, res, nex
               g.dansniiDugaar = dans.dugaar;
               g.bank = dans.bank;
               g.baiguullagiinId = dans.baiguullagiinId;
-              g.barilgiinId = dans.barilgiinId;
+              g.barilgiinId = dans.barilgiinId || req.body.barilgiinId || null;
               return g;
             });
             await BankniiGuilgee(tukhainBaaziinKholbolt).insertMany(guilgeenuud).catch(() => { });
@@ -544,7 +544,7 @@ router.post("/bankniiKhuulgaTatajKhadgalya", tokenShalgakh, async (req, res, nex
                   curRate: mur?.currate, CtBankNo: mur?.bankcode,
                 });
                 g.dansniiDugaar = dans.dugaar; g.bank = dans.bank;
-                g.baiguullagiinId = dans.baiguullagiinId; g.barilgiinId = dans.barilgiinId;
+                g.baiguullagiinId = dans.baiguullagiinId; g.barilgiinId = dans.barilgiinId || req.body.barilgiinId || null;
                 return g;
               });
               await BankniiGuilgee(tukhainBaaziinKholbolt).insertMany(guilgeenuud).catch(() => { });
@@ -576,7 +576,7 @@ router.post("/bankniiKhuulgaTatajKhadgalya", tokenShalgakh, async (req, res, nex
                 accName: mur?.accName, accNum: mur?.accNum,
               });
               g.dansniiDugaar = dans.dugaar; g.bank = dans.bank;
-              g.baiguullagiinId = dans.baiguullagiinId; g.barilgiinId = dans.barilgiinId;
+              g.baiguullagiinId = dans.baiguullagiinId; g.barilgiinId = dans.barilgiinId || req.body.barilgiinId || null;
               return g;
             });
             await BankniiGuilgee(tukhainBaaziinKholbolt).insertMany(guilgeenuud).catch((err) => {
@@ -677,7 +677,7 @@ router.post("/bankniiKhuulgaTatajKhadgalya", tokenShalgakh, async (req, res, nex
                 txnDesc: mur?.txnDesc, txnDate: mur?.txnDate, postDate: mur?.postDate,
               });
               g.dansniiDugaar = dans.dugaar; g.bank = dans.bank;
-              g.baiguullagiinId = dans.baiguullagiinId; g.barilgiinId = dans.barilgiinId;
+              g.baiguullagiinId = dans.baiguullagiinId; g.barilgiinId = dans.barilgiinId || req.body.barilgiinId || null;
               return g;
             });
             await BankniiGuilgee(tukhainBaaziinKholbolt).insertMany(guilgeenuud).catch((err) => { next(err); });
@@ -734,6 +734,7 @@ router.post("/tulultTaniya", tokenShalgakh, async (req, res, next) => {
       baiguullagiinId: req.body.baiguullagiinId,
     }).lean();
 
+    console.log(`🚀 [ТУЛАЛТ] эхэлж байна — baiguullagiinId=${req.body.baiguullagiinId}`);
     var tulultBolsonToo = 0;
 
     if (dansnuud?.length > 0) {
@@ -750,25 +751,27 @@ router.post("/tulultTaniya", tokenShalgakh, async (req, res, next) => {
         };
         if (dans.barilgiinId) match.barilgiinId = dans.barilgiinId;
         var guilgeenuud = await BankniiGuilgee(tukhainBaaziinKholbolt, false).find(match).lean();
+        console.log(`🔍 [ТУЛАЛТ] ${dans.bank} ${dans.dugaar}: ${guilgeenuud.length} боловсруулах гүйлгээ`);
         const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud");
 
         for (const guilgee of guilgeenuud) {
           try {
             const desc = guilgee.description || guilgee.TxAddInf || guilgee.tranDesc || guilgee.txnDesc || "";
             const toot = tootOlgokh(desc);
+            console.log(`  📄 id=${guilgee._id} desc="${desc.slice(0, 60)}" → тоот=${toot}`);
             if (!toot) continue;
 
             // Amount: must be positive incoming payment
             let dun = 0;
             if (guilgee.bank === "khanbank") dun = guilgee.amount;
             else if (guilgee.bank === "golomt") {
-              // Golomt: drOrCr="Credit" = incoming
               if (guilgee.drOrCr === "Debit") continue;
               dun = guilgee.tranAmount;
             }
             else if (guilgee.bank === "tdb") dun = guilgee.Amt;
             else if (guilgee.bank === "bogd") dun = guilgee.amount;
             else if (guilgee.bank === "trans") dun = guilgee.income > 0 ? guilgee.income : 0;
+            console.log(`     💰 dun=${dun}`);
             if (!dun || dun <= 0) continue;
 
             // Prevent duplicate first (cheap check before heavy DB queries)
@@ -776,7 +779,7 @@ router.post("/tulultTaniya", tokenShalgakh, async (req, res, next) => {
               .findOne({ bankniiGuilgeeId: String(guilgee._id), baiguullagiinId: dans.baiguullagiinId })
               .lean().catch(() => null);
             if (existing) {
-              // already recorded — just mark reconciled if not already
+              console.log(`     ⚠️ Давхардсан — аль хэдийн бүртгэсэн: ${existing._id}`);
               await BankniiGuilgee(tukhainBaaziinKholbolt).findByIdAndUpdate(guilgee._id,
                 { $addToSet: { kholbosonTalbainId: String(existing.gereeniiId) } }
               );
@@ -784,7 +787,7 @@ router.post("/tulultTaniya", tokenShalgakh, async (req, res, next) => {
             }
 
             // Find active contracts matching тоот (exclude terminated)
-            const tootStr = String(Number(toot)); // normalize "005" → "5"
+            const tootStr = String(Number(toot));
             var gereeMatch = {
               baiguullagiinId: dans.baiguullagiinId,
               $or: [{ toot: toot }, { toot: tootStr }],
@@ -792,6 +795,7 @@ router.post("/tulultTaniya", tokenShalgakh, async (req, res, next) => {
             };
             if (dans.barilgiinId) gereeMatch.barilgiinId = dans.barilgiinId;
             var gereenuud = await Geree(tukhainBaaziinKholbolt, false).find(gereeMatch).lean();
+            console.log(`     🏠 тоот=${toot} query=${JSON.stringify(gereeMatch)} → ${gereenuud.length} гэрээ`);
 
             // Narrow by phone if multiple contracts match
             const utas = utasOlgokh(desc);
@@ -836,6 +840,7 @@ router.post("/tulultTaniya", tokenShalgakh, async (req, res, next) => {
         }
       }
     }
+    console.log(`🏁 [ТУЛАЛТ] дууслаа — нийт тулалт: ${tulultBolsonToo}`);
     res.status(200).json({ message: "Тулалт амжилттай", tulultBolsonToo });
   } catch (err) {
     next(err);
