@@ -146,6 +146,18 @@ const baiguullagaSchema = new Schema(
             enabled: { type: Boolean, default: true },
           },
         ],
+        sohCameruud: [
+          {
+            id: String,
+            name: String,
+            ip: String,
+            port: { type: Number, default: 554 },
+            username: { type: String, default: "admin" },
+            password: { type: String, default: "Admin123" },
+            root: { type: String, default: "Streaming/Channels/102" },
+            enabled: { type: Boolean, default: true },
+          },
+        ],
       },
     ],
     talbai: Number,

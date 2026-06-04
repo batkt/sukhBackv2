@@ -31,14 +31,16 @@ router.get("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
     const populateCameras = (org) => {
       if (org && org.barilguud && Array.isArray(org.barilguud)) {
         org.barilguud.forEach(b => {
-          if (b.cameruud && Array.isArray(b.cameruud)) {
-            b.cameruud.forEach(cam => {
-              if (!cam.ip) cam.ip = b.cameraIp || "";
-              if (!cam.port) cam.port = b.cameraPort || 554;
-              if (!cam.username) cam.username = b.cameraUsername || "admin";
-              if (!cam.password) cam.password = b.cameraPassword || "Admin123";
-            });
-          }
+          ['cameruud', 'sohCameruud'].forEach(key => {
+            if (b[key] && Array.isArray(b[key])) {
+              b[key].forEach(cam => {
+                if (!cam.ip) cam.ip = b.cameraIp || "";
+                if (!cam.port) cam.port = b.cameraPort || 554;
+                if (!cam.username) cam.username = b.cameraUsername || "admin";
+                if (!cam.password) cam.password = b.cameraPassword || "Admin123";
+              });
+            }
+          });
         });
       }
       return org;
