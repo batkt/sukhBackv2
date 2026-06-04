@@ -254,6 +254,8 @@ router.post("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
         // Remove barilguud from req.body since we've handled it manually
         delete req.body.barilguud;
       }
+      // Ensure Mongoose detects changes in the barilguud nested array
+      baiguullaga.markModified("barilguud");
     }
     
     // Use .set() to ensure Mongoose detects changes in nested objects like tokhirgoo.zochinTokhirgoo

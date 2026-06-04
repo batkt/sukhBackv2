@@ -144,6 +144,7 @@ const baiguullagaSchema = new Schema(
             password: { type: String, default: "Admin123" },
             root: { type: String, default: "Streaming/Channels/102" },
             enabled: { type: Boolean, default: true },
+            residentVisible: { type: Boolean, default: false },
           },
         ],
         sohCameruud: [
@@ -156,6 +157,7 @@ const baiguullagaSchema = new Schema(
             password: { type: String, default: "Admin123" },
             root: { type: String, default: "Streaming/Channels/102" },
             enabled: { type: Boolean, default: true },
+            residentVisible: { type: Boolean, default: false },
           },
         ],
       },
