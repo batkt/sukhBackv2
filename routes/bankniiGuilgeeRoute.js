@@ -703,16 +703,20 @@ router.post("/bankniiKhuulgaTatajKhadgalya", tokenShalgakh, async (req, res, nex
 });
 
 // Extract тоот number from description
-// Handles: "147тоот", "134 тоот", "123toot", "122 toot", "ТООТ147", "605TOOT95393408"
-// тоот is always ≤4 digits — phone numbers (8 digits) are excluded automatically
+// Handles: "147тоот", "134 тоот", "123toot", "605TOOT95393408", "ТООТ147"
+// Fallback: "106 ХААНААС: 150000..." — leading digits before ХААНААС
+// тоот is always ≤4 digits — phone numbers (8 digits) excluded automatically
 function tootOlgokh(desc) {
   if (!desc) return null;
-  // digits (1-4) BEFORE keyword: "605TOOT..." → 605, "147тоот..." → 147
+  // digits (1-4) BEFORE тоот keyword: "605TOOT..." → 605
   const before = desc.match(/(\d{1,4})\s*(?:тоот|toot|ТООТ|TOOT)/i);
   if (before) return before[1];
-  // digits (1-4) AFTER keyword: "ТООТ147" — only if ≤4 digits so we don't grab phone
+  // digits (1-4) AFTER тоот keyword: "ТООТ147"
   const after = desc.match(/(?:тоот|toot|ТООТ|TOOT)\s*(\d{1,4})(?!\d)/i);
   if (after) return after[1];
+  // fallback: leading digits (1-4) before ХААНААС — "106 ХААНААС: ..."
+  const khaanFallback = desc.match(/^(\d{1,4})\s+ХААНААС/i);
+  if (khaanFallback) return khaanFallback[1];
   return null;
 }
 
@@ -814,10 +818,10 @@ router.post("/tulultTaniya", tokenShalgakh, async (req, res, next) => {
               continue;
             }
             if (gereenuud.length > 1) {
-              const utas = utasOlgokh(desc);
-              console.log(`     ⚠️  тоот=${toot} — ${gereenuud.length} гэрээ олдсон, утас=${utas || "байхгүй"} — гэрээний утасны мэдээлэл тохирохгүй тул алгасав`);
+              // tiebreaker: pick the most recently updated active contract
+              gereenuud.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+              console.log(`     ℹ️  тоот=${toot} — ${gereenuud.length} гэрээ, хамгийн сүүлд идэвхтэй гэрээг авлаа: ${gereenuud[0].gereeniiDugaar}`);
               console.log(`        гэрээнүүд: ${gereenuud.map(g => `${g.gereeniiDugaar}(utas:${(g.utas||[]).join(',')})`).join(' | ')}`);
-              continue;
             }
 
             const geree = gereenuud[0];
