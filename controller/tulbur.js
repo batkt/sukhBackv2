@@ -183,7 +183,7 @@ const tulultTaniya = asyncHandler(async (req, res, next) => {
               toot: toot,
               ognoo: guilgee.postDate || guilgee.tranDate || guilgee.TxDt || guilgee.txnDate || new Date(),
               dun: -Math.abs(dun),
-              tailbar: `Банкны хуулга тулалт - ${desc.slice(0, 80)}`,
+              tailbar: `Дансны шилжүүлэг ${toot} тоот`,
               source: "bank",
               bankniiGuilgeeId: String(guilgee._id),
               dansniiDugaar: dans.dugaar,
