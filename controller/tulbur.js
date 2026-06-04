@@ -209,7 +209,145 @@ const tulultTaniya = asyncHandler(async (req, res, next) => {
   }
 });
 
+const guilgeeKholbyo = asyncHandler(async (req, res, next) => {
+  try {
+    const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
+    const { bankniiGuilgeeId, gereeniiId } = req.body;
+
+    if (!bankniiGuilgeeId || !gereeniiId) {
+      return res.status(400).json({ error: "Гүйлгээний ID эсвэл гэрээний ID байхгүй байна." });
+    }
+
+    const GereeModel = require("../models/geree")(tukhainBaaziinKholbolt);
+    const BankniiGuilgeeModel = require("../models/bankniiGuilgee")(tukhainBaaziinKholbolt);
+    const guilgeeService = require("../services/guilgeeService");
+
+    // Fetch transaction
+    const guilgee = await BankniiGuilgeeModel.findById(bankniiGuilgeeId).lean();
+    if (!guilgee) {
+      return res.status(404).json({ error: "Гүйлгээ олдсонгүй." });
+    }
+
+    // Fetch contract
+    const geree = await GereeModel.findById(gereeniiId).lean();
+    if (!geree) {
+      return res.status(404).json({ error: "Гэрээ олдсонгүй." });
+    }
+
+    // Get transaction amount
+    let dun = 0;
+    if (guilgee.bank === "khanbank") dun = guilgee.amount;
+    else if (guilgee.bank === "golomt") {
+      if (guilgee.drOrCr === "Debit") {
+        return res.status(400).json({ error: "Зарлагын гүйлгээ холбох боломжгүй." });
+      }
+      dun = guilgee.tranAmount;
+    }
+    else if (guilgee.bank === "tdb") dun = guilgee.Amt;
+    else if (guilgee.bank === "bogd") dun = guilgee.amount;
+    else if (guilgee.bank === "trans") dun = guilgee.income > 0 ? guilgee.income : 0;
+
+    if (!dun || dun <= 0) {
+      return res.status(400).json({ error: "Гүйлгээний дүн буруу байна." });
+    }
+
+    // Record payment in GuilgeeAvlaguud (ledger)
+    await guilgeeService.recordPayment(tukhainBaaziinKholbolt, {
+      baiguullagiinId: String(geree.baiguullagiinId),
+      barilgiinId: String(geree.barilgiinId || ""),
+      gereeniiId: String(geree._id),
+      gereeniiDugaar: geree.gereeniiDugaar || "",
+      orshinSuugchId: geree.orshinSuugchId || "",
+      toot: geree.toot || "",
+      ognoo: guilgee.postDate || guilgee.tranDate || guilgee.TxDt || guilgee.txnDate || new Date(),
+      dun: -Math.abs(dun),
+      tailbar: `Дансны шилжүүлэг ${geree.toot || ""} тоот`,
+      source: "bank",
+      bankniiGuilgeeId: String(guilgee._id),
+      dansniiDugaar: guilgee.dansniiDugaar || "",
+    });
+
+    // Link transaction by updating BankniiGuilgee fields
+    await BankniiGuilgeeModel.findByIdAndUpdate(bankniiGuilgeeId, {
+      $addToSet: {
+        kholbosonTalbainId: String(geree._id),
+        kholbosonGereeniiId: String(geree._id)
+      }
+    });
+
+    // Emit event to update frontend clients
+    const io = req.app.get("socketio");
+    if (io) {
+      io.emit("baiguullagiin" + geree.baiguullagiinId, { turul: "bankniiGuilgeeShine" });
+    }
+
+    res.status(200).json({ message: "Амжилттай холбогдлоо", success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const guilgeeSalgaya = asyncHandler(async (req, res, next) => {
+  try {
+    const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
+    const { bankniiGuilgeeId } = req.body;
+
+    if (!bankniiGuilgeeId) {
+      return res.status(400).json({ error: "Гүйлгээний ID байхгүй байна." });
+    }
+
+    const BankniiGuilgeeModel = require("../models/bankniiGuilgee")(tukhainBaaziinKholbolt);
+    const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(tukhainBaaziinKholbolt);
+
+    // Fetch transaction to get its properties (like baiguullagiinId)
+    const guilgee = await BankniiGuilgeeModel.findById(bankniiGuilgeeId).lean();
+    if (!guilgee) {
+      return res.status(404).json({ error: "Гүйлгээ олдсонгүй." });
+    }
+
+    // Get gereeniiId from the deleted records (or before deleting)
+    const payments = await GuilgeeAvlaguudModel.find({
+      bankniiGuilgeeId: bankniiGuilgeeId,
+      turul: "төлөлт"
+    }).lean();
+
+    // Delete payment record from ledger
+    await GuilgeeAvlaguudModel.deleteMany({
+      bankniiGuilgeeId: bankniiGuilgeeId,
+      turul: "төлөлт"
+    });
+
+    // Clear connection fields from BankniiGuilgee
+    await BankniiGuilgeeModel.findByIdAndUpdate(bankniiGuilgeeId, {
+      $set: {
+        kholbosonTalbainId: [],
+        kholbosonGereeniiId: []
+      }
+    });
+
+    // Sync invoice status for each contract that was unlinked
+    const guilgeeService = require("../services/guilgeeService");
+    for (const pay of payments) {
+      if (pay.gereeniiId) {
+        await guilgeeService.syncInvoicesStatus(tukhainBaaziinKholbolt, pay.gereeniiId).catch(() => {});
+      }
+    }
+
+    // Emit event to update frontend clients
+    const io = req.app.get("socketio");
+    if (io && guilgee.baiguullagiinId) {
+      io.emit("baiguullagiin" + guilgee.baiguullagiinId, { turul: "bankniiGuilgeeShine" });
+    }
+
+    res.status(200).json({ message: "Амжилттай салгалаа", success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports.daraagiinTulukhOgnooZasya = daraagiinTulukhOgnooZasya;
 module.exports.tooZasya = tooZasya;
 module.exports.tooZasyaSync = tooZasyaSync;
 module.exports.tulultTaniya = tulultTaniya;
+module.exports.guilgeeKholbyo = guilgeeKholbyo;
+module.exports.guilgeeSalgaya = guilgeeSalgaya;

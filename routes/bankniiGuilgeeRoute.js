@@ -314,11 +314,13 @@ const {
   dansniiUldegdelAvya,
   bankniiKhuulgaTatajKhadgalya,
 } = require("../controller/cgw");
-const { tulultTaniya } = require("../controller/tulbur");
+const { tulultTaniya, guilgeeKholbyo, guilgeeSalgaya } = require("../controller/tulbur");
 
 router.post("/dansniiUldegdelAvya", tokenShalgakh, dansniiUldegdelAvya);
 router.post("/bankniiKhuulgaTatajKhadgalya", tokenShalgakh, bankniiKhuulgaTatajKhadgalya);
 router.post("/tulultTaniya", tokenShalgakh, tulultTaniya);
+router.post("/guilgeeKholbyo", tokenShalgakh, guilgeeKholbyo);
+router.post("/guilgeeSalgaya", tokenShalgakh, guilgeeSalgaya);
 
 module.exports = router;
 
