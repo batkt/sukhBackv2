@@ -82,6 +82,7 @@ router.get("/medegdel/unreadList", tokenShalgakh, medegdelUnreadList);
 router.get("/medegdel/thread/:id", tokenShalgakh, medegdelThread);
 router.post("/medegdel/reply", tokenShalgakh, medegdelUserReply);
 router.post("/medegdel/adminReply", tokenShalgakh, medegdelAdminReply);
+router.post("/medegdel/:id/kharsanEsekh", tokenShalgakh, medegdelKharsanEsekh);
 router.patch("/medegdel/:id/kharsanEsekh", tokenShalgakh, medegdelKharsanEsekh);
 router.get("/medegdel", tokenShalgakh, medegdelAvya);
 router.get("/medegdel/:id", tokenShalgakh, medegdelNegAvya);
