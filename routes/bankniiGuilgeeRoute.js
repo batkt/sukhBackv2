@@ -738,17 +738,17 @@ router.post("/tulultTaniya", tokenShalgakh, async (req, res, next) => {
 
     if (dansnuud?.length > 0) {
       for (const dans of dansnuud) {
-        // $size:0 misses records where field is missing entirely — cover both
+        // barilgiinId may not be set on older/CGW records — only filter if present
         var match = {
           dansniiDugaar: dans.dugaar,
           baiguullagiinId: dans.baiguullagiinId,
-          barilgiinId: dans.barilgiinId,
           bank: dans.bank,
           $or: [
             { kholbosonTalbainId: { $size: 0 } },
             { kholbosonTalbainId: { $exists: false } },
           ],
         };
+        if (dans.barilgiinId) match.barilgiinId = dans.barilgiinId;
         var guilgeenuud = await BankniiGuilgee(tukhainBaaziinKholbolt, false).find(match).lean();
         const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud");
 
@@ -785,12 +785,13 @@ router.post("/tulultTaniya", tokenShalgakh, async (req, res, next) => {
 
             // Find active contracts matching тоот (exclude terminated)
             const tootStr = String(Number(toot)); // normalize "005" → "5"
-            var gereenuud = await Geree(tukhainBaaziinKholbolt, false).find({
+            var gereeMatch = {
               baiguullagiinId: dans.baiguullagiinId,
-              barilgiinId: dans.barilgiinId,
               $or: [{ toot: toot }, { toot: tootStr }],
               tuluv: { $nin: ["Цуцалсан", "Дууссан"] },
-            }).lean();
+            };
+            if (dans.barilgiinId) gereeMatch.barilgiinId = dans.barilgiinId;
+            var gereenuud = await Geree(tukhainBaaziinKholbolt, false).find(gereeMatch).lean();
 
             // Narrow by phone if multiple contracts match
             const utas = utasOlgokh(desc);
@@ -809,7 +810,7 @@ router.post("/tulultTaniya", tokenShalgakh, async (req, res, next) => {
 
             await guilgeeService.recordPayment(tukhainBaaziinKholbolt, {
               baiguullagiinId: String(dans.baiguullagiinId),
-              barilgiinId: String(dans.barilgiinId),
+              barilgiinId: String(geree.barilgiinId || dans.barilgiinId || ""),
               gereeniiId: String(geree._id),
               gereeniiDugaar: geree.gereeniiDugaar || "",
               orshinSuugchId: geree.orshinSuugchId || "",
