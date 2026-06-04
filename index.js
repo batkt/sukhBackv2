@@ -517,8 +517,63 @@ if (!process.env.NODE_APP_INSTANCE || process.env.NODE_APP_INSTANCE === "0") {
     },
   );
 
+  // 5-minute cron job for automatic bank statement fetching & resident payment matching
+  cron.schedule(
+    "*/1 * * * *",
+    async function () {
+      const now = new Date();
+      console.log(`⏰ [CRON] Statement fetching started at ${now.toLocaleString("mn-MN", { timeZone: "Asia/Ulaanbaatar" })}`);
+
+      const { db } = require("zevbackv2");
+      const cgw = require("./controller/cgw");
+      const tulbur = require("./controller/tulbur");
+
+      if (db.kholboltuud && db.kholboltuud.length > 0) {
+        for (const kholbolt of db.kholboltuud) {
+          try {
+            console.log(`🔄 [CRON] Fetching statements for tenant: ${kholbolt.baiguullagiinId}`);
+
+            // Mock request and response objects
+            const req = {
+              body: {
+                tukhainBaaziinKholbolt: kholbolt,
+                baiguullagiinId: kholbolt.baiguullagiinId
+              },
+              app: {
+                get: (key) => { if (key === "socketio") return app.get("socketio"); }
+              }
+            };
+
+            const res = {
+              status: function () { return this; },
+              send: function () { },
+              json: function () { }
+            };
+
+            const next = (err) => {
+              if (err) console.error(`❌ [CRON] Statement fetch error for ${kholbolt.baiguullagiinId}:`, err.message || err);
+            };
+
+            // 1. Fetch bank statements (auto-deduplicated)
+            await cgw.bankniiKhuulgaTatajKhadgalya(req, res, next);
+
+            // 2. Identify resident payments (auto-matching by toot / phone)
+            await tulbur.tulultTaniya(req, res, next);
+
+          } catch (err) {
+            console.error(`❌ [CRON] Error processing tenant ${kholbolt?.baiguullagiinId}:`, err.message || err);
+          }
+        }
+      }
+    },
+    {
+      scheduled: true,
+      timezone: "Asia/Ulaanbaatar",
+    }
+  );
+
   console.log(
-    "🕐 [CRON] Schedules enabled on Instance 0: 16:20 (Invoices) and 07:20 (Parking Archive)",
+    "🕐 [CRON] Schedules enabled on Instance 0: 16:20 (Invoices), 07:20 (Parking Archive), and 5-min auto-CGW",
   );
 } else {
   console.log(

@@ -384,6 +384,425 @@ async function pad(num, size) {
   return num;
 }
 
+const dansniiUldegdelAvya = asyncHandler(async (req, res, next) => {
+  try {
+    const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
+    const dans = await Dans(tukhainBaaziinKholbolt).findOne({
+      dugaar: req.body.dansniiDugaar,
+    }).lean();
+
+    var uldegdel = 0;
+
+    if (dans && dans.bank === "khanbank") {
+      const { Token } = require("zevbackv2");
+      var query = {
+        turul: "khaanCorporate",
+        baiguullagiinId: dans.baiguullagiinId,
+        ognoo: { $gte: new Date(new Date().getTime() - 29 * 60000) },
+      };
+      if (dans.corporateBarilgaTusBur && !!dans.barilgiinId)
+        query["barilgiinId"] = dans.barilgiinId;
+      var tokenObject = await Token(tukhainBaaziinKholbolt).findOne(query);
+      var token;
+      if (!tokenObject) {
+        tokenObject = await tokenAvya(
+          dans.corporateNevtrekhNer,
+          dans.corporateNuutsUg,
+          next,
+          dans.baiguullagiinId,
+          dans.corporateBarilgaTusBur ? dans.barilgiinId : null,
+          tukhainBaaziinKholbolt
+        );
+        token = tokenObject?.access_token;
+      } else token = tokenObject.token;
+      if (!token)
+        throw new Error("Corporate Gateway үйлчилгээний нэвтрэх мэдээллээ шалгана уу!");
+      var khariu = await dansniiJagsaaltAvya(token, next);
+      khariu = khariu?.accounts?.filter((a) => a.number == req.body.dansniiDugaar);
+      if (khariu && khariu.length > 0) uldegdel = khariu[0].avalaibleBalance;
+      res.send({ uldegdel });
+
+    } else if (dans && dans.bank === "tdb") {
+      if (
+        !!dans.corporateNevtrekhNer &&
+        !!dans.corporateNuutsUg &&
+        !dans.AnyBIC &&
+        !dans.RoleID &&
+        !!dans.dugaar &&
+        (dans.dugaar.includes("mn") || dans.dugaar.includes("MN"))
+      ) {
+        var tokenObject = await tdbTokenAvya(dans, tukhainBaaziinKholbolt);
+        var url = process.env.TDB_SERVER + "/accounts/" + dans.dugaar + "/balance";
+        const response = await got.get(url, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + tokenObject.token,
+          },
+        }).catch((err) => { throw err; });
+        var khariu = JSON.parse(response.body);
+        res.send({ uldegdel: khariu.acntno.BALANCE });
+      }
+
+    } else if (dans && dans.bank === "golomt") {
+      var yawuulaxBody = { registerNo: dans.register, accountId: dans.dugaar };
+      var khariu = await golomtServiceDuudya(
+        dans, yawuulaxBody, "/v1/account/balance/inq", "ACCTBALINQ", next, tukhainBaaziinKholbolt
+      );
+      if (!!khariu && !!khariu.balanceLL && khariu.balanceLL.length > 0)
+        khariu = { uldegdel: khariu?.balanceLL[0].amount?.value };
+      res.send(khariu);
+
+    } else if (dans && dans.bank === "bogd") {
+      var tokenObject = await bogdTokentAvya(dans, tukhainBaaziinKholbolt);
+      const response = await got.post(process.env.BOGD_SERVER + "api/accounts", {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+          lang_code: "MN",
+          Authorization: "Bearer " + tokenObject,
+        },
+      }).catch((err) => { throw err; });
+      var khariu = JSON.parse(response.body);
+      var khariltsakh = khariu?.data?.types[0].accounts?.filter(
+        (e) => e.accountNo === dans.dugaar
+      )[0];
+      res.send({ uldegdel: khariltsakh?.balance });
+
+    } else if (dans && dans.bank === "trans") {
+      var tokenObject = await transTokenAvya(dans, tukhainBaaziinKholbolt);
+      var url =
+        process.env.TRANS_SERVER +
+        "/getAccountBalance?apikey=" +
+        (dans.apikey ? dans.apikey : "p_uZ6A");
+      const response = await got.post(url, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + tokenObject.token,
+        },
+        json: { acnt_code: dans.dugaar },
+      }).catch((err) => { throw err; });
+      var khariu = JSON.parse(response.body);
+      res.send(khariu);
+
+    } else {
+      res.send({ uldegdel: 0 });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+const bankniiKhuulgaTatajKhadgalya = asyncHandler(async (req, res, next) => {
+  try {
+    const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
+    var dansnuud;
+    var firstDay;
+    var lastDay;
+
+    if (req.body.ognoo) {
+      var ognoo = new Date(req.body.ognoo);
+      firstDay = new Date(ognoo.getFullYear(), ognoo.getMonth(), 1);
+      lastDay = new Date(ognoo.getFullYear(), ognoo.getMonth() + 1, 0);
+    } else {
+      firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      lastDay = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+    }
+
+    if (req.body.dansniiDugaar) {
+      dansnuud = await Dans(tukhainBaaziinKholbolt).find({
+        corporateAshiglakhEsekh: true,
+        dugaar: req.body.dansniiDugaar,
+      }).lean();
+    } else {
+      dansnuud = await Dans(tukhainBaaziinKholbolt).find({
+        corporateAshiglakhEsekh: true,
+        oirkhonTatakhEsekh: { $exists: false },
+        baiguullagiinId: req.body.baiguullagiinId,
+      }).lean();
+    }
+
+    if (!dansnuud || dansnuud.length === 0) {
+      return res.status(200).send("Татах дансны мэдээлэл байхгүй!");
+    }
+
+    const { Token } = require("zevbackv2");
+
+    for (const dans of dansnuud) {
+      try {
+        if (dans.bank === "khanbank") {
+          var query = {
+            turul: "khaanCorporate",
+            baiguullagiinId: dans.baiguullagiinId,
+            ognoo: { $gte: new Date(new Date().getTime() - 29 * 60000) },
+          };
+          if (dans.corporateBarilgaTusBur && !!dans.barilgiinId)
+            query["barilgiinId"] = dans.barilgiinId;
+          var tokenObject = await Token(tukhainBaaziinKholbolt).findOne(query);
+          var token;
+          if (!tokenObject) {
+            tokenObject = await tokenAvya(
+              dans.corporateNevtrekhNer,
+              dans.corporateNuutsUg,
+              next,
+              dans.baiguullagiinId,
+              dans.corporateBarilgaTusBur ? dans.barilgiinId : null,
+              tukhainBaaziinKholbolt
+            );
+            token = tokenObject?.access_token;
+          } else token = tokenObject.token;
+
+          var maxMatch = { dansniiDugaar: dans.dugaar, baiguullagiinId: dans.baiguullagiinId };
+          if (dans.barilgiinId) maxMatch.barilgiinId = dans.barilgiinId;
+          var maxAgg = [
+            { $match: maxMatch },
+            { $group: { _id: "$dansniiDugaar", max: { $max: { $toInt: "$record" } } } },
+          ];
+          var max = await BankniiGuilgee(tukhainBaaziinKholbolt, false).aggregate(maxAgg);
+          console.log(`📌 [ХУУЛГА] khanbank ${dans.dugaar}: max record=${max?.[0]?.max ?? "байхгүй (бүгдийг татна)"} barilgiinId=${dans.barilgiinId || "тохируулаагүй"}`);
+          var bodyKhuulga = {
+            baiguullagiinId: dans.baiguullagiinId,
+            barilgiinId: dans.barilgiinId,
+            dansniiDugaar: dans.dugaar,
+            corporateShunuUntraakhEsekh: dans.corporateShunuUntraakhEsekh,
+          };
+          if (max && max.length !== 0) bodyKhuulga["record"] = max[0].max;
+          var khariu = await dansniiKhuulgaAvya(token, next, bodyKhuulga);
+
+          if (khariu && khariu.transactions) {
+            var guilgeenuud = [];
+            for (const mur of khariu.transactions) {
+              var existing = await BankniiGuilgee(tukhainBaaziinKholbolt, false).findOne({
+                record: mur?.record,
+                dansniiDugaar: dans.dugaar,
+                barilgiinId: dans.barilgiinId || req.body.barilgiinId || null,
+              });
+              if (!existing) {
+                var g = new (BankniiGuilgee(tukhainBaaziinKholbolt))(mur);
+                g.dansniiDugaar = dans.dugaar;
+                g.bank = dans.bank;
+                g.baiguullagiinId = dans.baiguullagiinId;
+                g.barilgiinId = dans.barilgiinId || req.body.barilgiinId || null;
+                guilgeenuud.push(g);
+              }
+            }
+            if (guilgeenuud.length > 0) {
+              await BankniiGuilgee(tukhainBaaziinKholbolt).insertMany(guilgeenuud).catch(() => { });
+            }
+          }
+
+        } else if (dans.bank === "tdb") {
+          if (!!dans.corporateNevtrekhNer && !!dans.corporateNuutsUg && !dans.AnyBIC && !dans.RoleID &&
+            !!dans.dugaar && (dans.dugaar.includes("mn") || dans.dugaar.includes("MN"))) {
+            var tokenObject = await tdbTokenAvya(dans, tukhainBaaziinKholbolt);
+            var url = process.env.TDB_SERVER + "/accounts/statement/" + dans.dugaar;
+            var maxDoc = await BankniiGuilgee(tukhainBaaziinKholbolt, false)
+              .findOne({ barilgiinId: dans.barilgiinId, dansniiDugaar: dans.dugaar })
+              .sort({ TxDt: -1 }).limit(1);
+            if (!!maxDoc) firstDay = new Date(maxDoc.TxDt);
+            const fmt = (d) =>
+              d.getFullYear() + "/" + (d.getMonth() < 9 ? "0" : "") + (d.getMonth() + 1) + "/" +
+              (d.getDate() < 10 ? "0" : "") + d.getDate();
+            url += `?from=${fmt(firstDay)}&to=${fmt(lastDay)}&page=0&size=100`;
+            var response = await axios.get(url, {
+              headers: { "Content-Type": "application/json", Authorization: "Bearer " + tokenObject.token },
+            }).catch(() => { });
+            var khariu = response?.data;
+            if (!!khariu && !!khariu.txn && khariu.txn.length > 0) {
+              var guilgeenuud = [];
+              for (const mur of khariu.txn) {
+                var existing = await BankniiGuilgee(tukhainBaaziinKholbolt, false).findOne({
+                  refno: mur?.refno,
+                  dansniiDugaar: dans.dugaar,
+                  barilgiinId: dans.barilgiinId || req.body.barilgiinId || null,
+                });
+                if (!existing) {
+                  var g = new (BankniiGuilgee(tukhainBaaziinKholbolt))({
+                    TxDt: mur?.txndate, refno: mur?.refno, TxAddInf: mur?.txndesc,
+                    Amt: mur?.credit ? mur?.credit : mur?.debit, balance: mur?.balance,
+                    CtAcntOrg: mur?.contacntno, CtActnName: mur?.contacntname,
+                    curRate: mur?.currate, CtBankNo: mur?.bankcode,
+                  });
+                  g.dansniiDugaar = dans.dugaar; g.bank = dans.bank;
+                  g.baiguullagiinId = dans.baiguullagiinId; g.barilgiinId = dans.barilgiinId || req.body.barilgiinId || null;
+                  guilgeenuud.push(g);
+                }
+              }
+              if (guilgeenuud.length > 0) {
+                await BankniiGuilgee(tukhainBaaziinKholbolt).insertMany(guilgeenuud).catch(() => { });
+              }
+            }
+          }
+
+        } else if (dans.bank === "golomt") {
+          var maxDoc = await BankniiGuilgee(tukhainBaaziinKholbolt, false)
+            .findOne({ barilgiinId: dans.barilgiinId, dansniiDugaar: dans.dugaar, bank: "golomt" })
+            .sort({ createdAt: -1 }).limit(1);
+          if (!!maxDoc) firstDay = new Date(maxDoc.tranDate);
+          const fmtDash = (d) =>
+            d.getFullYear() + "-" + (d.getMonth() < 9 ? "0" : "") + (d.getMonth() + 1) + "-" +
+            (d.getDate() < 10 ? "0" : "") + d.getDate();
+          var yawuulaxBody = {
+            registerNo: dans.register, accountId: dans.dugaar,
+            startDate: fmtDash(firstDay), endDate: fmtDash(lastDay),
+          };
+          var khariu = await golomtServiceDuudya(
+            dans, yawuulaxBody, "/v1/account/operative/statement", "OPERACCTSTA", next, tukhainBaaziinKholbolt
+          );
+          if (!!khariu && !!khariu.statements && khariu.statements.length > 0) {
+            var guilgeenuud = [];
+            for (const mur of khariu.statements) {
+              var existing = await BankniiGuilgee(tukhainBaaziinKholbolt, false).findOne({
+                tranId: mur?.tranId,
+                dansniiDugaar: dans.dugaar,
+                barilgiinId: dans.barilgiinId || req.body.barilgiinId || null,
+              });
+              if (!existing) {
+                var g = new (BankniiGuilgee(tukhainBaaziinKholbolt))({
+                  requestId: mur?.requestId, recNum: mur?.recNum, tranId: mur?.tranId,
+                  tranDate: mur?.tranDate, drOrCr: mur?.drOrCr, tranAmount: mur?.tranAmount,
+                  tranDesc: mur?.tranDesc, tranPostedDate: mur?.tranPostedDate,
+                  tranCrnCode: mur?.tranCrnCode, exchRate: mur?.exchRate, balance: mur?.balance,
+                  accName: mur?.accName, accNum: mur?.accNum,
+                });
+                g.dansniiDugaar = dans.dugaar; g.bank = dans.bank;
+                g.baiguullagiinId = dans.baiguullagiinId; g.barilgiinId = dans.barilgiinId || req.body.barilgiinId || null;
+                guilgeenuud.push(g);
+              }
+            }
+            if (guilgeenuud.length > 0) {
+              await BankniiGuilgee(tukhainBaaziinKholbolt).insertMany(guilgeenuud).catch((err) => {
+                console.error("BankniiGuilgee golomt insertMany >>>", err);
+              });
+            }
+          }
+
+        } else if (dans.bank === "bogd") {
+          var tokenObject = await bogdTokentAvya(dans, tukhainBaaziinKholbolt);
+          var maxDoc = await BankniiGuilgee(tukhainBaaziinKholbolt, false)
+            .findOne({ barilgiinId: dans.barilgiinId, dansniiDugaar: dans.dugaar })
+            .sort({ createdAt: -1 }).limit(1);
+          if (!!maxDoc) firstDay = new Date(maxDoc.tranDate);
+          const fmtDash = (d) =>
+            d.getFullYear() + "-" + (d.getMonth() < 9 ? "0" : "") + (d.getMonth() + 1) + "-" +
+            (d.getDate() < 10 ? "0" : "") + d.getDate();
+          const paramsVal = new URLSearchParams(
+            "account_no=" + dans.dugaar + "&start_date=" + fmtDash(firstDay) + "&end_date=" + fmtDash(lastDay)
+          );
+          const response = await got.post(process.env.BOGD_SERVER + "api/statement", {
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+              lang_code: "MN",
+              Authorization: "Bearer " + tokenObject,
+            },
+            body: paramsVal.toString(),
+          }).catch((err) => { throw err; });
+          var khariu = JSON.parse(response.body);
+          var guilgeenuud = [];
+          if (khariu?.data?.transactions?.length > 0) {
+            khariu.data.transactions.forEach((mur) => {
+              var postedDate = new Date(mur?.date);
+              postedDate.setHours(mur?.time?.split(":")[0]);
+              postedDate.setMinutes(mur?.time?.split(":")[1]);
+              postedDate.setSeconds(mur?.time?.split(":")[2]);
+              guilgeenuud.push(new (BankniiGuilgee(tukhainBaaziinKholbolt))({
+                requestId: mur?.txn_id, recNum: mur?.txn_no, tranId: mur?.txn_id,
+                tranDate: new Date(mur?.date), drOrCr: "Credit", amount: mur?.debit,
+                description: mur?.description, tranPostedDate: postedDate,
+                tranCrnCode: mur?.currency, exchRate: 1, balance: mur?.balance_after,
+                beforeBalance: mur?.balance_before, accName: mur?.to_acc_name,
+                accNum: mur?.to_acc_no, relatedAccount: mur?.to_acc_no, time: mur?.time,
+              }));
+            });
+          }
+          // Deduplicate — skip already-saved records
+          var ustgakhJagsaalt = [];
+          for (const item of guilgeenuud) {
+            var existing = await BankniiGuilgee(tukhainBaaziinKholbolt, false).findOne({
+              requestId: item.requestId, recNum: item.recNum,
+              dansniiDugaar: dans.dugaar, barilgiinId: dans.barilgiinId,
+            });
+            if (existing) ustgakhJagsaalt.push(item);
+          }
+          guilgeenuud = guilgeenuud.filter((el) => !ustgakhJagsaalt.includes(el));
+          guilgeenuud.forEach((x) => {
+            x.dansniiDugaar = dans.dugaar; x.bank = dans.bank;
+            x.baiguullagiinId = dans.baiguullagiinId; x.barilgiinId = dans.barilgiinId;
+          });
+          if (guilgeenuud.length > 0) {
+            await BankniiGuilgee(tukhainBaaziinKholbolt).insertMany(guilgeenuud).catch((err) => { next(err); });
+          }
+
+        } else if (dans.bank === "trans") {
+          var tokenObject = await transTokenAvya(dans, tukhainBaaziinKholbolt);
+          var url =
+            process.env.TRANS_SERVER +
+            "/getStatement?apikey=" +
+            (dans.apikey ? dans.apikey : "p_uZ6A");
+          var maxDoc = await BankniiGuilgee(tukhainBaaziinKholbolt, false)
+            .findOne({ barilgiinId: dans.barilgiinId, dansniiDugaar: dans.dugaar })
+            .sort({ createdAt: -1 }).limit(1);
+          if (!!maxDoc) firstDay = new Date(maxDoc.txnDate);
+          const fmtDash = (d) =>
+            d.getFullYear() + "-" + (d.getMonth() < 9 ? "0" : "") + (d.getMonth() + 1) + "-" +
+            (d.getDate() < 10 ? "0" : "") + d.getDate();
+          const response = await got.post(url, {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: "Bearer " + tokenObject.token,
+            },
+            json: {
+              acnt_code: dans.dugaar,
+              start_date: fmtDash(firstDay),
+              end_date: fmtDash(lastDay),
+              start_paging_position: 0,
+              page_row_count: 100,
+            },
+          }).catch((err) => { throw err; });
+          var khariu = JSON.parse(response.body);
+          if (!!khariu && !!khariu.result && !!khariu.result.txns && khariu.result.txns.length > 0) {
+            var guilgeenuud = [];
+            for (const mur of khariu.result.txns) {
+              var existing = await BankniiGuilgee(tukhainBaaziinKholbolt, false).findOne({
+                jrno: mur?.jrno,
+                jritemNo: mur?.jritemNo,
+                dansniiDugaar: dans.dugaar,
+                barilgiinId: dans.barilgiinId || req.body.barilgiinId || null,
+              });
+              if (!existing) {
+                var g = new (BankniiGuilgee(tukhainBaaziinKholbolt))({
+                  jrno: mur?.jrno, jritemNo: mur?.jritemNo, contCurRate: mur?.contCurRate,
+                  username: mur?.username, userId: mur?.userId, userBrchCode: mur?.userBrchCode,
+                  txnCode: mur?.txnCode, txnNo: mur?.txnNo, balTypeCode: mur?.balTypeCode,
+                  income: mur?.income, outcome: mur?.outcome, curCode: mur?.curCode,
+                  curRate: mur?.curRate, contAcntName: mur?.contAcntName, contAcntCode: mur?.contAcntCode,
+                  contBankAcntCode: mur?.contBankAcntCode, contBankAcntName: mur?.contBankAcntName,
+                  txnDesc: mur?.txnDesc, txnDate: mur?.txnDate, postDate: mur?.postDate,
+                });
+                g.dansniiDugaar = dans.dugaar; g.bank = dans.bank;
+                g.baiguullagiinId = dans.baiguullagiinId; g.barilgiinId = dans.barilgiinId || req.body.barilgiinId || null;
+                guilgeenuud.push(g);
+              }
+            }
+            if (guilgeenuud.length > 0) {
+              await BankniiGuilgee(tukhainBaaziinKholbolt).insertMany(guilgeenuud).catch((err) => { next(err); });
+            }
+          }
+        }
+
+      } catch (aldaaa) {
+        console.error("bankniiKhuulgaTatajKhadgalya дотоод алдаа:", aldaaa?.message || aldaaa);
+        continue;
+      }
+    }
+
+    const io = req.app.get("socketio");
+    if (io) io.emit("baiguullagiin" + req.body.baiguullagiinId, { turul: "bankniiGuilgeeShine" });
+    res.status(200).send("Амжилттай татаж хадгаллаа");
+  } catch (err) {
+    console.error("bankniiKhuulgaTatajKhadgalya >>>", err);
+    next(err);
+  }
+});
+
 module.exports = {
   tokenAvya,
   golomtTokenAvya,
@@ -394,4 +813,6 @@ module.exports = {
   dansniiJagsaaltAvya,
   dansniiKhuulgaAvya,
   pad,
+  dansniiUldegdelAvya,
+  bankniiKhuulgaTatajKhadgalya,
 };
