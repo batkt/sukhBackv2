@@ -339,6 +339,44 @@ async function dansniiKhuulgaAvya(token, next, body) {
   }
 }
 
+// Trans (Tengerin) bank token function
+async function transTokenAvya(dans, tukhainBaaziinKholbolt) {
+  try {
+    var tokenObject = await Token(tukhainBaaziinKholbolt).findOne({
+      turul: "trans",
+      ognoo: { $gte: new Date(new Date().getTime() - 590000) },
+    });
+    if (!tokenObject) {
+      var url =
+        process.env.TRANS_SERVER +
+        "/getToken?apikey=" +
+        (dans.apikey ? dans.apikey : "p_uZ6A");
+      const response = await got
+        .post(url, {
+          headers: { "Content-Type": "application/json" },
+          json: {
+            username: dans.corporateNevtrekhNer,
+            password: dans.corporateNuutsUg,
+          },
+        })
+        .catch((err) => { throw err; });
+      var khariu = JSON.parse(response.body);
+      tokenObject = khariu;
+      Token(tukhainBaaziinKholbolt)
+        .updateOne(
+          { turul: "trans" },
+          { ognoo: new Date(), token: khariu.result },
+          { upsert: true }
+        )
+        .then(() => {})
+        .catch(() => {});
+    }
+    return tokenObject;
+  } catch (error) {
+    throw new Error("Trans банктай холбогдоход алдаа гарлаа!");
+  }
+}
+
 // Helper function to pad numbers
 async function pad(num, size) {
   num = num.toString();
@@ -351,6 +389,7 @@ module.exports = {
   golomtTokenAvya,
   tdbTokenAvya,
   bogdTokentAvya,
+  transTokenAvya,
   golomtServiceDuudya,
   dansniiJagsaaltAvya,
   dansniiKhuulgaAvya,
