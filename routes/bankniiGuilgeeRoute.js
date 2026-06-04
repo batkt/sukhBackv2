@@ -690,6 +690,8 @@ router.post("/bankniiKhuulgaTatajKhadgalya", tokenShalgakh, async (req, res, nex
       }
     }
 
+    const io = req.app.get("socketio");
+    if (io) io.emit("baiguullagiin" + req.body.baiguullagiinId, { turul: "bankniiGuilgeeShine" });
     res.status(200).send("Амжилттай татаж хадгаллаа");
   } catch (err) {
     console.error("bankniiKhuulgaTatajKhadgalya >>>", err);
