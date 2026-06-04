@@ -23,6 +23,7 @@
     "@socket.io/redis-adapter": "^8.3.0",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
+    "crypto-js": "^4.2.0",
     "express": "^5.1.0",
     "express-async-handler": "^1.2.0",
     "express-useragent": "^1.0.15",
