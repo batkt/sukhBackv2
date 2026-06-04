@@ -785,4 +785,63 @@ router.delete(
   },
 );
 
+router.get("/storageInfo", tokenShalgakh, async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const baiguullagiinId = req.user?.baiguullagiinId;
+
+    const results = [];
+
+    // Main/shared connection
+    const mainConn = db.erunkhiiKholbolt;
+    if (mainConn?.db) {
+      try {
+        const stats = await mainConn.db.command({ dbStats: 1, scale: 1 });
+        results.push({
+          ner: "Үндсэн бааз",
+          dataSize: stats.dataSize || 0,
+          storageSize: stats.storageSize || 0,
+          indexSize: stats.indexSize || 0,
+          collections: stats.collections || 0,
+          objects: stats.objects || 0,
+        });
+      } catch (e) {}
+    }
+
+    // Tenant connection for this org
+    if (baiguullagiinId && db.kholboltuud?.length) {
+      const kholbolt = db.kholboltuud.find(
+        (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
+      );
+      const tenantConn = kholbolt?.kholbolt;
+      if (tenantConn?.db) {
+        try {
+          const stats = await tenantConn.db.command({ dbStats: 1, scale: 1 });
+          results.push({
+            ner: "Байгууллагын бааз",
+            dataSize: stats.dataSize || 0,
+            storageSize: stats.storageSize || 0,
+            indexSize: stats.indexSize || 0,
+            collections: stats.collections || 0,
+            objects: stats.objects || 0,
+          });
+        } catch (e) {}
+      }
+    }
+
+    const total = results.reduce(
+      (acc, r) => ({
+        dataSize: acc.dataSize + r.dataSize,
+        storageSize: acc.storageSize + r.storageSize,
+        indexSize: acc.indexSize + r.indexSize,
+      }),
+      { dataSize: 0, storageSize: 0, indexSize: 0 }
+    );
+
+    return res.json({ success: true, details: results, total });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
