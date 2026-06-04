@@ -788,45 +788,36 @@ router.delete(
 router.get("/storageInfo", tokenShalgakh, async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
-    const baiguullagiinId = req.user?.baiguullagiinId;
+    const baiguullagiinId = req.query?.baiguullagiinId;
+
+    const getStats = async (conn, ner) => {
+      if (!conn?.db) return null;
+      try {
+        const s = await conn.db.command({ dbStats: 1, scale: 1 });
+        return {
+          ner,
+          dataSize: s.dataSize || 0,
+          storageSize: s.storageSize || 0,
+          indexSize: s.indexSize || 0,
+          collections: s.collections || 0,
+          objects: s.objects || 0,
+        };
+      } catch (e) {
+        return null;
+      }
+    };
 
     const results = [];
 
-    // Main/shared connection
-    const mainConn = db.erunkhiiKholbolt;
-    if (mainConn?.db) {
-      try {
-        const stats = await mainConn.db.command({ dbStats: 1, scale: 1 });
-        results.push({
-          ner: "Үндсэн бааз",
-          dataSize: stats.dataSize || 0,
-          storageSize: stats.storageSize || 0,
-          indexSize: stats.indexSize || 0,
-          collections: stats.collections || 0,
-          objects: stats.objects || 0,
-        });
-      } catch (e) {}
-    }
+    const mainStats = await getStats(db.erunkhiiKholbolt, "Үндсэн бааз");
+    if (mainStats) results.push(mainStats);
 
-    // Tenant connection for this org
     if (baiguullagiinId && db.kholboltuud?.length) {
-      const kholbolt = db.kholboltuud.find(
+      const entry = db.kholboltuud.find(
         (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
       );
-      const tenantConn = kholbolt?.kholbolt;
-      if (tenantConn?.db) {
-        try {
-          const stats = await tenantConn.db.command({ dbStats: 1, scale: 1 });
-          results.push({
-            ner: "Байгууллагын бааз",
-            dataSize: stats.dataSize || 0,
-            storageSize: stats.storageSize || 0,
-            indexSize: stats.indexSize || 0,
-            collections: stats.collections || 0,
-            objects: stats.objects || 0,
-          });
-        } catch (e) {}
-      }
+      const tenantStats = await getStats(entry?.kholbolt, "Байгууллагын бааз");
+      if (tenantStats) results.push(tenantStats);
     }
 
     const total = results.reduce(
