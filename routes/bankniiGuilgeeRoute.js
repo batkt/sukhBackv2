@@ -492,11 +492,14 @@ router.post("/bankniiKhuulgaTatajKhadgalya", tokenShalgakh, async (req, res, nex
             token = tokenObject?.access_token;
           } else token = tokenObject.token;
 
+          var maxMatch = { dansniiDugaar: dans.dugaar, baiguullagiinId: dans.baiguullagiinId };
+          if (dans.barilgiinId) maxMatch.barilgiinId = dans.barilgiinId;
           var maxAgg = [
-            { $match: { dansniiDugaar: dans.dugaar, baiguullagiinId: dans.baiguullagiinId, barilgiinId: dans.barilgiinId } },
+            { $match: maxMatch },
             { $group: { _id: "$dansniiDugaar", max: { $max: { $toInt: "$record" } } } },
           ];
           var max = await BankniiGuilgee(tukhainBaaziinKholbolt, false).aggregate(maxAgg);
+          console.log(`📌 [ХУУЛГА] khanbank ${dans.dugaar}: max record=${max?.[0]?.max ?? "байхгүй (бүгдийг татна)"} barilgiinId=${dans.barilgiinId || "тохируулаагүй"}`);
           var bodyKhuulga = {
             baiguullagiinId: dans.baiguullagiinId,
             barilgiinId: dans.barilgiinId,
@@ -806,9 +809,16 @@ router.post("/tulultTaniya", tokenShalgakh, async (req, res, next) => {
               if (byUtas.length > 0) gereenuud = byUtas;
             }
 
-            if (gereenuud.length === 0) continue;
-            // Still ambiguous after phone check → skip safely
-            if (gereenuud.length > 1) continue;
+            if (gereenuud.length === 0) {
+              console.log(`     ⚠️  тоот=${toot} — гэрээ олдсонгүй`);
+              continue;
+            }
+            if (gereenuud.length > 1) {
+              const utas = utasOlgokh(desc);
+              console.log(`     ⚠️  тоот=${toot} — ${gereenuud.length} гэрээ олдсон, утас=${utas || "байхгүй"} — гэрээний утасны мэдээлэл тохирохгүй тул алгасав`);
+              console.log(`        гэрээнүүд: ${gereenuud.map(g => `${g.gereeniiDugaar}(utas:${(g.utas||[]).join(',')})`).join(' | ')}`);
+              continue;
+            }
 
             const geree = gereenuud[0];
 
