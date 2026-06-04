@@ -699,39 +699,123 @@ router.post("/bankniiKhuulgaTatajKhadgalya", tokenShalgakh, async (req, res, nex
   }
 });
 
+// Extract тоот number from description — handles: "147тоот", "134 тоот", "123toot", "122 toot", "ТООТ147" etc.
+function tootOlgokh(desc) {
+  if (!desc) return null;
+  const patterns = [
+    /(\d+)\s*(?:тоот|toot|ТООТ|TOOT)/i,
+    /(?:тоот|toot|ТООТ|TOOT)\s*(\d+)/i,
+  ];
+  for (const re of patterns) {
+    const m = desc.match(re);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+// Extract 8-digit phone number from description
+function utasOlgokh(desc) {
+  if (!desc) return null;
+  const m = desc.match(/\b([5-9]\d{7})\b/);
+  return m ? m[1] : null;
+}
+
 // POST /tulultTaniya — шинэ гүйлгээнүүд дотроос тулалт таних
 router.post("/tulultTaniya", tokenShalgakh, async (req, res, next) => {
   try {
     const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
+    const Geree = require("../models/geree");
+    const guilgeeService = require("../services/guilgeeService");
+
     var dansnuud = await Dans(tukhainBaaziinKholbolt).find({
       corporateAshiglakhEsekh: true,
       oirkhonTatakhEsekh: { $exists: false },
       baiguullagiinId: req.body.baiguullagiinId,
     }).lean();
 
+    var tulultBolsonToo = 0;
+
     if (dansnuud?.length > 0) {
       for (const dans of dansnuud) {
         var match = {
-          createdAt: { $gt: new Date(new Date().getTime() - 60000), $lt: new Date() },
           dansniiDugaar: dans.dugaar,
           baiguullagiinId: dans.baiguullagiinId,
           barilgiinId: dans.barilgiinId,
           bank: dans.bank,
-          kholbosonRegisteruud: { $size: 0 },
+          kholbosonTalbainId: { $size: 0 },
         };
-        if (dans.bank === "golomt") {
-          match["drOrCr"] = "Credit";
-          match["recNum"] = "1";
-          match["tranAmount"] = { $gt: 0 };
-        }
-        var guilgeenuud = await BankniiGuilgee(tukhainBaaziinKholbolt, false).find(match);
-        // TODO: Тулалт танилтын логик энд нэмнэ (гэрээтэй тулах, эбаримт гаргах гэх мэт)
-        if (guilgeenuud?.length > 0) {
-          console.log(`tulultTaniya: ${dans.bank} дансны ${guilgeenuud.length} шинэ гүйлгээ олдлоо`);
+        var guilgeenuud = await BankniiGuilgee(tukhainBaaziinKholbolt, false).find(match).lean();
+
+        for (const guilgee of guilgeenuud) {
+          const desc = guilgee.description || guilgee.TxAddInf || guilgee.tranDesc || guilgee.txnDesc || "";
+          const toot = tootOlgokh(desc);
+          if (!toot) continue;
+
+          // Amount: bank-specific field, must be positive (incoming)
+          const dun = guilgee.bank === "khanbank" ? guilgee.amount :
+            guilgee.bank === "golomt" ? guilgee.tranAmount :
+              guilgee.bank === "tdb" ? guilgee.Amt :
+                guilgee.bank === "bogd" ? guilgee.amount :
+                  guilgee.bank === "trans" ? (guilgee.income > 0 ? guilgee.income : 0) : 0;
+          if (!dun || dun <= 0) continue;
+
+          // Find contracts matching тоот in this building
+          var gereeQuery = {
+            baiguullagiinId: dans.baiguullagiinId,
+            barilgiinId: dans.barilgiinId,
+            toot: toot,
+          };
+          var gereenuud = await Geree(tukhainBaaziinKholbolt, false).find(gereeQuery).lean();
+
+          // Narrow by phone if found in description and multiple contracts match
+          const utas = utasOlgokh(desc);
+          if (utas && gereenuud.length > 1) {
+            const byUtas = gereenuud.filter(g =>
+              Array.isArray(g.utas) ? g.utas.includes(utas) : g.utas === utas
+            );
+            if (byUtas.length > 0) gereenuud = byUtas;
+          }
+
+          if (gereenuud.length === 0) continue;
+          // If still ambiguous (multiple contracts), skip — can't safely auto-match
+          if (gereenuud.length > 1 && !utas) continue;
+
+          const geree = gereenuud[0];
+
+          // Prevent duplicate: check if this bank transaction is already recorded
+          const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud");
+          const existing = await GuilgeeAvlaguudModel(tukhainBaaziinKholbolt)
+            .findOne({ bankniiGuilgeeId: String(guilgee._id), baiguullagiinId: dans.baiguullagiinId })
+            .lean().catch(() => null);
+          if (existing) continue;
+
+          // Record payment
+          await guilgeeService.recordPayment(tukhainBaaziinKholbolt, {
+            baiguullagiinId: String(dans.baiguullagiinId),
+            barilgiinId: String(dans.barilgiinId),
+            gereeniiId: String(geree._id),
+            gereeniiDugaar: geree.gereeniiDugaar || "",
+            orshinSuugchId: geree.orshinSuugchId || "",
+            toot: toot,
+            ognoo: guilgee.postDate || guilgee.tranDate || guilgee.TxDt || guilgee.txnDate || new Date(),
+            dun: -Math.abs(dun),
+            tailbar: `Банкны хуулга тулалт - ${desc.slice(0, 80)}`,
+            source: "bank",
+            bankniiGuilgeeId: String(guilgee._id),
+            dansniiDugaar: dans.dugaar,
+          });
+
+          // Mark bank transaction as reconciled
+          await BankniiGuilgee(tukhainBaaziinKholbolt).findByIdAndUpdate(guilgee._id, {
+            $push: { kholbosonTalbainId: String(geree._id) },
+          });
+
+          tulultBolsonToo++;
+          console.log(`✅ [ТУЛАЛТ] тоот=${toot} geree=${geree.gereeniiDugaar} dun=${dun}`);
         }
       }
     }
-    res.status(200).send("Тулалт амжилттай");
+    res.status(200).json({ message: "Тулалт амжилттай", tulultBolsonToo });
   } catch (err) {
     next(err);
   }
