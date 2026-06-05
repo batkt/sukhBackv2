@@ -1,15 +1,10 @@
 const mongoose = require("mongoose");
-const { ObjectId } = mongoose.Types;
 const path = require("path");
 
 // Load environment variables relative to this script's directory
 require("dotenv").config({ path: path.join(__dirname, "..", "tokhirgoo", "tokhirgoo.env") });
 
-const targetIds = [
-  new ObjectId("6a05830ca481717f34d6480c"), // ner: 'ttt'
-  new ObjectId("6a05832ddfd2324d9e69d4c4"), // ner: 'test'
-  new ObjectId("6a22723ff360e75de5b108a5")  // ner: 'Ажиллах хүчний зардал'
-];
+const targetNames = ['ttt', 'test', 'Ажиллах хүчний зардал'];
 
 async function run() {
   try {
@@ -26,12 +21,10 @@ async function run() {
     let totalMatches = 0;
 
     for (const dbName of dbNames) {
-      // Exclude system databases if appropriate, but let's check everything
       if (["admin", "config", "local"].includes(dbName)) continue;
 
       const tenantDb = mongoose.connection.useDb(dbName);
       
-      // Get all collections
       const collections = await tenantDb.db.listCollections().toArray();
       const hasGeree = collections.some(c => c.name === "geree");
 
@@ -39,9 +32,13 @@ async function run() {
 
       const Geree = tenantDb.collection("geree");
 
-      // Find contracts that have any of the target IDs in their zardluud array
+      // Find contracts that have any matching zardluud items by name
       const matches = await Geree.find({
-        "zardluud._id": { $in: targetIds }
+        zardluud: {
+          $elemMatch: {
+            ner: { $in: targetNames }
+          }
+        }
       }).toArray();
 
       if (matches.length > 0) {
@@ -51,14 +48,15 @@ async function run() {
 
         for (const contract of matches) {
           console.log(`Contract: ${contract.gereeniiDugaar || "No contract number"} | Toot: ${contract.toot || "N/A"} | Resident: ${contract.ner || ""} ${contract.ovog || ""}`);
+          console.log(`Contract Building ID: ${contract.barilgiinId ? contract.barilgiinId.toString() : "N/A"}`);
           
           const itemsToRemove = contract.zardluud.filter(z => 
-            z._id && targetIds.some(tid => tid.equals(z._id))
+            z && targetNames.includes(z.ner)
           );
 
           console.log("Items to be removed:");
           itemsToRemove.forEach(item => {
-            console.log(`  - _id: ${item._id.toString()} | Name: "${item.ner}" | Type: ${item.turul} | Tariff: ${item.tariff}`);
+            console.log(`  - _id: ${item._id ? item._id.toString() : "N/A"} | Name: "${item.ner}" | BuildingID: ${item.barilgiinId ? item.barilgiinId.toString() : "N/A"} | Type: ${item.turul} | Tariff: ${item.tariff}`);
           });
           console.log();
           totalMatches += itemsToRemove.length;
