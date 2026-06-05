@@ -1,8 +1,9 @@
 const mongoose = require("mongoose");
 const { ObjectId } = mongoose.Types;
+const path = require("path");
 
-// Load environment variables
-require("dotenv").config({ path: "./tokhirgoo/tokhirgoo.env" });
+// Load environment variables relative to this script's directory
+require("dotenv").config({ path: path.join(__dirname, "..", "tokhirgoo", "tokhirgoo.env") });
 
 const targetIds = [
   new ObjectId("6a05830ca481717f34d6480c"), // ner: 'ttt'
