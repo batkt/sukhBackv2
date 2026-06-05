@@ -1,14 +1,10 @@
 const mongoose = require("mongoose");
-const { ObjectId } = mongoose.Types;
+const path = require("path");
 
-// Load environment variables
-require("dotenv").config({ path: "./tokhirgoo/tokhirgoo.env" });
+// Load environment variables relative to this script's directory
+require("dotenv").config({ path: path.join(__dirname, "..", "tokhirgoo", "tokhirgoo.env") });
 
-const targetIds = [
-  new ObjectId("6a05830ca481717f34d6480c"), // ner: 'ttt'
-  new ObjectId("6a05832ddfd2324d9e69d4c4"), // ner: 'test'
-  new ObjectId("6a22723ff360e75de5b108a5")  // ner: 'Ажиллах хүчний зардал'
-];
+const targetNames = ['ttt', 'test', 'Ажиллах хүчний зардал'];
 
 async function run() {
   try {
@@ -36,10 +32,10 @@ async function run() {
 
       const Geree = tenantDb.collection("geree");
 
-      // Update documents to pull matching zardluud items
+      // Update documents to pull matching zardluud items by name
       const result = await Geree.updateMany(
-        { "zardluud._id": { $in: targetIds } },
-        { $pull: { zardluud: { _id: { $in: targetIds } } } }
+        { "zardluud.ner": { $in: targetNames } },
+        { $pull: { zardluud: { ner: { $in: targetNames } } } }
       );
 
       if (result.modifiedCount > 0) {
