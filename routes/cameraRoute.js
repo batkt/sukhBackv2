@@ -54,11 +54,7 @@ router.post("/camera/stream/:barilgiinId/stream", async (req, res) => {
 
   try {
     const sdpAnswer = await waitForAnswer;
-    const isRawSdp = sdpAnswer.includes("v=0") || sdpAnswer.includes("m=video");
-    const sdp64 = isRawSdp
-      ? Buffer.from(sdpAnswer).toString("base64")
-      : sdpAnswer;
-    return res.status(200).json({ sdp64 });
+    return res.status(200).send(sdpAnswer);
   } catch (error) {
     console.error(`[Camera] ❌ Signaling failed: ${error.message}`);
     return res.status(504).json({ error: error.message });
