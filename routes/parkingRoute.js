@@ -687,34 +687,22 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
       }
     }
 
-    const khariu = await sdkData(req, medegdel);
-
-    // Manual Date Fix: Update orsonTsag if burtgelOgnoo is provided
+    // Pre-sdkData: fix orsonTsag on existing record so sdkData sees correct entry time
     if (req.body.burtgelOgnoo && req.body.mashiniiDugaar) {
       try {
-        // Wait a moment for the record to be created/indexed
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
         const uilchluulegchModel = Uilchluulegch(
           req.body.tukhainBaaziinKholbolt,
         );
         const manualDate = moment(req.body.burtgelOgnoo).toDate();
-        console.log("Attempting manual date update:", {
-          plate: req.body.mashiniiDugaar,
-          date: manualDate,
-        });
-
-        // Find relevant record (just created)
-        const latest = await uilchluulegchModel
+        const existing = await uilchluulegchModel
           .findOne({
             mashiniiDugaar: req.body.mashiniiDugaar,
+            "tuukh.0.garsanKhaalga": { $exists: false },
           })
           .sort({ createdAt: -1 });
-
-        if (latest) {
-          console.log("Found record to update:", latest._id);
+        if (existing) {
           await uilchluulegchModel.updateOne(
-            { _id: latest._id },
+            { _id: existing._id },
             {
               $set: {
                 "tuukh.0.tsagiinTuukh.0.orsonTsag": manualDate,
@@ -724,12 +712,51 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
               },
             },
           );
-          console.log("Manual date update success");
-        } else {
-          console.log("No record found for manual date update");
         }
       } catch (e) {
-        console.error("Manual date update error:", e);
+        console.error("Pre-sdkData date fix error:", e);
+      }
+    }
+
+    const khariu = await sdkData(req, medegdel);
+
+    // Post-sdkData: recalculate niitKhugatsaa to correct 0-min duration
+    if (req.body.mashiniiDugaar && req.body.CAMERA_IP) {
+      try {
+        const uilchluulegchModel = Uilchluulegch(
+          req.body.tukhainBaaziinKholbolt,
+        );
+        const latest = await uilchluulegchModel
+          .findOne({
+            mashiniiDugaar: req.body.mashiniiDugaar,
+          })
+          .sort({ createdAt: -1 });
+        if (
+          latest &&
+          latest.tuukh &&
+          latest.tuukh[0] &&
+          latest.tuukh[0].tsagiinTuukh &&
+          latest.tuukh[0].tsagiinTuukh[0]
+        ) {
+          const orson = latest.tuukh[0].tsagiinTuukh[0].orsonTsag;
+          const garsan = latest.tuukh[0].tsagiinTuukh[0].garsanTsag;
+          if (orson && garsan) {
+            const diffMs =
+              new Date(garsan).getTime() - new Date(orson).getTime();
+            const khugatsaaMin = Math.max(0, Math.ceil(diffMs / 60000));
+            await uilchluulegchModel.updateOne(
+              { _id: latest._id },
+              {
+                $set: {
+                  "tuukh.0.niitKhugatsaa": khugatsaaMin,
+                  "tuukh.0.tsagiinTuukh.0.khugatsaa": khugatsaaMin,
+                },
+              },
+            );
+          }
+        }
+      } catch (e) {
+        console.error("Post-sdkData duration fix error:", e);
       }
     }
 
