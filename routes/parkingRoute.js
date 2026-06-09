@@ -213,6 +213,21 @@ crud(router, "blockMashin", BlockMashin, UstsanBarimt);
 // });
 crud(router, "zogsoolUilchluulegch", Uilchluulegch, UstsanBarimt);
 // crud(router, "zogsoolUilchluulegch", (conn) => Uilchluulegch(conn, true), UstsanBarimt);
+
+// Custom PUT for uilchluulegch to avoid zevbackv2 crud _id bug
+router.put("/uilchluulegch/:id", tokenShalgakh, async (req, res, next) => {
+  try {
+    const uilchluulegchModel = Uilchluulegch(req.body.tukhainBaaziinKholbolt);
+    await uilchluulegchModel.updateOne(
+      { _id: req.params.id },
+      { $set: req.body },
+    );
+    res.send("Amjilttai");
+  } catch (err) {
+    next(err);
+  }
+});
+
 crud(router, "uilchluulegch", Uilchluulegch, UstsanBarimt);
 crud(router, "kassCameraKhaalt", KassCameraKhaalt, UstsanBarimt);
 /*
