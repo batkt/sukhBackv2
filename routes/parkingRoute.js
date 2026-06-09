@@ -218,9 +218,19 @@ crud(router, "zogsoolUilchluulegch", Uilchluulegch, UstsanBarimt);
 router.put("/uilchluulegch/:id", tokenShalgakh, async (req, res, next) => {
   try {
     const uilchluulegchModel = Uilchluulegch(req.body.tukhainBaaziinKholbolt);
+
+    const setObj = {};
+    for (const key of Object.keys(req.body)) {
+      if (
+        key.includes(".") ||
+        ["_id", "id", "createdAt", "updatedAt"].includes(key)
+      ) {
+        setObj[key] = req.body[key];
+      }
+    }
     await uilchluulegchModel.updateOne(
       { _id: req.params.id },
-      { $set: req.body },
+      { $set: setObj },
     );
     res.send("Amjilttai");
   } catch (err) {
