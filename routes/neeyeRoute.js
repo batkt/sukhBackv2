@@ -4,6 +4,7 @@ const { db } = require("zevbackv2");
 const jwt = require("jsonwebtoken");
 const KhaalgaNeeyeTuukh = require("../models/khaalgaNeeyeTuukh");
 const Ajiltan = require("../models/ajiltan");
+const OrshinSuugch = require("../models/orshinSuugch");
 
 /**
  * Remote Gate Open Route
@@ -26,62 +27,84 @@ router.get("/neeye/:ip", async (req, res) => {
       return res.status(500).json({ aldaa: "Socket.io not initialized" });
     }
 
-    console.log(`🚀 [Gate] Triggering remote open for Building: ${barilgiinId}, Camera: ${ip}`);
+    console.log(
+      `🚀 [Gate] Triggering remote open for Building: ${barilgiinId}, Camera: ${ip}`,
+    );
 
     // Emit to the specific building room
     io.to(`gate-room-${barilgiinId}`).emit("execute-open", { ip });
 
-    // 1. Try to decode JWT and find operator
-    let ajiltniiId = "unknown";
-    let ajiltniiNer = "Ажилтан";
-    let baiguullagiinId = "";
+    // 1. Decode JWT and resolve the resident (orshinSuugch) who opened the gate.
+    //    Only resident-initiated opens are recorded as history.
+    //    Opens triggered by staff (ajiltan) or the system (no token / zochin)
+    //    are NOT logged.
+    let orshinSuugch = null;
 
     if (req.headers.authorization) {
       const token = req.headers.authorization.split(" ")[1];
       if (token) {
         try {
           const decoded = jwt.verify(token, process.env.APP_SECRET);
-          if (decoded && decoded.id) {
-            ajiltniiId = decoded.id;
-            ajiltniiNer = decoded.ner || decoded.username || decoded.name || "Ажилтан";
-            baiguullagiinId = decoded.baiguullagiinId || "";
+          if (decoded && decoded.id && decoded.id !== "zochin") {
+            // If the token belongs to a staff member, skip logging entirely.
+            const ajiltan = await Ajiltan(db.erunkhiiKholbolt)
+              .findById(decoded.id)
+              .select("_id")
+              .lean();
 
-            // Query Ajiltan model to get freshest name and baiguullagiinId if needed
-            if (decoded.id !== "zochin") {
-              const ajiltan = await Ajiltan(db.erunkhiiKholbolt)
+            if (!ajiltan) {
+              // Not staff -> try resident
+              orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt)
                 .findById(decoded.id)
-                .select("ner baiguullagiinId")
+                .select("ner utas toot toots baiguullagiinId")
                 .lean();
-              if (ajiltan) {
-                ajiltniiNer = ajiltan.ner || ajiltniiNer;
-                baiguullagiinId = ajiltan.baiguullagiinId || baiguullagiinId;
-              }
             }
           }
         } catch (jwtErr) {
-          console.warn("[Gate] JWT verification failed in neeyeRoute:", jwtErr.message);
+          console.warn(
+            "[Gate] JWT verification failed in neeyeRoute:",
+            jwtErr.message,
+          );
         }
       }
     }
 
-    // 2. Save gate open log
-    try {
-      const KhaalgaNeeyeTuukhModel = KhaalgaNeeyeTuukh(db.erunkhiiKholbolt);
-      const log = new KhaalgaNeeyeTuukhModel({
-        ip,
-        barilgiinId,
-        baiguullagiinId,
-        ajiltniiId,
-        ajiltniiNer,
-        mashiniiDugaar,
-      });
-      await log.save();
-      console.log(`[Gate] Log saved successfully: Operator: ${ajiltniiNer}, Plate: ${mashiniiDugaar}, IP: ${ip}`);
-    } catch (dbErr) {
-      console.error("[Gate] Failed to save open gate log:", dbErr);
+    // 2. Save gate open log ONLY for residents (orshinSuugch).
+    if (orshinSuugch) {
+      try {
+        // Resolve the toot for this building if a toots array is present.
+        let toot = orshinSuugch.toot || "";
+        if (Array.isArray(orshinSuugch.toots) && orshinSuugch.toots.length) {
+          const matched =
+            orshinSuugch.toots.find((t) => t?.barilgiinId === barilgiinId) ||
+            orshinSuugch.toots[0];
+          toot = matched?.toot || toot;
+        }
+
+        const KhaalgaNeeyeTuukhModel = KhaalgaNeeyeTuukh(db.erunkhiiKholbolt);
+        const log = new KhaalgaNeeyeTuukhModel({
+          ip,
+          barilgiinId,
+          baiguullagiinId: orshinSuugch.baiguullagiinId || "",
+          orshinSuugchiinId: orshinSuugch._id?.toString(),
+          orshinSuugchiinNer: orshinSuugch.ner || "",
+          toot,
+          utas: orshinSuugch.utas || "",
+          mashiniiDugaar,
+        });
+        await log.save();
+        console.log(
+          `[Gate] Log saved: Resident: ${orshinSuugch.ner}, Toot: ${toot}, Plate: ${mashiniiDugaar}, IP: ${ip}`,
+        );
+      } catch (dbErr) {
+        console.error("[Gate] Failed to save open gate log:", dbErr);
+      }
     }
 
-    res.json({ status: "Amjilttai", message: "Open command sent to local worker" });
+    res.json({
+      status: "Amjilttai",
+      message: "Open command sent to local worker",
+    });
   } catch (error) {
     console.error("[Gate] neeye error:", error);
     res.status(500).json({ aldaa: "Internal server error" });
@@ -115,13 +138,15 @@ router.get("/khaalgaNeeyeTuukh", async (req, res, next) => {
     if (searchUtga) {
       query.$or = [
         { mashiniiDugaar: { $regex: searchUtga, $options: "i" } },
-        { ajiltniiNer: { $regex: searchUtga, $options: "i" } },
-        { ip: { $regex: searchUtga, $options: "i" } }
+        { orshinSuugchiinNer: { $regex: searchUtga, $options: "i" } },
+        { toot: { $regex: searchUtga, $options: "i" } },
+        { utas: { $regex: searchUtga, $options: "i" } },
+        { ip: { $regex: searchUtga, $options: "i" } },
       ];
     }
 
     const KhaalgaNeeyeTuukhModel = KhaalgaNeeyeTuukh(db.erunkhiiKholbolt);
-    
+
     const list = await KhaalgaNeeyeTuukhModel.find(query)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
@@ -135,7 +160,7 @@ router.get("/khaalgaNeeyeTuukh", async (req, res, next) => {
       jagsaalt: list,
       data: list,
       niitMur: total,
-      total
+      total,
     });
   } catch (error) {
     console.error("[Gate] khaalgaNeeyeTuukh error:", error);
