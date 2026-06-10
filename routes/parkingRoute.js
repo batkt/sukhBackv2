@@ -21,6 +21,7 @@ const {
   zogsooliinDunAvya,
   TokiMashin,
   uilchluulegchGaraasBurtgey,
+  EzenUrisanMashin,
 } = require("sukhParking-v1");
 const {
   zogsooloosEbarimtUusgye,
@@ -748,66 +749,71 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
       }
     }
 
-    const khariu = await sdkData(req, medegdel);
-
-    // Log Зочин (invited guest) entry to khaalgaNeeyeTuukh (entry only, no duplicates)
+    // Pre-sdkData: detect if there's a pending Зочин invitation for this car.
+    // tuluv=0 means not yet active. sdkData will flip it to 1 (идэвхтэй) on entry.
+    // We check BEFORE sdkData because sdkData's internal saves are not awaited,
+    // so querying after sdkData gives stale/missing data.
+    let pendingZochin = null;
     if (req.body.mashiniiDugaar && req.body.CAMERA_IP) {
       try {
-        const latest = await Uilchluulegch(req.body.tukhainBaaziinKholbolt)
+        pendingZochin = await EzenUrisanMashin(req.body.tukhainBaaziinKholbolt)
           .findOne({
-            mashiniiDugaar: req.body.mashiniiDugaar,
-            "tuukh.0.tuluv": 0,
-            "tuukh.0.garsanKhaalga": { $exists: false }, // entry only, not exit
+            baiguullagiinId: req.body.baiguullagiinId,
+            urisanMashiniiDugaar: req.body.mashiniiDugaar,
+            tuluv: 0, // pending — not yet active
           })
-          .sort({ createdAt: -1 })
           .lean();
-        if (latest?.turul === "Зочин" && latest?.urisanMashin) {
-          const um = latest.urisanMashin;
-          const KhaalgaModel = KhaalgaNeeyeTuukh(db.erunkhiiKholbolt);
-          // Dedup: skip if already logged for this entry within 10 min
-          const recentLog = await KhaalgaModel.findOne({
+      } catch (e) {
+        console.error("[Gate] Зочин pre-check error:", e.message);
+      }
+    }
+
+    const khariu = await sdkData(req, medegdel);
+
+    // Log Зочин entry now that sdkData has activated it
+    if (pendingZochin && req.body.CAMERA_IP) {
+      try {
+        const KhaalgaModel = KhaalgaNeeyeTuukh(db.erunkhiiKholbolt);
+        // Dedup: skip if already logged for this plate within 10 min
+        const recentLog = await KhaalgaModel.findOne({
+          mashiniiDugaar: req.body.mashiniiDugaar,
+          turul: "урьсан",
+          createdAt: { $gt: new Date(Date.now() - 10 * 60000) },
+        }).lean();
+        if (!recentLog) {
+          const residentId = pendingZochin.ezemshigchiinId || "";
+          let residentNer = pendingZochin.ezemshigchiinNer || "";
+          let residentToot = "";
+          let residentUtas = pendingZochin.ezemshigchiinUtas || "";
+          if (residentId) {
+            const resDoc = await OrshinSuugch(db.erunkhiiKholbolt)
+              .findById(residentId)
+              .select("ner toot utas toots")
+              .lean();
+            if (resDoc) {
+              if (resDoc.ner) residentNer = resDoc.ner;
+              if (Array.isArray(resDoc.toots) && resDoc.toots.length) {
+                const matched = resDoc.toots.find((t) => t?.barilgiinId === req.body.barilgiinId) || resDoc.toots[0];
+                residentToot = matched?.toot || resDoc.toot || "";
+              } else if (resDoc.toot) {
+                residentToot = resDoc.toot;
+              }
+              if (resDoc.utas) residentUtas = resDoc.utas;
+            }
+          }
+          await new KhaalgaModel({
+            ip: req.body.CAMERA_IP,
+            barilgiinId: req.body.barilgiinId,
+            baiguullagiinId: req.body.baiguullagiinId,
             mashiniiDugaar: req.body.mashiniiDugaar,
             turul: "урьсан",
-            createdAt: { $gt: new Date(Date.now() - 10 * 60000) },
-          }).lean();
-          if (!recentLog) {
-            const cleanVal = (v) => (!v || v === "-") ? "" : v;
-            const residentId = um.ezenId || um.ezemshigchiinId || "";
-            // Look up resident to get only their ner (not ovog+ner combined)
-            let residentNer = cleanVal(um.ezenNer) || cleanVal(um.ezemshigchiinNer) || "";
-            let residentToot = cleanVal(um.ezenToot) || cleanVal(um.ezemshigchiinToot) || "";
-            let residentUtas = cleanVal(um.ezenUtas) || cleanVal(um.ezemshigchiinUtas) || "";
-            if (residentId) {
-              const resDoc = await OrshinSuugch(db.erunkhiiKholbolt)
-                .findById(residentId)
-                .select("ner toot utas toots barilgiinId")
-                .lean();
-              if (resDoc) {
-                if (resDoc.ner) residentNer = resDoc.ner;
-                // Resolve toot for this building
-                if (Array.isArray(resDoc.toots) && resDoc.toots.length) {
-                  const matched = resDoc.toots.find((t) => t?.barilgiinId === req.body.barilgiinId) || resDoc.toots[0];
-                  residentToot = matched?.toot || resDoc.toot || residentToot;
-                } else if (resDoc.toot) {
-                  residentToot = resDoc.toot;
-                }
-                if (resDoc.utas) residentUtas = resDoc.utas;
-              }
-            }
-            await new KhaalgaModel({
-              ip: req.body.CAMERA_IP,
-              barilgiinId: req.body.barilgiinId,
-              baiguullagiinId: req.body.baiguullagiinId,
-              mashiniiDugaar: req.body.mashiniiDugaar,
-              turul: "урьсан",
-              orshinSuugchiinId: residentId,
-              orshinSuugchiinNer: residentNer,
-              toot: residentToot,
-              utas: residentUtas,
-              ezenNer: residentNer,
-              ezenToot: residentToot,
-            }).save();
-          }
+            orshinSuugchiinId: residentId,
+            orshinSuugchiinNer: residentNer,
+            toot: residentToot,
+            utas: residentUtas,
+            ezenNer: residentNer,
+            ezenToot: residentToot,
+          }).save();
         }
       } catch (e) {
         console.error("[Gate] Зочин log error:", e.message);
