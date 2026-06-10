@@ -4987,6 +4987,10 @@ router.post("/ebarimtShivye", tokenShalgakh, async (req, res, next) => {
       nuatTulukhEsekh
     );
 
+    // per-org ebarimt server URL (optional — falls back to EBARIMTSHINE_IP env var)
+    const orgEbarimtUrl = tuxainSalbar.ebarimtShineUrl || null;
+    console.log("[ebarimtShivye] orgEbarimtUrl:", orgEbarimtUrl || "(using env EBARIMTSHINE_IP)");
+
     ebarimtDuudya(
       ebarimt,
       async (d) => {
@@ -5022,7 +5026,8 @@ router.post("/ebarimtShivye", tokenShalgakh, async (req, res, next) => {
       },
       next,
       true,
-      tukhainObject.baiguullagiinId
+      tukhainObject.baiguullagiinId,
+      orgEbarimtUrl
     );
   } catch (err) {
     next(err);

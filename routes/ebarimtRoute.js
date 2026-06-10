@@ -120,18 +120,23 @@ async function nekhemjlekheesEbarimtShineUusgye(
   }
 }
 
-async function ebarimtDuudya(ugugdul, onFinish, next, shine = false, baiguullagiinId = null) {
+async function ebarimtDuudya(ugugdul, onFinish, next, shine = false, baiguullagiinId = null, overrideUrl = null) {
   try {
     if (!!shine) {
-      // Check if this baiguullaga should use TEST endpoint
-      // baiguullagiinId "69159a06dd2ba5c30308b90f" uses TEST, others use IP
-      // Get baiguullagiinId from parameter or from ugugdul if not provided
       const orgId = baiguullagiinId || ugugdul?.baiguullagiinId;
       const shouldUseTest = orgId && String(orgId) === "69f3f56a2899d5fdc24251d1";
 
-      const baseUrl = shouldUseTest
-        ? process.env.EBARIMTSHINE_TEST
-        : process.env.EBARIMTSHINE_IP;
+      // Priority: 1) per-call override, 2) env var for org type, 3) fallback to TEST
+      let baseUrl = overrideUrl
+        || (shouldUseTest ? process.env.EBARIMTSHINE_TEST : process.env.EBARIMTSHINE_IP)
+        || process.env.EBARIMTSHINE_TEST;
+
+      if (!baseUrl) {
+        const err = new Error("EBARIMTSHINE_IP тохируулаагүй байна — tokhirgoo.env файлд нэмнэ үү");
+        console.error("[EBARIMT]", err.message);
+        if (next) next(err);
+        return;
+      }
 
       var url = baseUrl + "rest/receipt";
       console.log("[EBARIMT] Sending receipt request", {
@@ -161,12 +166,15 @@ async function ebarimtDuudya(ugugdul, onFinish, next, shine = false, baiguullagi
           return;
         }
 
+        const qrSample = body?.qrData ? String(body.qrData).substring(0, 80) : null;
         console.log("[EBARIMT] receipt response", {
           statusCode: res1?.statusCode,
           hasBody: !!body,
           bodyStatus: body?.status || null,
           bodySuccess: body?.success,
           bodyMessage: body?.message || body?.error || null,
+          lottery: body?.lottery || null,
+          qrDataSample: qrSample,
         });
 
         if (body && (body.error || body.message)) {
