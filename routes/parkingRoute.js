@@ -43,6 +43,7 @@ const lodash = require("lodash");
 const moment = require("moment");
 const Baiguullaga = require("../models/baiguullaga");
 const { zogsoolNiitDungeerEbarimtShivye } = require("../routes/ebarimtRoute");
+const { resolveDistrictCode } = require("../lib/districtMapping");
 const { msgIlgeeye } = require("../controller/orshinSuugch");
 const MsgTuukh = require("../models/msgTuukh");
 const client = require("../routes/redisClient");
@@ -4973,12 +4974,15 @@ router.post("/ebarimtShivye", tokenShalgakh, async (req, res, next) => {
     const customerTin = isB2B ? (register || "") : "";
     const customerNo = !isB2B ? (register || "") : "";
 
+    const districtCode = await resolveDistrictCode(tuxainSalbar, tukhainKholbolt);
+    console.log("[ebarimtShivye] resolved districtCode:", districtCode);
+
     const ebarimt = await zogsooloosEbarimtShineUusgye(
       tukhainObject,
       customerNo,
       customerTin,
       tuxainSalbar.merchantTin,
-      tuxainSalbar.districtCode,
+      districtCode,
       tukhainKholbolt,
       nuatTulukhEsekh
     );
