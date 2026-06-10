@@ -4953,13 +4953,18 @@ router.post("/ebarimtShivye", tokenShalgakh, async (req, res, next) => {
     const tukhainObject = await Uilchluulegch(tukhainKholbolt).findById(id).lean();
     if (!tukhainObject) return res.status(404).json({ error: "Бүртгэл олдсонгүй" });
 
-    const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(tukhainObject.baiguullagiinId);
+    const baiguullagiinId = tukhainObject.baiguullagiinId || req.body.baiguullagiinId;
+    const barilgiinId = tukhainObject.barilgiinId || req.body.barilgiinId;
+
+    const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(baiguullagiinId);
     const tuxainSalbar = baiguullaga?.barilguud?.find(
-      (e) => e._id.toString() === String(tukhainObject.barilgiinId)
+      (e) => e._id.toString() === String(barilgiinId)
     )?.tokhirgoo;
 
-    if (!tuxainSalbar?.eBarimtShine) {
-      return res.status(400).json({ error: "И-Баримт тохиргоо хийгдээгүй байна" });
+    console.log("[ebarimtShivye] barilgiinId:", barilgiinId, "merchantTin:", tuxainSalbar?.merchantTin, "eBarimtShine:", tuxainSalbar?.eBarimtShine);
+
+    if (!tuxainSalbar?.merchantTin) {
+      return res.status(400).json({ error: "И-Баримт тохиргоо хийгдээгүй байна (merchantTin олдсонгүй)" });
     }
 
     const nuatTulukhEsekh = tuxainSalbar.nuatTulukhEsekh !== false;
