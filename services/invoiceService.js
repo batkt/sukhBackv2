@@ -29,7 +29,7 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     ? (geree.bodokhKhonog / denominator)
     : 1;
 
-  if (Number(geree.ekhniiUldegdel) > 0) {
+  if (Number(geree.ekhniiUldegdel) > 0 && options.isFirstInvoice) {
     charges.push({
       ner: "Эхний үлдэгдэл",
       dun: Number(geree.ekhniiUldegdel),
@@ -170,7 +170,12 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     throw new Error("Contract not found");
   }
 
-  const { charges, total } = await calculateGereeCharges(kholbolt, geree, options);
+  const priorInvoiceCount = await NekhemjlekhiinTuukhModel.countDocuments({
+    gereeniiId: gereeId.toString(),
+  });
+  const isFirstInvoice = priorInvoiceCount === 0;
+
+  const { charges, total } = await calculateGereeCharges(kholbolt, geree, { ...options, isFirstInvoice });
 
   if (total === 0 && !options.forceEmpty) {
     return { success: true, message: "No charges to bill", total: 0 };
