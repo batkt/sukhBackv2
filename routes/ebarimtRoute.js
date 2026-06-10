@@ -1044,9 +1044,170 @@ router.get("/easyRegister/user/:id", copyQueryToBody, tokenShalgakh, async (req,
   }
 });
 
+// ─── Parking (Zogsool) ebarimt helpers ───────────────────────────────────────
+
+async function zogsooloosEbarimtShineUusgye(
+  tukhainObject,
+  customerNo,
+  customerTin,
+  merchantTin,
+  districtCode,
+  tukhainBaaziinKholbolt,
+  nuatTulukhEsekh = true
+) {
+  const dun = tukhainObject.niitDun || 0;
+  var ebarimt = new EbarimtShine(tukhainBaaziinKholbolt)();
+
+  if (customerTin) {
+    ebarimt.type = "B2B_RECEIPT";
+    ebarimt.customerTin = customerTin;
+  } else {
+    ebarimt.type = "B2C_RECEIPT";
+  }
+
+  ebarimt.zogsooliinId = tukhainObject._id.toString();
+  ebarimt.baiguullagiinId = tukhainObject.baiguullagiinId;
+  ebarimt.barilgiinId = tukhainObject.barilgiinId;
+  ebarimt.mashiniiDugaar = tukhainObject.mashiniiDugaar;
+  ebarimt.customerNo = customerNo || "";
+
+  ebarimt.totalAmount = dun.toFixed(2);
+  ebarimt.totalVAT = nuatTulukhEsekh ? nuatBodyo(dun) : 0;
+  ebarimt.totalCityTax = "0.00";
+  ebarimt.branchNo = "001";
+  ebarimt.districtCode = String(districtCode || "").padStart(4, "0");
+  ebarimt.posNo = "0001";
+  ebarimt.merchantTin = merchantTin;
+  ebarimt.createdAt = new Date();
+
+  const taxType = nuatTulukhEsekh ? "VAT_ABLE" : "VAT_FREE";
+  const item = {
+    name: "ЗОГСООЛЫН ТӨЛБӨР",
+    barCodeType: "UNDEFINED",
+    classificationCode: "7211200",
+    measureUnit: "шир",
+    qty: "1.00",
+    unitPrice: dun.toFixed(2),
+    totalVat: nuatTulukhEsekh ? nuatBodyo(dun) : 0,
+    totalCityTax: "0.00",
+    totalAmount: dun.toFixed(2),
+  };
+  if (taxType !== "VAT_ABLE") item.taxProductCode = "401";
+
+  ebarimt.receipts = [
+    {
+      totalAmount: dun.toFixed(2),
+      totalVAT: nuatTulukhEsekh ? nuatBodyo(dun) : 0,
+      totalCityTax: "0.00",
+      taxType,
+      merchantTin,
+      items: [item],
+    },
+  ];
+
+  ebarimt.payments = [
+    { code: "PAYMENT_CARD", paidAmount: dun.toFixed(2), status: "PAID" },
+  ];
+
+  return ebarimt;
+}
+
+async function zogsoolNiitDungeerEbarimtShivye(
+  tukhainBaaziinKholbolt,
+  niitDun,
+  barilgiinId,
+  next,
+  _tuukhuud = [],
+  baiguullagiinId,
+  customerNo = "",
+  customerTin = ""
+) {
+  try {
+    const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(baiguullagiinId);
+    const tuxainSalbar = baiguullaga?.barilguud?.find(
+      (e) => e._id.toString() === String(barilgiinId)
+    )?.tokhirgoo;
+
+    if (!tuxainSalbar?.eBarimtShine || !tuxainSalbar?.merchantTin) return;
+
+    const nuatTulukhEsekh = tuxainSalbar.nuatTulukhEsekh !== false;
+    const dun = niitDun;
+
+    var ebarimt = new EbarimtShine(tukhainBaaziinKholbolt)();
+    ebarimt.type = customerTin ? "B2B_RECEIPT" : "B2C_RECEIPT";
+    if (customerTin) ebarimt.customerTin = customerTin;
+    ebarimt.baiguullagiinId = baiguullagiinId;
+    ebarimt.barilgiinId = barilgiinId;
+    ebarimt.customerNo = customerNo;
+    ebarimt.totalAmount = dun.toFixed(2);
+    ebarimt.totalVAT = nuatTulukhEsekh ? nuatBodyo(dun) : 0;
+    ebarimt.totalCityTax = "0.00";
+    ebarimt.branchNo = "001";
+    ebarimt.districtCode = String(tuxainSalbar.districtCode || "").padStart(4, "0");
+    ebarimt.posNo = "0001";
+    ebarimt.merchantTin = tuxainSalbar.merchantTin;
+    ebarimt.createdAt = new Date();
+
+    const taxType = nuatTulukhEsekh ? "VAT_ABLE" : "VAT_FREE";
+    const item = {
+      name: "ЗОГСООЛЫН ТӨЛБӨР",
+      barCodeType: "UNDEFINED",
+      classificationCode: "7211200",
+      measureUnit: "шир",
+      qty: "1.00",
+      unitPrice: dun.toFixed(2),
+      totalVat: nuatTulukhEsekh ? nuatBodyo(dun) : 0,
+      totalCityTax: "0.00",
+      totalAmount: dun.toFixed(2),
+    };
+    if (taxType !== "VAT_ABLE") item.taxProductCode = "401";
+
+    ebarimt.receipts = [
+      {
+        totalAmount: dun.toFixed(2),
+        totalVAT: nuatTulukhEsekh ? nuatBodyo(dun) : 0,
+        totalCityTax: "0.00",
+        taxType,
+        merchantTin: tuxainSalbar.merchantTin,
+        items: [item],
+      },
+    ];
+    ebarimt.payments = [
+      { code: "PAYMENT_CARD", paidAmount: dun.toFixed(2), status: "PAID" },
+    ];
+
+    await new Promise((resolve) => {
+      ebarimtDuudya(
+        ebarimt,
+        async (d) => {
+          try {
+            if (d?.status === "SUCCESS" || d?.success) {
+              const saved = new EbarimtShine(tukhainBaaziinKholbolt)(d);
+              saved.baiguullagiinId = baiguullagiinId;
+              saved.barilgiinId = barilgiinId;
+              if (d.qrData) saved.qrData = d.qrData;
+              if (d.lottery) saved.lottery = d.lottery;
+              if (d.id) saved.receiptId = d.id;
+              await saved.save().catch(() => {});
+            }
+          } catch (e) { /* non-critical */ }
+          resolve();
+        },
+        (err) => { if (next) next(err); resolve(); },
+        true,
+        baiguullagiinId
+      );
+    });
+  } catch (err) {
+    if (next) next(err);
+  }
+}
+
 module.exports = router;
 module.exports.nekhemjlekheesEbarimtShineUusgye =
   nekhemjlekheesEbarimtShineUusgye;
+module.exports.zogsooloosEbarimtShineUusgye = zogsooloosEbarimtShineUusgye;
+module.exports.zogsoolNiitDungeerEbarimtShivye = zogsoolNiitDungeerEbarimtShivye;
 module.exports.ebarimtDuudya = ebarimtDuudya;
 module.exports.autoApproveQr = autoApproveQr;
 module.exports.easyRegisterDuudya = easyRegisterDuudya;

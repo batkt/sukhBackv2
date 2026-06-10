@@ -26,6 +26,7 @@ const {
   zogsooloosEbarimtUusgye,
   zogsooloosEbarimtShineUusgye,
   ebarimtDuudya,
+  autoApproveQr,
 } = require("../routes/ebarimtRoute");
 const ZogsooliinIp = require("../models/zogsooliinIp");
 const OrshinSuugch = require("../models/orshinSuugch");
@@ -4940,5 +4941,83 @@ router.post(
     }
   },
 );
+
+// ─── Manual e-barimt from camera page ────────────────────────────────────────
+router.post("/ebarimtShivye", tokenShalgakh, async (req, res, next) => {
+  try {
+    const { id, type, register } = req.body;
+    if (!id) return res.status(400).json({ error: "id заавал оруулна" });
+
+    const tukhainKholbolt = req.body.tukhainBaaziinKholbolt;
+
+    const tukhainObject = await Uilchluulegch(tukhainKholbolt).findById(id).lean();
+    if (!tukhainObject) return res.status(404).json({ error: "Бүртгэл олдсонгүй" });
+
+    const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(tukhainObject.baiguullagiinId);
+    const tuxainSalbar = baiguullaga?.barilguud?.find(
+      (e) => e._id.toString() === String(tukhainObject.barilgiinId)
+    )?.tokhirgoo;
+
+    if (!tuxainSalbar?.eBarimtShine) {
+      return res.status(400).json({ error: "И-Баримт тохиргоо хийгдээгүй байна" });
+    }
+
+    const nuatTulukhEsekh = tuxainSalbar.nuatTulukhEsekh !== false;
+    // type "3" = Байгууллага (B2B) has customerTin; type "1" = Хувь хүн (B2C) has customerNo
+    const isB2B = type === "3" || type === "B2B_RECEIPT";
+    const customerTin = isB2B ? (register || "") : "";
+    const customerNo = !isB2B ? (register || "") : "";
+
+    const ebarimt = await zogsooloosEbarimtShineUusgye(
+      tukhainObject,
+      customerNo,
+      customerTin,
+      tuxainSalbar.merchantTin,
+      tuxainSalbar.districtCode,
+      tukhainKholbolt,
+      nuatTulukhEsekh
+    );
+
+    ebarimtDuudya(
+      ebarimt,
+      async (d) => {
+        try {
+          if (d?.status !== "SUCCESS" && !d?.success) {
+            return res.status(500).json({ error: d?.message || "И-Баримт үүсгэхэд алдаа гарлаа" });
+          }
+
+          const saved = new EbarimtShine(tukhainKholbolt)(d);
+          saved.zogsooliinId = tukhainObject._id;
+          saved.baiguullagiinId = tukhainObject.baiguullagiinId;
+          saved.barilgiinId = tukhainObject.barilgiinId;
+          saved.mashiniiDugaar = tukhainObject.mashiniiDugaar;
+          if (d.qrData) saved.qrData = d.qrData;
+          if (d.lottery) saved.lottery = d.lottery;
+          if (d.id) saved.receiptId = d.id;
+          await saved.save().catch((err) => console.error("[EBARIMT] save error:", err.message));
+
+          await Uilchluulegch(tukhainKholbolt).findByIdAndUpdate(tukhainObject._id, {
+            ebarimtAvsanEsekh: true,
+            ebarimtAvsanDun: d.totalAmount || tukhainObject.niitDun,
+            ...(customerNo ? { ebarimtRegister: customerNo } : {}),
+          }).catch(() => {});
+
+          if (customerNo && d.qrData) {
+            autoApproveQr(customerNo, d.qrData, tukhainObject.baiguullagiinId, tukhainKholbolt).catch(() => {});
+          }
+
+          res.json({ success: true, qrData: d.qrData, lottery: d.lottery, receiptId: d.id, ...d });
+        } catch (err) {
+          next(err);
+        }
+      },
+      next,
+      true,
+      tukhainObject.baiguullagiinId
+    );
+  } catch (err) {
+    next(err);
+  }
+});
 
 module.exports = router;
