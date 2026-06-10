@@ -177,13 +177,13 @@ module.exports.tulburUridchiljTulukh = async (body, next) => {
     var bodsonDun = 0;
     const zogsool = body.zogsooliinId
       ? await Parking(body.tukhainBaaziinKholbolt).findOne({
-          _id: body.zogsooliinId,
-        })
+        _id: body.zogsooliinId,
+      })
       : await Parking(body.tukhainBaaziinKholbolt).findOne({
-          baiguullagiinId: body.baiguullagiinId,
-          barilgiinId: body.barilgiinId,
-          "khaalga.ajiltnuud.id": body.ajiltniiId,
-        });
+        baiguullagiinId: body.baiguullagiinId,
+        barilgiinId: body.barilgiinId,
+        "khaalga.ajiltnuud.id": body.ajiltniiId,
+      });
     if (!!zogsool) {
       oldsonMashin = await Uilchluulegch(
         body.tukhainBaaziinKholbolt,
@@ -272,14 +272,14 @@ module.exports.zogsoolTseverlye = async (body, next) => {
                   $lt: ognoo,
                 },
               },
-              {
-                $set: {
-                  "tuukh.0.garsanKhaalga": "tseverlesen",
-                  "tuukh.0.tsagiinTuukh.0.garsanTsag": new Date(),
-                  "tuukh.0.tuluv": -3, //Tseverlesen tuluv
-                  zurchil: "Гарсан цаг тодорхойгүй!",
-                },
-              }
+              // {
+              //   $set: {
+              //     "tuukh.0.garsanKhaalga": "tseverlesen",
+              //     "tuukh.0.tsagiinTuukh.0.garsanTsag": new Date(),
+              //     "tuukh.0.tuluv": -3, //Tseverlesen tuluv
+              //     zurchil: "Гарсан цаг тодорхойгүй!",
+              //   },
+              // }
             );
           }
         }
@@ -388,7 +388,7 @@ module.exports.ebarimtDutuugShivye = async (body, next) => {
             if (uilchluulegchBulk)
               Uilchluulegch(tukhainKholbolt)
                 .bulkWrite(uilchluulegchBulk)
-                .then((bulkWriteOpResult) => {})
+                .then((bulkWriteOpResult) => { })
                 .catch((err) => {
                   throw err;
                 });
@@ -405,102 +405,102 @@ module.exports.ebarimtDutuugShivye = async (body, next) => {
 
 module.exports.archiveUilchluulegch =
   async function archiveUilchluulegch() {
-    try 
-    {
-        const { db } = require("zevbackv2");
-        const kholboltuud = db.kholboltuud;
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1;
-        if (kholboltuud) {
-            for (const kholbolt of kholboltuud) {
-                var baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(kholbolt.baiguullagiinId);
-                if (baiguullaga?.tokhirgoo?.dolooKhonogTutamArchiveEsekh) continue;
-                const months = await Uilchluulegch(kholbolt).aggregate([
-                    { $project: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } } },
-                    { $group: { _id: { year: "$year", month: "$month" } } },
-                    { $sort: { "_id.year": 1, "_id.month": 1 }, },
-                ]);
-                for (const { _id } of months) {
-                    const y = _id.year;
-                    const m = _id.month;
-                    if (y === currentYear && m === currentMonth) continue; // одоогийн сар алгасна
-                    const archiveName = `Uilchluulegch${y}${String(m).padStart(2, "0")}`;
-                    const docs = await Uilchluulegch(kholbolt, false, archiveName).find({
-                        "tuukh.0.tsagiinTuukh.0.garsanTsag": { $exists: true },
-                        createdAt: { $gte: new Date(y, m - 1, 1), $lt: new Date(y, m, 1) }
-                    });
-                    if (docs?.length > 0) continue;
-                    // --- Archive ---
-                    const data = await Uilchluulegch(kholbolt).aggregate([
-                        { $match: {
-                          "tuukh.0.tsagiinTuukh.0.garsanTsag": { $exists: true }, 
-                          createdAt: { $gte: new Date(y, m - 1, 1), $lt: new Date(y, m, 1) } 
-                        } },
-                    ]);
-                    await Uilchluulegch(kholbolt, false, archiveName).insertMany(data);
-                    // --- Delete ---
-                    const res = await Uilchluulegch(kholbolt).deleteMany({
-                        "tuukh.0.tsagiinTuukh.0.garsanTsag": { $exists: true },
-                        createdAt: { $gte: new Date(y, m - 1, 1), $lt: new Date(y, m, 1) }
-                    });
+    try {
+      const { db } = require("zevbackv2");
+      const kholboltuud = db.kholboltuud;
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+      if (kholboltuud) {
+        for (const kholbolt of kholboltuud) {
+          var baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(kholbolt.baiguullagiinId);
+          if (baiguullaga?.tokhirgoo?.dolooKhonogTutamArchiveEsekh) continue;
+          const months = await Uilchluulegch(kholbolt).aggregate([
+            { $project: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } } },
+            { $group: { _id: { year: "$year", month: "$month" } } },
+            { $sort: { "_id.year": 1, "_id.month": 1 }, },
+          ]);
+          for (const { _id } of months) {
+            const y = _id.year;
+            const m = _id.month;
+            if (y === currentYear && m === currentMonth) continue; // одоогийн сар алгасна
+            const archiveName = `Uilchluulegch${y}${String(m).padStart(2, "0")}`;
+            const docs = await Uilchluulegch(kholbolt, false, archiveName).find({
+              "tuukh.0.tsagiinTuukh.0.garsanTsag": { $exists: true },
+              createdAt: { $gte: new Date(y, m - 1, 1), $lt: new Date(y, m, 1) }
+            });
+            if (docs?.length > 0) continue;
+            // --- Archive ---
+            const data = await Uilchluulegch(kholbolt).aggregate([
+              {
+                $match: {
+                  "tuukh.0.tsagiinTuukh.0.garsanTsag": { $exists: true },
+                  createdAt: { $gte: new Date(y, m - 1, 1), $lt: new Date(y, m, 1) }
                 }
-            }
+              },
+            ]);
+            await Uilchluulegch(kholbolt, false, archiveName).insertMany(data);
+            // --- Delete ---
+            const res = await Uilchluulegch(kholbolt).deleteMany({
+              "tuukh.0.tsagiinTuukh.0.garsanTsag": { $exists: true },
+              createdAt: { $gte: new Date(y, m - 1, 1), $lt: new Date(y, m, 1) }
+            });
+          }
         }
+      }
     } catch (error) {
     }
-};
+  };
 
 module.exports.archiveUilchluulegchKhonog =
-async function archiveUilchluulegchKhonog() {
-  try {
-    const { db } = require("zevbackv2");
-    const kholboltuud = db.kholboltuud;
-    const now = new Date();
-    const archiveBeforeDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    archiveBeforeDate.setHours(0, 0, 0, 0);
-    const y = archiveBeforeDate.getFullYear();
-    const m = archiveBeforeDate.getMonth() + 1;
-    const archiveName = `Uilchluulegch${y}${String(m).padStart(2, "0")}`;
-    for (const kholbolt of kholboltuud) {
-      console.log(`Processing kholbolt: ${kholbolt.baiguullagiinId}`);
-      const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(kholbolt.baiguullagiinId);
-      if(!baiguullaga) continue;
-      // if (!baiguullaga?.tokhirgoo?.dolooKhonogTutamArchiveEsekh) continue;
-      const archivedIds = await Uilchluulegch(
-        kholbolt,
-        false,
-        archiveName
-      ).find({}, { _id: 1 }).lean();
-      const archivedIdSet = new Set(archivedIds.map(d => String(d._id)));
-      console.log("archiveBeforeDate --->:", archiveBeforeDate);
-      const data = await Uilchluulegch(kholbolt).find({
-        _id: { $nin: Array.from(archivedIdSet) },
-        "tuukh.0.tsagiinTuukh.0.garsanTsag": { $exists: true },
-        createdAt: { $lt: archiveBeforeDate }
-      }).lean();
-      if (!data.length) continue;
-      console.log(`Archiving ${data.length} docs for ${baiguullaga?.ner} (${kholbolt.baiguullagiinId})`);
-      await Uilchluulegch(kholbolt, false, archiveName).insertMany(data);
-      await Uilchluulegch(kholbolt).deleteMany({
-        _id: { $in: data.map(d => d._id) },
-        "tuukh.0.tsagiinTuukh.0.garsanTsag": { $exists: true },
-        createdAt: { $lt: archiveBeforeDate }
-      });
+  async function archiveUilchluulegchKhonog() {
+    try {
+      const { db } = require("zevbackv2");
+      const kholboltuud = db.kholboltuud;
+      const now = new Date();
+      const archiveBeforeDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      archiveBeforeDate.setHours(0, 0, 0, 0);
+      const y = archiveBeforeDate.getFullYear();
+      const m = archiveBeforeDate.getMonth() + 1;
+      const archiveName = `Uilchluulegch${y}${String(m).padStart(2, "0")}`;
+      for (const kholbolt of kholboltuud) {
+        console.log(`Processing kholbolt: ${kholbolt.baiguullagiinId}`);
+        const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(kholbolt.baiguullagiinId);
+        if (!baiguullaga) continue;
+        // if (!baiguullaga?.tokhirgoo?.dolooKhonogTutamArchiveEsekh) continue;
+        const archivedIds = await Uilchluulegch(
+          kholbolt,
+          false,
+          archiveName
+        ).find({}, { _id: 1 }).lean();
+        const archivedIdSet = new Set(archivedIds.map(d => String(d._id)));
+        console.log("archiveBeforeDate --->:", archiveBeforeDate);
+        const data = await Uilchluulegch(kholbolt).find({
+          _id: { $nin: Array.from(archivedIdSet) },
+          "tuukh.0.tsagiinTuukh.0.garsanTsag": { $exists: true },
+          createdAt: { $lt: archiveBeforeDate }
+        }).lean();
+        if (!data.length) continue;
+        console.log(`Archiving ${data.length} docs for ${baiguullaga?.ner} (${kholbolt.baiguullagiinId})`);
+        await Uilchluulegch(kholbolt, false, archiveName).insertMany(data);
+        await Uilchluulegch(kholbolt).deleteMany({
+          _id: { $in: data.map(d => d._id) },
+          "tuukh.0.tsagiinTuukh.0.garsanTsag": { $exists: true },
+          createdAt: { $lt: archiveBeforeDate }
+        });
+      }
+    } catch (error) {
+      console.error("Archive error:", error);
     }
-  } catch (error) {
-    console.error("Archive error:", error);
-  }
-};
+  };
 
 exports.zurchilteiTuvulBoluulakh = asyncHandler(
   async (baiguullagiinId = null) => {
-    try 
-    {
+    try {
       const { db } = require("zevbackv2");
       var kholboltuud = db.kholboltuud;
       if (!!baiguullagiinId)
-        kholboltuud = [ kholboltuud.find((a) => a.baiguullagiinId == baiguullagiinId), ];
+        kholboltuud = [kholboltuud.find((a) => a.baiguullagiinId == baiguullagiinId),];
       if (kholboltuud) {
         for (const kholbolt of kholboltuud) {
           const zurchilteiUilchluulegch = await Uilchluulegch(kholbolt).find({
@@ -517,7 +517,7 @@ exports.zurchilteiTuvulBoluulakh = asyncHandler(
           if (zurchilteiUilchluulegch?.length > 0) {
             for (const zurchiltei of zurchilteiUilchluulegch) {
               var dun = zurchiltei?.tuukh[0]?.tulbur?.length > 0 ? zurchiltei?.tuukh[0]?.tulbur.reduce((a, b) => a + b.dun || 0, 0) : 0;
-              var update = (dun > 0 && zurchiltei.niitDun === dun) ? {"tuukh.0.tuluv": 2 } : {"tuukh.0.tuluv": -4, zurchil: zurchiltei.niitDun > 0 ? "Төлбөрийн зөрчилтэй" : "Тодорхойгүй зөрчилтэй!"};
+              var update = (dun > 0 && zurchiltei.niitDun === dun) ? { "tuukh.0.tuluv": 2 } : { "tuukh.0.tuluv": -4, zurchil: zurchiltei.niitDun > 0 ? "Төлбөрийн зөрчилтэй" : "Тодорхойгүй зөрчилтэй!" };
               update["tuukh.0.burtgesenAjiltaniiNer"] = "систем";
               console.log("zurchilteiTuvulBoluulakh:", zurchiltei._id, update);
               let upsertDoc = {
@@ -528,10 +528,10 @@ exports.zurchilteiTuvulBoluulakh = asyncHandler(
               };
               bulkOps.push(upsertDoc);
             }
-            await Uilchluulegch(kholbolt).bulkWrite(bulkOps).then((bulkWriteOpResult) => {}).catch((err) => {});
+            await Uilchluulegch(kholbolt).bulkWrite(bulkOps).then((bulkWriteOpResult) => { }).catch((err) => { });
           }
-        } 
-      }   
+        }
+      }
     } catch (error) {
     }
-});
+  });
