@@ -219,7 +219,11 @@ router.put("/uilchluulegch/:id", tokenShalgakh, async (req, res, next) => {
   try {
     const uilchluulegchModel = Uilchluulegch(req.body.tukhainBaaziinKholbolt);
 
-    const EXCLUDED = new Set(["_id", "id", "createdAt", "updatedAt", "tukhainBaaziinKholbolt"]);
+    const EXCLUDED = new Set([
+      "_id", "id", "createdAt", "updatedAt",
+      "tukhainBaaziinKholbolt", "erunkhiiKholbolt",
+      "nevtersenAjiltniiToken", "baiguullagiinId",
+    ]);
     const setObj = {};
     for (const key of Object.keys(req.body)) {
       if (!EXCLUDED.has(key)) {
