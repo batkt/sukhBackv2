@@ -35,6 +35,7 @@ const Ebarimt = require("../models/ebarimt");
 const EbarimtShine = require("../models/ebarimtShine");
 const KassCameraKhaalt = require("../models/kassCameraKhaalt");
 const uneguiMashin = require("../models/uneguiMashin");
+const KhaalgaNeeyeTuukh = require("../models/khaalgaNeeyeTuukh");
 
 const {
   orshinSuugchidSonorduulgaIlgeeye,
@@ -748,6 +749,35 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
     }
 
     const khariu = await sdkData(req, medegdel);
+
+    // Log Зочин (invited guest) entry to khaalgaNeeyeTuukh
+    if (req.body.mashiniiDugaar && req.body.CAMERA_IP) {
+      try {
+        const latest = await Uilchluulegch(req.body.tukhainBaaziinKholbolt)
+          .findOne({ mashiniiDugaar: req.body.mashiniiDugaar, "tuukh.0.tuluv": 0 })
+          .sort({ createdAt: -1 })
+          .lean();
+        if (latest?.turul === "Зочин" && latest?.urisanMashin) {
+          const um = latest.urisanMashin;
+          const KhaalgaModel = KhaalgaNeeyeTuukh(db.erunkhiiKholbolt);
+          await new KhaalgaModel({
+            ip: req.body.CAMERA_IP,
+            barilgiinId: req.body.barilgiinId,
+            baiguullagiinId: req.body.baiguullagiinId,
+            mashiniiDugaar: req.body.mashiniiDugaar,
+            turul: "урьсан",
+            orshinSuugchiinId: um.ezenId || "",
+            orshinSuugchiinNer: um.ezenNer || um.ezemshigchiinNer || "",
+            toot: um.ezenToot || um.ezemshigchiinToot || "",
+            utas: um.ezenUtas || um.ezemshigchiinUtas || "",
+            ezenNer: um.ezenNer || um.ezemshigchiinNer || "",
+            ezenToot: um.ezenToot || um.ezemshigchiinToot || "",
+          }).save();
+        }
+      } catch (e) {
+        console.error("[Gate] Зочин log error:", e.message);
+      }
+    }
 
     // Post-sdkData: recalculate niitKhugatsaa to correct 0-min duration
     if (req.body.mashiniiDugaar && req.body.CAMERA_IP) {

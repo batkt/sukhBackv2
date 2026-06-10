@@ -91,6 +91,7 @@ router.get("/neeye/:ip", async (req, res) => {
           toot,
           utas: orshinSuugch.utas || "",
           mashiniiDugaar,
+          turul: "нээсэн",
         });
         await log.save();
         console.log(
