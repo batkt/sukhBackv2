@@ -507,11 +507,12 @@ router.get("/ebarimtJagsaaltAvya", tokenShalgakh, async (req, res, next) => {
       body.khuudasniiKhemjee = Number(body.khuudasniiKhemjee);
     if (!!body?.search) body.search = String(body.search);
     if (!body.query) body.query = {};
+    // baiguullagiinId comes from token middleware — always authoritative
     if (req.body.baiguullagiinId) body.query["baiguullagiinId"] = req.body.baiguullagiinId;
     if (req.query.baiguullagiinId) body.query["baiguullagiinId"] = req.query.baiguullagiinId;
     if (req.query.barilgiinId) body.query["barilgiinId"] = req.query.barilgiinId;
-    if (req.query.merchantTin) body.query["merchantTin"] = req.query.merchantTin;
-    if (req.query.districtCode) body.query["districtCode"] = req.query.districtCode;
+    // merchantTin/districtCode are NOT in saved EbarimtShine records (API response doesn't echo them back)
+    // so we skip those filters — baiguullagiinId is enough to scope the query
 
     if (req.query.ekhlekhOgnoo || req.query.duusakhOgnoo) {
       body.query["createdAt"] = {};
