@@ -850,10 +850,8 @@ router
         if (!!req.body.urdchilsan) {
           uurchlukhTuluv = 0;
         }
-        var totalPaid = tulbur.reduce((sum, t) => sum + ((t.dun || 0) > 0 ? t.dun : 0), 0);
         var setObj = {
           ebarimtAvakhDun: ebarimtAvakhDun,
-          niitDun: totalPaid,
           "tuukh.$.burtgesenAjiltaniiId": guilgeenuud[0].burtgesenAjiltaniiId,
           "tuukh.$.burtgesenAjiltaniiNer": guilgeenuud[0].burtgesenAjiltaniiNer,
           "tuukh.$.tulbur": tulbur,
