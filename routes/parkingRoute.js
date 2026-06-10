@@ -694,13 +694,13 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
       }
     }
 
-    // Guard against duplicate exit processing (force-exit from web UI)
+    // Guard against duplicate exit processing — only when same camera fires twice
     if (req.body.mashiniiDugaar && req.body.CAMERA_IP) {
       const recentlyExited = await Uilchluulegch(
         req.body.tukhainBaaziinKholbolt,
       ).findOne({
         mashiniiDugaar: req.body.mashiniiDugaar,
-        "tuukh.0.garsanKhaalga": { $exists: true },
+        "tuukh.0.garsanKhaalga": req.body.CAMERA_IP,
         "tuukh.0.tsagiinTuukh.0.garsanTsag": {
           $gt: new Date(Date.now() - 3 * 60000),
         },
