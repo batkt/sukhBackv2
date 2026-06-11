@@ -508,12 +508,19 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
 
     // 1. PLATE CHANGE RESTRICTION: Resident primary car
     if (inviterId && isResidentCar) {
-      if (existingPrimary && existingPrimary.mashiniiDugaar !== mashiniiDugaar) {
+      const oldPlate = existingPrimary ? (existingPrimary.dugaar || existingPrimary.mashiniiDugaar || "") : "";
+      const newPlate = (orshinSuugchMedeelel && orshinSuugchMedeelel.mashiniiDugaar) || mashiniiDugaar || "";
+      if (existingPrimary && oldPlate !== newPlate) {
         // App side restriction
         if (requesterRole === "OrshinSuugch") {
-          const oneMonthAgo = moment().subtract(1, 'month');
-          if (existingPrimary.dugaarUurchilsunOgnoo && moment(existingPrimary.dugaarUurchilsunOgnoo).isAfter(oneMonthAgo)) {
-            return res.status(403).json({ success: false, message: "Машины дугаарыг сард нэг удаа өөрчлөх боломжтой" });
+          const thirtyDaysAgo = moment().subtract(30, 'days');
+          if (existingPrimary.dugaarUurchilsunOgnoo && moment(existingPrimary.dugaarUurchilsunOgnoo).isAfter(thirtyDaysAgo)) {
+            const lastDate = moment(existingPrimary.dugaarUurchilsunOgnoo);
+            const diffDays = Math.ceil(30 - moment().diff(lastDate, 'days', true));
+            return res.status(403).json({
+              success: false,
+              message: `Машины дугаарыг 30 хоногт 1 удаа өөрчлөх боломжтой. Дахин өөрчлөхөд ${diffDays > 0 ? diffDays : 1} хоног үлдсэн байна.`
+            });
           }
           // Mark update time for resident-side change
           if (orshinSuugchMedeelel) orshinSuugchMedeelel.dugaarUurchilsunOgnoo = new Date();
