@@ -844,19 +844,40 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
             const diffMs =
               new Date(garsan).getTime() - new Date(orson).getTime();
             const khugatsaaMin = Math.max(0, Math.ceil(diffMs / 60000));
+
+            const niitDun = latest.niitDun || 0;
+            const tulbur = latest.tuukh[0].tulbur || [];
+            let hasDiscount = false;
+            const updatedTulbur = tulbur.map(p => {
+              if (p.turul === "khungulult" || p.turul === "discount" || p.turul === "Хөнгөлөлт" || p.turul?.includes("Хөнгөлөлт")) {
+                hasDiscount = true;
+                const absDun = Math.abs(p.dun || 0);
+                if (absDun > niitDun) {
+                  const plainP = p.toObject ? p.toObject() : p;
+                  return { ...plainP, dun: -niitDun };
+                }
+              }
+              return p;
+            });
+
+            const updateSetObj = {
+              "tuukh.0.niitKhugatsaa": khugatsaaMin,
+              "tuukh.0.tsagiinTuukh.0.khugatsaa": khugatsaaMin,
+            };
+            if (hasDiscount) {
+              updateSetObj["tuukh.0.tulbur"] = updatedTulbur;
+            }
+
             await uilchluulegchModel.updateOne(
               { _id: latest._id },
               {
-                $set: {
-                  "tuukh.0.niitKhugatsaa": khugatsaaMin,
-                  "tuukh.0.tsagiinTuukh.0.khugatsaa": khugatsaaMin,
-                },
+                $set: updateSetObj,
               },
             );
           }
         }
       } catch (e) {
-        console.error("Post-sdkData duration fix error:", e);
+        console.error("Post-sdkData duration and discount fix error:", e);
       }
     }
 
@@ -922,6 +943,22 @@ router
         });
         if (!!req.body.urdchilsan) {
           uurchlukhTuluv = 0;
+        } else {
+          try {
+            const uilchluulegch = await Uilchluulegch(req.body.tukhainBaaziinKholbolt).findById(req.body.id);
+            const niitDun = uilchluulegch?.niitDun || 0;
+            tulbur = tulbur.map(p => {
+              if (p.turul === "khungulult" || p.turul === "discount" || p.turul === "Хөнгөлөлт" || p.turul?.includes("Хөнгөлөлт")) {
+                const absDun = Math.abs(p.dun || 0);
+                if (absDun > niitDun) {
+                  return { ...p, dun: -niitDun };
+                }
+              }
+              return p;
+            });
+          } catch (err) {
+            console.error("Discount capping error in /zogsooliinTulburTulye:", err);
+          }
         }
         var setObj = {
           ebarimtAvakhDun: ebarimtAvakhDun,
