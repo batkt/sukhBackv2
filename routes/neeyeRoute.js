@@ -58,6 +58,35 @@ router.get("/neeye/:ip", async (req, res) => {
                 .findById(decoded.id)
                 .select("ner utas toot toots baiguullagiinId")
                 .lean();
+
+              if (orshinSuugch) {
+                // Fetch organization settings to check if resident gate open is allowed
+                const Baiguullaga = require("../models/baiguullaga");
+                const org = await Baiguullaga(db.erunkhiiKholbolt)
+                  .findById(orshinSuugch.baiguullagiinId)
+                  .select("tokhirgoo barilguud")
+                  .lean();
+
+                let allowed = false;
+                if (org) {
+                  const targetBarilga = org.barilguud?.find(
+                    (b) => String(b._id) === String(barilgiinId)
+                  );
+                  const bSetting = targetBarilga?.tokhirgoo?.orshinSuugchKhaalgaNeehEsekh;
+                  const oSetting = org.tokhirgoo?.orshinSuugchKhaalgaNeehEsekh;
+
+                  if (bSetting !== undefined && bSetting !== null) {
+                    allowed = !!bSetting;
+                  } else {
+                    allowed = !!oSetting;
+                  }
+                }
+
+                if (!allowed) {
+                  console.warn(`[Gate] Gate open denied for resident ${orshinSuugch.ner} - permission disabled`);
+                  return res.status(403).json({ aldaa: "Оршин суугч хаалга нээх эрхгүй байна" });
+                }
+              }
             }
           }
         } catch (jwtErr) {

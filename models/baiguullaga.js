@@ -30,6 +30,10 @@ const baiguullagaSchema = new Schema(
         register: String,
         niitTalbai: Number,
         tokhirgoo: {
+          orshinSuugchKhaalgaNeehEsekh: {
+            type: Boolean,
+            default: false,
+          },
           /**Хоногт бодох алдангийн хувь дээд тал 0.5 байна */
           aldangiinKhuvi: Number,
           /**Алданги авалгүйгээр хүлээх хоног */
@@ -165,6 +169,10 @@ const baiguullagaSchema = new Schema(
     ],
     talbai: Number,
     tokhirgoo: {
+      orshinSuugchKhaalgaNeehEsekh: {
+        type: Boolean,
+        default: false,
+      },
       /**Хоногт бодох алдангийн хувь дээд тал 0.5 байна */
       aldangiinKhuvi: Number,
 

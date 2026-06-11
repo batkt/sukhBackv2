@@ -55,6 +55,64 @@ const axios = require("axios");
 
 /*crud(router, "parking", Parking, UstsanBarimt, async (req, res, next) => {
 });*/
+router.get("/parking", tokenShalgakh, async (req, res, next) => {
+  try {
+    const { baiguullagiinId, barilgiinId } = req.query;
+    const page = parseInt(req.query.khuudasniiDugaar) || 1;
+    const limit = parseInt(req.query.khuudasniiKhemjee) || 10;
+
+    const query = {};
+    if (baiguullagiinId) query.baiguullagiinId = baiguullagiinId;
+    if (barilgiinId) query.barilgiinId = barilgiinId;
+
+    const kholbolt = req.body.tukhainBaaziinKholbolt || db.erunkhiiKholbolt;
+    const ParkingModel = Parking(kholbolt);
+    const list = await ParkingModel.find(query)
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+
+    const total = await ParkingModel.countDocuments(query);
+
+    let orshinSuugchKhaalgaNeehEsekh = false;
+    if (baiguullagiinId) {
+      const BaiguullagaModel = Baiguullaga(db.erunkhiiKholbolt);
+      const org = await BaiguullagaModel.findById(baiguullagiinId)
+        .select("tokhirgoo barilguud")
+        .lean();
+
+      if (org) {
+        let bSetting = undefined;
+        if (barilgiinId) {
+          const targetBarilga = org.barilguud?.find(
+            (b) => String(b._id) === String(barilgiinId)
+          );
+          bSetting = targetBarilga?.tokhirgoo?.orshinSuugchKhaalgaNeehEsekh;
+        }
+        const oSetting = org.tokhirgoo?.orshinSuugchKhaalgaNeehEsekh;
+
+        if (bSetting !== undefined && bSetting !== null) {
+          orshinSuugchKhaalgaNeehEsekh = !!bSetting;
+        } else {
+          orshinSuugchKhaalgaNeehEsekh = !!oSetting;
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      jagsaalt: list,
+      list: list,
+      data: list,
+      niitMur: total,
+      total,
+      orshinSuugchKhaalgaNeehEsekh,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 crud(router, "parking", Parking, UstsanBarimt);
 crud(router, "zurchilteiMashin", ZurchilteiMashin, UstsanBarimt);
 crud(router, "mashin", Mashin, UstsanBarimt);
