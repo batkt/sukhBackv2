@@ -974,7 +974,7 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
     if (req.query.turul && req.query.turul !== "Бүгд") {
       if (req.query.turul === "Бусад") {
         // "Бусад" = everything NOT in known categories
-        const knownCategories = ["Оршин суугч", "СӨХ", "Ажилтан", "Түрээслэгч"];
+        const knownCategories = ["Оршин суугч", "СӨХ", "Ажилтан", "Түрээслэгч", "Харилцагч"];
         mashinQuery.$and = mashinQuery.$and || [];
         mashinQuery.$and.push(
           { turul: { $nin: knownCategories } },
