@@ -822,8 +822,6 @@ router.get("/storageInfo", tokenShalgakh, async (req, res, next) => {
     const { db } = require("zevbackv2");
     const baiguullagiinId = req.query?.baiguullagiinId;
 
-    let imagesSize = 0;
-
     const getStats = async (conn, ner) => {
       if (!conn?.db) return null;
       try {
@@ -860,6 +858,7 @@ router.get("/storageInfo", tokenShalgakh, async (req, res, next) => {
       const path = require("path");
       const { getMedegdelPublicRoot } = require("../config/medegdelPaths");
       
+      let imagesSize = 0;
       const orgImagesDir = path.join(getMedegdelPublicRoot(), String(baiguullagiinId));
       
       const getDirSize = (dirPath) => {
@@ -941,13 +940,7 @@ router.get("/storageInfo", tokenShalgakh, async (req, res, next) => {
       { dataSize: 0, storageSize: 0, indexSize: 0 }
     );
 
-    return res.json({ 
-      success: true, 
-      details: results, 
-      total,
-      imagesSize,
-      dbSize: Math.max(0, total.dataSize - imagesSize)
-    });
+    return res.json({ success: true, details: results, total });
   } catch (error) {
     next(error);
   }
