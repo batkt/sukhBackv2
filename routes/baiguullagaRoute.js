@@ -852,6 +852,85 @@ router.get("/storageInfo", tokenShalgakh, async (req, res, next) => {
       if (tenantStats) results.push(tenantStats);
     }
 
+    if (baiguullagiinId) {
+      // 1. Calculate images/files directory size
+      const fs = require("fs");
+      const path = require("path");
+      const { getMedegdelPublicRoot } = require("../config/medegdelPaths");
+      
+      let imagesSize = 0;
+      const orgImagesDir = path.join(getMedegdelPublicRoot(), String(baiguullagiinId));
+      
+      const getDirSize = (dirPath) => {
+        let size = 0;
+        try {
+          if (!fs.existsSync(dirPath)) return 0;
+          const stats = fs.statSync(dirPath);
+          if (stats.isFile()) return stats.size;
+          if (stats.isDirectory()) {
+            const files = fs.readdirSync(dirPath);
+            for (const file of files) {
+              size += getDirSize(path.join(dirPath, file));
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+        return size;
+      };
+      
+      imagesSize = getDirSize(orgImagesDir);
+      if (imagesSize > 0) {
+        results.push({
+          ner: "Зургууд",
+          dataSize: imagesSize,
+          storageSize: imagesSize,
+          indexSize: 0,
+          collections: 0,
+          objects: 0,
+        });
+      }
+
+      // 2. Calculate OrshinSuugch documents size
+      const OrshinSuugch = require("../models/orshinSuugch");
+      const orshinSuugchDocs = await OrshinSuugch(db.erunkhiiKholbolt)
+        .find({ baiguullagiinId: String(baiguullagiinId) })
+        .lean();
+      if (orshinSuugchDocs && orshinSuugchDocs.length > 0) {
+        const docSize = Buffer.byteLength(JSON.stringify(orshinSuugchDocs), "utf8");
+        results.push({
+          ner: "Оршин суугчид",
+          dataSize: docSize,
+          storageSize: docSize,
+          indexSize: 0,
+          collections: 0,
+          objects: orshinSuugchDocs.length,
+        });
+      }
+
+      // 3. Calculate Khariltsagch documents size
+      const Khariltsagch = require("../models/khariltsagch");
+      const khariltsagchDocs = await Khariltsagch(db.erunkhiiKholbolt)
+        .find({
+          $or: [
+            { baiguullagiinId: String(baiguullagiinId) },
+            { "toots.baiguullagiinId": String(baiguullagiinId) }
+          ]
+        })
+        .lean();
+      if (khariltsagchDocs && khariltsagchDocs.length > 0) {
+        const docSize = Buffer.byteLength(JSON.stringify(khariltsagchDocs), "utf8");
+        results.push({
+          ner: "Харилцагчид",
+          dataSize: docSize,
+          storageSize: docSize,
+          indexSize: 0,
+          collections: 0,
+          objects: khariltsagchDocs.length,
+        });
+      }
+    }
+
     const total = results.reduce(
       (acc, r) => ({
         dataSize: acc.dataSize + r.dataSize,
