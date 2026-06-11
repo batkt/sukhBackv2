@@ -262,10 +262,10 @@ router.get("/khaalgaNeeyeTuukh", async (req, res, next) => {
     if (baiguullagiinId) query.baiguullagiinId = baiguullagiinId;
 
     if (turul && turul !== "all") {
-      if (turul === "нээсэн") {
+      if (turul === "urisan") {
+        query.turul = "урьсан";
+      } else if (turul === "neesen") {
         query.turul = { $ne: "урьсан" };
-      } else {
-        query.turul = turul;
       }
     }
 
