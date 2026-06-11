@@ -153,8 +153,11 @@ router.get("/khaalgaNeeyeTuukh/stats", async (req, res, next) => {
 
     counts.forEach(c => {
       totalCount += c.count;
-      if (c._id === "урьсан") urisanCount = c.count;
-      else if (c._id === "нээсэн") neesenCount = c.count;
+      if (c._id === "урьсан") {
+        urisanCount = c.count;
+      } else {
+        neesenCount += c.count;
+      }
     });
 
     // 2. Top residents
