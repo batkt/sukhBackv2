@@ -8,15 +8,10 @@ const si = require("systeminformation");
 
 crud(router, "license", License, UstsanBarimt);
 
-router.get("/systemiinMedeelelAvya", (req, res, next) => {
+router.get("/systemiinMedeelelAvya", async (req, res, next) => {
   try {
-    si.mem()
-      .then((data) => {
-        res.send(data);
-      })
-      .catch((error) => {
-        throw error;
-      });
+    const data = await si.mem();
+    res.send(data);
   } catch (error) {
     next(error);
   }
