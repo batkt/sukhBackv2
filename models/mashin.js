@@ -59,7 +59,7 @@ module.exports = function a(conn) {
   if (!conn || !conn.kholbolt)
     throw new Error("Холболтын мэдээлэл заавал бөглөх шаардлагатай!");
   conn = conn.kholbolt;
-  if(conn.models.Mashin) return conn.models.Mashin;
+  if(conn.models.mashin) return conn.models.mashin;
   return conn.model("mashin", mashinSchema);
 };
 //module.exports = mongoose.model("mashin", mashinSchema);
