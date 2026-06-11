@@ -1,13 +1,21 @@
+require("dotenv").config({ path: "./tokhirgoo/tokhirgoo.env" });
 const mongoose = require('mongoose');
 
-const MONGODB_URI = "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSukh?authSource=admin";
-
 async function run() {
-  await mongoose.connect(MONGODB_URI);
+  await mongoose.connect(process.env.MONGODB_URI);
   console.log("Connected to MongoDB");
 
-  const db = mongoose.connection.db;
+  // List all databases
+  const adminDb = mongoose.connection.db.admin();
+  const dbs = await adminDb.listDatabases();
+  console.log("Databases list:", dbs.databases.map(d => d.name));
+
+  // Let's check "nairamdalSukh" db specifically
+  const db = mongoose.connection.useDb("nairamdalSukh");
   const mashinCol = db.collection('mashin');
+  
+  const count = await mashinCol.countDocuments({});
+  console.log(`Document count in nairamdalSukh.mashin: ${count}`);
 
   const residentIds = [
     '6982ada408db41c95a43fec9',
@@ -19,19 +27,6 @@ async function run() {
   for (const id of residentIds) {
     const cars = await mashinCol.find({ ezemshigchiinId: id }).toArray();
     console.log(`Resident ID: ${id}, found cars:`, cars.map(c => ({ _id: c._id, dugaar: c.dugaar, ezemshigchiinId: c.ezemshigchiinId })));
-  }
-
-  console.log("\nSearching for resident cars by any other potential ID field:");
-  for (const id of residentIds) {
-    const cars = await mashinCol.find({
-      $or: [
-        { ezemshigchiinId: mongoose.Types.ObjectId(id) },
-        { ezemshigchiinId: id },
-        { orshinSuugchiinId: id },
-        { orshinSuugchiinId: mongoose.Types.ObjectId(id) }
-      ]
-    }).toArray();
-    console.log(`Resident ID: ${id}, found cars (flexible):`, cars.map(c => ({ _id: c._id, dugaar: c.dugaar, ezemshigchiinId: c.ezemshigchiinId, orshinSuugchiinId: c.orshinSuugchiinId })));
   }
 
   await mongoose.disconnect();
