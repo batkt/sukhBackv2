@@ -449,16 +449,6 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
       );
     }
 
-    let existingCancelledGeree = null;
-    if (tukhainBaaziinKholbolt && baiguullaga) {
-      const GereeModel = Geree(tukhainBaaziinKholbolt);
-      existingCancelledGeree = await GereeModel.findOne({
-        utas: { $in: [req.body.utas] }, // utas is an array in geree
-        tuluv: "Цуцалсан",
-        baiguullagiinId: baiguullaga._id.toString(),
-      });
-    }
-
 
     if (!baiguullaga && req.body.bairniiNer) {
 
