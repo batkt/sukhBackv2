@@ -242,6 +242,36 @@ router.post("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
             );
             
             if (index >= 0) {
+              const oldBuilding = baiguullaga.barilguud[index];
+              const oldIp = oldBuilding.cameraIp;
+              const oldPort = oldBuilding.cameraPort;
+              const oldUsername = oldBuilding.cameraUsername;
+              const oldPassword = oldBuilding.cameraPassword;
+
+              const newIp = updatedBarilga.cameraIp || "";
+              const newPort = updatedBarilga.cameraPort || 554;
+              const newUsername = updatedBarilga.cameraUsername || "admin";
+              const newPassword = updatedBarilga.cameraPassword || "Admin123";
+
+              ['cameruud', 'sohCameruud'].forEach(key => {
+                if (updatedBarilga[key] && Array.isArray(updatedBarilga[key])) {
+                  updatedBarilga[key].forEach(cam => {
+                    if (!cam.ip || cam.ip === oldIp) {
+                      cam.ip = newIp;
+                    }
+                    if (!cam.port || cam.port === oldPort) {
+                      cam.port = newPort;
+                    }
+                    if (!cam.username || cam.username === oldUsername) {
+                      cam.username = newUsername;
+                    }
+                    if (!cam.password || cam.password === oldPassword) {
+                      cam.password = newPassword;
+                    }
+                  });
+                }
+              });
+
               delete updatedBarilga._id;
               delete updatedBarilga.baiguullagiinId;
               
