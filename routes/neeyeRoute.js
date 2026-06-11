@@ -253,13 +253,21 @@ router.get("/khaalgaNeeyeTuukh/stats", async (req, res, next) => {
  */
 router.get("/khaalgaNeeyeTuukh", async (req, res, next) => {
   try {
-    const { barilgiinId, baiguullagiinId, start, end, searchUtga } = req.query;
+    const { barilgiinId, baiguullagiinId, start, end, searchUtga, turul } = req.query;
     const page = parseInt(req.query.khuudasniiDugaar) || 1;
     const limit = parseInt(req.query.khuudasniiKhemjee) || 10;
 
     const query = {};
     if (barilgiinId) query.barilgiinId = barilgiinId;
     if (baiguullagiinId) query.baiguullagiinId = baiguullagiinId;
+
+    if (turul && turul !== "all") {
+      if (turul === "нээсэн") {
+        query.turul = { $ne: "урьсан" };
+      } else {
+        query.turul = turul;
+      }
+    }
 
     if (start || end) {
       query.createdAt = {};
