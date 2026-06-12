@@ -31,14 +31,10 @@ async function main() {
     console.log(`Auditing Org ID: ${orgId}...`);
 
     try {
-      // 1. Fetch all paid invoices since Jan 1st, 2026 that were paid by QPay
+      // 1. Fetch all paid invoices since Jan 1st, 2026
       const invoices = await NekhemjlekhiinTuukh(kh).find({
         tuluv: "Төлсөн",
-        createdAt: { $gte: scanStartDate },
-        $or: [
-          { qpayInvoiceId: { $exists: true, $ne: null, $ne: "" } },
-          { qpayPaymentId: { $exists: true, $ne: null, $ne: "" } }
-        ]
+        createdAt: { $gte: scanStartDate }
       }).lean();
 
       if (invoices.length === 0) {
@@ -63,6 +59,8 @@ async function main() {
       ]);
 
       const missing = invoices.filter(i => !processedIds.has(i._id.toString()));
+      const missingQpay = missing.filter(i => i.qpayInvoiceId || i.qpayPaymentId);
+      const missingNonQpay = missing.filter(i => !i.qpayInvoiceId && !i.qpayPaymentId);
 
       report.totalPaidInvoicesChecked += invoices.length;
       report.totalMissingEbarimts += missing.length;
@@ -71,6 +69,8 @@ async function main() {
         orgId: orgId,
         paidInvoicesCount: invoices.length,
         missingEbarimtsCount: missing.length,
+        missingQpayCount: missingQpay.length,
+        missingNonQpayCount: missingNonQpay.length,
         missingPercentage: invoices.length > 0 ? ((missing.length / invoices.length) * 100).toFixed(1) + "%" : "0%"
       };
 
@@ -80,12 +80,13 @@ async function main() {
           contractNo: m.gereeniiDugaar,
           amount: m.niitTulbur,
           toot: m.toot,
+          isQpay: !!(m.qpayInvoiceId || m.qpayPaymentId),
           paidDate: m.tulsunOgnoo || m.updatedAt
         }));
       }
 
       report.tenantsReport.push(tenantStats);
-      console.log(`- Paid Invoices: ${invoices.length} | Missing Ebarimts: ${missing.length} (${tenantStats.missingPercentage})`);
+      console.log(`- Paid Invoices: ${invoices.length} | Missing: ${missing.length} (QPay: ${missingQpay.length}, Non-QPay: ${missingNonQpay.length})`);
 
     } catch (err) {
       console.error(`❌ Error auditing Org ID ${orgId}:`, err.message);
