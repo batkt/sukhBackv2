@@ -29,7 +29,6 @@ async function main() {
   await new Promise(r => setTimeout(r, 3000));
 
   const NekhemjlekhiinTuukh = require('../models/nekhemjlekhiinTuukh');
-  const Baiguullaga = require('../models/baiguullagiin'); // Wait, let's verify if baiguullaga.js is required as '../models/baiguullaga'
   const BaiguullagaModel = require('../models/baiguullaga');
   const EasyRegisterUser = require('../models/easyRegisterUser');
   const EbarimtShine = require('../models/ebarimtShine');
