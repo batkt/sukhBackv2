@@ -59,12 +59,25 @@ async function main() {
       ]);
 
       const { QuickQpayObject } = require("quickqpaypackvSukh");
-      const paidQpayObjs = await QuickQpayObject(kh).find({ tulsunEsekh: true }).lean();
-      const paidQpayInvoiceIds = new Set(paidQpayObjs.map(q => q.walletPaymentId).filter(Boolean));
+      const paidQpayObjs = await QuickQpayObject(kh).find({
+        $or: [
+          { tulsunEsekh: true },
+          { payment_id: { $exists: true, $ne: null, $ne: "" } }
+        ]
+      }).lean();
+
+      const paidInvoiceIds = new Set(paidQpayObjs.map(q => q.invoice_id).filter(Boolean));
+      const paidWalletPaymentIds = new Set(paidQpayObjs.map(q => q.walletPaymentId).filter(Boolean));
 
       const missing = invoices.filter(i => !processedIds.has(i._id.toString()));
-      const missingQpay = missing.filter(i => paidQpayInvoiceIds.has(i._id.toString()));
-      const missingNonQpay = missing.filter(i => !paidQpayInvoiceIds.has(i._id.toString()));
+      const missingQpay = missing.filter(i => 
+        (i.qpayInvoiceId && paidInvoiceIds.has(i.qpayInvoiceId)) ||
+        paidWalletPaymentIds.has(i._id.toString())
+      );
+      const missingNonQpay = missing.filter(i => 
+        !(i.qpayInvoiceId && paidInvoiceIds.has(i.qpayInvoiceId)) &&
+        !paidWalletPaymentIds.has(i._id.toString())
+      );
 
       report.totalPaidInvoicesChecked += invoices.length;
       report.totalMissingEbarimts += missing.length;

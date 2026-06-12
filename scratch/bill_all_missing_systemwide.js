@@ -55,18 +55,28 @@ async function main() {
     try {
       // 1. Fetch paid invoices since Jan 1st, 2026 that were paid by QPay (verified via QuickQpayObject)
       const { QuickQpayObject } = require("quickqpaypackvSukh");
-      const paidQpayObjs = await QuickQpayObject(kh).find({ tulsunEsekh: true }).lean();
-      const paidInvoiceIds = paidQpayObjs.map(q => q.walletPaymentId).filter(Boolean);
+      const paidQpayObjs = await QuickQpayObject(kh).find({
+        $or: [
+          { tulsunEsekh: true },
+          { payment_id: { $exists: true, $ne: null, $ne: "" } }
+        ]
+      }).lean();
 
-      if (paidInvoiceIds.length === 0) {
+      const paidInvoiceIds = paidQpayObjs.map(q => q.invoice_id).filter(Boolean);
+      const paidWalletPaymentIds = paidQpayObjs.map(q => q.walletPaymentId).filter(Boolean);
+
+      if (paidInvoiceIds.length === 0 && paidWalletPaymentIds.length === 0) {
         console.log("- No paid QPay transactions found.");
         continue;
       }
 
       const invoices = await NekhemjlekhiinTuukh(kh).find({
-        _id: { $in: paidInvoiceIds },
         tuluv: "Төлсөн",
-        createdAt: { $gte: scanStartDate }
+        createdAt: { $gte: scanStartDate },
+        $or: [
+          { qpayInvoiceId: { $in: paidInvoiceIds } },
+          { _id: { $in: paidWalletPaymentIds } }
+        ]
       }).lean();
 
       if (invoices.length === 0) {
