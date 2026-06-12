@@ -141,7 +141,7 @@ async function main() {
       }
     }
 
-    fs.writeFileSync("C:/Users/user/Desktop/sukhBackv2/scratch/search_results.json", JSON.stringify(results, null, 2));
+    fs.writeFileSync("./search_results.json", JSON.stringify(results, null, 2));
     console.log("Search completed. Results saved to search_results.json");
 
   } catch (err) {

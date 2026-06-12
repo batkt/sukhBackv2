@@ -39,7 +39,7 @@ async function main() {
           { "qpay.description": new RegExp(targetGereeNo, "i") },
           { talbainDugaar: geree.toot }
         ]
-      }).toArray();
+      }).lean();
 
       console.log(`Found ${qpayObjs.length} QPay objects:`);
       for (const q of qpayObjs) {
