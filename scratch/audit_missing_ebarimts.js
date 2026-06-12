@@ -31,10 +31,14 @@ async function main() {
     console.log(`Auditing Org ID: ${orgId}...`);
 
     try {
-      // 1. Fetch all paid invoices since Jan 1st, 2026
+      // 1. Fetch all paid invoices since Jan 1st, 2026 that were paid by QPay
       const invoices = await NekhemjlekhiinTuukh(kh).find({
         tuluv: "Төлсөн",
-        createdAt: { $gte: scanStartDate }
+        createdAt: { $gte: scanStartDate },
+        $or: [
+          { qpayInvoiceId: { $exists: true, $ne: null, $ne: "" } },
+          { qpayPaymentId: { $exists: true, $ne: null, $ne: "" } }
+        ]
       }).lean();
 
       if (invoices.length === 0) {
