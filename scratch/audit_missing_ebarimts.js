@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '../tokhirgoo/tokhirgoo.env' });
+require('dotenv').config({ path: require('path').resolve(__dirname, '../tokhirgoo/tokhirgoo.env') });
 const { db } = require('zevbackv2');
 const mongoose = require('mongoose');
 const fs = require('fs');

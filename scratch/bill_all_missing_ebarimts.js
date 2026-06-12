@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '../tokhirgoo/tokhirgoo.env' });
+require('dotenv').config({ path: require('path').resolve(__dirname, '../tokhirgoo/tokhirgoo.env') });
 const { db } = require('zevbackv2');
 const mongoose = require('mongoose');
 
@@ -60,12 +60,33 @@ async function main() {
   const paidInvoiceIds = paidQpayObjs.map(q => q.invoice_id).filter(Boolean);
   const paidWalletPaymentIds = paidQpayObjs.map(q => q.walletPaymentId).filter(Boolean);
 
+  // Resolve walletPaymentId UUID strings to actual NekhemjlekhiinTuukh ObjectIds via WalletInvoice (in main DB)
+  const resolvedInvoiceIds = [];
+  if (paidWalletPaymentIds.length > 0) {
+    const WalletInvoice = require("../models/walletInvoice");
+    const walletInvoices = await WalletInvoice(db.erunkhiiKholbolt).find({
+      walletPaymentId: { $in: paidWalletPaymentIds }
+    }).lean();
+
+    for (const wi of walletInvoices) {
+      if (wi.billIds && Array.isArray(wi.billIds)) {
+        resolvedInvoiceIds.push(...wi.billIds);
+      } else if (wi.billIds) {
+        resolvedInvoiceIds.push(wi.billIds);
+      }
+    }
+  }
+
+  const validObjectIds = resolvedInvoiceIds
+    .filter(id => mongoose.Types.ObjectId.isValid(id))
+    .map(id => new mongoose.Types.ObjectId(id));
+
   const invoices = await NekhemjlekhiinTuukh(kh).find({
     gereeniiDugaar: contractNo,
     tuluv: "Төлсөн",
     $or: [
       { qpayInvoiceId: { $in: paidInvoiceIds } },
-      { _id: { $in: paidWalletPaymentIds } }
+      { _id: { $in: validObjectIds } }
     ]
   }).sort({ createdAt: 1 }).lean();
   console.log(`Found ${invoices.length} paid QPay invoices total.`);
