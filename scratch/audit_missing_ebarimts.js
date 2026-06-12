@@ -58,9 +58,13 @@ async function main() {
         ...oldEbarimts.map(e => e.nekhemjlekhiinId)
       ]);
 
+      const { QuickQpayObject } = require("quickqpaypackvSukh");
+      const paidQpayObjs = await QuickQpayObject(kh).find({ tulsunEsekh: true }).lean();
+      const paidQpayInvoiceIds = new Set(paidQpayObjs.map(q => q.walletPaymentId).filter(Boolean));
+
       const missing = invoices.filter(i => !processedIds.has(i._id.toString()));
-      const missingQpay = missing.filter(i => i.qpayInvoiceId || i.qpayPaymentId);
-      const missingNonQpay = missing.filter(i => !i.qpayInvoiceId && !i.qpayPaymentId);
+      const missingQpay = missing.filter(i => paidQpayInvoiceIds.has(i._id.toString()));
+      const missingNonQpay = missing.filter(i => !paidQpayInvoiceIds.has(i._id.toString()));
 
       report.totalPaidInvoicesChecked += invoices.length;
       report.totalMissingEbarimts += missing.length;

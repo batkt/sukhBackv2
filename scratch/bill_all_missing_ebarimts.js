@@ -48,10 +48,17 @@ async function main() {
     process.exit(1);
   }
 
-  // 1. Fetch all invoices for this contract
-  console.log(`\nFetching all paid invoices for contract ${contractNo}...`);
-  const invoices = await NekhemjlekhiinTuukh(kh).find({ gereeniiDugaar: contractNo, tuluv: "Төлсөн" }).sort({ createdAt: 1 }).lean();
-  console.log(`Found ${invoices.length} paid invoices total.`);
+  // 1. Fetch all paid invoices since Jan 1st, 2026 that were paid by QPay (verified via QuickQpayObject)
+  const { QuickQpayObject } = require("quickqpaypackvSukh");
+  const paidQpayObjs = await QuickQpayObject(kh).find({ tulsunEsekh: true }).lean();
+  const paidInvoiceIds = paidQpayObjs.map(q => q.walletPaymentId).filter(Boolean);
+
+  const invoices = await NekhemjlekhiinTuukh(kh).find({
+    _id: { $in: paidInvoiceIds },
+    gereeniiDugaar: contractNo,
+    tuluv: "Төлсөн"
+  }).sort({ createdAt: 1 }).lean();
+  console.log(`Found ${invoices.length} paid QPay invoices total.`);
 
   // 2. Fetch existing Ebarimts
   const invoiceIds = invoices.map(i => i._id.toString());
@@ -63,11 +70,21 @@ async function main() {
     ...existingOld.map(e => e.nekhemjlekhiinId)
   ]);
 
-  const missingInvoices = invoices.filter(i => !processedInvoiceIds.has(i._id.toString()));
-  console.log(`Missing E-Barimts count: ${missingInvoices.length}`);
+  // Exclude invoices that the customer already manually generated/registered outside the system
+  const manualExclusions = [
+    "НЭХ-20260430-0021", // User already got this ebarimt manually
+    "НЭХ-20260401-0014", // Paid manually, not QPay
+    "НЭХ-20260204-0014"  // Paid manually, not QPay
+  ];
+
+  const missingInvoices = invoices.filter(i => 
+    !processedInvoiceIds.has(i._id.toString()) && 
+    !manualExclusions.includes(i.nekhemjlekhiinDugaar)
+  );
+  console.log(`Missing QPay E-Barimts count (after manual exclusions): ${missingInvoices.length}`);
 
   if (missingInvoices.length === 0) {
-    console.log("No missing E-Barimts found. All paid invoices are already registered!");
+    console.log("No missing E-Barimts found. All paid invoices are already registered or excluded!");
     process.exit(0);
   }
 
