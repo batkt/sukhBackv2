@@ -73,11 +73,19 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
     const yearMonth = invoice.ognoo ? new Date(invoice.ognoo) : new Date();
     const month = yearMonth.getMonth() + 1;
     const orgNameStr = invoice.baiguullagiinNer ? `[${invoice.baiguullagiinNer}] ` : "";
-    const tootStr = invoice.toot ? `${invoice.toot} тоотын ` : "";
+    const tootStr = invoice.toot ? `${invoice.toot} tootod ` : "";
 
     // Payment page URL hosted on Next.js frontend
     const paymentLink = `https://amarhome.mn/pay/${invoice._id}`;
-    const msgText = `${orgNameStr}Сайн байна уу? Таны ${tootStr}${month} сарын нэхэмжлэх үүслээ. Төлөх дүн: ${displayAmount || 0}₮. Төлөх линк: ${paymentLink}`;
+    let msgText = `${orgNameStr}Сайн байна уу? Таны ${tootStr}${month} сарын нэхэмжлэх үүслээ. Төлөх дүн: ${displayAmount || 0}₮. Төлөх линк: ${paymentLink}`;
+
+    // Ensure the message length does not exceed 160 characters, keeping the payment link intact
+    if (msgText.length > 160) {
+      const suffix = ` Tulukh kholboos: ${paymentLink}`;
+      const maxPrefixLength = 160 - suffix.length;
+      const prefix = `${orgNameStr} Tany ${tootStr} nekhemjlekh uuslee. Tulukh dun: ${displayAmount || 0}.`;
+      msgText = prefix.substring(0, maxPrefixLength) + suffix;
+    }
 
     // CallPro SMS Settings
     const key = "aa8e588459fdd9b7ac0b809fc29cfae3";

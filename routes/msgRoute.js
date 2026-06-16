@@ -232,4 +232,50 @@ router.route("/msgIlgeeye").post(tokenShalgakh, async (req, res, next) => {
   }
 });
 
+router.route("/msgTuukhAvya").get(tokenShalgakh, async (req, res, next) => {
+  try {
+    const { baiguullagiinId, barilgiinId, page = 1, limit = 50 } = req.query;
+
+    if (!baiguullagiinId) {
+      return res.status(400).json({
+        message: "baiguullagiinId is required",
+      });
+    }
+
+    const kholbolt = db.kholboltuud.find(
+      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
+    );
+
+    if (!kholbolt) {
+      return res.status(400).json({
+        message: "Тохиргоо хийгдээгүй байна!",
+      });
+    }
+
+    const MsgTuukhModel = MsgTuukh(kholbolt);
+    const query = { baiguullagiinId };
+    if (barilgiinId) {
+      query.barilgiinId = barilgiinId;
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const total = await MsgTuukhModel.countDocuments(query);
+    const list = await MsgTuukhModel.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    res.json({
+      success: true,
+      list,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit)
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
+
