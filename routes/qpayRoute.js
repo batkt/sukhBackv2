@@ -2954,7 +2954,7 @@ router.post(
   qpayNekhemjlekhMultipleCallbackHandler,
 );
 
-router.get("/api/pay/info/:invoiceId", async (req, res, next) => {
+router.get("/pay/info/:invoiceId", async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
     const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
