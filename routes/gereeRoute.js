@@ -87,11 +87,14 @@ router.use((req, res, next) => {
       (req.method === "POST" && req.path?.includes("delete"))) &&
     req.path?.includes("guilgeeAvlaguud");
   if (!isAvlagaMutation) return next();
+
+  console.log(`ℹ️ [GEREE ROUTE] Avlaga mutation intercepted: ${req.method} ${req.path}`);
   const originalJson = res.json.bind(res);
   res.json = function (data) {
     const baiguullagiinId = req.query?.baiguullagiinId || req.body?.baiguullagiinId || data?.baiguullagiinId;
     if (baiguullagiinId && req.app) {
       try {
+        console.log(`📡 [GEREE ROUTE] Emitting tulburUpdated socket event for org: ${baiguullagiinId}`);
         req.app.get("socketio").emit(`tulburUpdated:${baiguullagiinId}`, {});
       } catch (e) { }
     }
@@ -101,21 +104,32 @@ router.use((req, res, next) => {
     const kholbolt = req.body?.tukhainBaaziinKholbolt;
     if (gereeniiId && kholbolt) {
       const guilgeeService = require("../services/guilgeeService");
+      console.log(`🔄 [GEREE ROUTE] Syncing invoice status for contract: ${gereeniiId}`);
       guilgeeService.syncInvoicesStatus(kholbolt, gereeniiId)
         .then(async () => {
+          console.log(`✅ [GEREE ROUTE] Invoice status sync completed for contract: ${gereeniiId}`);
+          
           // If this is a creation (POST and not delete/update), trigger CallPro SMS notification
           const isPostCreation = req.method === "POST" && !req.path?.includes("delete") && !req.path?.includes("update");
           const invoiceId = req.body?.nekhemjlekhId || data?.nekhemjlekhId;
 
-          if (isPostCreation && invoiceId && baiguullagiinId) {
-            const invoiceSendService = require("../services/invoiceSendService");
-            console.log(`📡 [GEREE ROUTE] Triggering auto SMS for invoiceId: ${invoiceId} after manual avlaga creation`);
-            await invoiceSendService.sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId);
+          if (isPostCreation) {
+            if (invoiceId && baiguullagiinId) {
+              const invoiceSendService = require("../services/invoiceSendService");
+              console.log(`📡 [GEREE ROUTE] Triggering CallPro SMS notification for invoiceId: ${invoiceId} after manual avlaga creation`);
+              await invoiceSendService.sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId);
+            } else {
+              console.warn(`⚠️ [GEREE ROUTE] SMS skipped: invoiceId (${invoiceId}) or baiguullagiinId (${baiguullagiinId}) missing`);
+            }
+          } else {
+            console.log(`ℹ️ [GEREE ROUTE] SMS skipped: Not a POST creation mutation`);
           }
         })
         .catch((err) => {
           console.error("❌ [GEREE ROUTE] syncInvoicesStatus or SMS failed:", err.message);
         });
+    } else {
+      console.warn(`⚠️ [GEREE ROUTE] Sync skipped: gereeniiId (${gereeniiId}) or kholbolt (${!!kholbolt}) missing`);
     }
 
     return originalJson(data);
