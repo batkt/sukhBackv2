@@ -502,13 +502,35 @@ router.get(
           : Uilchluulegch(req.body.tukhainBaaziinKholbolt);
 
         khuudaslalt(model, body)
-          .then((result) => {
+          .then(async (result) => {
             // Normalize: ensure turul is populated at root level from mashin object
             if (result.jagsaalt && Array.isArray(result.jagsaalt)) {
+              // Get unique plate numbers that need lookup
+              const platesNeedingLookup = result.jagsaalt
+                .filter(v => !v.turul && !v.mashin && v.mashiniiDugaar)
+                .map(v => v.mashiniiDugaar);
+              
+              // Lookup mashin data for plates without mashin reference
+              const mashinMap = new Map();
+              if (platesNeedingLookup.length > 0) {
+                try {
+                  const kholbolt = req.body.tukhainBaaziinKholbolt || req.query.tukhainBaaziinKholbolt;
+                  const mashinResults = await Mashin(kholbolt).find({
+                    dugaar: { $in: [...new Set(platesNeedingLookup)] }
+                  }).lean();
+                  
+                  mashinResults.forEach(m => {
+                    if (m.dugaar) mashinMap.set(m.dugaar, m);
+                  });
+                } catch (e) {
+                  console.error("[Mashin lookup error]", e.message);
+                }
+              }
+              
               result.jagsaalt = result.jagsaalt.map((v) => {
-                const mashin = v.mashin;
+                const mashin = v.mashin || mashinMap.get(v.mashiniiDugaar);
                 const hasResidentData = mashin?.ezenToot || mashin?.orshinSuugchiinId || mashin?.ezemshigchiinNer;
-                const mashinTurul = mashin?.turul;
+                const mashinTurul = mashin?.turul || mashin?.zochinTurul;
                 
                 // If root turul is missing but mashin has it, or mashin has resident indicators
                 if (!v.turul && (mashinTurul || hasResidentData)) {
@@ -517,6 +539,7 @@ router.get(
                     turul: mashinTurul || "Оршин суугч",
                     toot: v.toot || mashin?.ezenToot,
                     orshinSuugchiinNer: v.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
+                    mashin: mashin || v.mashin,
                   };
                 }
                 return v;
@@ -592,10 +615,32 @@ router.get(
           let paginatedResults = allResults.slice(startIndex, endIndex);
 
           // Normalize: ensure turul is populated at root level from mashin object
+          // Get unique plate numbers that need lookup
+          const platesNeedingLookup = paginatedResults
+            .filter(v => !v.turul && !v.mashin && v.mashiniiDugaar)
+            .map(v => v.mashiniiDugaar);
+          
+          // Lookup mashin data for plates without mashin reference
+          const mashinMap = new Map();
+          if (platesNeedingLookup.length > 0) {
+            try {
+              const kholbolt = req.body.tukhainBaaziinKholbolt || req.query.tukhainBaaziinKholbolt;
+              const mashinResults = await Mashin(kholbolt).find({
+                dugaar: { $in: [...new Set(platesNeedingLookup)] }
+              }).lean();
+              
+              mashinResults.forEach(m => {
+                if (m.dugaar) mashinMap.set(m.dugaar, m);
+              });
+            } catch (e) {
+              console.error("[Mashin lookup error]", e.message);
+            }
+          }
+          
           paginatedResults = paginatedResults.map((v) => {
-            const mashin = v.mashin;
+            const mashin = v.mashin || mashinMap.get(v.mashiniiDugaar);
             const hasResidentData = mashin?.ezenToot || mashin?.orshinSuugchiinId || mashin?.ezemshigchiinNer;
-            const mashinTurul = mashin?.turul;
+            const mashinTurul = mashin?.turul || mashin?.zochinTurul;
             
             // If root turul is missing but mashin has it, or mashin has resident indicators
             if (!v.turul && (mashinTurul || hasResidentData)) {
@@ -604,6 +649,7 @@ router.get(
                 turul: mashinTurul || "Оршин суугч",
                 toot: v.toot || mashin?.ezenToot,
                 orshinSuugchiinNer: v.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
+                mashin: mashin || v.mashin,
               };
             }
             return v;
