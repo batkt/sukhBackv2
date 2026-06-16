@@ -5,16 +5,33 @@
  * Run: node scripts/fixOrphanUilchluulegch.js
  */
 
-const { db } = require("zevbackv2");
+const path = require("path");
+
+// Change to project root to load env and modules properly
+process.chdir(path.join(__dirname, ".."));
+
+require("dotenv").config({ path: "./tokhirgoo/tokhirgoo.env" });
+const zevbackv2 = require("zevbackv2");
 const Mashin = require("../models/mashin");
 const Uilchluulegch = require("sukhParking-v1").Uilchluulegch;
+
+async function waitForDb(maxWaitMs = 30000) {
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    if (zevbackv2.db && zevbackv2.db.kholboltuud && zevbackv2.db.kholboltuud.length > 0) {
+      return zevbackv2.db.kholboltuud;
+    }
+    await new Promise(r => setTimeout(r, 500));
+  }
+  throw new Error("Timeout waiting for database connections");
+}
 
 async function fixOrphanData() {
   console.log("[MIGRATION] Starting orphan data fix...");
   
   try {
-    // Get all database connections
-    const kholboltuud = db.kholboltuud || [];
+    // Wait for database connections to be initialized
+    const kholboltuud = await waitForDb();
     console.log(`[MIGRATION] Found ${kholboltuud.length} database connections`);
     
     for (const kholbolt of kholboltuud) {

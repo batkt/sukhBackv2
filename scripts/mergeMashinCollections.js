@@ -6,13 +6,31 @@
  * Run: node scripts/mergeMashinCollections.js
  */
 
-const { db } = require("zevbackv2");
+const path = require("path");
+
+// Change to project root to load env and modules properly
+process.chdir(path.join(__dirname, ".."));
+
+require("dotenv").config({ path: "./tokhirgoo/tokhirgoo.env" });
+const zevbackv2 = require("zevbackv2");
+
+async function waitForDb(maxWaitMs = 30000) {
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    if (zevbackv2.db && zevbackv2.db.kholboltuud && zevbackv2.db.kholboltuud.length > 0) {
+      return zevbackv2.db.kholboltuud;
+    }
+    await new Promise(r => setTimeout(r, 500));
+  }
+  throw new Error("Timeout waiting for database connections");
+}
 
 async function mergeMashinCollections() {
   console.log("[MERGE] Starting mashin collection merge...");
   
   try {
-    const kholboltuud = db.kholboltuud || [];
+    // Wait for database connections to be initialized
+    const kholboltuud = await waitForDb();
     console.log(`[MERGE] Found ${kholboltuud.length} database connections`);
     
     for (const kholbolt of kholboltuud) {
