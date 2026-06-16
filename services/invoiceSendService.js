@@ -4,7 +4,7 @@ const { deleteInvoice } = require("./invoiceDeletionService");
 const { getKholboltByBaiguullagiinId } = require("../utils/dbConnection");
 const axios = require("axios");
 
-async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId) {
+async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, options = {}) {
   try {
     const NekhemjlekhiinTuukhModel = NekhemjlekhiinTuukh(kholbolt);
     const invoice = await NekhemjlekhiinTuukhModel.findById(invoiceId);
@@ -24,8 +24,13 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId) 
       return { success: false, error: "No phone numbers found" };
     }
 
-    // 1. Create QPay invoice if it does not exist yet
-    if (!invoice.qpayInvoiceId && invoice.niitTulbur > 0) {
+    const displayAmount = (options && options.manualAmount !== undefined && options.manualAmount !== null)
+      ? options.manualAmount
+      : (invoice.niitTulbur || 0);
+
+    // 1. Create QPay invoice if it does not exist yet, or if a specific manual amount is requested
+    const shouldGenerateQpay = (!invoice.qpayInvoiceId || (options && options.manualAmount)) && displayAmount > 0;
+    if (shouldGenerateQpay) {
       try {
         const { qpayGargaya } = require("quickqpaypackvSukh");
         const maxDugaar = invoice.dugaalaltDugaar || 1;
@@ -40,14 +45,14 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId) 
         const qpayBody = {
           baiguullagiinId: baiguullagiinId,
           barilgiinId: invoice.barilgiinId,
-          dun: invoice.niitTulbur,
+          dun: displayAmount,
           tailbar: `${invoice.baiguullagiinNer || "Amarhome"} Нэхэмжлэх: ${invoice.toot || ""} тоот`,
           zakhialgiinDugaar: invoice.nekhemjlekhiinDugaar || String(maxDugaar),
           gereeniiId: invoice.gereeniiId,
           nekhemjlekhiinId: invoice._id.toString(),
         };
 
-        console.log(`📡 [SMS Notification] Generating QPay invoice for invoiceId: ${invoiceId}`);
+        console.log(`📡 [SMS Notification] Generating QPay invoice for invoiceId: ${invoiceId} with amount: ${displayAmount}`);
         const khariu = await qpayGargaya(qpayBody, callback_url, kholbolt);
 
         if (khariu) {
@@ -67,12 +72,12 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId) 
     // 2. Format Cyrillic/Mongolian message with the deep link
     const yearMonth = invoice.ognoo ? new Date(invoice.ognoo) : new Date();
     const month = yearMonth.getMonth() + 1;
-    const orgNameStr = invoice.baiguullagiinNer ? `${invoice.baiguullagiinNer} ` : "";
+    const orgNameStr = invoice.baiguullagiinNer ? `[${invoice.baiguullagiinNer}] ` : "";
     const tootStr = invoice.toot ? `${invoice.toot} тоотын ` : "";
 
     // Payment page URL hosted on Next.js frontend
     const paymentLink = `https://amarhome.mn/pay/${invoice._id}`;
-    const msgText = `Сайн байна уу? Таны ${orgNameStr}${tootStr}${month} сарын нэхэмжлэх үүслээ. Төлөх дүн: ${invoice.niitTulbur || 0}₮. Төлөх линк: ${paymentLink}`;
+    const msgText = `${orgNameStr}Сайн байна уу? Таны ${tootStr}${month} сарын нэхэмжлэх үүслээ. Төлөх дүн: ${displayAmount || 0}₮. Төлөх линк: ${paymentLink}`;
 
     // CallPro SMS Settings
     const key = "aa8e588459fdd9b7ac0b809fc29cfae3";

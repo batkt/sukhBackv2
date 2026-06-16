@@ -2986,14 +2986,18 @@ router.get("/api/pay/info/:invoiceId", async (req, res, next) => {
     }
 
     let qpayAmountMismatched = false;
+    let displayDun = invoice.niitTulbur;
     if (invoice.qpayInvoiceId && invoice.tuluv !== "Төлсөн") {
       try {
         const { QuickQpayObject } = require("quickqpaypackvSukh");
         const QuickQpayModel = QuickQpayObject(foundKholbolt);
         const qpayRec = await QuickQpayModel.findOne({ invoice_id: invoice.qpayInvoiceId }).lean();
-        if (qpayRec && Math.abs((qpayRec.dun || 0) - (invoice.niitTulbur || 0)) > 0.01) {
-          console.log(`ℹ️ [pay/info] QPay invoice amount mismatch. DB: ${invoice.niitTulbur}, QPay: ${qpayRec.dun}. Regenerating QPay invoice...`);
-          qpayAmountMismatched = true;
+        if (qpayRec) {
+          if (qpayRec.tulsunEsekh) {
+            qpayAmountMismatched = true;
+          } else {
+            displayDun = qpayRec.dun;
+          }
         }
       } catch (err) {
         console.error("⚠️ [pay/info] Failed to check QPay invoice amount mismatch:", err.message);
@@ -3076,7 +3080,7 @@ router.get("/api/pay/info/:invoiceId", async (req, res, next) => {
         baiguullagiinNer: invoice.baiguullagiinNer,
         ner: invoice.ner,
         toot: invoice.toot,
-        niitTulbur: invoice.niitTulbur,
+        niitTulbur: displayDun,
         tuluv: invoice.tuluv,
         qpayUrl: invoice.qpayUrl,
         qpayUrls: invoice.qpayUrls || [],

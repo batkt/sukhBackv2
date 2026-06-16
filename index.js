@@ -67,6 +67,14 @@ process.env.UV_THREADPOOL_SIZE = 20;
   try {
     console.log("🛠️ [INIT] Starting AmarSukh server initialization...");
 
+    // Run self-healing patch for sdkService to stop auto-violation "Гарсан цаг тодорхойгүй!"
+    try {
+      const patchSdkService = require("./utils/patchSdkService");
+      patchSdkService();
+    } catch (patchErr) {
+      console.error("❌ [INIT] Failed to run sdkService patch:", patchErr.message);
+    }
+
     /*
     // 1. Connect to Redis (async)
     console.log("🛠️ [INIT] Connecting to Redis...");

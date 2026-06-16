@@ -122,8 +122,9 @@ router.use((req, res, next) => {
           if (isPostCreation) {
             if (invoiceId && baiguullagiinId) {
               const invoiceSendService = require("../services/invoiceSendService");
-              console.log(`📡 [GEREE ROUTE] Triggering CallPro SMS notification for invoiceId: ${invoiceId} after manual avlaga creation`);
-              await invoiceSendService.sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId);
+              const manualAmount = req.body?.dun ? Number(req.body.dun) : null;
+              console.log(`📡 [GEREE ROUTE] Triggering CallPro SMS notification for invoiceId: ${invoiceId} with manualAmount: ${manualAmount} after manual avlaga creation`);
+              await invoiceSendService.sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, { manualAmount });
             } else {
               console.warn(`⚠️ [GEREE ROUTE] SMS skipped: invoiceId (${invoiceId}) or baiguullagiinId (${baiguullagiinId}) missing`);
             }
