@@ -74,7 +74,7 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId) 
     const msgText = `Сайн байна уу? Таны ${tootStr}${month} сарын нэхэмжлэх үүслээ. Төлөх дүн: ${invoice.niitTulbur || 0}₮. Төлөх линк: ${paymentLink}`;
 
     // CallPro SMS Settings
-    const key = "aa8e588459fdd9b7ac0b809fc29cfae3aa8e588459fdd9b7ac0b809fc29cfae3";
+    const key = "aa8e588459fdd9b7ac0b809fc29cfae3";
     const dugaar = "72002002";
     const activeUrl = "https://api-text.callpro.mn/v1/sms/send";
 
