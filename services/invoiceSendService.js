@@ -67,11 +67,12 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId) 
     // 2. Format Cyrillic/Mongolian message with the deep link
     const yearMonth = invoice.ognoo ? new Date(invoice.ognoo) : new Date();
     const month = yearMonth.getMonth() + 1;
+    const orgNameStr = invoice.baiguullagiinNer ? `${invoice.baiguullagiinNer} ` : "";
     const tootStr = invoice.toot ? `${invoice.toot} тоотын ` : "";
-    
+
     // Payment page URL hosted on Next.js frontend
     const paymentLink = `https://amarhome.mn/pay/${invoice._id}`;
-    const msgText = `Сайн байна уу? Таны ${tootStr}${month} сарын нэхэмжлэх үүслээ. Төлөх дүн: ${invoice.niitTulbur || 0}₮. Төлөх линк: ${paymentLink}`;
+    const msgText = `Сайн байна уу? Таны ${orgNameStr}${tootStr}${month} сарын нэхэмжлэх үүслээ. Төлөх дүн: ${invoice.niitTulbur || 0}₮. Төлөх линк: ${paymentLink}`;
 
     // CallPro SMS Settings
     const key = "aa8e588459fdd9b7ac0b809fc29cfae3";
@@ -82,7 +83,7 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId) 
       if (!phone || phone.trim() === "") continue;
       try {
         console.log(`📡 [SMS Notification] Sending SMS via CallPro to: ${phone}`);
-        
+
         await axios.post(activeUrl, {
           key: key,
           from: dugaar,
@@ -186,20 +187,20 @@ async function manualSendMassInvoices(baiguullagiinId, gereeIds, override = true
           if (geree) {
             gereeniiDugaar = `${geree.gereeniiDugaar || "Гэрээ"} (Тоот ${geree.toot || ""})`;
           }
-        } catch (_) {}
+        } catch (_) { }
       }
       errorsList.push({ gereeId: id, gereeniiDugaar, error: err.message });
     }
   }
 
-  return { 
-    success: true, 
-    data: { 
-      created, 
-      errors, 
+  return {
+    success: true,
+    data: {
+      created,
+      errors,
       errorsList,
-      results 
-    } 
+      results
+    }
   };
 }
 
