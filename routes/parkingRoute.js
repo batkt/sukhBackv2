@@ -503,6 +503,25 @@ router.get(
 
         khuudaslalt(model, body)
           .then((result) => {
+            // Normalize: ensure turul is populated at root level from mashin object
+            if (result.jagsaalt && Array.isArray(result.jagsaalt)) {
+              result.jagsaalt = result.jagsaalt.map((v) => {
+                const mashin = v.mashin;
+                const hasResidentData = mashin?.ezenToot || mashin?.orshinSuugchiinId || mashin?.ezemshigchiinNer;
+                const mashinTurul = mashin?.turul;
+                
+                // If root turul is missing but mashin has it, or mashin has resident indicators
+                if (!v.turul && (mashinTurul || hasResidentData)) {
+                  return {
+                    ...v,
+                    turul: mashinTurul || "Оршин суугч",
+                    toot: v.toot || mashin?.ezenToot,
+                    orshinSuugchiinNer: v.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
+                  };
+                }
+                return v;
+              });
+            }
             res.send(result);
           })
           .catch((err) => {
@@ -570,7 +589,25 @@ router.get(
 
           const startIndex = (originalPage - 1) * originalLimit;
           const endIndex = startIndex + originalLimit;
-          const paginatedResults = allResults.slice(startIndex, endIndex);
+          let paginatedResults = allResults.slice(startIndex, endIndex);
+
+          // Normalize: ensure turul is populated at root level from mashin object
+          paginatedResults = paginatedResults.map((v) => {
+            const mashin = v.mashin;
+            const hasResidentData = mashin?.ezenToot || mashin?.orshinSuugchiinId || mashin?.ezemshigchiinNer;
+            const mashinTurul = mashin?.turul;
+            
+            // If root turul is missing but mashin has it, or mashin has resident indicators
+            if (!v.turul && (mashinTurul || hasResidentData)) {
+              return {
+                ...v,
+                turul: mashinTurul || "Оршин суугч",
+                toot: v.toot || mashin?.ezenToot,
+                orshinSuugchiinNer: v.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
+              };
+            }
+            return v;
+          });
 
           res.send({
             khuudasniiDugaar: originalPage,
