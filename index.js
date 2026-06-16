@@ -440,6 +440,15 @@ async function automataarNekhemjlekhUusgekh() {
                 console.log(
                   `✅ [${processedCount}/${gereenuud.length}] Гэрээ ${batch[index].gereeniiDugaar} - Шинэ нэхэмжлэх үүсгэлээ (${urdun.nekhemjlekh._id})`,
                 );
+                // Send SMS notification containing QPay deeplink
+                const { sendInvoiceSmsNotification } = require("./services/invoiceSendService");
+                sendInvoiceSmsNotification(
+                  tukhainBaaziinKholbolt,
+                  urdun.nekhemjlekh._id,
+                  baiguullaga._id.toString()
+                ).catch((err) => {
+                  console.error(`❌ [CRON SMS] Failed to send SMS for invoice ${urdun.nekhemjlekh._id}:`, err.message);
+                });
               }
             } else {
               errorCount++;

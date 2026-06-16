@@ -2954,4 +2954,123 @@ router.post(
   qpayNekhemjlekhMultipleCallbackHandler,
 );
 
+router.get("/api/pay/info/:invoiceId", async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+    const { invoiceId } = req.params;
+
+    console.log(`ℹ️ [pay/info] Request details for invoiceId: ${invoiceId}`);
+
+    let invoice = null;
+    let foundKholbolt = null;
+
+    // Search for the invoice in all tenant databases
+    for (const kholbolt of db.kholboltuud) {
+      try {
+        const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
+        const inv = await NekhemjlekhModel.findById(invoiceId).lean();
+        if (inv) {
+          invoice = inv;
+          foundKholbolt = kholbolt;
+          break;
+        }
+      } catch (err) {
+        // Continue searching
+      }
+    }
+
+    if (!invoice) {
+      console.warn(`⚠️ [pay/info] Invoice not found: ${invoiceId}`);
+      return res.status(404).json({ success: false, message: "Нэхэмжлэх олдсонгүй." });
+    }
+
+    // Generate QPay invoice on-the-fly if not already generated, unpaid, and amount > 0
+    if (!invoice.qpayInvoiceId && invoice.tuluv !== "Төлсөн" && invoice.niitTulbur > 0) {
+      try {
+        const { qpayGargaya } = require("quickqpaypackvSukh");
+        const maxDugaar = invoice.dugaalaltDugaar || 1;
+
+        const callback_url =
+          process.env.UNDSEN_SERVER +
+          "/api/qpayNekhemjlekhCallback/" +
+          invoice.baiguullagiinId.toString() +
+          "/" +
+          invoice._id.toString();
+
+        const qpayBody = {
+          baiguullagiinId: invoice.baiguullagiinId,
+          barilgiinId: invoice.barilgiinId,
+          dun: invoice.niitTulbur,
+          tailbar: `${invoice.baiguullagiinNer} Танд сөхийн нэхэмжлэх үүслээ: ${invoice.toot || ""} тоот  Amarhome`,
+          zakhialgiinDugaar: invoice.nekhemjlekhiinDugaar || String(maxDugaar),
+          gereeniiId: invoice.gereeniiId,
+          nekhemjlekhiinId: invoice._id.toString(),
+        };
+
+        console.log(`📡 [pay/info] Creating QPay invoice on-the-fly for invoiceId: ${invoiceId}`);
+        const khariu = await qpayGargaya(qpayBody, callback_url, foundKholbolt);
+
+        if (khariu) {
+          const invoiceIdFromQpay = khariu.invoice_id || khariu.invoiceId || khariu.id;
+          const qpayUrl = khariu.qr_text || khariu.url || khariu.invoice_url || khariu.qr_image;
+
+          const NekhemjlekhModel = NekhemjlekhiinTuukh(foundKholbolt);
+          invoice = await NekhemjlekhModel.findByIdAndUpdate(
+            invoice._id,
+            {
+              $set: {
+                qpayInvoiceId: invoiceIdFromQpay,
+                qpayUrl: qpayUrl,
+                qpayUrls: khariu.urls,
+              },
+            },
+            { new: true }
+          ).lean();
+        }
+      } catch (qpayErr) {
+        console.error("❌ [pay/info] Failed to create QPay invoice on-the-fly:", qpayErr.message);
+      }
+    }
+
+    // Attempt to recover qpayUrls from QuickQpayObject if missing on the invoice record
+    if (invoice.qpayInvoiceId && (!invoice.qpayUrls || !invoice.qpayUrls.length)) {
+      try {
+        const { QuickQpayObject } = require("quickqpaypackvSukh");
+        const QuickQpayModel = QuickQpayObject(foundKholbolt);
+        const qpayRec = await QuickQpayModel.findOne({ invoice_id: invoice.qpayInvoiceId }).lean();
+        if (qpayRec?.qpay?.urls) {
+          invoice.qpayUrls = qpayRec.qpay.urls;
+          
+          // Save back to cache
+          const NekhemjlekhModel = NekhemjlekhiinTuukh(foundKholbolt);
+          await NekhemjlekhModel.findByIdAndUpdate(invoice._id, {
+            $set: { qpayUrls: qpayRec.qpay.urls }
+          });
+        }
+      } catch (err) {
+        console.error("⚠️ [pay/info] QuickQpayObject search failed:", err.message);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      invoice: {
+        _id: invoice._id,
+        nekhemjlekhiinDugaar: invoice.nekhemjlekhiinDugaar,
+        baiguullagiinNer: invoice.baiguullagiinNer,
+        ner: invoice.ner,
+        toot: invoice.toot,
+        niitTulbur: invoice.niitTulbur,
+        tuluv: invoice.tuluv,
+        qpayUrl: invoice.qpayUrl,
+        qpayUrls: invoice.qpayUrls || [],
+        ognoo: invoice.ognoo,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

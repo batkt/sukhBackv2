@@ -51,6 +51,7 @@ const nekhemjlekhiinTuukhSchema = new Schema(
     qpayPaymentId: String,
     qpayInvoiceId: String,
     qpayUrl: String,
+    qpayUrls: mongoose.Schema.Types.Mixed,
     tulukhOgnoo: Date,
     tulsunOgnoo: Date,
     orts: String, // Web only field

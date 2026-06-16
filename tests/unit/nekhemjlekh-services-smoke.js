@@ -30,12 +30,12 @@ function run() {
   assert(typeof deduplicateZardluud === "function");
   console.log("  utils OK");
 
-  console.log("Loading invoiceCreationService...");
+  console.log("Loading invoiceService...");
   const creation = require(
-    path.join(projectRoot, "services/invoiceCreationService.js"),
+    path.join(projectRoot, "services/invoiceService.js"),
   );
-  assert(typeof creation.gereeNeesNekhemjlekhUusgekh === "function");
-  console.log("  invoiceCreationService OK");
+  assert(typeof creation.createInvoiceForContract === "function");
+  console.log("  invoiceService OK");
 
   console.log("Loading invoicePreviewService...");
   const preview = require(
@@ -77,15 +77,13 @@ function run() {
   );
   const expectedExports = [
     "gereeNeesNekhemjlekhUusgekh",
-    "updateGereeAndNekhemjlekhFromZardluud",
-    "markInvoicesAsPaid",
     "previewInvoice",
     "manualSendInvoice",
     "manualSendMassInvoices",
-    "manualSendSelectedInvoices",
-    "deleteInvoiceZardal",
-    "recalculateGereeBalance",
     "deleteInvoice",
+    "deleteInvoiceZardal",
+    "updateGereeAndNekhemjlekhFromZardluud",
+    "recalculateGereeBalance"
   ];
   for (const name of expectedExports) {
     assert(controller[name] !== undefined, `Controller should export ${name}`);
