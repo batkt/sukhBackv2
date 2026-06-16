@@ -14,7 +14,7 @@ process.chdir(path.join(__dirname, ".."));
 
 require("dotenv").config({ path: "./tokhirgoo/tokhirgoo.env" });
 
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSukh?authSource=admin";
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://admin:Br1stelback1@127.0.0.1:27017/nairamdalSukh?authSource=admin";
 
 // Create schemas for the collections
 const MashinSchema = new mongoose.Schema({
