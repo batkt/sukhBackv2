@@ -37,6 +37,7 @@ const EbarimtShine = require("../models/ebarimtShine");
 const KassCameraKhaalt = require("../models/kassCameraKhaalt");
 const uneguiMashin = require("../models/uneguiMashin");
 const KhaalgaNeeyeTuukh = require("../models/khaalgaNeeyeTuukh");
+const mashinModel = require("../models/mashin"); // lowercase mashin collection
 
 const {
   orshinSuugchidSonorduulgaIlgeeye,
@@ -510,16 +511,25 @@ router.get(
                 .filter(v => !v.turul && !v.mashin && v.mashiniiDugaar)
                 .map(v => v.mashiniiDugaar);
               
-              // Lookup mashin data for plates without mashin reference
+              // Lookup mashin data for plates without mashin reference (both collections)
               const mashinMap = new Map();
               if (platesNeedingLookup.length > 0) {
                 try {
                   const kholbolt = req.body.tukhainBaaziinKholbolt || req.query.tukhainBaaziinKholbolt;
-                  const mashinResults = await Mashin(kholbolt).find({
-                    dugaar: { $in: [...new Set(platesNeedingLookup)] }
-                  }).lean();
+                  const uniquePlates = [...new Set(platesNeedingLookup)];
                   
-                  mashinResults.forEach(m => {
+                  // Query both uppercase Mashin and lowercase mashin collections
+                  const [mashinResultsUpper, mashinResultsLower] = await Promise.all([
+                    Mashin(kholbolt).find({ dugaar: { $in: uniquePlates } }).lean().catch(() => []),
+                    mashinModel(kholbolt).find({ dugaar: { $in: uniquePlates } }).lean().catch(() => [])
+                  ]);
+                  
+                  // Add uppercase Mashin results first
+                  mashinResultsUpper.forEach(m => {
+                    if (m.dugaar) mashinMap.set(m.dugaar, m);
+                  });
+                  // Add lowercase mashin results (will override if plate exists in both)
+                  mashinResultsLower.forEach(m => {
                     if (m.dugaar) mashinMap.set(m.dugaar, m);
                   });
                 } catch (e) {
@@ -620,16 +630,25 @@ router.get(
             .filter(v => !v.turul && !v.mashin && v.mashiniiDugaar)
             .map(v => v.mashiniiDugaar);
           
-          // Lookup mashin data for plates without mashin reference
+          // Lookup mashin data for plates without mashin reference (both collections)
           const mashinMap = new Map();
           if (platesNeedingLookup.length > 0) {
             try {
               const kholbolt = req.body.tukhainBaaziinKholbolt || req.query.tukhainBaaziinKholbolt;
-              const mashinResults = await Mashin(kholbolt).find({
-                dugaar: { $in: [...new Set(platesNeedingLookup)] }
-              }).lean();
+              const uniquePlates = [...new Set(platesNeedingLookup)];
               
-              mashinResults.forEach(m => {
+              // Query both uppercase Mashin and lowercase mashin collections
+              const [mashinResultsUpper, mashinResultsLower] = await Promise.all([
+                Mashin(kholbolt).find({ dugaar: { $in: uniquePlates } }).lean().catch(() => []),
+                mashinModel(kholbolt).find({ dugaar: { $in: uniquePlates } }).lean().catch(() => [])
+              ]);
+              
+              // Add uppercase Mashin results first
+              mashinResultsUpper.forEach(m => {
+                if (m.dugaar) mashinMap.set(m.dugaar, m);
+              });
+              // Add lowercase mashin results (will override if plate exists in both)
+              mashinResultsLower.forEach(m => {
                 if (m.dugaar) mashinMap.set(m.dugaar, m);
               });
             } catch (e) {
