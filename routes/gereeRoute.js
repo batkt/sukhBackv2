@@ -90,8 +90,14 @@ router.use((req, res, next) => {
 
   console.log(`ℹ️ [GEREE ROUTE] Avlaga mutation intercepted: ${req.method} ${req.path}`);
   const originalJson = res.json.bind(res);
-  res.json = function (data) {
-    const baiguullagiinId = req.query?.baiguullagiinId || req.body?.baiguullagiinId || data?.baiguullagiinId;
+  const originalSend = res.send.bind(res);
+  let ranAfterResponse = false;
+
+  const afterResponse = (data) => {
+    if (ranAfterResponse) return;
+    ranAfterResponse = true;
+
+    const baiguullagiinId = req.query?.baiguullagiinId || req.body?.baiguullagiinId || (data && typeof data === "object" ? data.baiguullagiinId : null);
     if (baiguullagiinId && req.app) {
       try {
         console.log(`📡 [GEREE ROUTE] Emitting tulburUpdated socket event for org: ${baiguullagiinId}`);
@@ -100,7 +106,7 @@ router.use((req, res, next) => {
     }
 
     // Trigger Full Sync for the affected contract
-    const gereeniiId = req.body?.gereeniiId || data?.gereeniiId;
+    const gereeniiId = req.body?.gereeniiId || (data && typeof data === "object" ? data.gereeniiId : null);
     const kholbolt = req.body?.tukhainBaaziinKholbolt;
     if (gereeniiId && kholbolt) {
       const guilgeeService = require("../services/guilgeeService");
@@ -111,7 +117,7 @@ router.use((req, res, next) => {
           
           // If this is a creation (POST and not delete/update), trigger CallPro SMS notification
           const isPostCreation = req.method === "POST" && !req.path?.includes("delete") && !req.path?.includes("update");
-          const invoiceId = req.body?.nekhemjlekhId || data?.nekhemjlekhId;
+          const invoiceId = req.body?.nekhemjlekhId || (data && typeof data === "object" ? data.nekhemjlekhId : null);
 
           if (isPostCreation) {
             if (invoiceId && baiguullagiinId) {
@@ -131,8 +137,16 @@ router.use((req, res, next) => {
     } else {
       console.warn(`⚠️ [GEREE ROUTE] Sync skipped: gereeniiId (${gereeniiId}) or kholbolt (${!!kholbolt}) missing`);
     }
+  };
 
+  res.json = function (data) {
+    afterResponse(data);
     return originalJson(data);
+  };
+
+  res.send = function (data) {
+    afterResponse(data);
+    return originalSend(data);
   };
   next();
 });
