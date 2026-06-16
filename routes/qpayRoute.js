@@ -2996,7 +2996,7 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
           if (qpayRec.tulsunEsekh) {
             qpayAmountMismatched = true;
           } else {
-            displayDun = qpayRec.dun;
+            displayDun = qpayRec.qpay?.amount || qpayRec.dun || invoice.niitTulbur;
           }
         }
       } catch (err) {
