@@ -2985,8 +2985,23 @@ router.get("/api/pay/info/:invoiceId", async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Нэхэмжлэх олдсонгүй." });
     }
 
-    // Generate QPay invoice on-the-fly if not already generated, unpaid, and amount > 0
-    if (!invoice.qpayInvoiceId && invoice.tuluv !== "Төлсөн" && invoice.niitTulbur > 0) {
+    let qpayAmountMismatched = false;
+    if (invoice.qpayInvoiceId && invoice.tuluv !== "Төлсөн") {
+      try {
+        const { QuickQpayObject } = require("quickqpaypackvSukh");
+        const QuickQpayModel = QuickQpayObject(foundKholbolt);
+        const qpayRec = await QuickQpayModel.findOne({ invoice_id: invoice.qpayInvoiceId }).lean();
+        if (qpayRec && Math.abs((qpayRec.dun || 0) - (invoice.niitTulbur || 0)) > 0.01) {
+          console.log(`ℹ️ [pay/info] QPay invoice amount mismatch. DB: ${invoice.niitTulbur}, QPay: ${qpayRec.dun}. Regenerating QPay invoice...`);
+          qpayAmountMismatched = true;
+        }
+      } catch (err) {
+        console.error("⚠️ [pay/info] Failed to check QPay invoice amount mismatch:", err.message);
+      }
+    }
+
+    // Generate QPay invoice on-the-fly if not already generated (or amount mismatched), unpaid, and amount > 0
+    if ((!invoice.qpayInvoiceId || qpayAmountMismatched) && invoice.tuluv !== "Төлсөн" && invoice.niitTulbur > 0) {
       try {
         const { qpayGargaya } = require("quickqpaypackvSukh");
         const maxDugaar = invoice.dugaalaltDugaar || 1;
