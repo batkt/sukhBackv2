@@ -7,106 +7,101 @@
  */
 
 const path = require("path");
+const mongoose = require("mongoose");
 
 // Change to project root to load env and modules properly
 process.chdir(path.join(__dirname, ".."));
 
 require("dotenv").config({ path: "./tokhirgoo/tokhirgoo.env" });
-const zevbackv2 = require("zevbackv2");
 
-async function waitForDb(maxWaitMs = 30000) {
-  const start = Date.now();
-  while (Date.now() - start < maxWaitMs) {
-    if (zevbackv2.db && zevbackv2.db.kholboltuud && zevbackv2.db.kholboltuud.length > 0) {
-      return zevbackv2.db.kholboltuud;
-    }
-    await new Promise(r => setTimeout(r, 500));
-  }
-  throw new Error("Timeout waiting for database connections");
-}
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSukh?authSource=admin";
+
+// Create schemas for the collections
+const MashinSchema = new mongoose.Schema({
+  dugaar: String,
+  turul: String,
+  zochinTurul: String,
+  ezenToot: String,
+  orshinSuugchiinId: String,
+  ezemshigchiinNer: String,
+  ezemshigchiinUtas: String,
+  baiguullagiinId: String,
+  barilgiinId: String,
+}, { strict: false });
 
 async function mergeMashinCollections() {
   console.log("[MERGE] Starting mashin collection merge...");
+  console.log(`[MERGE] Connecting to: ${MONGODB_URI.replace(/:.*@/, ":****@")}`);
   
   try {
-    // Wait for database connections to be initialized
-    const kholboltuud = await waitForDb();
-    console.log(`[MERGE] Found ${kholboltuud.length} database connections`);
+    // Connect to MongoDB
+    await mongoose.connect(MONGODB_URI);
+    console.log("[MERGE] Connected to MongoDB");
     
-    for (const kholbolt of kholboltuud) {
-      if (!kholbolt.kholbolt) continue;
-      
-      const baiguullagiinId = kholbolt.baiguullagiinId;
-      console.log(`\n[MERGE] Processing organization: ${baiguullagiinId}`);
-      
+    // Get the database
+    const db = mongoose.connection.db;
+    
+    // Get all records from uppercase Mashin collection
+    const upperCollection = db.collection("Mashin");
+    const lowerCollection = db.collection("mashin");
+    
+    const upperRecords = await upperCollection.find({}).toArray();
+    console.log(`[MERGE] Found ${upperRecords.length} records in uppercase 'Mashin'`);
+    
+    if (upperRecords.length === 0) {
+      console.log("[MERGE] No records to merge");
+      await mongoose.disconnect();
+      process.exit(0);
+    }
+    
+    let inserted = 0;
+    let updated = 0;
+    let errors = 0;
+    
+    for (const record of upperRecords) {
       try {
-        const mashinModel = require("../models/mashin");
-        const MashinUpper = require("sukhParking-v1").Mashin;
+        const existing = await lowerCollection.findOne({ dugaar: record.dugaar });
         
-        // Get all records from uppercase Mashin
-        const upperRecords = await MashinUpper(kholbolt.kholbolt).find({}).lean();
-        console.log(`  - Found ${upperRecords.length} records in uppercase 'Mashin'`);
-        
-        if (upperRecords.length === 0) {
-          console.log(`  - No records to merge`);
-          continue;
-        }
-        
-        let inserted = 0;
-        let updated = 0;
-        let errors = 0;
-        
-        for (const record of upperRecords) {
-          try {
-            const existing = await mashinModel(kholbolt.kholbolt).findOne({
-              dugaar: record.dugaar
-            }).lean();
-            
-            if (existing) {
-              // Update existing record in lowercase mashin with data from uppercase
-              await mashinModel(kholbolt.kholbolt).updateOne(
-                { _id: existing._id },
-                { 
-                  $set: {
-                    turul: record.turul || existing.turul,
-                    zochinTurul: record.zochinTurul || existing.zochinTurul,
-                    ezenToot: record.ezenToot || existing.ezenToot,
-                    orshinSuugchiinId: record.orshinSuugchiinId || existing.orshinSuugchiinId,
-                    ezemshigchiinNer: record.ezemshigchiinNer || existing.ezemshigchiinNer,
-                    ezemshigchiinUtas: record.ezemshigchiinUtas || existing.ezemshigchiinUtas,
-                    updatedAt: new Date()
-                  }
-                }
-              );
-              updated++;
-            } else {
-              // Insert new record into lowercase mashin
-              const newRecord = {
-                ...record,
-                _id: undefined, // Let MongoDB generate new _id
-                createdAt: new Date(),
+        if (existing) {
+          // Update existing record in lowercase mashin with data from uppercase
+          await lowerCollection.updateOne(
+            { _id: existing._id },
+            { 
+              $set: {
+                turul: record.turul || existing.turul,
+                zochinTurul: record.zochinTurul || existing.zochinTurul,
+                ezenToot: record.ezenToot || existing.ezenToot,
+                orshinSuugchiinId: record.orshinSuugchiinId || existing.orshinSuugchiinId,
+                ezemshigchiinNer: record.ezemshigchiinNer || existing.ezemshigchiinNer,
+                ezemshigchiinUtas: record.ezemshigchiinUtas || existing.ezemshigchiinUtas,
                 updatedAt: new Date()
-              };
-              delete newRecord._id;
-              
-              await mashinModel(kholbolt.kholbolt).create(newRecord);
-              inserted++;
+              }
             }
-          } catch (e) {
-            console.log(`    Error processing ${record.dugaar}: ${e.message}`);
-            errors++;
-          }
+          );
+          updated++;
+        } else {
+          // Insert new record into lowercase mashin
+          const newRecord = {
+            ...record,
+            _id: new mongoose.Types.ObjectId(),
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+          delete newRecord._id;
+          
+          await lowerCollection.insertOne(newRecord);
+          inserted++;
         }
-        
-        console.log(`  - Inserted: ${inserted}, Updated: ${updated}, Errors: ${errors}`);
-        
       } catch (e) {
-        console.log(`  Error: ${e.message}`);
+        console.log(`  Error processing ${record.dugaar}: ${e.message}`);
+        errors++;
       }
     }
     
-    console.log("\n[MERGE] Complete!");
-    console.log("You can now optionally drop the uppercase 'Mashin' collection after verifying everything works.");
+    console.log(`\n[MERGE] Results: Inserted: ${inserted}, Updated: ${updated}, Errors: ${errors}`);
+    console.log("[MERGE] Complete! You can now optionally drop the uppercase 'Mashin' collection.");
+    
+    await mongoose.disconnect();
     process.exit(0);
     
   } catch (e) {
