@@ -77,8 +77,27 @@ async function recordPayment(kholbolt, data, options = {}) {
     }).session(session);
 
     if (existing) {
-      console.log(`ℹ️ [LEDGER] Duplicate payment ignored: ${data.bankniiGuilgeeId}`);
+      console.log(`ℹ️ [LEDGER] Duplicate payment ignored (by transaction ID): ${data.bankniiGuilgeeId}`);
       return { success: true, paymentRecord: existing, alreadyExists: true };
+    }
+  }
+
+  // Additional duplicate check: same invoice + same amount within last 5 minutes
+  // This catches QPay duplicates where transaction ID differs between callbacks
+  // Note: Different invoices with same amount are allowed (user can pay multiple invoices)
+  if (data.nekhemjlekhId && paidAmount > 0) {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const recentDuplicate = await GuilgeeAvlaguudModel.findOne({
+      nekhemjlekhId: data.nekhemjlekhId,
+      baiguullagiinId: data.baiguullagiinId,
+      turul: "төлөлт",
+      tulsunDun: paidAmount,
+      ognoo: { $gte: fiveMinutesAgo }
+    }).session(session);
+
+    if (recentDuplicate) {
+      console.log(`ℹ️ [LEDGER] Duplicate payment ignored (recent same invoice/amount): nekhemjlekhId=${data.nekhemjlekhId}, amount=${paidAmount}`);
+      return { success: true, paymentRecord: recentDuplicate, alreadyExists: true };
     }
   }
 

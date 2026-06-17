@@ -74,17 +74,40 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
     const month = yearMonth.getMonth() + 1;
     const orgNameStr = invoice.baiguullagiinNer ? `[${invoice.baiguullagiinNer}] ` : "";
     const tootStr = invoice.toot ? `${invoice.toot} tootod ` : "";
+    const absAmount = Math.abs(displayAmount || 0);
 
     // Payment page URL hosted on Next.js frontend
     const paymentLink = `https://amarhome.mn/pay/${invoice._id}`;
-    let msgText = `${orgNameStr}Сайн байна уу? Таны ${tootStr}${month} сарын нэхэмжлэх үүслээ. Төлөх дүн: ${displayAmount || 0}₮. Төлөх линк: ${paymentLink}`;
+    let msgText;
 
-    // Ensure the message length does not exceed 160 characters, keeping the payment link intact
+    // Determine message type based on amount and status
+    if (displayAmount < 0) {
+      // Tulult (payment record - shows amount that was paid, no link needed)
+      msgText = `${orgNameStr}Tany ${tootStr} tulult burtgegdlee. Tulsun dun: ${absAmount}.`;
+    } else if (invoice.tuluv === "Төлсөн") {
+      // Tulsun (already paid)
+      msgText = `${orgNameStr}Tany ${tootStr} nekhemjlekh tulugdsun. Tulsun dun: ${absAmount}.`;
+    } else {
+      // Tulukh (needs payment - default)
+      msgText = `${orgNameStr}Tany ${tootStr} nekhemjlekh uuslee. Tuluh dun: ${absAmount}. Tulukh kholboos: ${paymentLink}`;
+    }
+
     if (msgText.length > 160) {
-      const suffix = ` Tulukh kholboos: ${paymentLink}`;
-      const maxPrefixLength = 160 - suffix.length;
-      const prefix = `${orgNameStr} Tany ${tootStr} nekhemjlekh uuslee. Tulukh dun: ${displayAmount || 0}.`;
-      msgText = prefix.substring(0, maxPrefixLength) + suffix;
+      let prefix;
+      if (displayAmount < 0) {
+        // Payment record - no payment link needed
+        prefix = `${orgNameStr}Tany ${tootStr} tulult burtgegdlee. Tulsun dun: ${absAmount}.`;
+        msgText = prefix.substring(0, 160);
+      } else {
+        const suffix = ` Kholboos: ${paymentLink}`;
+        const maxPrefixLength = 160 - suffix.length;
+        if (invoice.tuluv === "Төлсөн") {
+          prefix = `${orgNameStr}Tany ${tootStr} nekhemjlekh tulugdsun. Tulsun dun: ${absAmount}.`;
+        } else {
+          prefix = `${orgNameStr}Tany ${tootStr} nekhemjlekh uuslee. Tulukh dun: ${absAmount}. Tulukh kholboos: ${paymentLink}`;
+        }
+        msgText = prefix.substring(0, maxPrefixLength) + suffix;
+      }
     }
 
     // CallPro SMS Settings
