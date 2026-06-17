@@ -2326,17 +2326,24 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
                   nekhemjlekh.uldegdel > 0
                     ? nekhemjlekh.uldegdel
                     : multiPaidAmount;
+                const multiCurrentTulsun =
+                  typeof nekhemjlekh.tulsunDun === "number" &&
+                  !isNaN(nekhemjlekh.tulsunDun)
+                    ? nekhemjlekh.tulsunDun
+                    : 0;
                 const multiNewUldegdel = Math.max(
                   0,
                   multiCurrentUldegdel - multiPaidAmount,
                 );
+                const multiNewTulsun = multiCurrentTulsun + multiPaidAmount;
                 const multiIsFullyPaid = multiNewUldegdel <= 0.01;
                 return {
                   tuluv: multiIsFullyPaid ? "Төлсөн" : "Төлөөгүй",
+                  tulsunDun: multiNewTulsun,
+                  uldegdel: multiNewUldegdel,
                   ...(paymentTransactionId && {
                     qpayPaymentId: paymentTransactionId,
                   }),
-                  // uldegdel removed
                 };
               })(),
               $push: {
