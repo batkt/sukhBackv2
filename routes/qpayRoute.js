@@ -2961,6 +2961,92 @@ router.post(
   qpayNekhemjlekhMultipleCallbackHandler,
 );
 
+// NEW: Public endpoint to check payment status (polls QPay if needed)
+router.get("/pay/check/:invoiceId", async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const nekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+    const { qpayShalgay, QuickQpayObject } = require("quickqpaypackvSukh");
+
+    const nekhemjlekhiinId = req.params.invoiceId;
+    let nekhemjlekh = null;
+    let kholbolt = null;
+
+    for (const k of db.kholboltuud || []) {
+      const InvoiceModel = nekhemjlekhiinTuukh(k);
+      nekhemjlekh = await InvoiceModel.findById(nekhemjlekhiinId);
+      if (nekhemjlekh) { kholbolt = k; break; }
+    }
+
+    if (!nekhemjlekh) {
+      return res.status(404).json({ success: false, message: "Invoice not found" });
+    }
+
+    if (nekhemjlekh.qpayInvoiceId && nekhemjlekh.tuluv !== "Төлсөн") {
+      try {
+        const qpayObject = await QuickQpayObject(kholbolt);
+        const qpayCheckResult = await qpayShalgay(qpayObject, nekhemjlekh.qpayInvoiceId);
+        if (qpayCheckResult && (qpayCheckResult.paid || qpayCheckResult.payment_id)) {
+          const paymentAmount = Number(qpayCheckResult.amount || nekhemjlekh.niitTulbur || 0);
+          const currentTulsun = Number(nekhemjlekh.tulsunDun || 0);
+          const newTulsun = currentTulsun + paymentAmount;
+          const newUldegdel = Math.max(0, Number(nekhemjlekh.niitTulbur || 0) - newTulsun);
+          const isFullyPaid = newUldegdel <= 0.01;
+
+          nekhemjlekh.tuluv = isFullyPaid ? "Төлсөн" : "Төлөөгүй";
+          nekhemjlekh.tulsunDun = newTulsun;
+          nekhemjlekh.uldegdel = newUldegdel;
+          nekhemjlekh.tulsunOgnoo = new Date();
+          if (qpayCheckResult.payment_id) nekhemjlekh.qpayPaymentId = qpayCheckResult.payment_id;
+          await nekhemjlekh.save();
+        }
+      } catch (qpayErr) {
+        console.error("❌ [PAY CHECK] QPay check failed:", qpayErr.message);
+      }
+    }
+
+    // Also check ledger
+    try {
+      const GuilgeeModel = require("../models/guilgeeAvlaguud")(kholbolt);
+      if (GuilgeeModel) {
+        const allLedger = await GuilgeeModel.find({ nekhemjlekhId: nekhemjlekhiinId, turul: "төлөлт" }).lean();
+        const totalPaid = allLedger.filter((r) => (r.dun || 0) < 0).reduce((sum, r) => sum + Math.abs(r.dun || 0), 0);
+        if (totalPaid > 0 && (!nekhemjlekh.tulsunDun || nekhemjlekh.tulsunDun <= 0)) {
+          nekhemjlekh.tulsunDun = totalPaid;
+          nekhemjlekh.uldegdel = Math.max(0, Number(nekhemjlekh.niitTulbur || 0) - totalPaid);
+          if (nekhemjlekh.uldegdel <= 0.01) nekhemjlekh.tuluv = "Төлсөн";
+          await nekhemjlekh.save();
+        }
+      }
+    } catch (ledgerErr) {
+      console.error("❌ [PAY CHECK] Ledger check failed:", ledgerErr.message);
+    }
+
+    const displayDun = nekhemjlekh.niitTulbur || nekhemjlekh.niitDun || 0;
+    res.json({
+      success: true,
+      invoice: {
+        _id: nekhemjlekh._id,
+        nekhemjlekhiinDugaar: nekhemjlekh.nekhemjlekhiinDugaar,
+        baiguullagiinNer: nekhemjlekh.baiguullagiinNer,
+        ner: nekhemjlekh.ner,
+        toot: nekhemjlekh.toot,
+        niitTulbur: displayDun,
+        tuluv: nekhemjlekh.tuluv,
+        tulsunDun: nekhemjlekh.tulsunDun || 0,
+        uldegdel: nekhemjlekh.uldegdel,
+        qpayUrl: nekhemjlekh.qpayUrl,
+        qpayUrls: nekhemjlekh.qpayUrls || [],
+        qpayPaymentId: nekhemjlekh.qpayPaymentId,
+        paymentHistory: nekhemjlekh.paymentHistory || [],
+        ognoo: nekhemjlekh.ognoo,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get("/pay/info/:invoiceId", async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
