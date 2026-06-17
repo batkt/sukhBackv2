@@ -78,15 +78,16 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
 
     // Payment page URL hosted on Next.js frontend
     const paymentLink = `https://amarhome.mn/pay/${invoice._id}`;
+    const appLink = `https://zevtabs.mn/qr/amarhome/`
     let msgText;
 
     // Determine message type based on amount and status
     if (displayAmount < 0) {
       // Tulult (payment record - shows amount that was paid, no link needed)
-      msgText = `${orgNameStr}Tany ${tootStr} tulult burtgegdlee. Tulsun dun: ${absAmount}.`;
+      msgText = `${orgNameStr}Tany ${tootStr} tulult burtgegdlee. Tulsun dun: ${absAmount}. App tatakh kholboos ${appLink}`;
     } else if (invoice.tuluv === "Төлсөн") {
       // Tulsun (already paid)
-      msgText = `${orgNameStr}Tany ${tootStr} nekhemjlekh tulugdsun. Tulsun dun: ${absAmount}.`;
+      msgText = `${orgNameStr}Tany ${tootStr} tulbur burtgegdlee. Tulsun dun: ${absAmount}. App tatakh kholboos ${appLink}`;
     } else {
       // Tulukh (needs payment - default)
       msgText = `${orgNameStr}Tany ${tootStr} nekhemjlekh uuslee. Tuluh dun: ${absAmount}. Tulukh kholboos: ${paymentLink}`;
@@ -96,13 +97,13 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
       let prefix;
       if (displayAmount < 0) {
         // Payment record - no payment link needed
-        prefix = `${orgNameStr}Tany ${tootStr} tulult burtgegdlee. Tulsun dun: ${absAmount}.`;
+        prefix = `${orgNameStr}Tany ${tootStr} tulult burtgegdlee. Tulsun dun: ${absAmount}. App tatakh kholboos ${appLink}`;
         msgText = prefix.substring(0, 160);
       } else {
         const suffix = ` Kholboos: ${paymentLink}`;
         const maxPrefixLength = 160 - suffix.length;
         if (invoice.tuluv === "Төлсөн") {
-          prefix = `${orgNameStr}Tany ${tootStr} nekhemjlekh tulugdsun. Tulsun dun: ${absAmount}.`;
+          prefix = `${orgNameStr}Tany ${tootStr}  tulbur burtgegdlee. Tulsun dun: ${absAmount}. App tatakh kholboos ${appLink}`;
         } else {
           prefix = `${orgNameStr}Tany ${tootStr} nekhemjlekh uuslee. Tulukh dun: ${absAmount}. Tulukh kholboos: ${paymentLink}`;
         }
