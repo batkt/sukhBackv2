@@ -360,7 +360,14 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
 
   // Update Invoice state
   const balance = await guilgeeService.getBalance(kholbolt, { nekhemjlekhId: nekhemjlekhiinId });
-  nekhemjlekh.tuluv = balance <= 0.01 ? "Төлсөн" : "Төлөөгүй";
+  const isFullyPaid = balance <= 0.01;
+  const currentTulsun = Number(nekhemjlekh.tulsunDun || 0);
+  const newTulsun = currentTulsun + paidAmount;
+  const newUldegdel = Math.max(0, Number(nekhemjlekh.niitTulbur || 0) - newTulsun);
+  
+  nekhemjlekh.tuluv = isFullyPaid ? "Төлсөн" : "Төлөөгүй";
+  nekhemjlekh.tulsunDun = newTulsun;
+  nekhemjlekh.uldegdel = newUldegdel;
   nekhemjlekh.tulsunOgnoo = new Date();
   nekhemjlekh.qpayPaymentId = paymentTransactionId;
   
