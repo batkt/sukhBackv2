@@ -3082,6 +3082,8 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
         toot: invoice.toot,
         niitTulbur: displayDun,
         tuluv: invoice.tuluv,
+        tulsunDun: invoice.tulsunDun || 0,
+        uldegdel: invoice.uldegdel,
         qpayUrl: invoice.qpayUrl,
         qpayUrls: invoice.qpayUrls || [],
         ognoo: invoice.ognoo,
