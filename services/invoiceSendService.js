@@ -90,7 +90,7 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
       msgText = `${orgNameStr}Tany ${tootStr} tulbur burtgegdlee. Tulsun dun: ${absAmount}. App tatakh kholboos ${appLink}`;
     } else {
       // Tulukh (needs payment - default)
-      msgText = `${orgNameStr}Tany ${tootStr} nekhemjlekh uuslee. Tuluh dun: ${absAmount}. Tulukh kholboos: ${paymentLink}`;
+      msgText = `${orgNameStr}Tany ${tootStr} nekhemjlekh uuslee. Tulukh dun: ${absAmount}. Tulukh kholboos: ${paymentLink}`;
     }
 
     if (msgText.length > 160) {
