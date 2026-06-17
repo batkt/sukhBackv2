@@ -380,6 +380,9 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
     tailbar: "QPay төлбөр амжилттай синхрончлогдлоо",
   });
 
+  // Expire the one-time payment token so the link can no longer be used
+  nekhemjlekh.paymentTokenExpiresAt = new Date();
+
   await nekhemjlekh.save();
 
   // Update QPay Record status for history/consistency

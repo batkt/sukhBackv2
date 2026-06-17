@@ -57,6 +57,8 @@ const nekhemjlekhiinTuukhSchema = new Schema(
     orts: String, // Web only field
     tsahilgaanNekhemjlekh: Number, // Electricity invoice amount (calculated from zaalt readings)
     tailbar: String,
+    paymentToken: String, // One-time public token for payment page URL
+    paymentTokenExpiresAt: Date, // Token expiration (null = never, or set after payment to expire)
   },
   {
     timestamps: true,

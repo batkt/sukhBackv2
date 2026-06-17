@@ -2974,8 +2974,24 @@ router.get("/pay/check/:invoiceId", async (req, res, next) => {
 
     for (const k of db.kholboltuud || []) {
       const InvoiceModel = nekhemjlekhiinTuukh(k);
-      nekhemjlekh = await InvoiceModel.findById(nekhemjlekhiinId);
-      if (nekhemjlekh) { kholbolt = k; break; }
+      // Try paymentToken first (new URLs), fall back to _id (legacy URLs)
+      let inv = await InvoiceModel.findOne({ paymentToken: nekhemjlekhiinId });
+      if (!inv) {
+        try {
+          inv = await InvoiceModel.findById(nekhemjlekhiinId);
+        } catch (e) {
+          // Invalid ObjectId format, ignore
+        }
+      }
+      if (inv) {
+        // Reject if token is explicitly expired
+        if (inv.paymentTokenExpiresAt && new Date() > new Date(inv.paymentTokenExpiresAt)) {
+          return res.status(410).json({ success: false, message: "Төлбөрийн холбоос хүчингүй болсон." });
+        }
+        nekhemjlekh = inv;
+        kholbolt = k;
+        break;
+      }
     }
 
     if (!nekhemjlekh) {
@@ -3058,12 +3074,24 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
     let invoice = null;
     let foundKholbolt = null;
 
-    // Search for the invoice in all tenant databases
+    // Search for the invoice by paymentToken first, then by _id
     for (const kholbolt of db.kholboltuud) {
       try {
         const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
-        const inv = await NekhemjlekhModel.findById(invoiceId).lean();
+        // Try paymentToken first (new URLs), fall back to _id (legacy URLs)
+        let inv = await NekhemjlekhModel.findOne({ paymentToken: invoiceId }).lean();
+        if (!inv) {
+          try {
+            inv = await NekhemjlekhModel.findById(invoiceId).lean();
+          } catch (e) {
+            // Invalid ObjectId format, ignore
+          }
+        }
         if (inv) {
+          // Reject if token is explicitly expired
+          if (inv.paymentTokenExpiresAt && new Date() > new Date(inv.paymentTokenExpiresAt)) {
+            return res.status(410).json({ success: false, message: "Төлбөрийн холбоос хүчингүй болсон." });
+          }
           invoice = inv;
           foundKholbolt = kholbolt;
           break;

@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const { db, Dugaarlalt } = require("zevbackv2");
 const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
 const Geree = require("../models/geree");
@@ -238,7 +239,8 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
       nekhemjlekhiinDugaar: invoiceNumber,
       ognoo: billingDate,
       tulukhOgnoo: tulukhOgnoo,
-      niitTulbur: 0,
+      niitTulbur: total,
+      paymentToken: require("crypto").randomBytes(4).toString("hex"),
       tuluv: "Төлөөгүй",
       medeelel: { zardluud: [] },
     });
