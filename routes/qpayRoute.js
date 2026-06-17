@@ -3093,6 +3093,8 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
         uldegdel: invoice.uldegdel,
         qpayUrl: invoice.qpayUrl,
         qpayUrls: invoice.qpayUrls || [],
+        qpayPaymentId: invoice.qpayPaymentId,
+        paymentHistory: invoice.paymentHistory || [],
         ognoo: invoice.ognoo,
       },
     });
