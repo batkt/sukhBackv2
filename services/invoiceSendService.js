@@ -72,7 +72,7 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
     // 2. Format Cyrillic/Mongolian message with the deep link
     const yearMonth = invoice.ognoo ? new Date(invoice.ognoo) : new Date();
     const month = yearMonth.getMonth() + 1;
-    const orgNameStr = invoice.baiguullagiinNer ? `[${invoice.baiguullagiinNer}] ` : "";
+    const orgNameStr = invoice.baiguullagiinNer ? `${invoice.baiguullagiinNer}` : "";
     const tootStr = invoice.toot ? `${invoice.toot} tootod ` : "";
     const absAmount = Math.abs(displayAmount || 0);
 
