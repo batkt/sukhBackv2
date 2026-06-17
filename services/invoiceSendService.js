@@ -77,8 +77,10 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
     const absAmount = Math.abs(displayAmount || 0);
 
     // Payment page URL hosted on Next.js frontend
-    const paymentLink = `https://amarhome.mn/pay/${invoice.paymentToken}`;
-    const appLink = `https://zevtabs.mn/qr/amarhome/`
+    // const paymentLink = `https://amarhome.mn/pay/${invoice.paymentToken}`;
+    // const appLink = `https://zevtabs.mn/qr/amarhome/`
+    const paymentLink = "";
+    const appLink = "";
     let msgText;
 
     // Determine message type based on amount and status
