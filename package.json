@@ -37,7 +37,7 @@
     "redis": "^5.5.6",
     "request": "^2.88.2",
     "sharp": "^0.30.7",
-    "sukhParking-v1": "^1.1.10",
+    "sukhParking-v1": "^1.1.11",
     "xlsx": "^0.18.5",
     "zevbackv2": "^1.1.52",
     "zuragpack": "^1.0.17"
