@@ -1042,6 +1042,9 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
     }
 
     console.log("sdkData", khariu);
+    if (khariu && khariu.aldaa) {
+      console.warn(`⚠️ [sdkData] Request blocked or errored: ${khariu.aldaa}`);
+    }
     res.send(khariu);
   } catch (err) {
     next(err);
