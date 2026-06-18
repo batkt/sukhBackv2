@@ -114,7 +114,7 @@ router.use((req, res, next) => {
       guilgeeService.syncInvoicesStatus(kholbolt, gereeniiId)
         .then(async () => {
           console.log(`✅ [GEREE ROUTE] Invoice status sync completed for contract: ${gereeniiId}`);
-          
+
           // If this is a creation (POST and not delete/update), trigger CallPro SMS notification
           const isPostCreation = req.method === "POST" && !req.path?.includes("delete") && !req.path?.includes("update");
           const invoiceId = req.body?.nekhemjlekhId || (data && typeof data === "object" ? data.nekhemjlekhId : null);
@@ -125,7 +125,7 @@ router.use((req, res, next) => {
               const cleanDunStr = req.body?.dun ? String(req.body.dun).replace(/,/g, "") : null;
               const manualAmount = cleanDunStr ? Number(cleanDunStr) : null;
               console.log(`📡 [GEREE ROUTE] Triggering CallPro SMS notification for invoiceId: ${invoiceId} with manualAmount: ${manualAmount} after manual avlaga creation`);
-              // await invoiceSendService.sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, { manualAmount });
+              await invoiceSendService.sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, { manualAmount });
             } else {
               console.warn(`⚠️ [GEREE ROUTE] SMS skipped: invoiceId (${invoiceId}) or baiguullagiinId (${baiguullagiinId}) missing`);
             }
