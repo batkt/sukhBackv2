@@ -3075,36 +3075,63 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
     let invoice = null;
     let foundKholbolt = null;
 
-    // Search for the invoice by paymentToken first, then by _id
     for (const kholbolt of db.kholboltuud) {
       try {
         const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
-        // Try paymentToken first (new URLs), fall back to _id (legacy URLs)
         let inv = await NekhemjlekhModel.findOne({ paymentToken: invoiceId }).lean();
         if (!inv) {
           try {
             inv = await NekhemjlekhModel.findById(invoiceId).lean();
-          } catch (e) {
-            // Invalid ObjectId format, ignore
-          }
+          } catch (e) {}
         }
         if (inv) {
-          // Reject if token is explicitly expired
-          if (inv.paymentTokenExpiresAt && new Date() > new Date(inv.paymentTokenExpiresAt)) {
-            return res.status(410).json({ success: false, message: "Төлбөрийн холбоос хүчингүй болсон." });
-          }
           invoice = inv;
           foundKholbolt = kholbolt;
           break;
         }
-      } catch (err) {
-        // Continue searching
-      }
+      } catch (err) {}
     }
 
     if (!invoice) {
       console.warn(`⚠️ [pay/info] Invoice not found: ${invoiceId}`);
       return res.status(404).json({ success: false, message: "Нэхэмжлэх олдсонгүй." });
+    }
+
+    // Check payment status from ledger before checking token expiry
+    try {
+      const GuilgeeModel = require("../models/guilgeeAvlaguud")(foundKholbolt);
+      if (GuilgeeModel) {
+        // Query by gereeniiId to catch ALL payments for this contract,
+        // including those recorded via qpayTulye which may have no nekhemjlekhId.
+        const allLedger = await GuilgeeModel.find({ 
+          gereeniiId: invoice.gereeniiId, 
+          turul: "төлөлт" 
+        }).lean();
+        const totalPaid = allLedger
+          .filter((r) => (r.dun || 0) < 0)
+          .reduce((sum, r) => sum + Math.abs(r.dun || 0), 0);
+        
+        if (totalPaid > 0 && (invoice.tuluv !== "Төлсөн" || (invoice.tulsunDun || 0) < totalPaid)) {
+          const NekhemjlekhModel = NekhemjlekhiinTuukh(foundKholbolt);
+          invoice = await NekhemjlekhModel.findByIdAndUpdate(invoice._id, {
+            $set: { 
+              tuluv: "Төлсөн", 
+              tulsunDun: totalPaid, 
+              uldegdel: Math.max(0, Number(invoice.niitTulbur || 0) - totalPaid),
+              paymentTokenExpiresAt: new Date() // Force expire link on payment
+            }
+          }, { new: true }).lean();
+        }
+      }
+    } catch (ledgerErr) {
+      console.error("❌ [pay/info] Ledger check failed:", ledgerErr.message);
+    }
+
+    // Token expiry check: if already paid, allow viewing data, otherwise return error
+    if (invoice.paymentTokenExpiresAt && new Date() > new Date(invoice.paymentTokenExpiresAt)) {
+      if (invoice.tuluv !== "Төлсөн") {
+        return res.status(410).json({ success: false, message: "Төлбөрийн холбоос хүчингүй болсон." });
+      }
     }
 
     let qpayAmountMismatched = false;
@@ -3126,43 +3153,31 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
       }
     }
 
-    // Generate QPay invoice on-the-fly if not already generated (or amount mismatched), unpaid, and amount > 0
     if ((!invoice.qpayInvoiceId || qpayAmountMismatched) && invoice.tuluv !== "Төлсөн" && invoice.niitTulbur > 0) {
       try {
         const { qpayGargaya } = require("quickqpaypackvSukh");
-        const maxDugaar = invoice.dugaalaltDugaar || 1;
-
-        const callback_url =
-          process.env.UNDSEN_SERVER +
-          "/api/qpayNekhemjlekhCallback/" +
-          invoice.baiguullagiinId.toString() +
-          "/" +
-          invoice._id.toString();
+        const callback_url = process.env.UNDSEN_SERVER + "/api/qpayNekhemjlekhCallback/" + invoice.baiguullagiinId.toString() + "/" + invoice._id.toString();
 
         const qpayBody = {
           baiguullagiinId: invoice.baiguullagiinId,
           barilgiinId: invoice.barilgiinId,
           dun: invoice.niitTulbur,
-          tailbar: `${invoice.baiguullagiinNer} Танд сөхийн нэхэмжлэх үүслээ: ${invoice.toot || ""} тоот  Amarhome`,
-          zakhialgiinDugaar: invoice.nekhemjlekhiinDugaar || String(maxDugaar),
+          tailbar: `${invoice.baiguullagiinNer} Танд сөхийн нэхэмжлэх үүслээ: ${invoice.toot || ""} тоот Amarhome`,
+          zakhialgiinDugaar: invoice.nekhemjlekhiinDugaar || "1",
           gereeniiId: invoice.gereeniiId,
           nekhemjlekhiinId: invoice._id.toString(),
         };
 
-        console.log(`📡 [pay/info] Creating QPay invoice on-the-fly for invoiceId: ${invoiceId}`);
         const khariu = await qpayGargaya(qpayBody, callback_url, foundKholbolt);
 
         if (khariu) {
-          const invoiceIdFromQpay = khariu.invoice_id || khariu.invoiceId || khariu.id;
-          const qpayUrl = khariu.qr_text || khariu.url || khariu.invoice_url || khariu.qr_image;
-
           const NekhemjlekhModel = NekhemjlekhiinTuukh(foundKholbolt);
           invoice = await NekhemjlekhModel.findByIdAndUpdate(
             invoice._id,
             {
               $set: {
-                qpayInvoiceId: invoiceIdFromQpay,
-                qpayUrl: qpayUrl,
+                qpayInvoiceId: khariu.invoice_id || khariu.invoiceId || khariu.id,
+                qpayUrl: khariu.qr_text || khariu.url || khariu.invoice_url || khariu.qr_image,
                 qpayUrls: khariu.urls,
               },
             },
@@ -3174,20 +3189,14 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
       }
     }
 
-    // Attempt to recover qpayUrls from QuickQpayObject if missing on the invoice record
     if (invoice.qpayInvoiceId && (!invoice.qpayUrls || !invoice.qpayUrls.length)) {
       try {
         const { QuickQpayObject } = require("quickqpaypackvSukh");
-        const QuickQpayModel = QuickQpayObject(foundKholbolt);
-        const qpayRec = await QuickQpayModel.findOne({ invoice_id: invoice.qpayInvoiceId }).lean();
+        const qpayRec = await QuickQpayObject(foundKholbolt).findOne({ invoice_id: invoice.qpayInvoiceId }).lean();
         if (qpayRec?.qpay?.urls) {
           invoice.qpayUrls = qpayRec.qpay.urls;
-          
-          // Save back to cache
           const NekhemjlekhModel = NekhemjlekhiinTuukh(foundKholbolt);
-          await NekhemjlekhModel.findByIdAndUpdate(invoice._id, {
-            $set: { qpayUrls: qpayRec.qpay.urls }
-          });
+          await NekhemjlekhModel.findByIdAndUpdate(invoice._id, { $set: { qpayUrls: qpayRec.qpay.urls } });
         }
       } catch (err) {
         console.error("⚠️ [pay/info] QuickQpayObject search failed:", err.message);
@@ -3206,8 +3215,9 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
         tuluv: invoice.tuluv,
         tulsunDun: invoice.tulsunDun || 0,
         uldegdel: invoice.uldegdel,
-        qpayUrl: invoice.qpayUrl,
-        qpayUrls: invoice.qpayUrls || [],
+        // One-time link: hide QR/bank links once invoice is paid
+        qpayUrl: invoice.tuluv === "Төлсөн" ? null : invoice.qpayUrl,
+        qpayUrls: invoice.tuluv === "Төлсөн" ? [] : (invoice.qpayUrls || []),
         qpayPaymentId: invoice.qpayPaymentId,
         paymentHistory: invoice.paymentHistory || [],
         ognoo: invoice.ognoo,
