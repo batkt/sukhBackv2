@@ -3101,24 +3101,33 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
     try {
       const GuilgeeModel = require("../models/guilgeeAvlaguud")(foundKholbolt);
       if (GuilgeeModel) {
-        // Query by gereeniiId to catch ALL payments for this contract,
-        // including those recorded via qpayTulye which may have no nekhemjlekhId.
-        const allLedger = await GuilgeeModel.find({ 
-          gereeniiId: invoice.gereeniiId, 
-          turul: "төлөлт" 
-        }).lean();
+        // Query by gereeniiId to catch ALL payments for this contract.
+        // Falls back to nekhemjlekhId if gereeniiId is null/undefined.
+        let ledgerQuery = invoice.gereeniiId
+          ? { gereeniiId: invoice.gereeniiId, turul: "төлөлт" }
+          : { nekhemjlekhId: invoice._id.toString(), turul: "төлөлт" };
+        let allLedger = await GuilgeeModel.find(ledgerQuery).lean();
+
+        // If gereeniiId query returned nothing, also try by nekhemjlekhId as fallback
+        if (allLedger.length === 0 && invoice.gereeniiId) {
+          allLedger = await GuilgeeModel.find({
+            nekhemjlekhId: invoice._id.toString(),
+            turul: "төлөлт"
+          }).lean();
+        }
+
         const totalPaid = allLedger
           .filter((r) => (r.dun || 0) < 0)
           .reduce((sum, r) => sum + Math.abs(r.dun || 0), 0);
-        
+
         if (totalPaid > 0 && (invoice.tuluv !== "Төлсөн" || (invoice.tulsunDun || 0) < totalPaid)) {
           const NekhemjlekhModel = NekhemjlekhiinTuukh(foundKholbolt);
           invoice = await NekhemjlekhModel.findByIdAndUpdate(invoice._id, {
-            $set: { 
-              tuluv: "Төлсөн", 
-              tulsunDun: totalPaid, 
+            $set: {
+              tuluv: "Төлсөн",
+              tulsunDun: totalPaid,
               uldegdel: Math.max(0, Number(invoice.niitTulbur || 0) - totalPaid),
-              paymentTokenExpiresAt: new Date() // Force expire link on payment
+              paymentTokenExpiresAt: new Date()
             }
           }, { new: true }).lean();
         }
@@ -3213,8 +3222,9 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
         toot: invoice.toot,
         niitTulbur: displayDun,
         tuluv: invoice.tuluv,
-        tulsunDun: invoice.tulsunDun || 0,
-        uldegdel: invoice.uldegdel,
+        // If paid but tulsunDun was never set (callback set tuluv only), derive from niitTulbur
+        tulsunDun: invoice.tulsunDun || (invoice.tuluv === "Төлсөн" ? (Number(invoice.niitTulbur || 0) - Math.max(0, Number(invoice.uldegdel || 0))) : 0),
+        uldegdel: invoice.uldegdel || 0,
         // One-time link: hide QR/bank links once invoice is paid
         qpayUrl: invoice.tuluv === "Төлсөн" ? null : invoice.qpayUrl,
         qpayUrls: invoice.tuluv === "Төлсөн" ? [] : (invoice.qpayUrls || []),
