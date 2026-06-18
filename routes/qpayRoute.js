@@ -1120,7 +1120,8 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
           req.body?.zakhialgiinDugaar;
       }
 
-      if (req.body.barilgiinId) {
+      if (req.body.barilgiinId && !req.body.nekhemjlekhiinId && !req.body.nekhemjlekhiinTuukh) {
+        // Generic payment (no specific invoice) → use legacy /qpayTulye callback
         callback_url =
           process.env.UNDSEN_SERVER +
           "/qpayTulye/" +

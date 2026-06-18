@@ -125,7 +125,7 @@ router.use((req, res, next) => {
               const cleanDunStr = req.body?.dun ? String(req.body.dun).replace(/,/g, "") : null;
               const manualAmount = cleanDunStr ? Number(cleanDunStr) : null;
               console.log(`📡 [GEREE ROUTE] Triggering CallPro SMS notification for invoiceId: ${invoiceId} with manualAmount: ${manualAmount} after manual avlaga creation`);
-              await invoiceSendService.sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, { manualAmount });
+              // await invoiceSendService.sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, { manualAmount });
             } else {
               console.warn(`⚠️ [GEREE ROUTE] SMS skipped: invoiceId (${invoiceId}) or baiguullagiinId (${baiguullagiinId}) missing`);
             }

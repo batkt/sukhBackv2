@@ -74,6 +74,10 @@ async function recordPayment(kholbolt, data, options = {}) {
       bankniiGuilgeeId: data.bankniiGuilgeeId,
       baiguullagiinId: data.baiguullagiinId,
       turul: "төлөлт"
+      // NOTE: Intentionally NOT filtering by nekhemjlekhId here.
+      // A bank transaction ID (bankniiGuilgeeId) is globally unique per payment.
+      // Two different callback paths (qpayTulye vs qpayNekhemjlekhCallback) may
+      // record the same payment with different nekhemjlekhIds — this check stops that.
     }).session(session);
 
     if (existing) {
