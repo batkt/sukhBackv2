@@ -3101,20 +3101,13 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
     try {
       const GuilgeeModel = require("../models/guilgeeAvlaguud")(foundKholbolt);
       if (GuilgeeModel) {
-        // Query by gereeniiId to catch ALL payments for this contract.
-        // Falls back to nekhemjlekhId if gereeniiId is null/undefined.
-        let ledgerQuery = invoice.gereeniiId
-          ? { gereeniiId: invoice.gereeniiId, turul: "төлөлт" }
-          : { nekhemjlekhId: invoice._id.toString(), turul: "төлөлт" };
-        let allLedger = await GuilgeeModel.find(ledgerQuery).lean();
-
-        // If gereeniiId query returned nothing, also try by nekhemjlekhId as fallback
-        if (allLedger.length === 0 && invoice.gereeniiId) {
-          allLedger = await GuilgeeModel.find({
-            nekhemjlekhId: invoice._id.toString(),
-            turul: "төлөлт"
-          }).lean();
-        }
+        // Only look for payments explicitly linked to THIS invoice by nekhemjlekhId.
+        // Do NOT query by gereeniiId — that finds ALL historical payments for the contract,
+        // which would incorrectly mark a NEW invoice as paid if the old balance covers it.
+        const allLedger = await GuilgeeModel.find({
+          nekhemjlekhId: invoice._id.toString(),
+          turul: "төлөлт"
+        }).lean();
 
         const totalPaid = allLedger
           .filter((r) => (r.dun || 0) < 0)
