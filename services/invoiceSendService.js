@@ -76,11 +76,10 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
     const tootStr = invoice.toot ? `${invoice.toot} tootod ` : "";
     const absAmount = Math.abs(displayAmount || 0);
 
-    // Payment page URL hosted on Next.js frontend
-    // const paymentLink = `https://amarhome.mn/pay/${invoice.paymentToken}`;
-    // const appLink = `https://zevtabs.mn/qr/amarhome/`
-    const paymentLink = "";
-    const appLink = "";
+    // Payment page URL — use paymentToken if available, fall back to _id
+    const paymentToken = invoice.paymentToken || invoice._id?.toString();
+    const paymentLink = paymentToken ? `https://amarhome.mn/pay/${paymentToken}` : "";
+    const appLink = `https://zevtabs.mn/qr/amarhome/`;
     let msgText;
 
     // Determine message type based on amount and status
