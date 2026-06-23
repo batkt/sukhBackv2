@@ -203,8 +203,13 @@ router.route("/msgIlgeeye").post(tokenShalgakh, async (req, res, next) => {
     const baiguullaga = await BaiguullagaModel.findById(baiguullagiinId);
 
     const msgIlgeekhKey =
-      "aa8e588459fdd9b7ac0b809fc29cfae3aa8e588459fdd9b7ac0b809fc29cfae3";
-    const msgIlgeekhDugaar = "72002002";
+      (baiguullaga?.tokhirgoo?.msgIlgeekhKey &&
+        String(baiguullaga.tokhirgoo.msgIlgeekhKey).trim()) ||
+      "aa8e588459fdd9b7ac0b809fc29cfae3";
+    const msgIlgeekhDugaar =
+      (baiguullaga?.tokhirgoo?.msgIlgeekhDugaar &&
+        String(baiguullaga.tokhirgoo.msgIlgeekhDugaar).trim()) ||
+      "72002002";
 
     if (!msgnuud || msgnuud.length === 0) {
       return res.status(400).json({
