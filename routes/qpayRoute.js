@@ -159,10 +159,16 @@ router.get(
         );
         return res.status(404).send("Organization not found");
       }
-      const unpaid = await QuickQpayObject(kholbolt).findOne({
-        zakhialgiinDugaar: zd,
-        tulsunEsekh: false,
-      });
+      const unpaid = await QuickQpayObject(kholbolt).findOneAndUpdate(
+        {
+          zakhialgiinDugaar: zd,
+          tulsunEsekh: false,
+        },
+        {
+          $set: { tulsunEsekh: true, isNew: false }
+        },
+        { new: true }
+      );
       if (unpaid) {
         var qpayObject = unpaid;
       } else {
@@ -182,9 +188,6 @@ router.get(
           .send("QuickQpayObject not found for this order id");
       }
 
-      qpayObject.tulsunEsekh = true;
-      qpayObject.isNew = false;
-      await qpayObject.save();
       console.log(`✅ [QPAY CALLBACK] Saved status=PAID for order: ${zd}`);
 
       const io = req.app.get("socketio");
@@ -255,10 +258,16 @@ router.get(
         );
         return res.status(404).send("Organization not found");
       }
-      const unpaidSticker = await QuickQpayObject(kholbolt).findOne({
-        zakhialgiinDugaar: zd,
-        tulsunEsekh: false,
-      });
+      const unpaidSticker = await QuickQpayObject(kholbolt).findOneAndUpdate(
+        {
+          zakhialgiinDugaar: zd,
+          tulsunEsekh: false,
+        },
+        {
+          $set: { tulsunEsekh: true, isNew: false }
+        },
+        { new: true }
+      );
       let qpayObject;
       if (unpaidSticker) {
         qpayObject = unpaidSticker;
@@ -282,9 +291,6 @@ router.get(
           .send("QuickQpayObject not found for this order id");
       }
 
-      qpayObject.tulsunEsekh = true;
-      qpayObject.isNew = false;
-      await qpayObject.save();
       console.log(
         `✅ [QPAY CALLBACK GADAA] Saved status=PAID for order: ${zd}`,
       );

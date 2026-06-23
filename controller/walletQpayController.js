@@ -1304,9 +1304,26 @@ async function settleWalletPayment(
     return;
   }
 
+  // Atomically lock/update the document to prevent concurrent executions
+  const lockedObject = await QuickQpayObject(tukhainBaaziinKholbolt).findOneAndUpdate(
+    {
+      _id: qpayObject._id,
+      tulsunEsekh: false
+    },
+    {
+      $set: { tulsunEsekh: true, isNew: false }
+    },
+    { new: true }
+  );
+
+  if (!lockedObject) {
+    console.log(`ℹ️ [SETTLE WALLET] Already processing or paid (skipped): ${qpayObject.zakhialgiinDugaar}`);
+    return;
+  }
+
+  qpayObject = lockedObject;
+
   /* ── 1. Mark paid locally ── */
-  qpayObject.tulsunEsekh = true;
-  qpayObject.isNew = false;
   if (qpayPaymentIdFromRequest) {
     qpayObject.payment_id = qpayPaymentIdFromRequest;
   }

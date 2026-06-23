@@ -78,11 +78,13 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     baiguullagiinId,
   });
 
+  let isQuickQpay = true;
   if (!qpayBarimt) {
     qpayBarimt = await QpayModel.findOne({
       "qpay.sender_invoice_no": dugaar,
       baiguullagiinId,
     });
+    isQuickQpay = false;
   }
 
   if (!qpayBarimt) {
@@ -94,6 +96,26 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     console.log(`ℹ️ [QPAY CALLBACK] Already paid (idempotent): dugaar=${dugaar}`);
     return res.sendStatus(200);
   }
+
+  // Atomically lock/update the record to prevent concurrent double callback executions.
+  const targetModel = isQuickQpay ? QuickQpayModel : QpayModel;
+  const lockedBarimt = await targetModel.findOneAndUpdate(
+    {
+      _id: qpayBarimt._id,
+      tulsunEsekh: { $ne: true }
+    },
+    {
+      $set: { tulsunEsekh: true, status: "paid" }
+    },
+    { new: true }
+  );
+
+  if (!lockedBarimt) {
+    console.log(`ℹ️ [QPAY CALLBACK] Already processing or paid (skipped): dugaar=${dugaar}`);
+    return res.sendStatus(200);
+  }
+
+  qpayBarimt = lockedBarimt;
 
   const amount = parseFloat(qpayBarimt.qpay?.amount || qpayBarimt.amount || 0);
   console.log(`ℹ️ [QPAY CALLBACK] Proceeding with payment: dugaar=${dugaar}, amount=${amount}`);
@@ -119,11 +141,11 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     generateEbarimtForQPay(kholbolt, baiguullagiinId, qpayBarimt.sukhNekhemjlekh.nekhemjlekhiinId, amount);
   }
 
-  // Update record status
-  qpayBarimt.tulsunEsekh = true;
-  qpayBarimt.status = "paid";
-  if (req.query?.qpay_payment_id) qpayBarimt.payment_id = req.query.qpay_payment_id;
-  await qpayBarimt.save();
+  // Update payment ID if provided in query
+  if (req.query?.qpay_payment_id) {
+    qpayBarimt.payment_id = req.query.qpay_payment_id;
+    await qpayBarimt.save();
+  }
   console.log(`✅ [QPAY CALLBACK] Payment successful and recorded for dugaar=${dugaar}, amount=${amount}`);
 
   // Sync Invoice status
@@ -222,10 +244,40 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
     return res.status(404).send("Invoice not found");
   }
 
-  console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Found invoice: ${nekhemjlekhiinId}, gereeniiId=${nekhemjlekh.gereeniiId}, niitTulbur=${nekhemjlekh.niitTulbur}`);
+  if (nekhemjlekh.tuluv === "Төлсөн") {
+    console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Invoice is already PAID (idempotent skip): ${nekhemjlekhiinId}`);
+    return res.sendStatus(200);
+  }
 
   // Allow re-processing to ensure ledger sync (recordPayment handles idempotency)
   let paymentTransactionId = req.query.qpay_payment_id || nekhemjlekh.qpayPaymentId;
+
+  // Try to lock/update the QuickQpayObject atomically to prevent double execution
+  if (nekhemjlekh.qpayInvoiceId) {
+    const { QuickQpayObject } = require("quickqpaypackvSukh");
+    const QuickQpayModel = QuickQpayObject(kholbolt);
+
+    const lockedQpayRecord = await QuickQpayModel.findOneAndUpdate(
+      {
+        $or: [
+          { invoice_id: nekhemjlekh.qpayInvoiceId },
+          { "sukhNekhemjlekh.nekhemjlekhiinId": nekhemjlekhiinId }
+        ],
+        tulsunEsekh: { $ne: true }
+      },
+      {
+        $set: { tulsunEsekh: true, status: "paid", payment_id: paymentTransactionId || "manual_sync" }
+      },
+      { new: true }
+    ).sort({ ognoo: -1 });
+
+    if (!lockedQpayRecord) {
+      console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Already processing or paid (skipped): ${nekhemjlekhiinId}`);
+      return res.sendStatus(200);
+    }
+  }
+
+  console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Found invoice: ${nekhemjlekhiinId}, gereeniiId=${nekhemjlekh.gereeniiId}, niitTulbur=${nekhemjlekh.niitTulbur}`);
 
   // Try to fetch latest info from QPay if possible
   const { qpayShalgay } = require("quickqpaypackvSukh");
