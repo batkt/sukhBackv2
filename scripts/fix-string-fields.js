@@ -107,27 +107,29 @@ async function main() {
     const GuilgeeModel = GuilgeeAvlaguud(kh);
 
     // Find contract first
-    const contract = await GereeModel.findOne({ gereeniiDugaar: TARGET_GEREE });
+    const contract = await GereeModel.findOne({ gereeniiDugaar: TARGET_GEREE }).lean();
     if (!contract) continue;
 
     console.log(`\n🏢 Found contract in Organization: ${kh.baiguullagiinId}`);
     
     // 1. Process Geree Document
     const contractChanges = [];
-    const topFields = ['ekhniiUldegdel', 'ashiglaltiinZardal', 'umnukhZaalt', 'suuliinZaalt', 'zaaltTog', 'zaaltUs'];
-    topFields.forEach(field => {
-      if (contract[field] !== undefined && contract[field] !== null) {
-        const original = contract[field];
+    const updatedContract = JSON.parse(JSON.stringify(contract));
+    const topFieldsGeree = ['ekhniiUldegdel', 'ashiglaltiinZardal', 'umnukhZaalt', 'suuliinZaalt', 'zaaltTog', 'zaaltUs'];
+    
+    topFieldsGeree.forEach(field => {
+      if (updatedContract[field] !== undefined && updatedContract[field] !== null) {
+        const original = updatedContract[field];
         const fixed = convertToNumber(original);
         if (original !== fixed) {
           contractChanges.push(`    - geree.${field}: "${original}" (${typeof original}) -> ${fixed} (${typeof fixed})`);
-          contract[field] = fixed;
+          updatedContract[field] = fixed;
         }
       }
     });
 
-    if (contract.zardluud && Array.isArray(contract.zardluud)) {
-      contract.zardluud.forEach((z, idx) => {
+    if (updatedContract.zardluud && Array.isArray(updatedContract.zardluud)) {
+      updatedContract.zardluud.forEach((z, idx) => {
         fixZardalItem(z, `zardluud[${idx}] (${z.ner})`, contractChanges);
       });
     }
@@ -138,8 +140,16 @@ async function main() {
       totalChanges += contractChanges.length;
 
       if (isWrite) {
-        contract.markModified('zardluud');
-        await contract.save();
+        const setObj = {};
+        topFieldsGeree.forEach(field => {
+          if (updatedContract[field] !== undefined) {
+            setObj[field] = updatedContract[field];
+          }
+        });
+        if (updatedContract.zardluud) {
+          setObj.zardluud = updatedContract.zardluud;
+        }
+        await GereeModel.updateOne({ _id: contract._id }, { $set: setObj });
         console.log(`    ✅ Saved Geree contract document.`);
       }
     } else {
@@ -147,81 +157,98 @@ async function main() {
     }
 
     // 2. Process Invoices (nekhemjlekhiinTuukh)
-    const invoices = await NekhemjlekhModel.find({ gereeniiId: String(contract._id) });
+    const invoices = await NekhemjlekhModel.find({ gereeniiId: String(contract._id) }).lean();
     console.log(`\n  🧾 Found ${invoices.length} invoices.`);
     
     for (const inv of invoices) {
       const invChanges = [];
-      const topFields = ['niitTulbur', 'niitTulburOriginal', 'uldegdel', 'dugaalaltDugaar', 'tsahilgaanNekhemjlekh'];
-      topFields.forEach(field => {
-        if (inv[field] !== undefined && inv[field] !== null) {
-          const original = inv[field];
+      const updatedInv = JSON.parse(JSON.stringify(inv));
+      const topFieldsInvoice = ['niitTulbur', 'niitTulburOriginal', 'uldegdel', 'dugaalaltDugaar', 'tsahilgaanNekhemjlekh'];
+      
+      topFieldsInvoice.forEach(field => {
+        if (updatedInv[field] !== undefined && updatedInv[field] !== null) {
+          const original = updatedInv[field];
           const fixed = convertToNumber(original);
           if (original !== fixed) {
             invChanges.push(`      - invoice.${field}: "${original}" (${typeof original}) -> ${fixed} (${typeof fixed})`);
-            inv[field] = fixed;
+            updatedInv[field] = fixed;
           }
         }
       });
 
-      if (inv.toots && Array.isArray(inv.toots)) {
-        inv.toots.forEach((t, idx) => {
+      if (updatedInv.toots && Array.isArray(updatedInv.toots)) {
+        updatedInv.toots.forEach((t, idx) => {
           fixZardalItem(t, `toots[${idx}] (${t.ner})`, invChanges);
         });
       }
 
-      if (inv.medeelel) {
-        if (inv.medeelel.zardluud && Array.isArray(inv.medeelel.zardluud)) {
-          inv.medeelel.zardluud.forEach((z, idx) => {
+      if (updatedInv.medeelel) {
+        if (updatedInv.medeelel.zardluud && Array.isArray(updatedInv.medeelel.zardluud)) {
+          updatedInv.medeelel.zardluud.forEach((z, idx) => {
             fixZardalItem(z, `medeelel.zardluud[${idx}] (${z.ner})`, invChanges);
           });
         }
-        if (inv.medeelel.guilgeenuud && Array.isArray(inv.medeelel.guilgeenuud)) {
-          inv.medeelel.guilgeenuud.forEach((g, idx) => {
+        if (updatedInv.medeelel.guilgeenuud && Array.isArray(updatedInv.medeelel.guilgeenuud)) {
+          updatedInv.medeelel.guilgeenuud.forEach((g, idx) => {
             fixGuilgeeItem(g, `medeelel.guilgeenuud[${idx}]`, invChanges);
           });
         }
       }
 
       if (invChanges.length > 0) {
-        console.log(`    - Invoice ID: ${inv._id} (Ognoo: ${inv.ognoo ? inv.ognoo.toISOString().split('T')[0] : 'N/A'})`);
+        console.log(`    - Invoice ID: ${inv._id} (Ognoo: ${inv.ognoo ? new Date(inv.ognoo).toISOString().split('T')[0] : 'N/A'})`);
         invChanges.forEach(c => console.log(c));
         totalChanges += invChanges.length;
 
         if (isWrite) {
-          inv.markModified('toots');
-          inv.markModified('medeelel');
-          await inv.save();
+          const setObj = {};
+          topFieldsInvoice.forEach(field => {
+            if (updatedInv[field] !== undefined) {
+              setObj[field] = updatedInv[field];
+            }
+          });
+          if (updatedInv.toots) setObj.toots = updatedInv.toots;
+          if (updatedInv.medeelel) setObj.medeelel = updatedInv.medeelel;
+
+          await NekhemjlekhModel.updateOne({ _id: inv._id }, { $set: setObj });
           console.log(`      ✅ Saved Invoice document.`);
         }
       }
     }
 
     // 3. Process Ledger Entries (guilgeeAvlaguud)
-    const ledgerEntries = await GuilgeeModel.find({ gereeniiId: String(contract._id) });
+    const ledgerEntries = await GuilgeeModel.find({ gereeniiId: String(contract._id) }).lean();
     console.log(`\n  💵 Found ${ledgerEntries.length} ledger entries.`);
     
     for (const entry of ledgerEntries) {
       const ledgerChanges = [];
-      const topFields = ['dun', 'undsenDun', 'tulukhDun', 'tulsunDun'];
-      topFields.forEach(field => {
-        if (entry[field] !== undefined && entry[field] !== null) {
-          const original = entry[field];
+      const updatedEntry = JSON.parse(JSON.stringify(entry));
+      const topFieldsLedger = ['dun', 'undsenDun', 'tulukhDun', 'tulsunDun'];
+      
+      topFieldsLedger.forEach(field => {
+        if (updatedEntry[field] !== undefined && updatedEntry[field] !== null) {
+          const original = updatedEntry[field];
           const fixed = convertToNumber(original);
           if (original !== fixed) {
             ledgerChanges.push(`      - ledger.${field}: "${original}" (${typeof original}) -> ${fixed} (${typeof fixed})`);
-            entry[field] = fixed;
+            updatedEntry[field] = fixed;
           }
         }
       });
 
       if (ledgerChanges.length > 0) {
-        console.log(`    - Ledger Entry: ${entry._id} (Ognoo: ${entry.ognoo ? entry.ognoo.toISOString().split('T')[0] : 'N/A'}, Tailbar: ${entry.tailbar || entry.zardliinNer})`);
+        console.log(`    - Ledger Entry: ${entry._id} (Ognoo: ${entry.ognoo ? new Date(entry.ognoo).toISOString().split('T')[0] : 'N/A'}, Tailbar: ${entry.tailbar || entry.zardliinNer})`);
         ledgerChanges.forEach(c => console.log(c));
         totalChanges += ledgerChanges.length;
 
         if (isWrite) {
-          await entry.save();
+          const setObj = {};
+          topFieldsLedger.forEach(field => {
+            if (updatedEntry[field] !== undefined) {
+              setObj[field] = updatedEntry[field];
+            }
+          });
+          await GuilgeeModel.updateOne({ _id: entry._id }, { $set: setObj });
           console.log(`      ✅ Saved Ledger Entry document.`);
         }
       }
