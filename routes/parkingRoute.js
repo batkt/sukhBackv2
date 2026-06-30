@@ -754,6 +754,10 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
   try {
     if (req.body.mashiniiDugaar)
       req.body.mashiniiDugaar = req.body.mashiniiDugaar.replace(/\0/g, "");
+    if (req.body.CAMERA_IP)
+      req.body.CAMERA_IP = req.body.CAMERA_IP.replace(/\0/g, "").trim();
+    if (req.body.camerA_IP)
+      req.body.camerA_IP = req.body.camerA_IP.replace(/\0/g, "").trim();
     if (!!req?.body?.color) {
     }
     const medegdel = async (uilchluulegch, orshinSuugchiinId) => {
@@ -858,23 +862,37 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
       }
     }
 
-    // Guard against duplicate exit processing — only when same camera fires twice
+    // Guard against duplicate exit processing — only when same camera fires twice.
+    // IMPORTANT: skip this guard if the car currently has an open session (car is
+    // still inside). The guard is only meaningful after an exit — if there is an
+    // open session the car never left, so sdkData must handle it normally.
+    // This prevents blocking re-entry when a manual exit records garsanKhaalga as
+    // the entry camera IP and the car re-enters within the 3-minute window.
     if (req.body.mashiniiDugaar && req.body.CAMERA_IP) {
-      const recentlyExited = await Uilchluulegch(
+      const hasOpenSession = await Uilchluulegch(
         req.body.tukhainBaaziinKholbolt,
       ).findOne({
         mashiniiDugaar: req.body.mashiniiDugaar,
-        "tuukh.0.garsanKhaalga": req.body.CAMERA_IP,
-        "tuukh.0.tsagiinTuukh.0.garsanTsag": {
-          $gt: new Date(Date.now() - 3 * 60000),
-        },
-      });
-      if (recentlyExited) {
-        return res.send({
-          aldaa: false,
-          message: "Машин аль хэдийн гарсан байна",
-          alreadyExited: true,
+        "tuukh.0.tsagiinTuukh.0.garsanTsag": { $exists: false },
+        "tuukh.0.tuluv": { $ne: -2 },
+      }).lean();
+      if (!hasOpenSession) {
+        const recentlyExited = await Uilchluulegch(
+          req.body.tukhainBaaziinKholbolt,
+        ).findOne({
+          mashiniiDugaar: req.body.mashiniiDugaar,
+          "tuukh.0.garsanKhaalga": req.body.CAMERA_IP,
+          "tuukh.0.tsagiinTuukh.0.garsanTsag": {
+            $gt: new Date(Date.now() - 3 * 60000),
+          },
         });
+        if (recentlyExited) {
+          return res.send({
+            aldaa: false,
+            message: "Машин аль хэдийн гарсан байна",
+            alreadyExited: true,
+          });
+        }
       }
     }
 
