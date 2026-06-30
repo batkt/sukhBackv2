@@ -862,12 +862,6 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
       }
     }
 
-    // Guard against duplicate exit processing — only when same camera fires twice.
-    // IMPORTANT: skip this guard if the car currently has an open session (car is
-    // still inside). The guard is only meaningful after an exit — if there is an
-    // open session the car never left, so sdkData must handle it normally.
-    // This prevents blocking re-entry when a manual exit records garsanKhaalga as
-    // the entry camera IP and the car re-enters within the 3-minute window.
     if (req.body.mashiniiDugaar && req.body.CAMERA_IP) {
       const hasOpenSession = await Uilchluulegch(
         req.body.tukhainBaaziinKholbolt,
