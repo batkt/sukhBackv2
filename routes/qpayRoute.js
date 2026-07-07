@@ -3346,7 +3346,7 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
         let inv = null;
         try {
           inv = await NekhemjlekhModel.findById(invoiceId).lean();
-        } catch (e) {}
+        } catch (e) { }
 
         if (!inv) {
           // Fallback: try finding by gereeniiId (retrieve the latest invoice of this contract)
@@ -3360,7 +3360,7 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
           foundKholbolt = kholbolt;
           break;
         }
-      } catch (err) {}
+      } catch (err) { }
     }
 
     if (!invoice) {
@@ -3399,12 +3399,10 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
     }
 
     // 2. Format Cyrillic/Mongolian message with outstanding balance and pay link
-    const orgNameStr = invoice.baiguullagiinNer ? `${invoice.baiguullagiinNer} ` : "";
-    const tootStr = invoice.toot ? `${invoice.toot} тоотод ` : "";
-    const paymentToken = invoice.paymentToken || invoice._id.toString();
-    const paymentLink = `https://amarhome.mn/pay/${paymentToken}`;
+    const tootStr = invoice.toot ? `${invoice.toot} tootod ` : "";
+    const paymentLink = `https://amarhome.mn/pay/${invoice._id.toString()}`;
 
-    const msgText = `${orgNameStr}Tulbur sanuulakh. ${tootStr}Niit uldegdel dun: ${new Intl.NumberFormat("mn-MN").format(overallUldegdel)}₮. Tulukh kholboos: ${paymentLink}`;
+    const msgText = `Tulbur sanuulakh. ${tootStr} uldegdel dun: ${new Intl.NumberFormat("mn-MN").format(overallUldegdel)}₮. Tulukh kholboos: ${paymentLink}`;
 
     // 3. CallPro SMS API Settings
     const key = "aa8e588459fdd9b7ac0b809fc29cfae3";

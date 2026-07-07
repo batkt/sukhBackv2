@@ -76,9 +76,7 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
     const tootStr = invoice.toot ? `${invoice.toot} tootod ` : "";
     const absAmount = Math.abs(displayAmount || 0);
 
-    // Payment page URL — use paymentToken if available, fall back to _id
-    const paymentToken = invoice.paymentToken || invoice._id?.toString();
-    const paymentLink = paymentToken ? `https://amarhome.mn/pay/${paymentToken}` : "";
+    const paymentLink = `https://amarhome.mn/pay/${invoice._id.toString()}`;
     const appLink = `https://zevtabs.mn/qr/amarhome/`;
     let msgText;
 
