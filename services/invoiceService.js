@@ -393,10 +393,9 @@ async function ensureEkhniiUldegdel(kholbolt, geree, options = {}) {
   if (Math.abs(delta) < 0.01) return true;
 
   if (rows.length > 0) {
-    await GuilgeeAvlaguudModel.updateOne(
-      { _id: rows[0]._id },
-      { $inc: { undsenDun: delta, tulukhDun: delta } }
-    );
+    // Once created, the initial balance ledger record is completely untouchable by automated updates.
+    console.log(`ℹ️ [ensureEkhniiUldegdel] Record already exists, keeping untouchable (no update).`);
+    return true;
   } else {
     const gereeObj = typeof geree.toObject === "function" ? geree.toObject() : geree;
     await guilgeeService.recordCharge(kholbolt, {
