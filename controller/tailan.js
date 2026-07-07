@@ -2713,6 +2713,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       baiguullagiinId: String(baiguullagiinId),
       dun: { $gt: 0 },
     };
+    if (barilgiinId) receivableQuery.barilgiinId = String(barilgiinId);
     if (startDate && endDate) {
       receivableQuery.ognoo = { $gte: startDate, $lte: endDate };
     }

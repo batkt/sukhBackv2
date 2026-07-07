@@ -130,6 +130,10 @@ guilgeeAvlaguudSchema.index({ baiguullagiinId: 1, gereeniiId: 1, ognoo: -1 });
 guilgeeAvlaguudSchema.index({ baiguullagiinId: 1, barilgiinId: 1, ognoo: -1 });
 guilgeeAvlaguudSchema.index({ nekhemjlekhId: 1 });
 guilgeeAvlaguudSchema.index({ baiguullagiinId: 1, dun: 1, ognoo: -1 });
+// Some callers (e.g. GET /geree's ledger-balance aggregate) $match purely on
+// gereeniiId without baiguullagiinId - the compound index above can't be used
+// efficiently for that shape, so this covers it directly.
+guilgeeAvlaguudSchema.index({ gereeniiId: 1 });
 
 module.exports = function a(conn) {
 
