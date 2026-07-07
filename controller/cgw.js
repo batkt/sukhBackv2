@@ -760,13 +760,21 @@ const bankniiKhuulgaTatajKhadgalya = asyncHandler(async (req, res, next) => {
           var khariu = JSON.parse(response.body);
           if (!!khariu && !!khariu.result && !!khariu.result.txns && khariu.result.txns.length > 0) {
             var guilgeenuud = [];
-            for (const mur of khariu.result.txns) {
-              var existing = await BankniiGuilgee(tukhainBaaziinKholbolt, false).findOne({
-                jrno: mur?.jrno,
-                jritemNo: mur?.jritemNo,
+            const txnBarilgiinId = dans.barilgiinId || req.body.barilgiinId || null;
+            // Batch dedup check: one query for the whole page instead of one findOne per row
+            const existingDocs = await BankniiGuilgee(tukhainBaaziinKholbolt, false)
+              .find({
                 dansniiDugaar: dans.dugaar,
-                barilgiinId: dans.barilgiinId || req.body.barilgiinId || null,
-              });
+                barilgiinId: txnBarilgiinId,
+                jrno: { $in: khariu.result.txns.map((t) => t?.jrno) },
+              })
+              .select("jrno jritemNo")
+              .lean();
+            const existingKeySet = new Set(
+              existingDocs.map((d) => `${d.jrno}|${d.jritemNo}`),
+            );
+            for (const mur of khariu.result.txns) {
+              var existing = existingKeySet.has(`${mur?.jrno}|${mur?.jritemNo}`);
               if (!existing) {
                 var g = new (BankniiGuilgee(tukhainBaaziinKholbolt))({
                   jrno: mur?.jrno, jritemNo: mur?.jritemNo, contCurRate: mur?.contCurRate,

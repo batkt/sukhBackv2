@@ -114,10 +114,8 @@ khariltsagchSchema.index({ "toots.walletUserId": 1 });
 khariltsagchSchema.index({ "toots.toot": 1 });
 khariltsagchSchema.index({ "toots.baiguullagiinId": 1 });
 
-khariltsagchSchema.index({
-  $nevtrekhNer: "text",
-  mail: 1,
-});
+khariltsagchSchema.index({ nevtrekhNer: 1 });
+khariltsagchSchema.index({ mail: 1 });
 
 khariltsagchSchema.methods.tokenUusgeye = function (
   duusakhOgnoo,

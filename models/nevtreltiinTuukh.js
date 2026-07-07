@@ -22,6 +22,9 @@ const nevtreltiinTuukhSchema = new Schema(
   }
 );
 
+nevtreltiinTuukhSchema.index({ baiguullagiinId: 1, ognoo: -1 });
+nevtreltiinTuukhSchema.index({ ajiltniiId: 1 });
+
 module.exports = function a(conn) {
   if (!conn || !conn.kholbolt)
     throw new Error("Холболтын мэдээлэл заавал бөглөх шаардлагатай!");

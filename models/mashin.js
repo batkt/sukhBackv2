@@ -51,6 +51,11 @@ const mashinSchema = new Schema(
   }
 );
 
+mashinSchema.index({ baiguullagiinId: 1, barilgiinId: 1 });
+mashinSchema.index({ dugaar: 1 });
+mashinSchema.index({ ezemshigchiinId: 1 });
+mashinSchema.index({ gereeniiId: 1 });
+
 // Add audit hooks for tracking changes
 const { addAuditHooks } = require("../utils/auditHooks");
 addAuditHooks(mashinSchema, "mashin");

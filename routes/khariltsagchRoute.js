@@ -184,14 +184,17 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
     const kholbolt = db.erunkhiiKholbolt;
 
     // Fetch residents from erunkhiiKholbolt
-    let jagsaalt = await khariltsagch(kholbolt)
-      .find(body.query)
-      .sort(body.order)
-      .collation(body.collation ? body.collation : {})
-      .select(body.select)
-      .skip((khuudasniiDugaar - 1) * khuudasniiKhemjee)
-      .limit(khuudasniiKhemjee);
-    let niitMur = await khariltsagch(kholbolt).countDocuments(body.query);
+    const [jagsaalt, niitMur] = await Promise.all([
+      khariltsagch(kholbolt)
+        .find(body.query)
+        .sort(body.order)
+        .collation(body.collation ? body.collation : {})
+        .select(body.select)
+        .skip((khuudasniiDugaar - 1) * khuudasniiKhemjee)
+        .limit(khuudasniiKhemjee)
+        .lean(),
+      khariltsagch(kholbolt).countDocuments(body.query),
+    ]);
 
     let niitKhuudas =
       niitMur % khuudasniiKhemjee == 0

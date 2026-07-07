@@ -126,6 +126,11 @@ guilgeeAvlaguudSchema.pre("save", async function (next) {
 });
 
 
+guilgeeAvlaguudSchema.index({ baiguullagiinId: 1, gereeniiId: 1, ognoo: -1 });
+guilgeeAvlaguudSchema.index({ baiguullagiinId: 1, barilgiinId: 1, ognoo: -1 });
+guilgeeAvlaguudSchema.index({ nekhemjlekhId: 1 });
+guilgeeAvlaguudSchema.index({ baiguullagiinId: 1, dun: 1, ognoo: -1 });
+
 module.exports = function a(conn) {
 
   if (!conn || !conn.kholbolt)

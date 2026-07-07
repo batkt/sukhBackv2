@@ -94,6 +94,12 @@ nekhemjlekhiinTuukhSchema.pre("findOneAndDelete", async function () {
   await handleBalanceOnDelete(doc);
 });
 
+nekhemjlekhiinTuukhSchema.index({ baiguullagiinId: 1, barilgiinId: 1, ognoo: -1 });
+nekhemjlekhiinTuukhSchema.index({ gereeniiId: 1, ognoo: -1 });
+nekhemjlekhiinTuukhSchema.index({ nekhemjlekhiinDugaar: 1 });
+nekhemjlekhiinTuukhSchema.index({ baiguullagiinId: 1, tuluv: 1 });
+nekhemjlekhiinTuukhSchema.index({ paymentToken: 1 });
+
 module.exports = function a(conn) {
   if (!conn || !conn.kholbolt)
     throw new Error("Холболтын мэдээлэл заавал бөглөх шаардлагатай!");

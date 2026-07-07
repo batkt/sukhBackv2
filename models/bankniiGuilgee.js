@@ -67,6 +67,10 @@ const bankniiGuilgeeSchema = new Schema(
   }
 );
 
+bankniiGuilgeeSchema.index({ dansniiDugaar: 1, baiguullagiinId: 1, barilgiinId: 1 });
+bankniiGuilgeeSchema.index({ tranDate: -1 });
+bankniiGuilgeeSchema.index({ baiguullagiinId: 1, bank: 1 });
+
 // Add audit hooks for tracking changes
 const { addAuditHooks } = require("../utils/auditHooks");
 addAuditHooks(bankniiGuilgeeSchema, "bankniiGuilgee");

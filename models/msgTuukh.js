@@ -17,6 +17,9 @@ const msgTuukhSchema = new Schema(
   { timestamps: true }
 );
 
+msgTuukhSchema.index({ baiguullagiinId: 1, barilgiinId: 1, gereeniiId: 1 });
+msgTuukhSchema.index({ mashiniiDugaar: 1 });
+
 module.exports = function a(conn) {
   if (!conn || !conn.kholbolt)
     throw new Error("Холболтын мэдээлэл заавал бөглөх шаардлагатай!");

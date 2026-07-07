@@ -809,44 +809,56 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
     );
 
     if (fallbackUserIds.length > 0) {
+      // Fire all billingId x fallbackUserId lookups in parallel instead of one-at-a-time,
+      // then merge results sequentially (in the same order as before) to keep dedup deterministic.
+      const combos = [];
       for (const billingId of billingIds) {
         for (const fallbackUserId of fallbackUserIds) {
+          combos.push({ billingId, fallbackUserId });
+        }
+      }
+
+      const comboResults = await Promise.all(
+        combos.map(async ({ billingId, fallbackUserId }) => {
           try {
             const billingPayments = await walletApiService.getBillingPayments(
               fallbackUserId,
               billingId
             );
-
-            for (const bp of billingPayments || []) {
-              const status = String(bp.paymentStatus || bp.walletStatus || "UNKNOWN").toUpperCase();
-              const key = bp.paymentId || bp.walletPaymentId || bp.id;
-              if (!key || existingKeys.has(key)) continue;
-
-              // Only merge actionable states into walletQpay/list
-              if (!["PAID", "PENDING", "REFUNDED"].includes(status)) continue;
-
-              mergedPayments.push({
-                walletPaymentId: key,
-                paymentId: key,
-                walletInvoiceId: bp.invoiceId || "",
-                zakhialgiinDugaar: bp.invoiceNo || bp.invoiceId || "",
-                invoiceNo: bp.invoiceNo || bp.invoiceId || "",
-                billingId: billingId,
-                baiguullagiinId: orgByBillingId.get(billingId) || "",
-                userId: fallbackUserId,
-                tulsunEsekh: status === "PAID",
-                walletStatus: status,
-                isStuck: false,
-                amount: bp.totalAmount || bp.amount || bp.paymentAmount || 0,
-                createdAt: bp.createdAt || bp.trxDate || new Date(),
-                updatedAt: bp.updatedAt || bp.trxDate || new Date(),
-                source: "WALLET_API_FALLBACK",
-              });
-              existingKeys.add(key);
-            }
+            return { billingId, fallbackUserId, billingPayments: billingPayments || [] };
           } catch (fallbackErr) {
-            // ignore
+            return { billingId, fallbackUserId, billingPayments: [] };
           }
+        })
+      );
+
+      for (const { billingId, fallbackUserId, billingPayments } of comboResults) {
+        for (const bp of billingPayments) {
+          const status = String(bp.paymentStatus || bp.walletStatus || "UNKNOWN").toUpperCase();
+          const key = bp.paymentId || bp.walletPaymentId || bp.id;
+          if (!key || existingKeys.has(key)) continue;
+
+          // Only merge actionable states into walletQpay/list
+          if (!["PAID", "PENDING", "REFUNDED"].includes(status)) continue;
+
+          mergedPayments.push({
+            walletPaymentId: key,
+            paymentId: key,
+            walletInvoiceId: bp.invoiceId || "",
+            zakhialgiinDugaar: bp.invoiceNo || bp.invoiceId || "",
+            invoiceNo: bp.invoiceNo || bp.invoiceId || "",
+            billingId: billingId,
+            baiguullagiinId: orgByBillingId.get(billingId) || "",
+            userId: fallbackUserId,
+            tulsunEsekh: status === "PAID",
+            walletStatus: status,
+            isStuck: false,
+            amount: bp.totalAmount || bp.amount || bp.paymentAmount || 0,
+            createdAt: bp.createdAt || bp.trxDate || new Date(),
+            updatedAt: bp.updatedAt || bp.trxDate || new Date(),
+            source: "WALLET_API_FALLBACK",
+          });
+          existingKeys.add(key);
         }
       }
     }

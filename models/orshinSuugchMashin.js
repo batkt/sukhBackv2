@@ -25,6 +25,9 @@ const orshinSuugchMashinSchema = new Schema(
     {timestamps: true}
 )
 
+orshinSuugchMashinSchema.index({ baiguullagiinId: 1, barilgiinId: 1, orshinSuugchiinId: 1 });
+orshinSuugchMashinSchema.index({ mashiniiDugaar: 1 });
+
 module.exports = function a(conn) {
 if (!conn || !conn.kholbolt)
     throw new Error("Холболтын мэдээлэл заавал бөглөх шаардлагатай!");

@@ -35,6 +35,8 @@ const sonorduulgaSchema = new Schema(
   { timestamps: true }
 );
 
+sonorduulgaSchema.index({ baiguullagiinId: 1, barilgiinId: 1, tuluv: 1, ognoo: -1 });
+
 module.exports = function a(conn) {
   if (!conn || !conn.kholbolt)
     throw new Error("Холболтын мэдээлэл заавал бөглөх шаардлагатай!");

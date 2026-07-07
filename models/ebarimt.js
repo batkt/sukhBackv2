@@ -66,6 +66,10 @@ ebarimtSchema.pre("updateOne", async function () {
   this._update.dateOgnoo = new Date(this._update.date);
 });
 
+ebarimtSchema.index({ baiguullagiinId: 1, barilgiinId: 1 });
+ebarimtSchema.index({ gereeniiDugaar: 1 });
+ebarimtSchema.index({ zogsooliinId: 1 });
+
 // Add audit hooks for tracking changes
 const { addAuditHooks } = require("../utils/auditHooks");
 addAuditHooks(ebarimtSchema, "ebarimt");

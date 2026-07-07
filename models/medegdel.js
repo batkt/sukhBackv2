@@ -37,6 +37,9 @@ const medegdelSchema = new Schema(
   }
 );
 
+medegdelSchema.index({ baiguullagiinId: 1, barilgiinId: 1, status: 1, kharsanEsekh: 1 });
+medegdelSchema.index({ baiguullagiinId: 1, orshinSuugchId: 1, createdAt: -1 });
+
 // Add audit hooks for tracking changes
 const { addAuditHooks } = require("../utils/auditHooks");
 addAuditHooks(medegdelSchema, "medegdel");

@@ -118,6 +118,11 @@ const gereeSchema = new Schema(
   },
 );
 
+gereeSchema.index({ baiguullagiinId: 1, barilgiinId: 1, tuluv: 1 });
+gereeSchema.index({ baiguullagiinId: 1, gereeniiDugaar: 1 });
+gereeSchema.index({ orshinSuugchId: 1 });
+gereeSchema.index({ khariltsagchId: 1 });
+
 const { addAuditHooks } = require("../utils/auditHooks");
 addAuditHooks(gereeSchema, "geree");
 

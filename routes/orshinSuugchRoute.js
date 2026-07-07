@@ -207,14 +207,17 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
     const kholbolt = db.erunkhiiKholbolt;
 
     // Fetch residents from erunkhiiKholbolt
-    let jagsaalt = await OrshinSuugch(kholbolt)
-      .find(body.query)
-      .sort(body.order)
-      .collation(body.collation ? body.collation : {})
-      .select(body.select)
-      .skip((khuudasniiDugaar - 1) * khuudasniiKhemjee)
-      .limit(khuudasniiKhemjee);
-    let niitMur = await OrshinSuugch(kholbolt).countDocuments(body.query);
+    const [jagsaalt, niitMur] = await Promise.all([
+      OrshinSuugch(kholbolt)
+        .find(body.query)
+        .sort(body.order)
+        .collation(body.collation ? body.collation : {})
+        .select(body.select)
+        .skip((khuudasniiDugaar - 1) * khuudasniiKhemjee)
+        .limit(khuudasniiKhemjee)
+        .lean(),
+      OrshinSuugch(kholbolt).countDocuments(body.query),
+    ]);
 
     let niitKhuudas =
       niitMur % khuudasniiKhemjee == 0
@@ -1248,15 +1251,16 @@ router.get("/ustsanBarimt", tokenShalgakh, async (req, res, next) => {
       body.khuudasniiDugaar = Number(body.khuudasniiDugaar);
     if (!!body?.khuudasniiKhemjee)
       body.khuudasniiKhemjee = Number(body.khuudasniiKhemjee);
-    let jagsaalt = await UstsanBarimt(req.body.tukhainBaaziinKholbolt)
-      .find(body.query)
-      .sort(body.order)
-      .collation(body.collation ? body.collation : {})
-      .skip((body.khuudasniiDugaar - 1) * body.khuudasniiKhemjee)
-      .limit(body.khuudasniiKhemjee);
-    let niitMur = await UstsanBarimt(
-      req.body.tukhainBaaziinKholbolt,
-    ).countDocuments(body.query);
+    const [jagsaalt, niitMur] = await Promise.all([
+      UstsanBarimt(req.body.tukhainBaaziinKholbolt)
+        .find(body.query)
+        .sort(body.order)
+        .collation(body.collation ? body.collation : {})
+        .skip((body.khuudasniiDugaar - 1) * body.khuudasniiKhemjee)
+        .limit(body.khuudasniiKhemjee)
+        .lean(),
+      UstsanBarimt(req.body.tukhainBaaziinKholbolt).countDocuments(body.query),
+    ]);
     let niitKhuudas =
       niitMur % khuudasniiKhemjee == 0
         ? Math.floor(niitMur / khuudasniiKhemjee)

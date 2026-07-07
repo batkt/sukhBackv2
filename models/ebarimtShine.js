@@ -85,6 +85,10 @@ ebarimtSchema.pre("updateOne", async function () {
   this._update.dateOgnoo = new Date(this._update.date);
 });
 
+ebarimtSchema.index({ baiguullagiinId: 1, barilgiinId: 1 });
+ebarimtSchema.index({ gereeniiDugaar: 1 });
+ebarimtSchema.index({ nekhemjlekhiinId: 1 });
+
 module.exports = function a(conn) {
   if (!conn || !conn.kholbolt)
     throw new Error("Холболтын мэдээлэл заавал бөглөх шаардлагатай!");

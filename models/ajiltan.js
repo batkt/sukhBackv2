@@ -53,10 +53,9 @@ const ajiltanSchema = new Schema(
   }
 );
 
-ajiltanSchema.index({
-  $nevtrekhNer: "text",
-  mail: 1,
-});
+ajiltanSchema.index({ nevtrekhNer: 1 });
+ajiltanSchema.index({ mail: 1 });
+ajiltanSchema.index({ baiguullagiinId: 1 });
 
 ajiltanSchema.methods.tokenUusgeye = function (duusakhOgnoo, salbaruud = null) {
   const token = jwt.sign(

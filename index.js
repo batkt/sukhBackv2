@@ -56,6 +56,8 @@ const { db } = require("zevbackv2");
 
 const aldaaBarigch = require("./middleware/aldaaBarigch");
 const { requestContextMiddleware } = require("./middleware/requestContext");
+const { requestTimingMiddleware } = require("./middleware/requestTiming");
+const { enableSlowQueryMonitor } = require("./utils/slowQueryMonitor");
 const nekhemjlekhiinZagvar = require("./models/nekhemjlekhiinZagvar");
 const nekhemjlekhController = require("./controller/nekhemjlekhController");
 const NekhemjlekhCron = require("./models/cronSchedule");
@@ -74,6 +76,9 @@ process.env.UV_THREADPOOL_SIZE = 20;
     } catch (patchErr) {
       console.error("❌ [INIT] Failed to run sdkService patch:", patchErr.message);
     }
+
+    // Diagnostic: log any MongoDB query/aggregate slower than SLOW_QUERY_MS (default 500ms)
+    enableSlowQueryMonitor();
 
     /*
     // 1. Connect to Redis (async)
@@ -209,6 +214,7 @@ app.use((req, res, next) => {
 });
 
 app.use(requestContextMiddleware);
+app.use(requestTimingMiddleware);
 
 const {
   getMedegdelRoots,
@@ -535,52 +541,67 @@ if (!process.env.NODE_APP_INSTANCE || process.env.NODE_APP_INSTANCE === "0") {
   );
 
   // 5-minute cron job for automatic bank statement fetching & resident payment matching
+  let bankSyncCronRunning = false;
   cron.schedule(
     "*/1 * * * *",
     async function () {
+      // Guard against overlapping runs: if a previous tick is still processing
+      // tenants (e.g. slow bank API, many tenants), skip this tick instead of
+      // stacking another full pass on top of it and competing for the same
+      // Mongo connection pool that API requests use.
+      if (bankSyncCronRunning) {
+        console.warn("⏭️ [CRON] Previous bank-sync run still in progress, skipping this tick");
+        return;
+      }
+      bankSyncCronRunning = true;
+
       const now = new Date();
       console.log(`⏰ [CRON] Statement fetching started at ${now.toLocaleString("mn-MN", { timeZone: "Asia/Ulaanbaatar" })}`);
 
-      const { db } = require("zevbackv2");
-      const cgw = require("./controller/cgw");
-      const tulbur = require("./controller/tulbur");
+      try {
+        const { db } = require("zevbackv2");
+        const cgw = require("./controller/cgw");
+        const tulbur = require("./controller/tulbur");
 
-      if (db.kholboltuud && db.kholboltuud.length > 0) {
-        for (const kholbolt of db.kholboltuud) {
-          try {
-            console.log(`🔄 [CRON] Fetching statements for tenant: ${kholbolt.baiguullagiinId}`);
+        if (db.kholboltuud && db.kholboltuud.length > 0) {
+          for (const kholbolt of db.kholboltuud) {
+            try {
+              console.log(`🔄 [CRON] Fetching statements for tenant: ${kholbolt.baiguullagiinId}`);
 
-            // Mock request and response objects
-            const req = {
-              body: {
-                tukhainBaaziinKholbolt: kholbolt,
-                baiguullagiinId: kholbolt.baiguullagiinId
-              },
-              app: {
-                get: (key) => { if (key === "socketio") return app.get("socketio"); }
-              }
-            };
+              // Mock request and response objects
+              const req = {
+                body: {
+                  tukhainBaaziinKholbolt: kholbolt,
+                  baiguullagiinId: kholbolt.baiguullagiinId
+                },
+                app: {
+                  get: (key) => { if (key === "socketio") return app.get("socketio"); }
+                }
+              };
 
-            const res = {
-              status: function () { return this; },
-              send: function () { },
-              json: function () { }
-            };
+              const res = {
+                status: function () { return this; },
+                send: function () { },
+                json: function () { }
+              };
 
-            const next = (err) => {
-              if (err) console.error(`❌ [CRON] Statement fetch error for ${kholbolt.baiguullagiinId}:`, err.message || err);
-            };
+              const next = (err) => {
+                if (err) console.error(`❌ [CRON] Statement fetch error for ${kholbolt.baiguullagiinId}:`, err.message || err);
+              };
 
-            // 1. Fetch bank statements (auto-deduplicated)
-            await cgw.bankniiKhuulgaTatajKhadgalya(req, res, next);
+              // 1. Fetch bank statements (auto-deduplicated)
+              await cgw.bankniiKhuulgaTatajKhadgalya(req, res, next);
 
-            // 2. Identify resident payments (auto-matching by toot / phone)
-            await tulbur.tulultTaniya(req, res, next);
+              // 2. Identify resident payments (auto-matching by toot / phone)
+              await tulbur.tulultTaniya(req, res, next);
 
-          } catch (err) {
-            console.error(`❌ [CRON] Error processing tenant ${kholbolt?.baiguullagiinId}:`, err.message || err);
+            } catch (err) {
+              console.error(`❌ [CRON] Error processing tenant ${kholbolt?.baiguullagiinId}:`, err.message || err);
+            }
           }
         }
+      } finally {
+        bankSyncCronRunning = false;
       }
     },
     {

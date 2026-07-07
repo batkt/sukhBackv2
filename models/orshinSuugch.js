@@ -114,10 +114,8 @@ orshinSuugchSchema.index({ "toots.walletUserId": 1 });
 orshinSuugchSchema.index({ "toots.toot": 1 });
 orshinSuugchSchema.index({ "toots.baiguullagiinId": 1 });
 
-orshinSuugchSchema.index({
-  $nevtrekhNer: "text",
-  mail: 1,
-});
+orshinSuugchSchema.index({ nevtrekhNer: 1 });
+orshinSuugchSchema.index({ mail: 1 });
 
 orshinSuugchSchema.methods.tokenUusgeye = function (
   duusakhOgnoo,

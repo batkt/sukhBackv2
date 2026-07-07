@@ -23,6 +23,9 @@ const zogsoolSchema = new Schema(
   }
 );
 
+zogsoolSchema.index({ baiguullagiinId: 1, barilgiinId: 1, check_in_time: -1 });
+zogsoolSchema.index({ car_number: 1 });
+
 // Add audit hooks for tracking changes
 const { addAuditHooks } = require("../utils/auditHooks");
 addAuditHooks(zogsoolSchema, "zogsool");
