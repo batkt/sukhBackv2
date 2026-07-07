@@ -1320,7 +1320,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
               req.body.dun = totalActualBalance;
             }
           }
-        } catch (multiVerifyErr) {}
+        } catch (multiVerifyErr) { }
       } else if (req.body.nekhemjlekhiinId) {
         // Single invoice payment (existing logic)
         callback_url =
@@ -1370,7 +1370,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
               }
             }
           }
-        } catch (verifyErr) {}
+        } catch (verifyErr) { }
 
         if (!req.body.dun && req.body.tukhainBaaziinKholbolt) {
           // Trust the authoritative amount from frontend
@@ -1543,7 +1543,7 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
               qpayUrl: qpayUrl,
             },
           );
-        } catch (saveErr) {}
+        } catch (saveErr) { }
       } else if (req.body.nekhemjlekhiinId && khariu) {
         // Single invoice payment (existing logic)
         try {
@@ -1676,12 +1676,12 @@ router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
                 }
               };
 
-              updateNekhemjlekhData().catch((err) => {});
+              updateNekhemjlekhData().catch((err) => { });
             } else {
             }
           } else {
           }
-        } catch (saveErr) {}
+        } catch (saveErr) { }
       } else {
       }
 
@@ -1789,13 +1789,13 @@ router.post("/qpayShalgay", tokenShalgakh, async (req, res, next) => {
               paid_amount: isPaid ? qpayObj.qpay?.amount || 0 : 0,
               payments: isPaid
                 ? [
-                    {
-                      payment_status: "PAID",
-                      status: "PAID",
-                      amount: qpayObj.qpay?.amount || 0,
-                      transactions: [],
-                    },
-                  ]
+                  {
+                    payment_status: "PAID",
+                    status: "PAID",
+                    amount: qpayObj.qpay?.amount || 0,
+                    transactions: [],
+                  },
+                ]
                 : [],
             });
           }
@@ -2268,9 +2268,9 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
           gereeniiDugaar: foundQpayRecord.sukhNekhemjlekh?.gereeniiDugaar || "",
           niitTulbur: parseFloat(
             foundQpayRecord.sukhNekhemjlekh?.pay_amount ||
-              foundQpayRecord.amount ||
-              foundQpayRecord.qpay?.amount ||
-              0,
+            foundQpayRecord.amount ||
+            foundQpayRecord.qpay?.amount ||
+            0,
           ),
           isGenericPayment: true,
           baiguullagiinNer: "",
@@ -2360,12 +2360,12 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
           if (foundQpayRecord) {
             invoicePaidAmount = parseFloat(
               foundQpayRecord.sukhNekhemjlekh?.pay_amount ||
-                foundQpayRecord.amount ||
-                foundQpayRecord.qpay?.amount ||
-                0,
+              foundQpayRecord.amount ||
+              foundQpayRecord.qpay?.amount ||
+              0,
             );
           }
-        } catch (qpErr) {}
+        } catch (qpErr) { }
 
         // Priority 2: Fallback to niitTulbur only if 0
         if (invoicePaidAmount <= 0) {
@@ -2400,8 +2400,8 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
           orshinSuugchId: nekhemjlekh.orshinSuugchId || "",
           nekhemjlekhId:
             nekhemjlekh.isStandaloneAvlaga ||
-            nekhemjlekh.isSyntheticBalance ||
-            nekhemjlekh.isGenericPayment
+              nekhemjlekh.isSyntheticBalance ||
+              nekhemjlekh.isGenericPayment
               ? null
               : nekhemjlekh._id?.toString() || null,
           ognoo: new Date(),
@@ -2439,13 +2439,13 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
                 const multiPaidAmount = nekhemjlekh.niitTulbur || 0;
                 const multiCurrentUldegdel =
                   typeof nekhemjlekh.uldegdel === "number" &&
-                  !isNaN(nekhemjlekh.uldegdel) &&
-                  nekhemjlekh.uldegdel > 0
+                    !isNaN(nekhemjlekh.uldegdel) &&
+                    nekhemjlekh.uldegdel > 0
                     ? nekhemjlekh.uldegdel
                     : multiPaidAmount;
                 const multiCurrentTulsun =
                   typeof nekhemjlekh.tulsunDun === "number" &&
-                  !isNaN(nekhemjlekh.tulsunDun)
+                    !isNaN(nekhemjlekh.tulsunDun)
                     ? nekhemjlekh.tulsunDun
                     : 0;
                 const multiNewUldegdel = Math.max(
@@ -2527,7 +2527,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
               gereeForUpdate.zaaltUs = 0;
               await gereeForUpdate.save();
             }
-          } catch (zaaltError) {}
+          } catch (zaaltError) { }
         }
 
         // 4. Create bank payment record for each invoice
@@ -2582,7 +2582,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
               );
             }
           }
-        } catch (bankErr) {}
+        } catch (bankErr) { }
 
         // Create ebarimt for each invoice
         try {
@@ -3128,14 +3128,14 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
         if (!inv) {
           try {
             inv = await NekhemjlekhModel.findById(invoiceId).lean();
-          } catch (e) {}
+          } catch (e) { }
         }
         if (inv) {
           invoice = inv;
           foundKholbolt = kholbolt;
           break;
         }
-      } catch (err) {}
+      } catch (err) { }
     }
 
     if (!invoice) {
@@ -3173,6 +3173,46 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
       }
     } catch (ledgerErr) {
       console.error("❌ [pay/info] Ledger check failed:", ledgerErr.message);
+    }
+
+    let overallUldegdel = invoice.niitTulbur;
+    if (invoice.gereeniiId) {
+      try {
+        const GuilgeeModel = require("../models/guilgeeAvlaguud")(foundKholbolt);
+        if (GuilgeeModel) {
+          const result = await GuilgeeModel.aggregate([
+            { $match: { gereeniiId: invoice.gereeniiId } },
+            {
+              $group: {
+                _id: null,
+                uldegdel: { $sum: "$dun" },
+              },
+            },
+          ]);
+          const currentBal = result[0]?.uldegdel || 0;
+          if (currentBal > 0) {
+            overallUldegdel = Number(currentBal.toFixed(2));
+          } else {
+            overallUldegdel = 0;
+          }
+        }
+      } catch (balErr) {
+        console.error("❌ [pay/info] Failed to calculate contract balance:", balErr.message);
+      }
+    }
+
+    if (overallUldegdel > 0) {
+      invoice.niitTulbur = overallUldegdel;
+      invoice.uldegdel = overallUldegdel;
+      invoice.tuluv = "Төлөөгүй";
+      invoice.tulsunDun = 0;
+      invoice.paymentTokenExpiresAt = null;
+    } else {
+      invoice.niitTulbur = invoice.niitTulbur;
+      invoice.uldegdel = 0;
+      invoice.tuluv = "Төлсөн";
+      invoice.tulsunDun = invoice.niitTulbur;
+      invoice.paymentTokenExpiresAt = new Date();
     }
 
     // Token expiry check: if already paid, allow viewing data, otherwise return error
@@ -3231,6 +3271,18 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
             },
             { new: true }
           ).lean();
+
+          if (overallUldegdel > 0) {
+            invoice.niitTulbur = overallUldegdel;
+            invoice.uldegdel = overallUldegdel;
+            invoice.tuluv = "Төлөөгүй";
+            invoice.tulsunDun = 0;
+            invoice.paymentTokenExpiresAt = null;
+          } else {
+            invoice.uldegdel = 0;
+            invoice.tuluv = "Төлсөн";
+            invoice.tulsunDun = invoice.niitTulbur;
+          }
         }
       } catch (qpayErr) {
         console.error("❌ [pay/info] Failed to create QPay invoice on-the-fly:", qpayErr.message);
@@ -3250,6 +3302,8 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
         console.error("⚠️ [pay/info] QuickQpayObject search failed:", err.message);
       }
     }
+
+    displayDun = invoice.niitTulbur;
 
     return res.status(200).json({
       success: true,
