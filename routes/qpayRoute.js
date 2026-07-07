@@ -2220,12 +2220,35 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
     }
 
     // Idempotency guard: if already paid, return immediately
-    if (foundQpayRecord && foundQpayRecord.tulsunEsekh) {
-      console.log("ℹ️ [QPAY MULTI CALLBACK] Already paid (idempotent):", {
-        invoiceIds,
-        qpayInvoiceIdForApi,
-      });
-      return res.sendStatus(200);
+    if (foundQpayRecord) {
+      if (foundQpayRecord.tulsunEsekh) {
+        console.log("ℹ️ [QPAY MULTI CALLBACK] Already paid (idempotent):", {
+          invoiceIds,
+          qpayInvoiceIdForApi,
+        });
+        return res.sendStatus(200);
+      }
+
+      // Lock atomically using findOneAndUpdate to prevent concurrent double callback executions.
+      const lockedRecord = await QuickQpayModel.findOneAndUpdate(
+        {
+          _id: foundQpayRecord._id,
+          tulsunEsekh: { $ne: true }
+        },
+        {
+          $set: { tulsunEsekh: true, status: "paid" }
+        },
+        { new: true }
+      ).lean();
+
+      if (!lockedRecord) {
+        console.log("ℹ️ [QPAY MULTI CALLBACK] Already processing or paid (skipped lock):", {
+          invoiceIds,
+          qpayInvoiceIdForApi,
+        });
+        return res.sendStatus(200);
+      }
+      foundQpayRecord = lockedRecord;
     }
 
     // Try normal invoices for invoice ID if not resolved
@@ -2312,6 +2335,93 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
           return;
         }
 
+        const bankniiGuilgeeId =
+          paymentTransactionId ||
+          nekhemjlekh.qpayInvoiceId ||
+          "qpay-multi-" + (nekhemjlekh._id?.toString() || "");
+
+        // 1. Quick check if already processed in ledger
+        const existingLedgerPayment = await GuilgeeAvlaguud(kholbolt).findOne({
+          bankniiGuilgeeId: bankniiGuilgeeId,
+          baiguullagiinId: String(nekhemjlekh.baiguullagiinId),
+          turul: "төлөлт",
+        });
+
+        if (existingLedgerPayment) {
+          console.log(`ℹ️ [QPAY MULTI CALLBACK] Payment already recorded in ledger (skipped duplicate): ${bankniiGuilgeeId}`);
+          return;
+        }
+
+        let invoicePaidAmount = 0;
+        let geree = null;
+
+        // Priority 1: Try to get amount from local QPay record (the intended amount)
+        try {
+          if (foundQpayRecord) {
+            invoicePaidAmount = parseFloat(
+              foundQpayRecord.sukhNekhemjlekh?.pay_amount ||
+                foundQpayRecord.amount ||
+                foundQpayRecord.qpay?.amount ||
+                0,
+            );
+          }
+        } catch (qpErr) {}
+
+        // Priority 2: Fallback to niitTulbur only if 0
+        if (invoicePaidAmount <= 0) {
+          invoicePaidAmount = nekhemjlekh.niitTulbur || 0;
+        }
+
+        // Priority 3: Fallback to ledger charge record if still 0
+        if (
+          invoicePaidAmount <= 0 &&
+          !nekhemjlekh.isStandaloneAvlaga &&
+          !nekhemjlekh.isSyntheticBalance &&
+          !nekhemjlekh.isGenericPayment
+        ) {
+          const chargeRecord = await GuilgeeAvlaguud(kholbolt).findOne({
+            nekhemjlekhId: nekhemjlekh._id.toString(),
+            dun: { $gt: 0 },
+          });
+          if (chargeRecord) {
+            invoicePaidAmount =
+              chargeRecord.undsenDun || chargeRecord.dun || 0;
+          }
+        }
+
+        // 2. Record the QPay payment in the ledger (Authoritative Lock / Idempotency Check)
+        const guilgeeService = require("../services/guilgeeService");
+        const ledgerResult = await guilgeeService.recordPayment(kholbolt, {
+          baiguullagiinId: String(nekhemjlekh.baiguullagiinId),
+          baiguullagiinNer: nekhemjlekh.baiguullagiinNer || "",
+          barilgiinId: nekhemjlekh.barilgiinId || "",
+          gereeniiId: String(nekhemjlekh.gereeniiId),
+          gereeniiDugaar: nekhemjlekh.gereeniiDugaar || "",
+          orshinSuugchId: nekhemjlekh.orshinSuugchId || "",
+          nekhemjlekhId:
+            nekhemjlekh.isStandaloneAvlaga ||
+            nekhemjlekh.isSyntheticBalance ||
+            nekhemjlekh.isGenericPayment
+              ? null
+              : nekhemjlekh._id?.toString() || null,
+          ognoo: new Date(),
+          dun: invoicePaidAmount,
+          tailbar: "QPay төлөлт",
+          source: "nekhemjlekh",
+          bankniiGuilgeeId: bankniiGuilgeeId,
+        });
+
+        if (ledgerResult && ledgerResult.alreadyExists) {
+          console.log(`ℹ️ [QPAY MULTI CALLBACK] Ledger payment record already exists (skipped concurrent duplicate): ${bankniiGuilgeeId}`);
+          return;
+        }
+
+        if (!ledgerResult || !ledgerResult.success) {
+          console.error(`❌ [QPAY MULTI CALLBACK] Ledger recording failed: ${ledgerResult?.error || "Unknown error"}`);
+          return;
+        }
+
+        // 3. Update the Invoice document details
         let updatedInvoice = null;
 
         if (
@@ -2420,10 +2530,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
           } catch (zaaltError) {}
         }
 
-        let invoicePaidAmount = 0;
-        let geree = null;
-
-        // Create bank payment record for each invoice
+        // 4. Create bank payment record for each invoice
         try {
           geree = await Geree(kholbolt).findById(nekhemjlekh.gereeniiId).lean();
 
@@ -2431,41 +2538,6 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
             const bankGuilgee = new BankniiGuilgee(kholbolt)();
 
             bankGuilgee.tranDate = new Date();
-            invoicePaidAmount = 0;
-
-            // Priority 1: Try to get amount from local QPay record (the intended amount)
-            try {
-              if (foundQpayRecord) {
-                invoicePaidAmount = parseFloat(
-                  foundQpayRecord.sukhNekhemjlekh?.pay_amount ||
-                    foundQpayRecord.amount ||
-                    foundQpayRecord.qpay?.amount ||
-                    0,
-                );
-              }
-            } catch (qpErr) {}
-
-            // Priority 2: Fallback to niitTulbur only if 0
-            if (invoicePaidAmount <= 0) {
-              invoicePaidAmount = nekhemjlekh.niitTulbur || 0;
-            }
-
-            // Priority 3: Fallback to ledger charge record if still 0
-            if (
-              invoicePaidAmount <= 0 &&
-              !nekhemjlekh.isStandaloneAvlaga &&
-              !nekhemjlekh.isSyntheticBalance &&
-              !nekhemjlekh.isGenericPayment
-            ) {
-              const chargeRecord = await GuilgeeAvlaguud(kholbolt).findOne({
-                nekhemjlekhId: nekhemjlekh._id.toString(),
-                dun: { $gt: 0 },
-              });
-              if (chargeRecord) {
-                invoicePaidAmount =
-                  chargeRecord.undsenDun || chargeRecord.dun || 0;
-              }
-            }
 
             bankGuilgee.amount = invoicePaidAmount;
             bankGuilgee.description = `QPay төлбөр - Гэрээ ${nekhemjlekh.gereeniiDugaar}`;
@@ -2511,38 +2583,6 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
             }
           }
         } catch (bankErr) {}
-
-        // Record the QPay payment in the ledger
-        try {
-          const guilgeeService = require("../services/guilgeeService");
-          await guilgeeService.recordPayment(kholbolt, {
-            baiguullagiinId: String(nekhemjlekh.baiguullagiinId),
-            baiguullagiinNer: nekhemjlekh.baiguullagiinNer || "",
-            barilgiinId: nekhemjlekh.barilgiinId || "",
-            gereeniiId: String(nekhemjlekh.gereeniiId),
-            gereeniiDugaar: nekhemjlekh.gereeniiDugaar || "",
-            orshinSuugchId: nekhemjlekh.orshinSuugchId || "",
-            nekhemjlekhId:
-              nekhemjlekh.isStandaloneAvlaga ||
-              nekhemjlekh.isSyntheticBalance ||
-              nekhemjlekh.isGenericPayment
-                ? null
-                : nekhemjlekh._id?.toString() || null,
-            ognoo: new Date(),
-            dun: invoicePaidAmount,
-            tailbar: "QPay төлөлт",
-            source: "nekhemjlekh",
-            bankniiGuilgeeId:
-              paymentTransactionId ||
-              nekhemjlekh.qpayInvoiceId ||
-              "qpay-multi-" + (nekhemjlekh._id?.toString() || ""),
-          });
-        } catch (ledgerErr) {
-          console.error(
-            "❌ [QPAY MULTI CALLBACK] Ledger error:",
-            ledgerErr.message,
-          );
-        }
 
         // Create ebarimt for each invoice
         try {

@@ -125,7 +125,7 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
   }
 
   // Record payment in Ledger (Authoritative)
-  await guilgeeService.recordPayment(kholbolt, {
+  const ledgerResult = await guilgeeService.recordPayment(kholbolt, {
     baiguullagiinId,
     gereeniiId: qpayBarimt.gereeniiId,
     dun: amount,
@@ -135,6 +135,16 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     ognoo: new Date(),
     nekhemjlekhId: qpayBarimt.sukhNekhemjlekh?.nekhemjlekhiinId
   });
+
+  if (ledgerResult && ledgerResult.alreadyExists) {
+    console.log(`ℹ️ [QPAY CALLBACK] Ledger payment record already exists (skipped duplicate): dugaar=${dugaar}`);
+    return res.sendStatus(200);
+  }
+
+  if (!ledgerResult || !ledgerResult.success) {
+    console.error(`❌ [QPAY CALLBACK] Ledger recording failed: ${ledgerResult?.error || "Unknown error"}`);
+    return res.status(500).send("Ledger recording failed");
+  }
 
   // Trigger ebarimt if invoice exists
   if (qpayBarimt.sukhNekhemjlekh?.nekhemjlekhiinId) {
@@ -363,6 +373,16 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
     ognoo: new Date(),
     nekhemjlekhId: nekhemjlekhiinId,
   });
+
+  if (ledgerResult && ledgerResult.alreadyExists) {
+    console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Ledger payment record already exists (skipped duplicate): ${paymentTransactionId}`);
+    return res.sendStatus(200);
+  }
+
+  if (!ledgerResult || !ledgerResult.success) {
+    console.error(`❌ [QPAY-INVOICE CALLBACK] Ledger recording failed: ${ledgerResult?.error || "Unknown error"}`);
+    return res.status(500).send("Ledger recording failed");
+  }
 
   // Trigger ebarimt
   generateEbarimtForQPay(kholbolt, baiguullagiinId, nekhemjlekhiinId, paidAmount);
