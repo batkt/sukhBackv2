@@ -52,7 +52,7 @@ const neeyeRoute = require("./routes/neeyeRoute");
 
 
 
-const { db, tokenShalgakh } = require("zevbackv2");
+const { db } = require("zevbackv2");
 
 const aldaaBarigch = require("./middleware/aldaaBarigch");
 const { requestContextMiddleware } = require("./middleware/requestContext");
@@ -318,10 +318,24 @@ app.use(appVersionRoute);
 app.use(blogRoute);
 
 // Read-only feed of buffered errors/slow-requests/slow-queries for an external
-// agent to pull and analyze. Requires the same staff auth as every other admin
-// action. ?clear=true drains the buffer after returning it (so a polling agent
-// only ever sees issues new since its last call).
-app.get("/admin/logs", tokenShalgakh, (req, res) => {
+// agent to pull and analyze. No login/JWT required - instead gated by a static
+// shared secret (AI_LOGS_SECRET in tokhirgoo.env) so it's not wide open to the
+// public internet. ?clear=true drains the buffer after returning it (so a
+// polling agent only ever sees issues new since its last call).
+app.get("/admin/logs", (req, res) => {
+  const expectedKey = process.env.AI_LOGS_SECRET;
+  const providedKey = req.query.key || req.headers["x-logs-key"];
+
+  if (!expectedKey) {
+    return res.status(503).json({
+      success: false,
+      message: "AI_LOGS_SECRET is not configured on the server - set it in tokhirgoo.env to enable this endpoint",
+    });
+  }
+  if (providedKey !== expectedKey) {
+    return res.status(401).json({ success: false, message: "Invalid or missing key" });
+  }
+
   const issues = aiOpsAnalyzer.getIssues();
   if (req.query.clear === "true") aiOpsAnalyzer.clearIssues();
   res.json({ success: true, generatedAt: new Date().toISOString(), issues });
