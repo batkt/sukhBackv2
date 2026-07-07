@@ -76,7 +76,18 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
     const tootStr = invoice.toot ? `${invoice.toot} tootod ` : "";
     const absAmount = Math.abs(displayAmount || 0);
 
-    const paymentLink = `https://amarhome.mn/pay/${invoice._id.toString()}`;
+    let paymentToken = invoice.paymentToken;
+    if (!paymentToken) {
+      paymentToken = require("crypto").randomBytes(4).toString("hex");
+      try {
+        await NekhemjlekhiinTuukhModel.findByIdAndUpdate(invoice._id, {
+          $set: { paymentToken: paymentToken }
+        });
+      } catch (saveErr) {
+        console.error("❌ Failed to save generated paymentToken in invoiceSendService:", saveErr.message);
+      }
+    }
+    const paymentLink = `https://amarhome.mn/pay/${paymentToken}`;
     const appLink = `https://zevtabs.mn/qr/amarhome/`;
     let msgText;
 

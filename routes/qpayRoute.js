@@ -3400,7 +3400,20 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
 
     // 2. Format Cyrillic/Mongolian message with outstanding balance and pay link
     const tootStr = invoice.toot ? `${invoice.toot} tootod ` : "";
-    const paymentLink = `https://amarhome.mn/pay/${invoice._id.toString()}`;
+    
+    let paymentToken = invoice.paymentToken;
+    if (!paymentToken) {
+      paymentToken = require("crypto").randomBytes(4).toString("hex");
+      try {
+        const NekhemjlekhModel = NekhemjlekhiinTuukh(foundKholbolt);
+        await NekhemjlekhModel.findByIdAndUpdate(invoice._id, {
+          $set: { paymentToken: paymentToken }
+        });
+      } catch (saveErr) {
+        console.error("❌ Failed to save generated paymentToken:", saveErr.message);
+      }
+    }
+    const paymentLink = `https://amarhome.mn/pay/${paymentToken}`;
 
     const msgText = `Tulbur sanuulakh. ${tootStr} uldegdel dun: ${new Intl.NumberFormat("mn-MN").format(overallUldegdel)}₮. Tulukh kholboos: ${paymentLink}`;
 
