@@ -3343,13 +3343,24 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
     for (const kholbolt of db.kholboltuud) {
       try {
         const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
-        let inv = await NekhemjlekhModel.findById(invoiceId).lean();
+        let inv = null;
+        try {
+          inv = await NekhemjlekhModel.findById(invoiceId).lean();
+        } catch (e) {}
+
+        if (!inv) {
+          // Fallback: try finding by gereeniiId (retrieve the latest invoice of this contract)
+          inv = await NekhemjlekhModel.findOne({ gereeniiId: invoiceId })
+            .sort({ createdAt: -1 })
+            .lean();
+        }
+
         if (inv) {
           invoice = inv;
           foundKholbolt = kholbolt;
           break;
         }
-      } catch (err) { }
+      } catch (err) {}
     }
 
     if (!invoice) {
