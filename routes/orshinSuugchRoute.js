@@ -764,6 +764,36 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
       .findById(req.params.id)
       .lean();
 
+    // Restore old ekhniiUldegdel values to prevent any modification on update/edit
+    if (oldDoc) {
+      if (oldDoc.ekhniiUldegdel !== undefined) {
+        req.body.ekhniiUldegdel = oldDoc.ekhniiUldegdel;
+      } else {
+        delete req.body.ekhniiUldegdel;
+      }
+
+      if (Array.isArray(req.body.toots)) {
+        req.body.toots = req.body.toots.map((t) => {
+          const oldToot = Array.isArray(oldDoc.toots)
+            ? oldDoc.toots.find(
+                (ot) =>
+                  String(ot.toot) === String(t.toot) &&
+                  String(ot.barilgiinId) === String(t.barilgiinId)
+              )
+            : null;
+          if (oldToot && oldToot.ekhniiUldegdel !== undefined) {
+            t.ekhniiUldegdel = oldToot.ekhniiUldegdel;
+          } else {
+            t.ekhniiUldegdel = 0;
+          }
+          return t;
+        });
+      }
+      if (req.body.units && Array.isArray(req.body.units)) {
+        req.body.units = req.body.toots;
+      }
+    }
+
     // Prevent duplicate toot when updating: check if new toot+barilgiinId is already taken by another resident
     const updateToot = req.body.toot ? String(req.body.toot).trim() : null;
     const updateDavkhar = req.body.davkhar
@@ -970,6 +1000,8 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
           }
 
           // Sync to ledger if ekhniiUldegdel was updated
+          // Disabled to prevent incorrect calculations during standard profile edits
+          /*
           if (req.body.ekhniiUldegdel !== undefined || req.body.toots !== undefined) {
             const activeGerees = await GereeModel.find({
               orshinSuugchId: result._id.toString(),
@@ -987,6 +1019,7 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
               );
             }
           }
+          */
 
           // 1. Update Geree (Contracts) - Essential to keep personal info in sync
           if (Object.keys(syncData).length > 0) {
