@@ -3331,4 +3331,119 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
   }
 });
 
+router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+    const { invoiceId } = req.params;
+
+    let invoice = null;
+    let foundKholbolt = null;
+
+    for (const kholbolt of db.kholboltuud) {
+      try {
+        const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
+        let inv = await NekhemjlekhModel.findById(invoiceId).lean();
+        if (inv) {
+          invoice = inv;
+          foundKholbolt = kholbolt;
+          break;
+        }
+      } catch (err) { }
+    }
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: "Нэхэмжлэх олдсонгүй." });
+    }
+
+    if (!invoice.utas || !invoice.utas.length) {
+      return res.status(400).json({ success: false, message: "Оршин суугчийн утасны дугаар олдсонгүй." });
+    }
+
+    // 1. Calculate overall outstanding balance
+    let overallUldegdel = invoice.niitTulbur;
+    if (invoice.gereeniiId) {
+      try {
+        const GuilgeeModel = require("../models/guilgeeAvlaguud")(foundKholbolt);
+        if (GuilgeeModel) {
+          const result = await GuilgeeModel.aggregate([
+            { $match: { gereeniiId: invoice.gereeniiId } },
+            {
+              $group: {
+                _id: null,
+                uldegdel: { $sum: "$dun" },
+              },
+            },
+          ]);
+          const currentBal = result[0]?.uldegdel || 0;
+          overallUldegdel = currentBal > 0 ? Number(currentBal.toFixed(2)) : 0;
+        }
+      } catch (balErr) {
+        console.error("❌ Failed to calculate outstanding balance for reminder SMS:", balErr.message);
+      }
+    }
+
+    if (overallUldegdel <= 0) {
+      return res.status(400).json({ success: false, message: "Төлөх төлбөрийн үлдэгдэл байхгүй байна." });
+    }
+
+    // 2. Format Cyrillic/Mongolian message with outstanding balance and pay link
+    const orgNameStr = invoice.baiguullagiinNer ? `${invoice.baiguullagiinNer} ` : "";
+    const tootStr = invoice.toot ? `${invoice.toot} тоотод ` : "";
+    const paymentToken = invoice.paymentToken || invoice._id.toString();
+    const paymentLink = `https://amarhome.mn/pay/${paymentToken}`;
+
+    const msgText = `${orgNameStr}Tulbur sanuulakh. ${tootStr}Niit uldegdel dun: ${new Intl.NumberFormat("mn-MN").format(overallUldegdel)}₮. Tulukh kholboos: ${paymentLink}`;
+
+    // 3. CallPro SMS API Settings
+    const key = "aa8e588459fdd9b7ac0b809fc29cfae3";
+    const dugaar = "72002002";
+    const activeUrl = "https://api-text.callpro.mn/v1/sms/send";
+
+    const axios = require("axios");
+    const sendPromises = invoice.utas.map(async (phone) => {
+      if (!phone) return;
+      try {
+        const response = await axios.post(activeUrl, {
+          key: key,
+          number: dugaar,
+          to: phone.trim(),
+          message: msgText,
+        });
+
+        // Save to MsgTuukh
+        try {
+          const MsgTuukh = require("../models/msgTuukh");
+          const MsgTuukhModel = MsgTuukh(foundKholbolt);
+          await MsgTuukhModel.create({
+            baiguullagiinId: invoice.baiguullagiinId,
+            barilgiinId: invoice.barilgiinId || "",
+            dugaar: [phone.trim()],
+            gereeniiId: invoice.gereeniiId || "",
+            msg: msgText,
+            msgIlgeekhKey: key,
+            msgIlgeekhDugaar: dugaar,
+          });
+        } catch (dbErr) {
+          console.error("❌ Failed to save MsgTuukh:", dbErr.message);
+        }
+
+        return response.data;
+      } catch (err) {
+        console.error(`❌ Failed to send SMS to ${phone}:`, err.message);
+        throw err;
+      }
+    });
+
+    await Promise.all(sendPromises);
+
+    return res.status(200).json({
+      success: true,
+      message: "Төлбөр сануулах SMS-ийг амжилттай илгээлээ.",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
