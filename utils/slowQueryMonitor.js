@@ -5,6 +5,7 @@
  * prototypes are global, not per-connection).
  */
 const mongoose = require("mongoose");
+const { recordIssue } = require("./aiOpsAnalyzer");
 
 const SLOW_QUERY_MS = parseInt(process.env.SLOW_QUERY_MS || "500", 10);
 
@@ -44,6 +45,11 @@ function patchExec(proto, kindLabel) {
       console.warn(
         `🐢 [SLOW QUERY] ${ms.toFixed(1)}ms db=${dbName} ${collection}.${op} ${detail.slice(0, 400)}`,
       );
+      recordIssue({
+        kind: "slow_query",
+        message: `${ms.toFixed(1)}ms ${collection}.${op} ${detail.slice(0, 400)}`,
+        meta: { db: dbName, collection, op, ms: Math.round(ms) },
+      });
     };
 
     if (result && typeof result.then === "function") {

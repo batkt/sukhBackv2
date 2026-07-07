@@ -52,12 +52,13 @@ const neeyeRoute = require("./routes/neeyeRoute");
 
 
 
-const { db } = require("zevbackv2");
+const { db, tokenShalgakh } = require("zevbackv2");
 
 const aldaaBarigch = require("./middleware/aldaaBarigch");
 const { requestContextMiddleware } = require("./middleware/requestContext");
 const { requestTimingMiddleware } = require("./middleware/requestTiming");
 const { enableSlowQueryMonitor } = require("./utils/slowQueryMonitor");
+const aiOpsAnalyzer = require("./utils/aiOpsAnalyzer");
 const nekhemjlekhiinZagvar = require("./models/nekhemjlekhiinZagvar");
 const nekhemjlekhController = require("./controller/nekhemjlekhController");
 const NekhemjlekhCron = require("./models/cronSchedule");
@@ -315,6 +316,16 @@ app.use(transformationRoute);
 // walletQpayRoute moved to top
 app.use(appVersionRoute);
 app.use(blogRoute);
+
+// Read-only feed of buffered errors/slow-requests/slow-queries for an external
+// agent to pull and analyze. Requires the same staff auth as every other admin
+// action. ?clear=true drains the buffer after returning it (so a polling agent
+// only ever sees issues new since its last call).
+app.get("/admin/logs", tokenShalgakh, (req, res) => {
+  const issues = aiOpsAnalyzer.getIssues();
+  if (req.query.clear === "true") aiOpsAnalyzer.clearIssues();
+  res.json({ success: true, generatedAt: new Date().toISOString(), issues });
+});
 
 
 

@@ -1,4 +1,10 @@
 const http = require("http");
+const { recordIssue } = require("../utils/aiOpsAnalyzer");
+
+function truncateStack(stack) {
+  if (!stack) return stack;
+  return stack.split("\n").slice(0, 5).join("\n");
+}
 
 function aldaagIlgeeye(aldaa, req) {
   const data = new TextEncoder().encode(
@@ -48,6 +54,12 @@ const aldaaBarigch = (err, req, res, next) => {
       } : undefined,
     });
     
+    recordIssue({
+      kind: "error",
+      message: err.message,
+      meta: { url: req.url, method: req.method, stack: truncateStack(err.stack) },
+    });
+
     if (req.body && req.body.nevtersenAjiltniiToken) aldaagIlgeeye(err, req);
     if (!!err.message && err.message.includes("indexTalbar_1 dup key"))
       err.message = "Нэвтрэх нэр давхардаж байна!";
