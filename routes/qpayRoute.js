@@ -3417,9 +3417,16 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
       try {
         const response = await axios.post(activeUrl, {
           key: key,
-          number: dugaar,
-          to: phone.trim(),
-          message: msgText,
+          from: dugaar,
+          to: phone.trim().toString(),
+          text: msgText,
+        }, {
+          headers: {
+            "x-api-key": key,
+            "api-key": key,
+            "Authorization": `Bearer ${key}`,
+            "Content-Type": "application/json"
+          }
         });
 
         // Save to MsgTuukh
