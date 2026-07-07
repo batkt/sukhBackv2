@@ -3400,7 +3400,7 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
 
     // 2. Format Cyrillic/Mongolian message with outstanding balance and pay link
     const tootStr = invoice.toot ? `${invoice.toot} tootod ` : "";
-    
+
     let paymentToken = invoice.paymentToken;
     if (!paymentToken) {
       paymentToken = require("crypto").randomBytes(4).toString("hex");
@@ -3415,7 +3415,7 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
     }
     const paymentLink = `https://amarhome.mn/pay/${paymentToken}`;
 
-    const msgText = `Tulbur sanuulakh. ${tootStr} uldegdel dun: ${new Intl.NumberFormat("mn-MN").format(overallUldegdel)}₮. Tulukh kholboos: ${paymentLink}`;
+    const msgText = `Tulbur sanuulakh. ${tootStr} uldegdel dun: ${new Intl.NumberFormat("mn-MN").format(overallUldegdel)}. Tulukh kholboos: ${paymentLink}`;
 
     // 3. CallPro SMS API Settings
     const key = "aa8e588459fdd9b7ac0b809fc29cfae3";
