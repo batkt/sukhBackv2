@@ -10,8 +10,10 @@ async function connectRedis() {
     await subClient.connect();
     await client.connect();
     console.log("✅ Redis clients connected (pub/sub/cache)");
+    return true;
   } catch (err) {
-    console.error("❌ Redis connection failed:", err);
+    console.error("❌ Redis connection failed:", err.message);
+    return false;
   }
 }
 

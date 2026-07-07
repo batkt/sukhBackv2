@@ -10,7 +10,7 @@ const io = require("socket.io")(server, {
   pingInterval: 10000,
 });
 const { createAdapter } = require("@socket.io/redis-adapter");
-// const { pubClient, subClient, connectRedis } = require("./utils/redisClient");
+const { pubClient, subClient, connectRedis } = require("./utils/redisClient");
 
 const dotenv = require("dotenv");
 const cron = require("node-cron");
@@ -80,16 +80,28 @@ process.env.UV_THREADPOOL_SIZE = 20;
     // Diagnostic: log any MongoDB query/aggregate slower than SLOW_QUERY_MS (default 500ms)
     enableSlowQueryMonitor();
 
-    /*
-    // 1. Connect to Redis (async)
+    // 1. Connect to Redis (async). Required for Socket.IO to work correctly across
+    // multiple PM2 cluster workers - without it, rooms/broadcasts (camera signaling,
+    // tulburUpdated/baiguullagiin events) only reach sockets on the same worker.
+    // Non-fatal if it fails: the server still boots and works correctly in
+    // single-instance/fork mode, just without cross-worker socket support.
     console.log("🛠️ [INIT] Connecting to Redis...");
-    await connectRedis();
+    const redisOk = await connectRedis();
 
-    // 2. Attach Redis adapter to Socket.io
-    console.log("🛠️ [INIT] Attaching Socket.IO Redis adapter...");
-    io.adapter(createAdapter(pubClient, subClient));
-    console.log("✅ Socket.IO Redis adapter connected");
-    */
+    if (redisOk) {
+      try {
+        io.adapter(createAdapter(pubClient, subClient));
+        console.log("✅ [INIT] Socket.IO Redis adapter attached");
+      } catch (adapterErr) {
+        console.error("❌ [INIT] Failed to attach Socket.IO Redis adapter:", adapterErr.message);
+      }
+    } else {
+      console.warn(
+        "⚠️ [INIT] Redis unavailable - Socket.IO running with in-memory adapter only. " +
+        "Do NOT run this app with more than 1 PM2 instance until Redis is confirmed working, " +
+        "or camera signaling / socket broadcasts will silently fail across workers.",
+      );
+    }
 
     // 3. Connect to MongoDB (zevbackv2) - Moved inside to catch errors
     const MONGODB_URI =
