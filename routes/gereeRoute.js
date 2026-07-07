@@ -249,9 +249,15 @@ router.get("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
     }
     body.query = query;
 
-    if (Number(body.khuudasniiKhemjee) > MAX_KHUUDASNII_KHEMJEE) {
-      body.khuudasniiKhemjee = MAX_KHUUDASNII_KHEMJEE;
-    }
+    // NOTE: no page-size cap here (removed MAX_KHUUDASNII_KHEMJEE=2000). The
+    // tulbur/guilgeeTuukh dashboard and useTulburFooterTotals both intentionally
+    // request the full ledger (khuudasniiKhemjee up to 20000) to derive each
+    // contract's latest balance client-side and sum it into the footer total -
+    // capping the page size silently truncated that fetch and produced an
+    // inflated total (missing recent payments past the cutoff). Revisit only
+    // alongside fixing the frontend to use a real server-side aggregation
+    // (controller/tailan.js:3354 tailanTulburDugnelt already does this correctly
+    // via $group/$sum) instead of fetch-everything-then-sum-client-side.
 
     khuudaslalt(GuilgeeAvlaguud(req.body.tukhainBaaziinKholbolt), body).then(res.send.bind(res)).catch(next);
   } catch (e) { next(e); }
