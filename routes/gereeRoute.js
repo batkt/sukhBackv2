@@ -124,11 +124,13 @@ router.use((req, res, next) => {
               const invoiceSendService = require("../services/invoiceSendService");
               const cleanDunStr = req.body?.dun ? String(req.body.dun).replace(/,/g, "") : null;
               const manualAmount = cleanDunStr ? Number(cleanDunStr) : null;
-              console.log(`📡 [GEREE ROUTE] Triggering CallPro SMS notification for invoiceId: ${invoiceId} with manualAmount: ${manualAmount} after manual avlaga creation`);
-              // SMS for manual avlaga creation disabled: multiple avlagas belong to one invoice,
-              // so sending a new SMS+QPay URL for each line item spams the resident and creates
-              // duplicate QPay invoices. The cron-based SMS (one per invoice) handles this.
-              // await invoiceSendService.sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, { manualAmount });
+              
+              if (manualAmount !== null && manualAmount < 0) {
+                console.log(`📡 [GEREE ROUTE] Triggering CallPro SMS notification for manual payment: ${invoiceId} with manualAmount: ${manualAmount}`);
+                await invoiceSendService.sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, { manualAmount });
+              } else {
+                console.log(`📡 [GEREE ROUTE] SMS skipped for positive charge manually created (to avoid spam/duplicates)`);
+              }
             } else {
               console.warn(`⚠️ [GEREE ROUTE] SMS skipped: invoiceId (${invoiceId}) or baiguullagiinId (${baiguullagiinId}) missing`);
             }
