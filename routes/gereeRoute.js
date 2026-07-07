@@ -124,7 +124,7 @@ router.use((req, res, next) => {
               const invoiceSendService = require("../services/invoiceSendService");
               const cleanDunStr = req.body?.dun ? String(req.body.dun).replace(/,/g, "") : null;
               const manualAmount = cleanDunStr ? Number(cleanDunStr) : null;
-              
+
               if (manualAmount !== null && manualAmount < 0) {
                 console.log(`📡 [GEREE ROUTE] Triggering CallPro SMS notification for manual payment: ${invoiceId} with manualAmount: ${manualAmount}`);
                 await invoiceSendService.sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, { manualAmount });
@@ -240,6 +240,13 @@ router.get("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
     const query = body.query || {};
     if (body.baiguullagiinId && query.baiguullagiinId === undefined) query.baiguullagiinId = body.baiguullagiinId;
     if (body.barilgiinId && query.barilgiinId === undefined) query.barilgiinId = body.barilgiinId;
+    if (body.ekhlekhOgnoo && body.duusakhOgnoo && query.ognoo === undefined) {
+      const startDate = new Date(body.ekhlekhOgnoo);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(body.duusakhOgnoo);
+      endDate.setHours(23, 59, 59, 999);
+      query.ognoo = { $gte: startDate, $lte: endDate };
+    }
     body.query = query;
 
     if (Number(body.khuudasniiKhemjee) > MAX_KHUUDASNII_KHEMJEE) {
