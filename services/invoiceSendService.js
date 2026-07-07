@@ -72,7 +72,6 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
     // 2. Format Cyrillic/Mongolian message with the deep link
     const yearMonth = invoice.ognoo ? new Date(invoice.ognoo) : new Date();
     const month = yearMonth.getMonth() + 1;
-    const orgNameStr = invoice.baiguullagiinNer ? `${invoice.baiguullagiinNer} ` : "";
     const tootStr = invoice.toot ? `${invoice.toot} tootod ` : "";
     const absAmount = Math.abs(displayAmount || 0);
 
@@ -94,28 +93,28 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
     // Determine message type based on amount and status
     if (displayAmount < 0) {
       // Tulult (payment record - shows amount that was paid, no link needed)
-      msgText = `${orgNameStr}Tany ${tootStr} tulult burtgegdlee. Tulsun dun: ${absAmount}. App tatakh kholboos ${appLink}`;
+      msgText = `Tany ${tootStr} tulult burtgegdlee. Tulsun dun: ${absAmount}. App tatakh kholboos ${appLink}`;
     } else if (invoice.tuluv === "Төлсөн") {
       // Tulsun (already paid)
-      msgText = `${orgNameStr}Tany ${tootStr} tulbur burtgegdlee. Tulsun dun: ${absAmount}. App tatakh kholboos ${appLink}`;
+      msgText = `Tany ${tootStr} tulbur burtgegdlee. Tulsun dun: ${absAmount}. App tatakh kholboos ${appLink}`;
     } else {
       // Tulukh (needs payment - default)
-      msgText = `${orgNameStr}Tany ${tootStr} nekhemjlekh uuslee. Tulukh dun: ${absAmount}. Tulukh kholboos: ${paymentLink}`;
+      msgText = `Tany ${tootStr} nekhemjlekh uuslee. Tulukh dun: ${absAmount}. Tulukh kholboos: ${paymentLink}`;
     }
 
     if (msgText.length > 160) {
       let prefix;
       if (displayAmount < 0) {
         // Payment record - no payment link needed
-        prefix = `${orgNameStr}Tany ${tootStr} tulult burtgegdlee. Tulsun dun: ${absAmount}. App tatakh kholboos ${appLink}`;
+        prefix = `Tany ${tootStr} tulult burtgegdlee. Tulsun dun: ${absAmount}. App tatakh kholboos ${appLink}`;
         msgText = prefix.substring(0, 160);
       } else {
         const suffix = ` Kholboos: ${paymentLink}`;
         const maxPrefixLength = 160 - suffix.length;
         if (invoice.tuluv === "Төлсөн") {
-          prefix = `${orgNameStr}Tany ${tootStr}  tulbur burtgegdlee. Tulsun dun: ${absAmount}. App tatakh kholboos ${appLink}`;
+          prefix = `Tany ${tootStr}  tulbur burtgegdlee. Tulsun dun: ${absAmount}. App tatakh kholboos ${appLink}`;
         } else {
-          prefix = `${orgNameStr}Tany ${tootStr} nekhemjlekh uuslee. Tulukh dun: ${absAmount}. Tulukh kholboos: ${paymentLink}`;
+          prefix = `Tany ${tootStr} nekhemjlekh uuslee. Tulukh dun: ${absAmount}. Tulukh kholboos: ${paymentLink}`;
         }
         msgText = prefix.substring(0, maxPrefixLength) + suffix;
       }
