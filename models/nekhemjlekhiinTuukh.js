@@ -96,15 +96,14 @@ nekhemjlekhiinTuukhSchema.pre("findOneAndDelete", async function () {
 
 nekhemjlekhiinTuukhSchema.index({ baiguullagiinId: 1, barilgiinId: 1, ognoo: -1 });
 nekhemjlekhiinTuukhSchema.index({ gereeniiId: 1, ognoo: -1 });
-// Explicit name: some tenant DBs already have a legacy `unique+sparse` index
-// auto-named "nekhemjlekhiinDugaar_1" (added outside the schema, directly via
-// mongosh). Reusing that auto-generated name here would make createIndexes()
-// reject the whole batch on those tenants - give this one a distinct name so
-// it coexists instead of colliding.
-nekhemjlekhiinTuukhSchema.index(
-  { nekhemjlekhiinDugaar: 1 },
-  { name: "nekhemjlekhiinDugaar_lookup_1" },
-);
+// No schema.index({ nekhemjlekhiinDugaar: 1 }) here on purpose: every tenant DB
+// already has a working index covering this field by now - either a legacy
+// `unique+sparse` one added outside the schema (via mongosh), or a plain one
+// this schema created on an earlier deploy where the legacy index didn't exist.
+// Declaring it again just collides with whichever one is already there
+// (MongoDB rejects a second index with an identical key pattern under a
+// different name unless the options meaningfully differ) and errors on every
+// worker restart for no benefit.
 nekhemjlekhiinTuukhSchema.index({ baiguullagiinId: 1, tuluv: 1 });
 nekhemjlekhiinTuukhSchema.index({ paymentToken: 1 });
 
