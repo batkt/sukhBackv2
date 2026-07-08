@@ -333,9 +333,11 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
         if (resident) {
           let tootsChanged = false;
           let newToots = (resident.toots || []).map(t => {
+            console.log(`[RESET LOOP DEBUG] t.toot: "${t.toot}", khonogoorBodokhEsekh: ${t.khonogoorBodokhEsekh} (${typeof t.khonogoorBodokhEsekh})`);
             const isMainMatch = String(t.toot) === String(geree.toot) && 
                                 String(t.barilgiinId) === String(geree.barilgiinId) && 
                                 String(t.baiguullagiinId) === String(geree.baiguullagiinId);
+            console.log(`[RESET LOOP DEBUG] isMainMatch: ${isMainMatch}`);
             const isNemeltMatch = Array.isArray(geree.nemeltTootnuud) && geree.nemeltTootnuud.some(nt => 
               String(nt.toot) === String(t.toot) && 
               String(t.barilgiinId) === String(geree.barilgiinId) && 
