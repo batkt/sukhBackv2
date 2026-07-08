@@ -958,15 +958,8 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     });
     headerRow.commit();
 
-    // Row 2: plain empty cells, each with a tooltip comment
+    // Row 2: plain empty cells
     const legendRow = worksheet.getRow(2);
-    headers.forEach((h, idx) => {
-      const colNum = idx + 1;
-      const cell = legendRow.getCell(colNum);
-      cell.note = requiredCols.includes(colNum)
-        ? 'Энэ өнгө нь заавал бөглөх өнгө'
-        : 'Энэ өнгө нь бөглөхгүй байж болно';
-    });
     legendRow.commit();
 
     // Data validation for Orts (Column E) and Davkhar (Column F)
@@ -2276,11 +2269,8 @@ exports.generateTootBurtgelExcelTemplate = asyncHandler(
         });
         headerRow.commit();
 
-        // Row 2: plain empty cells, each with a tooltip comment
+        // Row 2: plain empty cells
         const legendRow2 = worksheet.getRow(2);
-        ['Давхар', 'Тоот'].forEach((h, idx) => {
-          legendRow2.getCell(idx + 1).note = 'Энэ өнгө нь заавал бөглөх өнгө';
-        });
         legendRow2.commit();
       });
 
@@ -2658,11 +2648,8 @@ exports.generateInitialBalanceTemplate = asyncHandler(
       });
       headerRow.commit();
 
-      // Row 2: plain empty cells, each with a tooltip comment
+      // Row 2: plain empty cells
       const legendRow2 = worksheet.getRow(2);
-      headers.forEach((h, idx) => {
-        legendRow2.getCell(idx + 1).note = 'Энэ өнгө нь заавал бөглөх өнгө';
-      });
       legendRow2.commit();
 
       res.setHeader(
