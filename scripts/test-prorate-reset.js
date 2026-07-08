@@ -71,6 +71,12 @@ async function run() {
       }
     });
     console.log("✅ Pro-rating flags set to true / 18 days for contract and resident toot!");
+    console.log("Diagnostic Comparison:");
+    resident.toots.forEach(t => {
+      console.log(`- t.toot: "${t.toot}" vs geree.toot: "${geree.toot}"`);
+      console.log(`  t.barilgiinId: "${t.barilgiinId}" (${typeof t.barilgiinId}) vs geree.barilgiinId: "${geree.barilgiinId}" (${typeof geree.barilgiinId})`);
+      console.log(`  t.baiguullagiinId: "${t.baiguullagiinId}" (${typeof t.baiguullagiinId}) vs geree.baiguullagiinId: "${geree.baiguullagiinId}" (${typeof geree.baiguullagiinId})`);
+    });
 
     console.log("\n--- STEP 2: Creating Test Invoice ---");
     // Use billingDate in the future to avoid collision or override option
