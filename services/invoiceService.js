@@ -332,12 +332,10 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
         const resident = await OrshinSuugchModel.findById(residentId);
         if (resident) {
           let tootsChanged = false;
-          let newToots = (resident.toots || []).map(t => {
-            console.log(`[RESET LOOP DEBUG] t.toot: "${t.toot}", khonogoorBodokhEsekh: ${t.khonogoorBodokhEsekh} (${typeof t.khonogoorBodokhEsekh})`);
+          (resident.toots || []).forEach(t => {
             const isMainMatch = String(t.toot) === String(geree.toot) && 
                                 String(t.barilgiinId) === String(geree.barilgiinId) && 
                                 String(t.baiguullagiinId) === String(geree.baiguullagiinId);
-            console.log(`[RESET LOOP DEBUG] isMainMatch: ${isMainMatch}`);
             const isNemeltMatch = Array.isArray(geree.nemeltTootnuud) && geree.nemeltTootnuud.some(nt => 
               String(nt.toot) === String(t.toot) && 
               String(t.barilgiinId) === String(geree.barilgiinId) && 
@@ -345,24 +343,22 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
             );
             if (t.khonogoorBodokhEsekh && (isMainMatch || isNemeltMatch)) {
               tootsChanged = true;
-              return { ...t, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
+              t.khonogoorBodokhEsekh = false;
+              t.bodokhKhonog = 0;
             }
-            return t;
           });
 
-          await OrshinSuugchModel.findByIdAndUpdate(residentId, {
-            $set: {
-              khonogoorBodokhEsekh: false,
-              bodokhKhonog: 0,
-              ...(tootsChanged ? { toots: newToots } : {})
-            }
-          });
+          if (tootsChanged || resident.khonogoorBodokhEsekh || resident.bodokhKhonog !== 0) {
+            resident.khonogoorBodokhEsekh = false;
+            resident.bodokhKhonog = 0;
+            await resident.save();
+          }
         }
 
         const client = await KhariltsagchModel.findById(residentId);
         if (client) {
           let tootsChanged = false;
-          let newToots = (client.toots || []).map(t => {
+          (client.toots || []).forEach(t => {
             const isMainMatch = String(t.toot) === String(geree.toot) && 
                                 String(t.barilgiinId) === String(geree.barilgiinId) && 
                                 String(t.baiguullagiinId) === String(geree.baiguullagiinId);
@@ -373,18 +369,16 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
             );
             if (t.khonogoorBodokhEsekh && (isMainMatch || isNemeltMatch)) {
               tootsChanged = true;
-              return { ...t, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
+              t.khonogoorBodokhEsekh = false;
+              t.bodokhKhonog = 0;
             }
-            return t;
           });
 
-          await KhariltsagchModel.findByIdAndUpdate(residentId, {
-            $set: {
-              khonogoorBodokhEsekh: false,
-              bodokhKhonog: 0,
-              ...(tootsChanged ? { toots: newToots } : {})
-            }
-          });
+          if (tootsChanged || client.khonogoorBodokhEsekh || client.bodokhKhonog !== 0) {
+            client.khonogoorBodokhEsekh = false;
+            client.bodokhKhonog = 0;
+            await client.save();
+          }
         }
       }
     }
