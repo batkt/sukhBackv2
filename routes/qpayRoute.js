@@ -2192,10 +2192,11 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
 
     let qpayInvoiceIdForApi = null;
     let foundQpayRecord = null;
+    let QuickQpayModel = null;
 
     try {
       const { QuickQpayObject } = require("quickqpaypackvSukh");
-      const QuickQpayModel = QuickQpayObject(kholbolt);
+      QuickQpayModel = QuickQpayObject(kholbolt);
 
       // Search matching QuickQpayObject
       const matchRegex = invoiceIds.join(",");
