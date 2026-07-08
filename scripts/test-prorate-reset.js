@@ -1,11 +1,11 @@
 require("dotenv").config({ path: "./tokhirgoo/tokhirgoo.env" });
 const mongoose = require("mongoose");
 const { db } = require("zevbackv2");
-const Geree = require("./models/geree");
-const OrshinSuugch = require("./models/orshinSuugch");
-const NekhemjlekhiinTuukh = require("./models/nekhemjlekhiinTuukh");
-const GuilgeeAvlaguud = require("./models/guilgeeAvlaguud");
-const invoiceService = require("./services/invoiceService");
+const Geree = require("../models/geree");
+const OrshinSuugch = require("../models/orshinSuugch");
+const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+const invoiceService = require("../services/invoiceService");
 
 async function run() {
   try {
