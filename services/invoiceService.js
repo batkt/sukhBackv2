@@ -333,8 +333,15 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
         if (resident) {
           let tootsChanged = false;
           let newToots = (resident.toots || []).map(t => {
-            const match = t.khonogoorBodokhEsekh && (t.turul === "Гараж" || t.turul === "Агуулах");
-            if (match) {
+            const isMainMatch = String(t.toot) === String(geree.toot) && 
+                                String(t.barilgiinId) === String(geree.barilgiinId) && 
+                                String(t.baiguullagiinId) === String(geree.baiguullagiinId);
+            const isNemeltMatch = Array.isArray(geree.nemeltTootnuud) && geree.nemeltTootnuud.some(nt => 
+              String(nt.toot) === String(t.toot) && 
+              String(t.barilgiinId) === String(geree.barilgiinId) && 
+              String(t.baiguullagiinId) === String(geree.baiguullagiinId)
+            );
+            if (t.khonogoorBodokhEsekh && (isMainMatch || isNemeltMatch)) {
               tootsChanged = true;
               return { ...t, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
             }
@@ -354,8 +361,15 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
         if (client) {
           let tootsChanged = false;
           let newToots = (client.toots || []).map(t => {
-            const match = t.khonogoorBodokhEsekh && (t.turul === "Гараж" || t.turul === "Агуулах");
-            if (match) {
+            const isMainMatch = String(t.toot) === String(geree.toot) && 
+                                String(t.barilgiinId) === String(geree.barilgiinId) && 
+                                String(t.baiguullagiinId) === String(geree.baiguullagiinId);
+            const isNemeltMatch = Array.isArray(geree.nemeltTootnuud) && geree.nemeltTootnuud.some(nt => 
+              String(nt.toot) === String(t.toot) && 
+              String(t.barilgiinId) === String(geree.barilgiinId) && 
+              String(t.baiguullagiinId) === String(geree.baiguullagiinId)
+            );
+            if (t.khonogoorBodokhEsekh && (isMainMatch || isNemeltMatch)) {
               tootsChanged = true;
               return { ...t, khonogoorBodokhEsekh: false, bodokhKhonog: 0 };
             }
