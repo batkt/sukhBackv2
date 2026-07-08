@@ -17,8 +17,13 @@ async function run() {
     await db.kholboltUusgey(app, MONGODB_URI);
     console.log("✅ Connected successfully!");
 
-    const kholbolt = { kholbolt: db.erunkhiiKholbolt.kholbolt };
-    const contractDugaar = "ГД-56325483";
+    const targetKholbolt = db.kholboltuud.find(k => k.baaziinNer === "zevSukh");
+    if (!targetKholbolt) {
+      console.log("Available databases in kholboltuud:", db.kholboltuud.map(k => k.baaziinNer));
+      throw new Error("zevSukh connection not found!");
+    }
+    const kholbolt = { kholbolt: targetKholbolt.kholbolt };
+    const contractDugaar = "ГД-91346582";
 
     // 1. Fetch Contract & Resident
     const GereeModel = Geree(kholbolt);
