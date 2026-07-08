@@ -16,26 +16,6 @@ const {
   qpayShalgay,
 } = require("quickqpaypackvSukh");
 
-/**
- * Runs `finder(kholbolt)` against every tenant connection in parallel and returns the
- * first match in tenant-order (instead of the old sequential for-loop, which did up to
- * 2 round trips per tenant, one tenant at a time, until a match was found).
- */
-async function findAcrossTenants(kholboltuud, finder) {
-  const results = await Promise.all(
-    (kholboltuud || []).map(async (kholbolt, idx) => {
-      try {
-        const doc = await finder(kholbolt);
-        return doc ? { idx, doc, kholbolt } : null;
-      } catch (e) {
-        return null;
-      }
-    }),
-  );
-  const hits = results.filter(Boolean).sort((a, b) => a.idx - b.idx);
-  return hits.length ? { doc: hits[0].doc, kholbolt: hits[0].kholbolt } : { doc: null, kholbolt: null };
-}
-
 router.get("/qpayTulye/:baiguullagiinId/:barilgiinId/:dugaar", qpayTulye);
 
 // BANK ACCOUNT ENDPOINT - MUST BE FIRST TO AVOID ROUTE CONFLICTS
@@ -3036,8 +3016,10 @@ router.get("/pay/check/:invoiceId", async (req, res, next) => {
     const { qpayShalgay, QuickQpayObject } = require("quickqpaypackvSukh");
 
     const nekhemjlekhiinId = req.params.invoiceId;
+    let nekhemjlekh = null;
+    let kholbolt = null;
 
-    const { doc: nekhemjlekh, kholbolt } = await findAcrossTenants(db.kholboltuud, async (k) => {
+    for (const k of db.kholboltuud || []) {
       const InvoiceModel = nekhemjlekhiinTuukh(k);
       // Try paymentToken first (new URLs), fall back to _id (legacy URLs)
       let inv = await InvoiceModel.findOne({ paymentToken: nekhemjlekhiinId });
@@ -3048,16 +3030,19 @@ router.get("/pay/check/:invoiceId", async (req, res, next) => {
           // Invalid ObjectId format, ignore
         }
       }
-      return inv;
-    });
+      if (inv) {
+        // Reject if token is explicitly expired
+        if (inv.paymentTokenExpiresAt && new Date() > new Date(inv.paymentTokenExpiresAt)) {
+          return res.status(410).json({ success: false, message: "Төлбөрийн холбоос хүчингүй болсон." });
+        }
+        nekhemjlekh = inv;
+        kholbolt = k;
+        break;
+      }
+    }
 
     if (!nekhemjlekh) {
       return res.status(404).json({ success: false, message: "Invoice not found" });
-    }
-
-    // Reject if token is explicitly expired
-    if (nekhemjlekh.paymentTokenExpiresAt && new Date() > new Date(nekhemjlekh.paymentTokenExpiresAt)) {
-      return res.status(410).json({ success: false, message: "Төлбөрийн холбоос хүчингүй болсон." });
     }
 
     if (nekhemjlekh.qpayInvoiceId && nekhemjlekh.tuluv !== "Төлсөн") {
@@ -3133,16 +3118,25 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
 
     console.log(`ℹ️ [pay/info] Request details for invoiceId: ${invoiceId}`);
 
-    const { doc: invoice, kholbolt: foundKholbolt } = await findAcrossTenants(db.kholboltuud, async (kholbolt) => {
-      const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
-      let inv = await NekhemjlekhModel.findOne({ paymentToken: invoiceId }).lean();
-      if (!inv) {
-        try {
-          inv = await NekhemjlekhModel.findById(invoiceId).lean();
-        } catch (e) { }
-      }
-      return inv;
-    });
+    let invoice = null;
+    let foundKholbolt = null;
+
+    for (const kholbolt of db.kholboltuud) {
+      try {
+        const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
+        let inv = await NekhemjlekhModel.findOne({ paymentToken: invoiceId }).lean();
+        if (!inv) {
+          try {
+            inv = await NekhemjlekhModel.findById(invoiceId).lean();
+          } catch (e) { }
+        }
+        if (inv) {
+          invoice = inv;
+          foundKholbolt = kholbolt;
+          break;
+        }
+      } catch (err) { }
+    }
 
     if (!invoice) {
       console.warn(`⚠️ [pay/info] Invoice not found: ${invoiceId}`);
@@ -3343,21 +3337,31 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
     const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
     const { invoiceId } = req.params;
 
-    const { doc: invoice, kholbolt: foundKholbolt } = await findAcrossTenants(db.kholboltuud, async (kholbolt) => {
-      const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
-      let inv = null;
-      try {
-        inv = await NekhemjlekhModel.findById(invoiceId).lean();
-      } catch (e) { }
+    let invoice = null;
+    let foundKholbolt = null;
 
-      if (!inv) {
-        // Fallback: try finding by gereeniiId (retrieve the latest invoice of this contract)
-        inv = await NekhemjlekhModel.findOne({ gereeniiId: invoiceId })
-          .sort({ createdAt: -1 })
-          .lean();
-      }
-      return inv;
-    });
+    for (const kholbolt of db.kholboltuud) {
+      try {
+        const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
+        let inv = null;
+        try {
+          inv = await NekhemjlekhModel.findById(invoiceId).lean();
+        } catch (e) { }
+
+        if (!inv) {
+          // Fallback: try finding by gereeniiId (retrieve the latest invoice of this contract)
+          inv = await NekhemjlekhModel.findOne({ gereeniiId: invoiceId })
+            .sort({ createdAt: -1 })
+            .lean();
+        }
+
+        if (inv) {
+          invoice = inv;
+          foundKholbolt = kholbolt;
+          break;
+        }
+      } catch (err) { }
+    }
 
     if (!invoice) {
       return res.status(404).json({ success: false, message: "Нэхэмжлэх олдсонгүй." });

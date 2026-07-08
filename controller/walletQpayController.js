@@ -32,7 +32,7 @@ async function getOrshinSuugchFromToken(req) {
     // Check cache
     const cached = userCache.get(tokenObject.id);
     if (cached && (Date.now() - cached.timestamp < USER_CACHE_TTL)) {
-       return cached.data;
+      return cached.data;
     }
 
     // Use full document instead of lean to allow access to all fields and potential save
@@ -40,7 +40,7 @@ async function getOrshinSuugchFromToken(req) {
       .findById(tokenObject.id);
 
     if (orshinSuugch) {
-       userCache.set(tokenObject.id, { timestamp: Date.now(), data: orshinSuugch });
+      userCache.set(tokenObject.id, { timestamp: Date.now(), data: orshinSuugch });
     }
 
     return orshinSuugch || null;
@@ -91,7 +91,7 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
 
   // Parallelize user fetch and dugaarlalt lookup
   const [orshinSuugch] = await Promise.all([
-     getOrshinSuugchFromToken(req),
+    getOrshinSuugchFromToken(req),
   ]);
 
   if (!baiguullagiinId && orshinSuugch) {
@@ -181,7 +181,7 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
             // If they are different (e.g. user selected 1 bill, but existing covers 5), we MUST cancel the old one.
             const existingBillIds = existingInvoice.billIds || [];
             const isExactMatch = existingBillIds.length === billIds.length &&
-                                 billIds.every(id => existingBillIds.includes(id));
+              billIds.every(id => existingBillIds.includes(id));
 
             if (isExactMatch) {
               walletInvoiceId = existingInvoice.walletInvoiceId;
@@ -256,13 +256,13 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
     const errMsg = (err.message || "").toLowerCase();
     // --- FALLBACK: If payment already created for this invoice, try to fetch it ---
     if (errMsg.includes("нэхэмжлэхээр төлөлт үүссэн байна")) {
-       try {
-          const payments = await walletApiService.getBillingPayments(walletUserId, billingId);
-          const existingPayment = payments.find(p => p.invoiceId === walletInvoiceId && p.paymentStatus !== 'CANCELLED');
-          if (existingPayment) {
-            walletPaymentResult = existingPayment;
-          }
-       } catch (pErr) {}
+      try {
+        const payments = await walletApiService.getBillingPayments(walletUserId, billingId);
+        const existingPayment = payments.find(p => p.invoiceId === walletInvoiceId && p.paymentStatus !== 'CANCELLED');
+        if (existingPayment) {
+          walletPaymentResult = existingPayment;
+        }
+      } catch (pErr) { }
     }
 
     if (!walletPaymentResult) {
@@ -328,8 +328,8 @@ exports.createWalletQpayInvoice = asyncHandler(async (req, res, next) => {
     const resultId = qpayResult?.invoice_id || qpayResult?.invoiceId || qpayResult?.id;
 
     if (typeof qpayResult === "string" || !resultId) {
-       const errorMsg = typeof qpayResult === "string" ? qpayResult : "QPay нэхэмжлэх үүсгэхэд алдаа гарлаа (QR дата олдсонгүй)";
-       throw new Error(errorMsg);
+      const errorMsg = typeof qpayResult === "string" ? qpayResult : "QPay нэхэмжлэх үүсгэхэд алдаа гарлаа (QR дата олдсонгүй)";
+      throw new Error(errorMsg);
     }
   } catch (qpayError) {
     throw new aldaa(`QPay нэхэмжлэх үүсгэхэд алдаа: ${qpayError.message}`);
@@ -508,7 +508,7 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
       if (metadata) {
         walletPaymentId = metadata.walletPaymentId;
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // If we still don't have an ID and no QPay object, then we truly don't know this payment
@@ -529,16 +529,16 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
 
       let userId = walletInvoiceDoc?.userId;
       if (!userId) {
-         const orshinSuugch = await getOrshinSuugchFromToken(req);
-         userId = await getWalletIdentifier(orshinSuugch);
+        const orshinSuugch = await getOrshinSuugchFromToken(req);
+        userId = await getWalletIdentifier(orshinSuugch);
       }
 
       if (userId) {
-         const pData = await walletApiService.getPayment(userId, walletPaymentId);
-         vatInformation = pData?.vatInformation || null;
-         if (pData?.paymentStatus === "PAID") {
-            paymentStatus = "PAID";
-         }
+        const pData = await walletApiService.getPayment(userId, walletPaymentId);
+        vatInformation = pData?.vatInformation || null;
+        if (pData?.paymentStatus === "PAID") {
+          paymentStatus = "PAID";
+        }
       }
     } catch (err) {
       // ignore
@@ -546,8 +546,8 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
 
     // If it's paid in Wallet API but not locally, and it belongs to a local object, we could settle it here
     if (paymentStatus === "PAID" && qpayObject && !qpayObject.tulsunEsekh) {
-       const io = req.app.get("socketio");
-       await settleWalletPayment(qpayObject, tukhainBaaziinKholbolt, baiguullagiinId, null, io);
+      const io = req.app.get("socketio");
+      await settleWalletPayment(qpayObject, tukhainBaaziinKholbolt, baiguullagiinId, null, io);
     }
 
     if (paymentStatus === "PAID") {
@@ -615,8 +615,8 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
 
           let userId = walletInvoiceDoc?.userId;
           if (!userId) {
-             const orshinSuugch = await getOrshinSuugchFromToken(req);
-             userId = orshinSuugch?.utas;
+            const orshinSuugch = await getOrshinSuugchFromToken(req);
+            userId = orshinSuugch?.utas;
           }
 
           if (userId) {
@@ -716,67 +716,67 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
 
     // Parallelize paid-status lookups for performance
     const payments = await Promise.all(dedupedInvoices.map(async (p) => {
-        const tukhainKholbolt = db.kholboltuud.find(k => String(k.baiguullagiinId) === String(p.baiguullagiinId));
-        if (!tukhainKholbolt) return { ...p, paymentId: p.walletInvoiceId };
+      const tukhainKholbolt = db.kholboltuud.find(k => String(k.baiguullagiinId) === String(p.baiguullagiinId));
+      if (!tukhainKholbolt) return { ...p, paymentId: p.walletInvoiceId };
 
-        const qpayObject = await QuickQpayObject(tukhainKholbolt).findOne({
-          $or: [
-            { walletPaymentId: p.walletPaymentId || p.walletInvoiceId },
-            { zakhialgiinDugaar: p.zakhialgiinDugaar }
-          ]
-        }).select('tulsunEsekh updatedAt qpay.amount').lean();
+      const qpayObject = await QuickQpayObject(tukhainKholbolt).findOne({
+        $or: [
+          { walletPaymentId: p.walletPaymentId || p.walletInvoiceId },
+          { zakhialgiinDugaar: p.zakhialgiinDugaar }
+        ]
+      }).select('tulsunEsekh updatedAt qpay.amount').lean();
 
-        let walletStatus = p.walletStatus || "UNKNOWN";
-        const isPaidLocally = qpayObject?.tulsunEsekh || false;
+      let walletStatus = p.walletStatus || "UNKNOWN";
+      const isPaidLocally = qpayObject?.tulsunEsekh || false;
 
-        // Reconcile with Wallet API for recent records (not only locally-paid),
-        // so REFUNDED/PENDING transitions are visible in history.
+      // Reconcile with Wallet API for recent records (not only locally-paid),
+      // so REFUNDED/PENDING transitions are visible in history.
+      try {
+        const baseDate = p.updatedAt || p.createdAt;
+        const isRecent = baseDate
+          ? (new Date() - new Date(baseDate) < 14 * 24 * 60 * 60 * 1000)
+          : true;
+
+        if (isRecent && p.walletPaymentId) {
+          const walletUserId = p.userId || walletIdentifier || userPhone;
+          if (walletUserId) {
+            const walletData = await walletApiService.getPayment(walletUserId, p.walletPaymentId);
+            if (walletData?.paymentStatus) {
+              walletStatus = String(walletData.paymentStatus).toUpperCase();
+            }
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      // Keep "stuck" visibility for locally PAID but API still not PAID.
+      if (isPaidLocally && (walletStatus === "UNKNOWN" || walletStatus === "API_ERROR")) {
         try {
-          const baseDate = p.updatedAt || p.createdAt;
-          const isRecent = baseDate
-            ? (new Date() - new Date(baseDate) < 14 * 24 * 60 * 60 * 1000)
-            : true;
-
-          if (isRecent && p.walletPaymentId) {
+          if (p.walletPaymentId) {
             const walletUserId = p.userId || walletIdentifier || userPhone;
             if (walletUserId) {
               const walletData = await walletApiService.getPayment(walletUserId, p.walletPaymentId);
-              if (walletData?.paymentStatus) {
-                walletStatus = String(walletData.paymentStatus).toUpperCase();
-              }
+              walletStatus = walletData?.paymentStatus
+                ? String(walletData.paymentStatus).toUpperCase()
+                : "PENDING";
             }
           }
         } catch (e) {
-          // ignore
+          walletStatus = "API_ERROR";
         }
+      }
 
-        // Keep "stuck" visibility for locally PAID but API still not PAID.
-        if (isPaidLocally && (walletStatus === "UNKNOWN" || walletStatus === "API_ERROR")) {
-          try {
-            if (p.walletPaymentId) {
-              const walletUserId = p.userId || walletIdentifier || userPhone;
-              if (walletUserId) {
-                const walletData = await walletApiService.getPayment(walletUserId, p.walletPaymentId);
-                walletStatus = walletData?.paymentStatus
-                  ? String(walletData.paymentStatus).toUpperCase()
-                  : "PENDING";
-              }
-            }
-          } catch (e) {
-            walletStatus = "API_ERROR";
-          }
-        }
-
-        return {
-          ...p,
-          paymentId: p.walletPaymentId || p.walletInvoiceId,
-          invoiceNo: p.zakhialgiinDugaar || p.walletInvoiceId,
-          tulsunEsekh: isPaidLocally,
-          walletStatus: walletStatus, // This helps identify "PAID locally but PENDING in Wallet"
-          isStuck: isPaidLocally && (walletStatus === "PENDING" || walletStatus === "NEW"),
-          updatedAt: qpayObject?.updatedAt || p.updatedAt,
-          amount: qpayObject?.qpay?.amount || p.totalAmount
-        };
+      return {
+        ...p,
+        paymentId: p.walletPaymentId || p.walletInvoiceId,
+        invoiceNo: p.zakhialgiinDugaar || p.walletInvoiceId,
+        tulsunEsekh: isPaidLocally,
+        walletStatus: walletStatus, // This helps identify "PAID locally but PENDING in Wallet"
+        isStuck: isPaidLocally && (walletStatus === "PENDING" || walletStatus === "NEW"),
+        updatedAt: qpayObject?.updatedAt || p.updatedAt,
+        amount: qpayObject?.qpay?.amount || p.totalAmount
+      };
     }));
 
     // Fallback source-of-truth merge:
@@ -809,56 +809,44 @@ exports.getWalletQpayList = asyncHandler(async (req, res, next) => {
     );
 
     if (fallbackUserIds.length > 0) {
-      // Fire all billingId x fallbackUserId lookups in parallel instead of one-at-a-time,
-      // then merge results sequentially (in the same order as before) to keep dedup deterministic.
-      const combos = [];
       for (const billingId of billingIds) {
         for (const fallbackUserId of fallbackUserIds) {
-          combos.push({ billingId, fallbackUserId });
-        }
-      }
-
-      const comboResults = await Promise.all(
-        combos.map(async ({ billingId, fallbackUserId }) => {
           try {
             const billingPayments = await walletApiService.getBillingPayments(
               fallbackUserId,
               billingId
             );
-            return { billingId, fallbackUserId, billingPayments: billingPayments || [] };
+
+            for (const bp of billingPayments || []) {
+              const status = String(bp.paymentStatus || bp.walletStatus || "UNKNOWN").toUpperCase();
+              const key = bp.paymentId || bp.walletPaymentId || bp.id;
+              if (!key || existingKeys.has(key)) continue;
+
+              // Only merge actionable states into walletQpay/list
+              if (!["PAID", "PENDING", "REFUNDED"].includes(status)) continue;
+
+              mergedPayments.push({
+                walletPaymentId: key,
+                paymentId: key,
+                walletInvoiceId: bp.invoiceId || "",
+                zakhialgiinDugaar: bp.invoiceNo || bp.invoiceId || "",
+                invoiceNo: bp.invoiceNo || bp.invoiceId || "",
+                billingId: billingId,
+                baiguullagiinId: orgByBillingId.get(billingId) || "",
+                userId: fallbackUserId,
+                tulsunEsekh: status === "PAID",
+                walletStatus: status,
+                isStuck: false,
+                amount: bp.totalAmount || bp.amount || bp.paymentAmount || 0,
+                createdAt: bp.createdAt || bp.trxDate || new Date(),
+                updatedAt: bp.updatedAt || bp.trxDate || new Date(),
+                source: "WALLET_API_FALLBACK",
+              });
+              existingKeys.add(key);
+            }
           } catch (fallbackErr) {
-            return { billingId, fallbackUserId, billingPayments: [] };
+            // ignore
           }
-        })
-      );
-
-      for (const { billingId, fallbackUserId, billingPayments } of comboResults) {
-        for (const bp of billingPayments) {
-          const status = String(bp.paymentStatus || bp.walletStatus || "UNKNOWN").toUpperCase();
-          const key = bp.paymentId || bp.walletPaymentId || bp.id;
-          if (!key || existingKeys.has(key)) continue;
-
-          // Only merge actionable states into walletQpay/list
-          if (!["PAID", "PENDING", "REFUNDED"].includes(status)) continue;
-
-          mergedPayments.push({
-            walletPaymentId: key,
-            paymentId: key,
-            walletInvoiceId: bp.invoiceId || "",
-            zakhialgiinDugaar: bp.invoiceNo || bp.invoiceId || "",
-            invoiceNo: bp.invoiceNo || bp.invoiceId || "",
-            billingId: billingId,
-            baiguullagiinId: orgByBillingId.get(billingId) || "",
-            userId: fallbackUserId,
-            tulsunEsekh: status === "PAID",
-            walletStatus: status,
-            isStuck: false,
-            amount: bp.totalAmount || bp.amount || bp.paymentAmount || 0,
-            createdAt: bp.createdAt || bp.trxDate || new Date(),
-            updatedAt: bp.updatedAt || bp.trxDate || new Date(),
-            source: "WALLET_API_FALLBACK",
-          });
-          existingKeys.add(key);
         }
       }
     }
@@ -974,12 +962,12 @@ exports.debugQpayCheck = asyncHandler(async (req, res, next) => {
     // Pull out the most useful identifiers for quick reading
     const payments = result?.payments || [];
     const summary = payments.map((p) => ({
-      payment_id:     p.payment_id,
+      payment_id: p.payment_id,
       payment_status: p.payment_status || p.status,
-      amount:         p.payment_amount,
-      transactions:   (p.transactions || []).map((t) => ({
-        id:              t.id,
-        amount:          t.amount,
+      amount: p.payment_amount,
+      transactions: (p.transactions || []).map((t) => ({
+        id: t.id,
+        amount: t.amount,
         settlement_date: t.settlement_date,
       })),
     }));
@@ -1258,9 +1246,9 @@ exports.resyncWalletPayment = asyncHandler(async (req, res, next) => {
     trxNo,
     trxDescription: qpayObject.qpay?.description || `WalletQPay-${walletPaymentId}`,
     amount: trxAmount,
-    receiverBankCode:    bankAccount.account_bank_code || "",
-    receiverAccountNo:   bankAccount.account_number    || "",
-    receiverAccountName: bankAccount.account_name      || "",
+    receiverBankCode: bankAccount.account_bank_code || "",
+    receiverAccountNo: bankAccount.account_number || "",
+    receiverAccountName: bankAccount.account_name || "",
   };
 
   let walletSyncResult = null;
@@ -1287,9 +1275,9 @@ exports.resyncWalletPayment = asyncHandler(async (req, res, next) => {
     trxNo,
     trxDate,
     trxAmount,
-    receiverBankCode:    bankAccount.account_bank_code || "",
-    receiverAccountNo:   bankAccount.account_number    || "",
-    receiverAccountName: bankAccount.account_name      || "",
+    receiverBankCode: bankAccount.account_bank_code || "",
+    receiverAccountNo: bankAccount.account_number || "",
+    receiverAccountName: bankAccount.account_name || "",
     walletSyncResult,
     walletSyncError,
     ebarimtTriggered,
@@ -1703,7 +1691,7 @@ async function handleWalletEbarimt(
         .findOne({ walletPaymentId })
         .lean();
       orshinSuugchId = walletDoc?.orshinSuugchId || null;
-    } catch (e) {}
+    } catch (e) { }
 
     // Path 1: Search by orshinSuugchiinId (Priority)
     let easyUser = null;
@@ -1780,12 +1768,12 @@ exports.walletWebhook = asyncHandler(async (req, res, next) => {
           try {
             const paymentInfo = await walletApiService.getPayment(userId, objectId);
             if (paymentInfo && paymentInfo.billingId) {
-               // Try to find ANY invoice for this billingId to get the baiguullagiinId
-               invoiceMetadata = await WalletInvoice(db.erunkhiiKholbolt).findOne({
-                 billingId: paymentInfo.billingId
-               }).lean();
+              // Try to find ANY invoice for this billingId to get the baiguullagiinId
+              invoiceMetadata = await WalletInvoice(db.erunkhiiKholbolt).findOne({
+                billingId: paymentInfo.billingId
+              }).lean();
             }
-          } catch (e) {}
+          } catch (e) { }
         }
       }
 
