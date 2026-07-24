@@ -1444,6 +1444,12 @@ async function settleWalletPayment(
         bankGuilgee.indexTalbar = `${bankGuilgee.barilgiinId}${bankGuilgee.bank}${bankGuilgee.dansniiDugaar}${bankGuilgee.record}${bankGuilgee.amount}`;
 
         await bankGuilgee.save();
+
+        if (io) {
+          io.emit("baiguullagiin" + baiguullagiinId, {
+            turul: "bankniiGuilgeeShine",
+          });
+        }
       } catch (bankErr) {
         // ignore
       }
