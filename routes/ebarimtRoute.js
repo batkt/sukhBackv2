@@ -554,9 +554,13 @@ router.post("/ebarimtIlgeeye", tokenShalgakh, async (req, res, next) => {
     var baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(
       req.body.baiguullagiinId
     );
-    var tuxainSalbar = baiguullaga?.barilguud?.find(
+    var matchedBarilga = baiguullaga?.barilguud?.find(
       (e) => e._id.toString() == req.body?.barilgiinId
-    )?.tokhirgoo;
+    );
+    if (!matchedBarilga && baiguullaga?.barilguud?.length === 1) {
+      matchedBarilga = baiguullaga.barilguud[0];
+    }
+    var tuxainSalbar = matchedBarilga?.tokhirgoo;
 
     const orgId = req.body.baiguullagiinId;
     const shouldUseTest = orgId && String(orgId) === "69f3f56a2899d5fdc24251d1";
