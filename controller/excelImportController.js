@@ -266,9 +266,19 @@ exports.downloadEbarimtExcel = asyncHandler(async (req, res, next) => {
     if (baiguullagiinId) query.baiguullagiinId = baiguullagiinId;
     if (barilgiinId) query.barilgiinId = barilgiinId;
 
-    // Apply additional filters if provided
+    // Apply additional filters if provided (translate to real schema fields —
+    // ekhlekhOgnoo/duusakhOgnoo/uilchilgee aren't literal field names on EbarimtShine)
     if (filters) {
-      Object.assign(query, filters);
+      if (filters.ekhlekhOgnoo || filters.duusakhOgnoo) {
+        query.createdAt = {};
+        if (filters.ekhlekhOgnoo)
+          query.createdAt.$gte = new Date(`${filters.ekhlekhOgnoo}T00:00:00`);
+        if (filters.duusakhOgnoo)
+          query.createdAt.$lte = new Date(
+            `${filters.duusakhOgnoo}T23:59:59.999`,
+          );
+      }
+      if (filters.uilchilgee) query["receipts.items.name"] = filters.uilchilgee;
     }
 
     // Fetch ebarimt data
@@ -284,10 +294,44 @@ exports.downloadEbarimtExcel = asyncHandler(async (req, res, next) => {
       });
     }
 
-    // Set data for download
-    req.body.data = ebarimtList;
+    // Format data with the columns shown on the E-Barimt page
+    const formattedData = ebarimtList.map((item, index) => {
+      const rec = Array.isArray(item.receipts) ? item.receipts[0] : undefined;
+      const item0 = Array.isArray(rec?.items) ? rec.items[0] : undefined;
+      const pay = Array.isArray(item.payments) ? item.payments[0] : undefined;
+      const dateVal = item.dateOgnoo || item.date || item.createdAt || null;
+
+      return {
+        dugaar: index + 1, // № (row number)
+        ognoo: dateVal ? new Date(dateVal).toISOString().split("T")[0] : "", // Огноо (date)
+        ddtd: item.ddtd || rec?.ddtd || item.receiptId || item.id || "", // ДДТД
+        turul: item.type || "", // Төрөл (B2C_RECEIPT / B2B_RECEIPT)
+        uilchilgee: item0?.name || "", // Үйлчилгээ
+        gereeniiDugaar: item.gereeniiDugaar || "", // Гэрээний дугаар
+        niitDun: item.totalAmount ?? rec?.totalAmount ?? 0, // Нийт дүн
+        nuat: item.totalVAT ?? rec?.totalVAT ?? 0, // НӨАТ
+        nkhat: item.totalCityTax ?? rec?.totalCityTax ?? 0, // НХАТ
+        tolbiinTuluv: pay?.status || "", // Төлбөрийн төлөв
+      };
+    });
+
+    // Set data for download with specific headers
+    req.body.data = formattedData;
+    req.body.headers = [
+      { key: "dugaar", label: "№" },
+      { key: "ognoo", label: "Огноо" },
+      { key: "ddtd", label: "ДДТД" },
+      { key: "turul", label: "Төрөл" },
+      { key: "uilchilgee", label: "Үйлчилгээ" },
+      { key: "gereeniiDugaar", label: "Гэрээний дугаар" },
+      { key: "niitDun", label: "Нийт дүн" },
+      { key: "nuat", label: "НӨАТ" },
+      { key: "nkhat", label: "НХАТ" },
+      { key: "tolbiinTuluv", label: "Төлбөрийн төлөв" },
+    ];
     req.body.fileName = req.body.fileName || `ebarimt_${Date.now()}`;
     req.body.sheetName = req.body.sheetName || "E-Barimt";
+    req.body.colWidths = [8, 15, 20, 15, 25, 20, 15, 15, 15, 18]; // Column widths
 
     // Call downloadExcelList function directly
     return exports.downloadExcelList(req, res, next);

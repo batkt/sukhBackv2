@@ -549,6 +549,40 @@ router.get("/ebarimtJagsaaltAvya", tokenShalgakh, async (req, res, next) => {
   }
 });
 
+router.post("/ebarimtIlgeeye", tokenShalgakh, async (req, res, next) => {
+  try {
+    var baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(
+      req.body.baiguullagiinId
+    );
+    var tuxainSalbar = baiguullaga?.barilguud?.find(
+      (e) => e._id.toString() == req.body?.barilgiinId
+    )?.tokhirgoo;
+
+    const orgId = req.body.baiguullagiinId;
+    const shouldUseTest = orgId && String(orgId) === "69f3f56a2899d5fdc24251d1";
+    var url;
+    if (!!tuxainSalbar?.eBarimtShine) {
+      const baseUrl = shouldUseTest
+        ? process.env.EBARIMTSHINE_TEST
+        : process.env.EBARIMTSHINE_IP;
+      url = baseUrl + "rest/send";
+      request.get(url, { json: true }, (err, res1, body) => {
+        if (err) return next(err);
+        res.send(body);
+      });
+    } else {
+      url = process.env.EBARIMT_IP + "/sendData";
+      if (orgId) url = url + "?lib=" + orgId.toString();
+      request.get(url, { json: true }, (err, res1, body) => {
+        if (err) return next(err);
+        res.send(body);
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post("/ebarimtToololtAvya", tokenShalgakh, async (req, res, next) => {
   try {
     var ebarimtShine = true;
