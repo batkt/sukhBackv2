@@ -391,6 +391,16 @@ const dansniiUldegdelAvya = asyncHandler(async (req, res, next) => {
       dugaar: req.body.dansniiDugaar,
     }).lean();
 
+    console.log("[ULDEGDEL] dans lookup", {
+      dansniiDugaar: req.body.dansniiDugaar,
+      found: !!dans,
+      bank: dans?.bank || null,
+      corporateBarilgaTusBur: dans?.corporateBarilgaTusBur || false,
+      hasCorporateCreds: !!(dans?.corporateNevtrekhNer && dans?.corporateNuutsUg),
+      hasAnyBIC: !!dans?.AnyBIC,
+      hasRoleID: !!dans?.RoleID,
+    });
+
     var uldegdel = 0;
 
     if (dans && dans.bank === "khanbank") {
@@ -441,6 +451,11 @@ const dansniiUldegdelAvya = asyncHandler(async (req, res, next) => {
         }).catch((err) => { throw err; });
         var khariu = JSON.parse(response.body);
         res.send({ uldegdel: khariu.acntno.BALANCE });
+      } else {
+        console.error("[ULDEGDEL] TDB dans missing required corporate credentials/format", {
+          dansniiDugaar: dans.dugaar,
+        });
+        res.send({ uldegdel: 0 });
       }
 
     } else if (dans && dans.bank === "golomt") {

@@ -549,6 +549,26 @@ router.get("/ebarimtJagsaaltAvya", tokenShalgakh, async (req, res, next) => {
   }
 });
 
+router.post("/ebarimtIlgeeye", tokenShalgakh, async (req, res, next) => {
+  try {
+    const orgId = req.body.baiguullagiinId;
+    const shouldUseTest = orgId && String(orgId) === "69f3f56a2899d5fdc24251d1";
+    const baseUrl = shouldUseTest
+      ? process.env.EBARIMTSHINE_TEST
+      : process.env.EBARIMTSHINE_IP;
+    if (!baseUrl) {
+      return next(new Error("EBARIMTSHINE_IP тохируулаагүй байна!"));
+    }
+    const url = baseUrl + "rest/send";
+    request.get(url, { json: true }, (err, res1, body) => {
+      if (err) return next(err);
+      res.send(body);
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post("/ebarimtToololtAvya", tokenShalgakh, async (req, res, next) => {
   try {
     var ebarimtShine = true;
