@@ -36,6 +36,39 @@ function nuatBodyo(bodokhDun) {
 }
 crud(router, "ebarimtShine", EbarimtShine, UstsanBarimt);
 
+// Resolve an organization's TIN (taxpayer number) from its 7-digit registration
+// number via api.ebarimt.mn, then look up the org's name/details by that TIN.
+router.get("/tatvaraasBaiguullagaAvya/:regno", tokenShalgakh, async (req, res, next) => {
+  try {
+    const regno = (req.params.regno || "").toString().trim();
+    if (!/^[0-9]{7}$/.test(regno)) {
+      return res.status(400).json({ error: "Байгууллагын регистр буруу байна (7 оронтой тоо байх ёстой)" });
+    }
+
+    const tinUrl = encodeURI("https://api.ebarimt.mn/api/info/check/getTinInfo?regNo=" + regno);
+    const tin = await new Promise((resolve, reject) => {
+      request(tinUrl, { json: true }, (err, res1, body) => {
+        if (err) reject(err);
+        else if (body?.data) resolve(body.data);
+        else reject(new Error("Татвар төлөгчийн дугаар олдсонгүй"));
+      });
+    });
+
+    const infoUrl = encodeURI("https://api.ebarimt.mn/api/info/check/getInfo?tin=" + tin);
+    const info = await new Promise((resolve, reject) => {
+      request(infoUrl, { json: true }, (err2, res2, body2) => {
+        if (err2) reject(err2);
+        else if (body2?.data) resolve(body2.data);
+        else reject(new Error("Байгууллагын мэдээлэл олдсонгүй"));
+      });
+    });
+
+    res.send({ ...info, tin });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Татварын мэдээлэл авахад алдаа гарлаа" });
+  }
+});
+
 async function nekhemjlekheesEbarimtShineUusgye(
   nekhemjlekh,
   customerNo,
