@@ -750,7 +750,6 @@ router.post("/zogsoolUstgay", tokenShalgakh, async (req, res, next) => {
 });
 
 router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
-  console.log("iiishee orlooo zogsoolSdkService", req.body);
   try {
     if (req.body.mashiniiDugaar)
       req.body.mashiniiDugaar = req.body.mashiniiDugaar.replace(/\0/g, "");
@@ -1065,7 +1064,6 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
       }
     }
 
-    console.log("sdkData", khariu);
     if (khariu && khariu.aldaa) {
       console.warn(`⚠️ [sdkData] Request blocked or errored: ${khariu.aldaa}`);
     }
