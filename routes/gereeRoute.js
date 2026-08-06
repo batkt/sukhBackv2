@@ -125,9 +125,16 @@ router.use((req, res, next) => {
               const cleanDunStr = req.body?.dun ? String(req.body.dun).replace(/,/g, "") : null;
               const manualAmount = cleanDunStr ? Number(cleanDunStr) : null;
 
-              if (manualAmount !== null && manualAmount < 0) {
+              const isDiscount =
+                req.body?.turul === "khungulult" ||
+                req.body?.turul === "Хөнгөлөлт" ||
+                req.body?.zardliinTurul === "Хөнгөлөлт";
+
+              if (manualAmount !== null && manualAmount < 0 && !isDiscount) {
                 console.log(`📡 [GEREE ROUTE] Triggering CallPro SMS notification for manual payment: ${invoiceId} with manualAmount: ${manualAmount}`);
                 await invoiceSendService.sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, { manualAmount });
+              } else if (isDiscount) {
+                console.log(`📡 [GEREE ROUTE] SMS skipped for discount (Хөнгөлөлт) transaction`);
               } else {
                 console.log(`📡 [GEREE ROUTE] SMS skipped for positive charge manually created (to avoid spam/duplicates)`);
               }
