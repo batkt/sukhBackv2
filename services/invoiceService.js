@@ -433,20 +433,46 @@ async function ensureActiveInvoice(kholbolt, gereeId, options = {}) {
   const NekhemjlekhiinTuukhModel = NekhemjlekhiinTuukh(kholbolt);
   const GereeModel = Geree(kholbolt);
 
-  const unpaid = await NekhemjlekhiinTuukhModel.findOne({
-    gereeniiId: gereeId,
-    tuluv: "Төлөөгүй",
-  }).sort({ ognoo: -1, createdAt: -1 });
-
-  if (unpaid) return unpaid;
-
   const geree = await GereeModel.findById(gereeId).lean();
   if (!geree) return null;
 
+  const targetDate = options.billingDate ? new Date(options.billingDate) : new Date();
+
+  // Determine billing cycle bounds for targetDate
+  let cronDay = 1;
+  try {
+    const cronSchedule = await NekhemjlekhCron(kholbolt).findOne({
+      baiguullagiinId: geree.baiguullagiinId,
+      $or: [{ barilgiinId: geree.barilgiinId }, { barilgiinId: null }]
+    }).sort({ barilgiinId: -1 }).lean();
+    if (cronSchedule && cronSchedule.nekhemjlekhUusgekhOgnoo) {
+      cronDay = cronSchedule.nekhemjlekhUusgekhOgnoo;
+    }
+  } catch (e) {}
+
+  const { startOfCycle, endOfCycle } = calculateBillingCycleBounds(cronDay, targetDate);
+
+  // 1. First look for an invoice in the target date's billing cycle
+  let invoice = await NekhemjlekhiinTuukhModel.findOne({
+    gereeniiId: gereeId.toString(),
+    ognoo: { $gte: startOfCycle, $lte: endOfCycle }
+  }).sort({ ognoo: -1, createdAt: -1 });
+
+  // 2. Fallback to latest unpaid invoice if no specific billing date was requested
+  if (!invoice && !options.billingDate) {
+    invoice = await NekhemjlekhiinTuukhModel.findOne({
+      gereeniiId: gereeId.toString(),
+      tuluv: "Төлөөгүй",
+    }).sort({ ognoo: -1, createdAt: -1 });
+  }
+
+  if (invoice) return invoice;
+
+  // 3. Create invoice with targetDate as billingDate
   const result = await createInvoiceForContract(kholbolt, gereeId, {
     ...options,
     forceEmpty: true,
-    billingDate: new Date()
+    billingDate: targetDate
   });
 
   if (result.success) {

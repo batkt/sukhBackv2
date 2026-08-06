@@ -182,7 +182,8 @@ router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
         cronDay = cronSchedule.nekhemjlekhUusgekhOgnoo;
       }
 
-      const { startOfCycle, endOfCycle } = calculateBillingCycleBounds(cronDay, new Date());
+      const targetDate = req.body.ognoo ? new Date(req.body.ognoo) : new Date();
+      const { startOfCycle, endOfCycle } = calculateBillingCycleBounds(cronDay, targetDate);
       const typeRegex = isGarage ? /зогсоол/i : /агуулах/i;
       const toot = req.body.toot ? String(req.body.toot) : undefined;
 
@@ -213,7 +214,10 @@ router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
       const activeInv = await invoiceService.ensureActiveInvoice(
         tukhainBaaziinKholbolt,
         gereeniiId,
-        { skipCharges: true }
+        {
+          skipCharges: true,
+          billingDate: req.body.ognoo ? new Date(req.body.ognoo) : new Date()
+        }
       );
       if (activeInv) {
         req.body.nekhemjlekhId = activeInv._id.toString();

@@ -25,7 +25,11 @@ async function recordCharge(kholbolt, data, options = {}) {
   // Automatically find or CREATE a 'home' invoice if not provided
   if (!data.nekhemjlekhId && data.gereeniiId) {
     const invoiceService = require("./invoiceService");
-    const activeInv = await invoiceService.ensureActiveInvoice(kholbolt, data.gereeniiId);
+    const activeInv = await invoiceService.ensureActiveInvoice(
+      kholbolt,
+      data.gereeniiId,
+      { billingDate: data.ognoo ? new Date(data.ognoo) : new Date() }
+    );
     if (activeInv) {
       data.nekhemjlekhId = activeInv._id.toString();
     }

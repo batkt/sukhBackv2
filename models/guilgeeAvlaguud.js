@@ -110,8 +110,11 @@ guilgeeAvlaguudSchema.pre("save", async function (next) {
         (k) => String(k.baiguullagiinId) === String(this.baiguullagiinId)
       );
       if (kholbolt) {
-        const invoiceService = require("../services/invoiceService");
-        const activeInv = await invoiceService.ensureActiveInvoice(kholbolt, this.gereeniiId);
+        const activeInv = await invoiceService.ensureActiveInvoice(
+          kholbolt,
+          this.gereeniiId,
+          { billingDate: this.ognoo ? new Date(this.ognoo) : new Date() }
+        );
         if (activeInv) {
           this.nekhemjlekhId = activeInv._id.toString();
           console.log(`✅ [LEDGER PRE-SAVE] Associated manual charge with invoice: ${this.nekhemjlekhId}`);
