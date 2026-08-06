@@ -78,6 +78,10 @@ const guilgeeAvlaguudSchema = new Schema(
 );
 
 guilgeeAvlaguudSchema.pre("save", async function (next) {
+  if (this.turul === "khungulult" || this.turul === "discount") {
+    this.turul = "Хөнгөлөлт";
+  }
+
   // If dun is provided, ensure it syncs to undsenDun/tulukhDun for receivables (positive)
   // or tulsunDun for payments (negative)
   if (typeof this.dun === "number" && this.dun !== 0) {
