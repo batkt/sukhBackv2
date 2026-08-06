@@ -986,6 +986,18 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
             ezenNer: residentNer,
             ezenToot: residentToot,
           }).save();
+
+          // Emit real-time notification to resident socket
+          const io = req.app.get("socketio");
+          if (io && residentId) {
+            io.emit("orshinSuugch" + residentId, {
+              type: "zochinUrikh.updated",
+              title: "Зочин ирлээ",
+              message: `${req.body.mashiniiDugaar} дугаартай машин зогсоолд нэвтэрлээ.`,
+              mashiniiDugaar: req.body.mashiniiDugaar,
+              tuluv: 1,
+            });
+          }
         }
       } catch (e) {
         console.error("[Gate] Зочин log error:", e.message);

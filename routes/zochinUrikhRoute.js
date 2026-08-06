@@ -1147,7 +1147,13 @@ router.post("/ezenUrisanTuukh", tokenShalgakh, async (req, res, next) => {
     var jagsaalt = [];
     if (ezenJagsaalt?.length > 0) {
       const invitationIds = ezenJagsaalt.map((e) => String(e._id));
-      const plateNumbers = ezenJagsaalt.map((e) => e.urisanMashiniiDugaar);
+      const plateNumbers = ezenJagsaalt
+        .map((e) => (e.urisanMashiniiDugaar || "").toString().trim())
+        .filter(Boolean);
+
+      const plateRegexes = plateNumbers.map(
+        (p) => new RegExp("^" + p.replace(/\s+/g, "\\s*") + "$", "i")
+      );
 
       jagsaalt = await Uilchluulegch(
         req.body.tukhainBaaziinKholbolt,
@@ -1156,20 +1162,58 @@ router.post("/ezenUrisanTuukh", tokenShalgakh, async (req, res, next) => {
         baiguullagiinId: req.body.baiguullagiinId,
         $or: [
           { "urisanMashin._id": { $in: invitationIds } },
-          {
-            $and: [
-              { mashiniiDugaar: { $in: plateNumbers } },
-              {
-                $or: [
-                  { "urisanMashin.ezenId": searchId },
-                  { "urisanMashin.ezemshigchiinId": searchId },
-                ],
-              },
-            ],
-          },
+          { mashiniiDugaar: { $in: plateRegexes } },
         ],
-      });
+      }).sort({ createdAt: -1 });
+
+      const activePlates = new Set();
+      const activeInvitationIds = new Set();
+      const processedJagsaalt = [];
+
+      for (const item of jagsaalt) {
+        const itemObj = item.toObject ? item.toObject() : item;
+        const tuukh = itemObj.tuukh || [];
+        const lastTuukh = tuukh[tuukh.length - 1] || {};
+        const tsagiinTuukh = lastTuukh.tsagiinTuukh || [];
+        const lastTsag = tsagiinTuukh[tsagiinTuukh.length - 1] || {};
+
+        // Active if inside (no exit time)
+        const isInside = !lastTsag.garsanTsag && !itemObj.garakhTsag;
+
+        if (!itemObj.urisanMashin) {
+          itemObj.urisanMashin = {};
+        }
+
+        if (isInside) {
+          itemObj.urisanMashin.tuluv = 1; // Active
+          if (itemObj.mashiniiDugaar) {
+            activePlates.add(itemObj.mashiniiDugaar.trim().toUpperCase());
+          }
+          if (itemObj.urisanMashin._id) {
+            activeInvitationIds.add(String(itemObj.urisanMashin._id));
+          }
+        } else {
+          itemObj.urisanMashin.tuluv = 2; // Exited
+        }
+
+        processedJagsaalt.push(itemObj);
+      }
+
+      jagsaalt = processedJagsaalt;
+
+      // Sync tuluv in EzenUrisanMashin if car has entered/active
+      for (const ez of ezenJagsaalt) {
+        const ezPlate = (ez.urisanMashiniiDugaar || "").trim().toUpperCase();
+        if (ez.tuluv === 0 && (activeInvitationIds.has(String(ez._id)) || activePlates.has(ezPlate))) {
+          ez.tuluv = 1;
+          await EzenUrisanMashin(req.body.tukhainBaaziinKholbolt).updateOne(
+            { _id: ez._id },
+            { $set: { tuluv: 1 } }
+          );
+        }
+      }
     }
+
     var ezenList = ezenJagsaalt?.filter((a) => a.tuluv == 0);
     res.send({ ezenList, jagsaalt });
   } catch (error) {
