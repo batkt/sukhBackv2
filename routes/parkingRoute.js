@@ -5304,10 +5304,13 @@ router.post("/ebarimtShivye", tokenShalgakh, async (req, res, next) => {
           if (d.id) saved.receiptId = d.id;
           await saved.save().catch((err) => console.error("[EBARIMT] save error:", err.message));
 
+          const ebId = d.id || d.receiptId || d.lottery || "";
           await Uilchluulegch(tukhainKholbolt).findByIdAndUpdate(tukhainObject._id, {
             ebarimtAvsanEsekh: true,
             ebarimtAvsanDun: d.totalAmount || tukhainObject.niitDun,
             ...(customerNo ? { ebarimtRegister: customerNo } : {}),
+            ...(ebId ? { ebarimtId: ebId, ebarimtDugaar: ebId, lottery: d.lottery } : {}),
+            ...(ebId ? { "tuukh.0.ebarimtId": ebId, "tuukh.0.ebarimtDugaar": ebId, "tuukh.0.lottery": d.lottery } : {}),
           }).catch(() => {});
 
           if (customerNo && d.qrData) {
