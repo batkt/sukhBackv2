@@ -8,8 +8,9 @@ function escapeRegex(str) {
 exports.tailanZogsool = asyncHandler(async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
-    const { Uilchluulegch } = require("sukhParking-v1");
+    const { Uilchluulegch, EzenUrisanMashin } = require("sukhParking-v1");
     const OrshinSuugchMashin = require("../models/orshinSuugchMashin");
+    const OrshinSuugch = require("../models/orshinSuugch");
 
     const source = req.method === "GET" ? req.query : req.body;
     const {
@@ -43,103 +44,148 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
       ? new Date(duusakhOgnoo)
       : new Date(new Date().setHours(23, 59, 59, 999));
 
-    // 1. Get guest car registrations (OrshinSuugchMashin) - zochinTurul != "Оршин суугч"
-    const osmPipeline = [
-      { $match: { orshinSuugchiinId: { $exists: true, $ne: "" } } },
-      { $addFields: { orshinSuugchObjId: { $toObjectId: "$orshinSuugchiinId" } } },
-      {
-        $lookup: {
-          from: "orshinSuugch",
-          localField: "orshinSuugchObjId",
-          foreignField: "_id",
-          as: "resident",
-        },
-      },
-      { $unwind: "$resident" },
-      {
-        $match: {
-          zochinTurul: { $ne: "Оршин суугч" },
-          $or: [
-            { "resident.baiguullagiinId": String(baiguullagiinId) },
-            { "resident.baiguullagiinId": baiguullagiinId },
-          ],
-        },
-      },
-    ];
-    const lastMatch = osmPipeline[osmPipeline.length - 1].$match;
-    if (barilgiinId) lastMatch["resident.barilgiinId"] = String(barilgiinId);
-    if (orshinSuugch) {
-      const re = new RegExp(escapeRegex(String(orshinSuugch).trim()), "i");
-      osmPipeline.push({
-        $match: {
-          $or: [
-            { "resident.ner": re },
-            { "resident.ovog": re },
-          ],
-        },
-      });
-    }
-    if (toot) {
-      const tootRe = new RegExp(escapeRegex(String(toot).trim()), "i");
-      osmPipeline.push({
-        $match: {
-          $or: [
-            { "resident.toot": tootRe },
-            { ezenToot: tootRe },
-          ],
-        },
-      });
+    // 1. Fetch residents from central DB
+    const resQuery = {
+      $or: [
+        { baiguullagiinId: String(baiguullagiinId) },
+        { baiguullagiinId: db.erunkhiiKholbolt.base.Types.ObjectId.isValid(baiguullagiinId) ? new db.erunkhiiKholbolt.base.Types.ObjectId(baiguullagiinId) : baiguullagiinId },
+      ],
+    };
+
+    const allResidents = await OrshinSuugch(db.erunkhiiKholbolt).find(resQuery).lean();
+    const residentMapById = {};
+    const plateToResidentMap = {};
+
+    for (const r of allResidents) {
+      const rId = String(r._id);
+      const resInfo = {
+        orshinSuugchiinId: rId,
+        ner: [r.ovog, r.ner].filter(Boolean).join(" ") || r.ner || r.toot || "Оршин суугч",
+        toot: r.toot || "",
+        davkhar: r.davkhar || "",
+        utas: Array.isArray(r.utas) ? (r.utas[0] || "") : (r.utas || ""),
+      };
+      residentMapById[rId] = resInfo;
+
+      if (Array.isArray(r.mashinuud)) {
+        for (const m of r.mashinuud) {
+          const plate = (m.ulsiinDugaar || "").trim().toUpperCase();
+          if (plate && !plateToResidentMap[plate]) {
+            plateToResidentMap[plate] = resInfo;
+          }
+        }
+      }
     }
 
-    const guestRegistrations = await OrshinSuugchMashin(db.erunkhiiKholbolt).aggregate(osmPipeline);
+    // 2. Fetch guest cars from OrshinSuugchMashin (central DB)
+    const osmList = await OrshinSuugchMashin(db.erunkhiiKholbolt)
+      .find({
+        $or: [
+          { baiguullagiinId: String(baiguullagiinId) },
+          { baiguullagiinId: baiguullagiinId }
+        ]
+      })
+      .lean();
 
-    // Build plate -> resident map
-    const plateToResident = {};
-    for (const r of guestRegistrations) {
-      const plate = (r.mashiniiDugaar || "").trim().toUpperCase();
+    for (const osm of osmList) {
+      const plate = (osm.mashiniiDugaar || "").trim().toUpperCase();
       if (!plate) continue;
-      const residentId = String(r.orshinSuugchiinId || r.resident?._id);
-      if (!plateToResident[plate]) {
-        plateToResident[plate] = {
-          orshinSuugchiinId: residentId,
-          ner: r.resident?.ner || "",
-          ovog: r.resident?.ovog || "",
-          toot: r.resident?.toot || r.ezenToot || "",
-          davkhar: r.resident?.davkhar || "",
-          utas: Array.isArray(r.resident?.utas) ? (r.resident.utas[0] || "") : (r.resident?.utas || ""),
+      const rid = String(osm.orshinSuugchiinId || "");
+      if (rid && residentMapById[rid] && !plateToResidentMap[plate]) {
+        plateToResidentMap[plate] = residentMapById[rid];
+      } else if (!plateToResidentMap[plate] && osm.ezenToot) {
+        plateToResidentMap[plate] = {
+          orshinSuugchiinId: rid || `toot_${osm.ezenToot}`,
+          ner: `Тоот ${osm.ezenToot}`,
+          toot: osm.ezenToot,
+          davkhar: "",
+          utas: "",
         };
       }
     }
 
-    // 2. Get Uilchluulegch (parking records) for date range
+    // 3. Fetch invitations from EzenUrisanMashin (tenant DB)
+    try {
+      const EzenUrisanMashinModel = EzenUrisanMashin(kholbolt);
+      const ezenList = await EzenUrisanMashinModel.find({}).lean();
+      for (const ez of ezenList) {
+        const plate = (ez.mashiniiDugaar || "").trim().toUpperCase();
+        if (!plate) continue;
+        const rid = String(ez.orshinSuugchId || ez.orshinSuugchiinId || "");
+        if (rid && residentMapById[rid] && !plateToResidentMap[plate]) {
+          plateToResidentMap[plate] = residentMapById[rid];
+        } else if (!plateToResidentMap[plate] && (ez.ezenToot || ez.ner)) {
+          plateToResidentMap[plate] = {
+            orshinSuugchiinId: rid || `toot_${ez.ezenToot || ez.ner}`,
+            ner: ez.ner || ez.orshinSuugchNer || `Тоот ${ez.ezenToot}`,
+            toot: ez.ezenToot || "",
+            davkhar: "",
+            utas: ez.utas || "",
+          };
+        }
+      }
+    } catch (ezenErr) {
+      console.error("EzenUrisanMashin fetch notice:", ezenErr.message);
+    }
+
+    // 4. Fetch Uilchluulegch parking records for date range
     const ulMatch = {
-      baiguullagiinId: String(baiguullagiinId),
       createdAt: { $gte: startDate, $lte: endDate },
     };
-    if (barilgiinId) ulMatch.barilgiinId = String(barilgiinId);
 
-    const uilchluulegchuud = await Uilchluulegch(kholbolt, true)
-      .find(ulMatch)
-      .lean();
+    const UilchluulegchModel = Uilchluulegch(kholbolt, true);
+    const uilchluulegchuud = await UilchluulegchModel.find(ulMatch).lean();
 
-    // 3. Aggregate by resident
-    const residentMap = {};
+    // 5. Aggregate parking sessions by resident
+    const residentSummaryMap = {};
     const guestCarList = [];
     const guestCarSeen = new Set();
 
     for (const u of uilchluulegchuud) {
       const plate = (u.mashiniiDugaar || "").trim().toUpperCase();
-      const resident = plateToResident[plate];
-      if (!resident) continue; // Not a guest car, skip
+      let resident = plateToResidentMap[plate];
+
+      if (!resident && (u.orshinSuugchiinId || u.ezenToot)) {
+        const rid = String(u.orshinSuugchiinId || "");
+        if (rid && residentMapById[rid]) {
+          resident = residentMapById[rid];
+        } else if (u.ezenToot) {
+          resident = {
+            orshinSuugchiinId: rid || `toot_${u.ezenToot}`,
+            ner: u.orshinSuugchNer || `Тоот ${u.ezenToot}`,
+            toot: u.ezenToot,
+            davkhar: "",
+            utas: "",
+          };
+        }
+      }
+
+      if (!resident) continue; // If not matched to any resident, skip
+
+      if (orshinSuugch) {
+        const searchStr = String(orshinSuugch).toLowerCase();
+        const rName = String(resident.ner || "").toLowerCase();
+        const rToot = String(resident.toot || "").toLowerCase();
+        if (!rName.includes(searchStr) && !rToot.includes(searchStr)) {
+          continue;
+        }
+      }
+      if (toot) {
+        const tStr = String(toot).toLowerCase();
+        const rToot = String(resident.toot || "").toLowerCase();
+        if (!rToot.includes(tStr)) {
+          continue;
+        }
+      }
 
       const mur = u.tuukh?.[0];
       const tsag = mur?.tsagiinTuukh?.[0];
       const orsonTsag = tsag?.orsonTsag ? new Date(tsag.orsonTsag) : null;
       const garsanTsag = tsag?.garsanTsag ? new Date(tsag.garsanTsag) : null;
       const zogssonMinut = orsonTsag && garsanTsag
-        ? Math.round((garsanTsag - orsonTsag) / 60000)
+        ? Math.max(1, Math.round((garsanTsag - orsonTsag) / 60000))
         : orsonTsag
-        ? Math.round((new Date() - orsonTsag) / 60000)
+        ? Math.max(1, Math.round((new Date() - orsonTsag) / 60000))
         : 0;
       const khungulsunMinut = Number(mur?.khungulult || 0) || 0;
       const tulbur = Number(u.niitDun || 0) || 0;
@@ -148,7 +194,7 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
       const tuluvLabel = tuluv === 1 || tuluv === 2 ? "Төлбөртэй" : tulbur <= 0 ? "Үнэгүй" : "Төлөөгүй";
 
       const detailRow = {
-        mashiniiDugaar: u.mashiniiDugaar,
+        mashiniiDugaar: u.mashiniiDugaar || plate,
         zogssonMinut,
         khungulsunMinut,
         tulbur,
@@ -159,9 +205,11 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
         davkhar: resident.davkhar,
         utas: resident.utas,
       };
+
       const rid = resident.orshinSuugchiinId;
-      if (!residentMap[rid]) {
-        residentMap[rid] = {
+      if (!residentSummaryMap[rid]) {
+        residentSummaryMap[rid] = {
+          orshinSuugchiinId: rid,
           ner: resident.ner,
           toot: resident.toot,
           davkhar: resident.davkhar,
@@ -175,34 +223,34 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
           details: [],
         };
       }
-      residentMap[rid].uniquePlates.add(plate);
-      residentMap[rid].urisanMachinToo = residentMap[rid].uniquePlates.size;
-      residentMap[rid].niitTulbur += tulbur;
-      residentMap[rid].khungulultMinut += khungulsunMinut;
-      residentMap[rid].tulsunDun += tulsunDun;
-      residentMap[rid].details.push(detailRow);
 
-      const carKey = `${plate}|${resident.orshinSuugchiinId}`;
+      residentSummaryMap[rid].uniquePlates.add(plate);
+      residentSummaryMap[rid].urisanMachinToo = residentSummaryMap[rid].uniquePlates.size;
+      residentSummaryMap[rid].niitTulbur += tulbur;
+      residentSummaryMap[rid].khungulultMinut += khungulsunMinut;
+      residentSummaryMap[rid].tulsunDun += tulsunDun;
+      residentSummaryMap[rid].details.push(detailRow);
+
+      const carKey = `${plate}|${rid}`;
       if (!guestCarSeen.has(carKey)) {
         guestCarSeen.add(carKey);
         guestCarList.push({
-          mashiniiDugaar: u.mashiniiDugaar,
+          mashiniiDugaar: u.mashiniiDugaar || plate,
           orshinSuugchiinNer: resident.ner,
           davkhar: resident.davkhar,
           toot: resident.toot,
-          utas: typeof resident.utas === "string" ? resident.utas : (Array.isArray(resident.utas) ? resident.utas[0] : resident.utas) || "",
+          utas: resident.utas,
         });
       }
     }
 
-    // Calculate uldegdel per resident
-    for (const rid of Object.keys(residentMap)) {
-      const r = residentMap[rid];
+    for (const rid of Object.keys(residentSummaryMap)) {
+      const r = residentSummaryMap[rid];
       r.uldegdelTulbur = Math.max(0, r.niitTulbur - r.tulsunDun);
     }
 
-    const residentSummary = Object.entries(residentMap).map(([id, r]) => ({
-      orshinSuugchiinId: id,
+    const residentSummary = Object.values(residentSummaryMap).map((r) => ({
+      orshinSuugchiinId: r.orshinSuugchiinId,
       ner: r.ner,
       toot: r.toot,
       urisanMachinToo: r.urisanMachinToo,
@@ -212,7 +260,7 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
       uldegdelTulbur: r.uldegdelTulbur,
     }));
 
-    const niit = Object.values(residentMap).reduce(
+    const niit = residentSummary.reduce(
       (a, r) => ({
         urisanMachinToo: a.urisanMachinToo + (r.urisanMachinToo || 0),
         niitTulbur: a.niitTulbur + (r.niitTulbur || 0),
@@ -231,11 +279,11 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
           (toot && String(r.toot || "").includes(String(toot)))
       );
       if (matchResident) {
-        selectedDetail = residentMap[matchResident.orshinSuugchiinId]?.details || [];
+        selectedDetail = residentSummaryMap[matchResident.orshinSuugchiinId]?.details || [];
       }
     }
 
-    res.json({
+    return res.json({
       success: true,
       filter: {
         baiguullagiinId,
