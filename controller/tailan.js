@@ -44,11 +44,13 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
       ? new Date(duusakhOgnoo)
       : new Date(new Date().setHours(23, 59, 59, 999));
 
+    const mongoose = require("mongoose");
+
     // 1. Fetch residents from central DB
     const resQuery = {
       $or: [
         { baiguullagiinId: String(baiguullagiinId) },
-        { baiguullagiinId: db.erunkhiiKholbolt.base.Types.ObjectId.isValid(baiguullagiinId) ? new db.erunkhiiKholbolt.base.Types.ObjectId(baiguullagiinId) : baiguullagiinId },
+        { baiguullagiinId: mongoose.Types.ObjectId.isValid(baiguullagiinId) ? new mongoose.Types.ObjectId(baiguullagiinId) : baiguullagiinId },
       ],
     };
 
