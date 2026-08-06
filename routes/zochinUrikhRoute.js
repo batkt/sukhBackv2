@@ -13,8 +13,6 @@ const Geree = require("../models/geree");
 const router = express.Router();
 const { tokenShalgakh, crud, UstsanBarimt, db } = require("zevbackv2");
 
-crud(router, "ezenUrisanMashin", EzenUrisanMashin, UstsanBarimt);
-
 // Session validation for multiple device login prevention
 const orshinSuugchSessionShalgaya = async (req, res, next) => {
   const token = req.body.nevtersenAjiltniiToken;
@@ -37,6 +35,250 @@ const orshinSuugchSessionShalgaya = async (req, res, next) => {
 };
 
 router.use(orshinSuugchSessionShalgaya);
+
+/**
+ * Shared Quota & Permission Checker Helper
+ */
+async function checkQuotaAndPermissions(residentId, baiguullagiinId, barilgiinId, tukhainBaaziinKholbolt) {
+  const Mashin = require("../models/mashin");
+  const Baiguullaga = require("../models/baiguullaga");
+  const OrshinSuugch = require("../models/orshinSuugch");
+  const EzenUrisanMashinModel = require("sukhParking-v1").EzenUrisanMashin;
+  const { db } = require("zevbackv2");
+
+  const query = {
+    $or: [
+      { ezemshigchiinId: String(residentId) },
+      { orshinSuugchiinId: String(residentId) }
+    ],
+    zochinTurul: "Оршин суугч"
+  };
+  if (baiguullagiinId) query.baiguullagiinId = String(baiguullagiinId);
+  if (barilgiinId) query.barilgiinId = String(barilgiinId);
+
+  let masterSetting = await Mashin(tukhainBaaziinKholbolt).findOne(query);
+  if (!masterSetting) {
+    masterSetting = await Mashin(tukhainBaaziinKholbolt).findOne({
+      $or: [
+        { ezemshigchiinId: residentId },
+        { orshinSuugchiinId: residentId }
+      ],
+      zochinTurul: "Оршин суугч"
+    });
+  }
+
+  let buildingSettings = null;
+  if (!baiguullagiinId || !barilgiinId) {
+    const rObj = await OrshinSuugch(tukhainBaaziinKholbolt).findById(residentId) ||
+      await OrshinSuugch(tukhainBaaziinKholbolt).findOne({
+        $or: [{ _id: residentId }, { id: String(residentId) }]
+      });
+
+    if (rObj && rObj.toots && rObj.toots.length > 0) {
+      baiguullagiinId = baiguullagiinId || rObj.toots[0].baiguullagiinId;
+      barilgiinId = barilgiinId || rObj.toots[0].barilgiinId;
+    }
+  }
+
+  if (baiguullagiinId) {
+    const baiguullagaRecord = await Baiguullaga(db.erunkhiiKholbolt).findById(baiguullagiinId);
+    let targetBarilga = null;
+    if (barilgiinId) {
+      targetBarilga = baiguullagaRecord?.barilguud?.id(barilgiinId) ||
+        baiguullagaRecord?.barilguud?.find(b => String(b._id) === String(barilgiinId));
+    }
+    if (!targetBarilga && baiguullagaRecord?.barilguud?.length > 0) {
+      targetBarilga = baiguullagaRecord.barilguud[0];
+    }
+    buildingSettings = targetBarilga?.zochinTokhirgoo || targetBarilga?.tokhirgoo?.zochinTokhirgoo;
+  }
+
+  const effectiveTotal = Math.max(
+    masterSetting?.zochinErkhiinToo || 0,
+    buildingSettings?.zochinErkhiinToo || 0
+  );
+  const effectiveType = masterSetting?.davtamjiinTurul || buildingSettings?.davtamjiinTurul || "saraar";
+  const effectiveValue = masterSetting?.davtamjUtga || buildingSettings?.davtamjUtga || 1;
+  const effectiveMinutes = Math.max(
+    masterSetting?.zochinTusBurUneguiMinut || 0,
+    buildingSettings?.zochinTusBurUneguiMinut || 0
+  );
+  const buildingRight = buildingSettings?.zochinUrikhEsekh;
+  const residentRight = masterSetting?.zochinUrikhEsekh;
+
+  let hasRight;
+  if (typeof buildingRight === 'boolean') {
+    hasRight = buildingRight === true && (residentRight === true || residentRight === undefined || residentRight === null);
+  } else {
+    hasRight = residentRight === true;
+  }
+
+  let startOfPeriod;
+  if (effectiveType === "udruur") {
+    startOfPeriod = moment().startOf("day").toDate();
+  } else if (effectiveType === "7khonogoor") {
+    startOfPeriod = moment().startOf("week").toDate();
+  } else if (effectiveType === "saraar") {
+    let candidate = moment().date(effectiveValue || 1).startOf('day');
+    if (moment().isBefore(candidate)) candidate.subtract(1, 'month');
+    startOfPeriod = candidate.toDate();
+  } else if (effectiveType === "jileer") {
+    const targetMonth = (effectiveValue || 1) - 1;
+    let candidate = moment().month(targetMonth).date(1).startOf('day');
+    if (moment().isBefore(candidate)) candidate.subtract(1, 'year');
+    startOfPeriod = candidate.toDate();
+  } else {
+    startOfPeriod = moment().startOf("month").toDate();
+  }
+
+  const usedMatchQuery = {
+    $or: [
+      { ezenId: residentId },
+      { ezemshigchiinId: residentId },
+      { ezenId: String(residentId) },
+      { ezemshigchiinId: String(residentId) }
+    ],
+    createdAt: { $gte: startOfPeriod }
+  };
+  if (baiguullagiinId) usedMatchQuery.baiguullagiinId = String(baiguullagiinId);
+
+  const usedCount = await EzenUrisanMashinModel(tukhainBaaziinKholbolt).countDocuments(usedMatchQuery);
+  const remaining = Math.max(0, effectiveTotal - usedCount);
+
+  return {
+    hasRight,
+    effectiveTotal,
+    usedCount,
+    remaining,
+    effectiveType,
+    effectiveMinutes,
+    baiguullagiinId,
+    barilgiinId
+  };
+}
+
+/**
+ * CUSTOM CREATE INVITATION ROUTE WITH QUOTA VALIDATION & REAL-TIME SOCKET EMIT
+ */
+router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
+  try {
+    const residentId = req.body.nevtersenAjiltniiToken?.id || req.body.ezemshigchiinId || req.body.ezenId;
+    const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
+    const plate = String(req.body.urisanMashiniiDugaar || req.body.mashiniiDugaar || "").trim().toUpperCase();
+
+    if (!residentId) return res.status(401).send("Нэвтрэх шаардлагатай");
+    if (!plate) return res.status(400).json({ success: false, message: "Машины дугаар оруулна уу" });
+
+    const baiguullagiinId = req.body.baiguullagiinId;
+    const barilgiinId = req.body.barilgiinId;
+
+    const quotaInfo = await checkQuotaAndPermissions(residentId, baiguullagiinId, barilgiinId, tukhainBaaziinKholbolt);
+
+    if (!quotaInfo.hasRight) {
+      return res.status(403).json({ success: false, message: "Танд зочин урих эрх байхгүй байна" });
+    }
+
+    if (quotaInfo.effectiveTotal > 0 && quotaInfo.remaining <= 0) {
+      return res.status(403).json({ success: false, message: "Таны зочин урих лимит дууссан байна" });
+    }
+
+    const EzenUrisanMashinModel = require("sukhParking-v1").EzenUrisanMashin;
+
+    // Check for duplicate pending invitation for exact same plate
+    const existingPending = await EzenUrisanMashinModel(tukhainBaaziinKholbolt).findOne({
+      baiguullagiinId: String(quotaInfo.baiguullagiinId || baiguullagiinId),
+      urisanMashiniiDugaar: plate,
+      tuluv: 0
+    });
+
+    if (existingPending) {
+      return res.status(400).json({
+        success: false,
+        message: `Энэ ${plate} дугаартай машин аль хэдийн хүлээлгэнд байна`
+      });
+    }
+
+    const newDoc = new (EzenUrisanMashinModel(tukhainBaaziinKholbolt))({
+      baiguullagiinId: String(quotaInfo.baiguullagiinId || baiguullagiinId),
+      barilgiinId: quotaInfo.barilgiinId || barilgiinId ? String(quotaInfo.barilgiinId || barilgiinId) : undefined,
+      ezenId: String(residentId),
+      ezemshigchiinId: String(residentId),
+      ezemshigchiinNer: req.body.ezemshigchiinNer || "",
+      ezemshigchiinRegister: req.body.ezemshigchiinRegister || "",
+      ezemshigchiinUtas: req.body.ezemshigchiinUtas || "",
+      urisanMashiniiDugaar: plate,
+      davtamjiinTurul: quotaInfo.effectiveType,
+      zochinErkhiinToo: quotaInfo.effectiveTotal,
+      tusBurUneguiMinut: quotaInfo.effectiveMinutes,
+      tuluv: 0,
+      ognoo: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const savedDoc = await newDoc.save();
+
+    // Socket Emit to resident channel
+    try {
+      const io = req.app.get("socketio");
+      if (io) {
+        io.emit(`orshinSuugch${residentId}`, {
+          type: "ZOCHIN_URI",
+          message: "Шинэ зочин уригдлаа",
+          data: savedDoc
+        });
+      }
+    } catch (socketErr) {
+      console.error("Socket emit error on ezenUrisanMashin:", socketErr);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Зочин амжилттай уригдлаа",
+      data: savedDoc
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * CUSTOM DELETE INVITATION ROUTE WITH REAL-TIME SOCKET EMIT
+ */
+router.delete("/ezenUrisanMashin/:id", tokenShalgakh, async (req, res, next) => {
+  try {
+    const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
+    const EzenUrisanMashinModel = require("sukhParking-v1").EzenUrisanMashin;
+
+    const doc = await EzenUrisanMashinModel(tukhainBaaziinKholbolt).findById(req.params.id);
+    if (!doc) {
+      return res.status(404).json({ success: false, message: "Урилга олдсонгүй" });
+    }
+
+    const residentId = doc.ezenId || doc.ezemshigchiinId;
+    await EzenUrisanMashinModel(tukhainBaaziinKholbolt).findByIdAndDelete(req.params.id);
+
+    try {
+      const io = req.app.get("socketio");
+      if (io && residentId) {
+        io.emit(`orshinSuugch${residentId}`, {
+          type: "ZOCHIN_DELETE",
+          message: "Зочны урилга цуцлагдлаа",
+          id: req.params.id
+        });
+      }
+    } catch (socketErr) {
+      console.error("Socket emit error on delete invitation:", socketErr);
+    }
+
+    return res.send("Amjilttai");
+  } catch (error) {
+    next(error);
+  }
+});
+
+crud(router, "ezenUrisanMashin", EzenUrisanMashin, UstsanBarimt);
 
 // Харилцагчийн мэдээллийг шинээр хадгалах буюу засварлах функц
 async function orshinSuugchKhadgalya(
