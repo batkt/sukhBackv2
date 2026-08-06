@@ -204,26 +204,38 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
       // Create and save web notification (turul: "medegdel")
       try {
         const MedegdelModel = Medegdel(kholbolt);
-        const m = new MedegdelModel({
+        const notifMsg = `${geree?.toot || qpayBarimt.toot || ""} тоот, ${geree?.ner || qpayBarimt.ner || "Оршин суугч"} QPay-ээр ${amount.toLocaleString()}₮ төллөө.`;
+        const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+        const existingNotif = await MedegdelModel.findOne({
           baiguullagiinId,
-          barilgiinId: geree?.barilgiinId || qpayBarimt.barilgiinId || "",
-          title: "QPay төлөлт",
-          message: `${geree?.toot || qpayBarimt.toot || ""} тоот, ${geree?.ner || qpayBarimt.ner || "Оршин суугч"} QPay-ээр ${amount.toLocaleString()}₮ төллөө.`,
-          orshinSuugchId: geree?.orshinSuugchId || qpayBarimt.orshinSuugchId || "",
-          orshinSuugchNer: `${geree?.ovog || ""} ${geree?.ner || ""}`.trim() || qpayBarimt.ner || "",
-          orshinSuugchUtas: (Array.isArray(geree?.utas) ? geree?.utas[0] : geree?.utas) || qpayBarimt.utas || "",
-          gereeniiDugaar: geree?.gereeniiDugaar || qpayBarimt.gereeniiDugaar || "",
-          kharsanEsekh: false,
-          status: "pending",
-          turul: "medegdel",
-          ognoo: new Date()
+          message: notifMsg,
+          ognoo: { $gte: twoMinAgo },
         });
-        await m.save();
 
-        io.emit("baiguullagiin" + baiguullagiinId, {
-          type: "medegdelNew",
-          data: m.toObject ? m.toObject() : m
-        });
+        if (existingNotif) {
+          console.log(`ℹ️ [QPAY CALLBACK] Duplicate web notification prevented: ${notifMsg}`);
+        } else {
+          const m = new MedegdelModel({
+            baiguullagiinId,
+            barilgiinId: geree?.barilgiinId || qpayBarimt.barilgiinId || "",
+            title: "QPay төлөлт",
+            message: notifMsg,
+            orshinSuugchId: geree?.orshinSuugchId || qpayBarimt.orshinSuugchId || "",
+            orshinSuugchNer: `${geree?.ovog || ""} ${geree?.ner || ""}`.trim() || qpayBarimt.ner || "",
+            orshinSuugchUtas: (Array.isArray(geree?.utas) ? geree?.utas[0] : geree?.utas) || qpayBarimt.utas || "",
+            gereeniiDugaar: geree?.gereeniiDugaar || qpayBarimt.gereeniiDugaar || "",
+            kharsanEsekh: false,
+            status: "pending",
+            turul: "medegdel",
+            ognoo: new Date()
+          });
+          await m.save();
+
+          io.emit("baiguullagiin" + baiguullagiinId, {
+            type: "medegdelNew",
+            data: m.toObject ? m.toObject() : m
+          });
+        }
       } catch (err) {
         console.error("⚠️ [QPAY CALLBACK] Failed to create web notification:", err.message);
       }
@@ -516,26 +528,38 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
       // Create and save web notification (turul: "medegdel")
       try {
         const MedegdelModel = Medegdel(kholbolt);
-        const m = new MedegdelModel({
+        const notifMsg = `${geree?.toot || nekhemjlekh.toot || ""} тоот, ${geree?.ner || nekhemjlekh.ner || "Оршин суугч"} QPay-ээр ${paidAmount.toLocaleString()}₮ төллөө.`;
+        const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+        const existingNotif = await MedegdelModel.findOne({
           baiguullagiinId,
-          barilgiinId: geree?.barilgiinId || nekhemjlekh.barilgiinId || "",
-          title: "QPay төлөлт",
-          message: `${geree?.toot || nekhemjlekh.toot || ""} тоот, ${geree?.ner || nekhemjlekh.ner || "Оршин суугч"} QPay-ээр ${paidAmount.toLocaleString()}₮ төллөө.`,
-          orshinSuugchId: geree?.orshinSuugchId || nekhemjlekh.orshinSuugchId || "",
-          orshinSuugchNer: `${geree?.ovog || ""} ${geree?.ner || ""}`.trim() || nekhemjlekh.ner || "",
-          orshinSuugchUtas: (Array.isArray(geree?.utas) ? geree?.utas[0] : geree?.utas) || nekhemjlekh.utas || "",
-          gereeniiDugaar: geree?.gereeniiDugaar || nekhemjlekh.gereeniiDugaar || "",
-          kharsanEsekh: false,
-          status: "pending",
-          turul: "medegdel",
-          ognoo: new Date()
+          message: notifMsg,
+          ognoo: { $gte: twoMinAgo },
         });
-        await m.save();
 
-        io.emit("baiguullagiin" + baiguullagiinId, {
-          type: "medegdelNew",
-          data: m.toObject ? m.toObject() : m
-        });
+        if (existingNotif) {
+          console.log(`ℹ️ [QPAY PAYMENT] Duplicate web notification prevented: ${notifMsg}`);
+        } else {
+          const m = new MedegdelModel({
+            baiguullagiinId,
+            barilgiinId: geree?.barilgiinId || nekhemjlekh.barilgiinId || "",
+            title: "QPay төлөлт",
+            message: notifMsg,
+            orshinSuugchId: geree?.orshinSuugchId || nekhemjlekh.orshinSuugchId || "",
+            orshinSuugchNer: `${geree?.ovog || ""} ${geree?.ner || ""}`.trim() || nekhemjlekh.ner || "",
+            orshinSuugchUtas: (Array.isArray(geree?.utas) ? geree?.utas[0] : geree?.utas) || nekhemjlekh.utas || "",
+            gereeniiDugaar: geree?.gereeniiDugaar || nekhemjlekh.gereeniiDugaar || "",
+            kharsanEsekh: false,
+            status: "pending",
+            turul: "medegdel",
+            ognoo: new Date()
+          });
+          await m.save();
+
+          io.emit("baiguullagiin" + baiguullagiinId, {
+            type: "medegdelNew",
+            data: m.toObject ? m.toObject() : m
+          });
+        }
       } catch (err) {
         console.error("⚠️ [QPAY-INVOICE CALLBACK] Failed to create web notification:", err.message);
       }

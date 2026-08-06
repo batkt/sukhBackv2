@@ -2897,31 +2897,43 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
             });
             try {
               const MedegdelModel = Medegdel(kholbolt);
-              const m = new MedegdelModel({
+              const notifMsg = `${geree?.toot || updatedInvoice.gereeniiDugaar || ""} тоот, ${geree?.ner || "Оршин суугч"} QPay-ээр ${invoicePaidAmount.toLocaleString()}₮ төллөө.`;
+              const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+              const existingNotif = await MedegdelModel.findOne({
                 baiguullagiinId,
-                barilgiinId:
-                  geree?.barilgiinId || updatedInvoice.barilgiinId || "",
-                title: "QPay төлөлт",
-                message: `${geree?.toot || updatedInvoice.gereeniiDugaar || ""} тоот, ${geree?.ner || "Оршин суугч"} QPay-ээр ${invoicePaidAmount.toLocaleString()}₮ төллөө.`,
-                orshinSuugchId:
-                  geree?.orshinSuugchId || updatedInvoice.orshinSuugchId || "",
-                orshinSuugchNer:
-                  `${geree?.ovog || ""} ${geree?.ner || ""}`.trim() || "",
-                orshinSuugchUtas:
-                  (Array.isArray(geree?.utas) ? geree?.utas[0] : geree?.utas) ||
-                  "",
-                gereeniiDugaar:
-                  geree?.gereeniiDugaar || updatedInvoice.gereeniiDugaar || "",
-                kharsanEsekh: false,
-                status: "pending",
-                turul: "medegdel",
-                ognoo: new Date(),
+                message: notifMsg,
+                ognoo: { $gte: twoMinAgo },
               });
-              await m.save();
-              ioNekh.emit("baiguullagiin" + baiguullagiinId, {
-                type: "medegdelNew",
-                data: m.toObject ? m.toObject() : m,
-              });
+
+              if (existingNotif) {
+                console.log(`ℹ️ [QPAY MULTI CALLBACK] Duplicate web notification prevented: ${notifMsg}`);
+              } else {
+                const m = new MedegdelModel({
+                  baiguullagiinId,
+                  barilgiinId:
+                    geree?.barilgiinId || updatedInvoice.barilgiinId || "",
+                  title: "QPay төлөлт",
+                  message: notifMsg,
+                  orshinSuugchId:
+                    geree?.orshinSuugchId || updatedInvoice.orshinSuugchId || "",
+                  orshinSuugchNer:
+                    `${geree?.ovog || ""} ${geree?.ner || ""}`.trim() || "",
+                  orshinSuugchUtas:
+                    (Array.isArray(geree?.utas) ? geree?.utas[0] : geree?.utas) ||
+                    "",
+                  gereeniiDugaar:
+                    geree?.gereeniiDugaar || updatedInvoice.gereeniiDugaar || "",
+                  kharsanEsekh: false,
+                  status: "pending",
+                  turul: "medegdel",
+                  ognoo: new Date(),
+                });
+                await m.save();
+                ioNekh.emit("baiguullagiin" + baiguullagiinId, {
+                  type: "medegdelNew",
+                  data: m.toObject ? m.toObject() : m,
+                });
+              }
             } catch (medErr) {
               console.error(
                 "⚠️ [QPAY MULTI CALLBACK] Failed to create web notification:",
