@@ -214,6 +214,16 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
           return String(raw);
         })();
 
+        const khungulultVal = (() => {
+          if (item.khungulult !== undefined && item.khungulult !== null) return Number(item.khungulult);
+          if (item.discount !== undefined && item.discount !== null) return Number(item.discount);
+          if (item.khungulultiinDun !== undefined && item.khungulultiinDun !== null) return Number(item.khungulultiinDun);
+          if (Array.isArray(item.medeelel?.khungulultuud)) {
+            return item.medeelel.khungulultuud.reduce((s, k) => s + (Number(k.khungulultiinDun || k.dun || 0)), 0);
+          }
+          return 0;
+        })();
+
         return {
           dugaar: index + 1, // № (row number)
           ner: item.ner || "", // Нэр (name)
@@ -222,10 +232,12 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
           orts: geree ? geree.orts || "1" : "", // Орц (entrance)
           davkhar: geree ? geree.davkhar || item.davkhar || "" : item.davkhar || "", // Давхар (floor)
           gereeniiDugaar: item.gereeniiDugaar || "", // Гэрээний дугаар (contract number)
+          turul: item.turul || (geree ? geree.turul : "") || "Үндсэн", // Төрөл (type)
+          gereeniiTuluv: gereeTuluv, // Гэрээний төлөв (contract status)
           ekhniiUldegdel: Number(item.ekhniiUldegdel || 0), // Эхний үлдэгдэл
           uldegdel: Number(latestUldegdel || item.uldegdel || item.tulbur || 0), // Үлдэгдэл
-          khungulult: Number(item.khungulult || item.discount || 0), // Хөнгөлөлт
-          tuluv: item.tuluv || "", // Төлөв
+          khungulult: khungulultVal, // Хөнгөлөлт (discount)
+          tuluv: item.tuluv || "", // Төлөв (payment status)
         };
       });
 
@@ -239,6 +251,8 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
         { key: "orts", label: "Орц" },
         { key: "davkhar", label: "Давхар" },
         { key: "gereeniiDugaar", label: "Гэрээний дугаар" },
+        { key: "turul", label: "Төрөл" },
+        { key: "gereeniiTuluv", label: "Гэрээний төлөв" },
         { key: "ekhniiUldegdel", label: "Эхний үлдэгдэл" },
         { key: "uldegdel", label: "Үлдэгдэл" },
         { key: "khungulult", label: "Хөнгөлөлт" },
@@ -247,7 +261,7 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
       req.body.fileName =
         req.body.fileName || `Нэхэмжлэхийн_түүх_${Date.now()}`;
       req.body.sheetName = req.body.sheetName || "Нэхэмжлэхийн түүх";
-      req.body.colWidths = [8, 20, 10, 15, 8, 8, 20, 16, 16, 16, 15]; // Column widths
+      req.body.colWidths = [8, 20, 10, 15, 8, 8, 20, 12, 14, 16, 16, 16, 15]; // Column widths
 
       // Call downloadExcelList function directly
       return exports.downloadExcelList(req, res, next);
@@ -897,23 +911,25 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
       const totalsRow = {};
       let hasNumericSummary = false;
 
-      // Find first numeric column index to place "НИЙТ" right before totals
-      let firstNumericIndex = headerKeys.findIndex((key, i) => {
-        const keyLower = String(key || "").toLowerCase();
+      // Find the last NON-NUMERIC column index to place "НИЙТ" right before numeric totals
+      let labelColIndex = 0;
+      for (let i = 0; i < headerKeys.length; i++) {
+        const keyLower = String(headerKeys[i] || "").toLowerCase();
         const labelLower = String(headerLabels[i] || "").toLowerCase();
-        return currencyKeys.some(ck => keyLower.includes(ck) || labelLower.includes(ck));
-      });
-      if (firstNumericIndex === -1) firstNumericIndex = 0;
-      const labelColIndex = Math.max(0, firstNumericIndex - 1);
+        const isNumeric = currencyKeys.some(ck => keyLower.includes(ck) || labelLower.includes(ck));
+        if (!isNumeric) {
+          labelColIndex = i;
+        } else {
+          break;
+        }
+      }
 
       headerKeys.forEach((key, colIndex) => {
         const keyLower = String(key || "").toLowerCase();
         const labelLower = String(headerLabels[colIndex] || "").toLowerCase();
         const isNumericKey = currencyKeys.some(nk => keyLower.includes(nk) || labelLower.includes(nk));
 
-        if (colIndex === labelColIndex) {
-          totalsRow[key] = "НИЙТ";
-        } else if (isNumericKey) {
+        if (isNumericKey) {
           let sum = 0;
           let foundVal = false;
           groupData.forEach(item => {
@@ -927,12 +943,10 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
               foundVal = true;
             }
           });
-          if (foundVal) {
-            totalsRow[key] = Math.round(sum * 100) / 100;
-            hasNumericSummary = true;
-          } else {
-            totalsRow[key] = "";
-          }
+          totalsRow[key] = Math.round(sum * 100) / 100;
+          hasNumericSummary = true;
+        } else if (colIndex === labelColIndex) {
+          totalsRow[key] = "НИЙТ";
         } else {
           totalsRow[key] = "";
         }
