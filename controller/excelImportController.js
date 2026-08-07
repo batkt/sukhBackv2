@@ -222,12 +222,10 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
           orts: geree ? geree.orts || "1" : "", // Орц (entrance)
           davkhar: geree ? geree.davkhar || item.davkhar || "" : item.davkhar || "", // Давхар (floor)
           gereeniiDugaar: item.gereeniiDugaar || "", // Гэрээний дугаар (contract number)
-          gereeniiTuluv: gereeTuluv, // Гэрээний төлөв (active/cancelled)
-          nekhemjlekhiinDugaar: item.nekhemjlekhiinDugaar || item.dugaalaltDugaar || "", // Нэхэмжлэхийн дугаар
-          niitTulbur: Number(item.niitTulbur || item.tulbur || 0), // Нийт төлбөр
+          ekhniiUldegdel: Number(item.ekhniiUldegdel || 0), // Эхний үлдэгдэл
+          uldegdel: Number(latestUldegdel || item.uldegdel || item.tulbur || 0), // Үлдэгдэл
           khungulult: Number(item.khungulult || item.discount || 0), // Хөнгөлөлт
-          uldegdel: Number(latestUldegdel || 0), // Үлдэгдэл
-          guitsetgel: item.tuluv || "", // Төлбөрийн төлөв
+          tuluv: item.tuluv || "", // Төлөв
         };
       });
 
@@ -241,17 +239,15 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
         { key: "orts", label: "Орц" },
         { key: "davkhar", label: "Давхар" },
         { key: "gereeniiDugaar", label: "Гэрээний дугаар" },
-        { key: "gereeniiTuluv", label: "Гэрээний төлөв" },
-        { key: "nekhemjlekhiinDugaar", label: "Нэхэмжлэхийн дугаар" },
-        { key: "niitTulbur", label: "Нийт төлбөр" },
-        { key: "khungulult", label: "Хөнгөлөлт" },
+        { key: "ekhniiUldegdel", label: "Эхний үлдэгдэл" },
         { key: "uldegdel", label: "Үлдэгдэл" },
-        { key: "guitsetgel", label: "Төлбөрийн төлөв" },
+        { key: "khungulult", label: "Хөнгөлөлт" },
+        { key: "tuluv", label: "Төлөв" },
       ];
       req.body.fileName =
         req.body.fileName || `Нэхэмжлэхийн_түүх_${Date.now()}`;
       req.body.sheetName = req.body.sheetName || "Нэхэмжлэхийн түүх";
-      req.body.colWidths = [8, 20, 10, 15, 8, 8, 20, 15, 20, 16, 16, 16, 15]; // Column widths
+      req.body.colWidths = [8, 20, 10, 15, 8, 8, 20, 16, 16, 16, 15]; // Column widths
 
       // Call downloadExcelList function directly
       return exports.downloadExcelList(req, res, next);
@@ -843,6 +839,13 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
         width: Array.isArray(colWidths) && colWidths[i] ? (typeof colWidths[i] === 'number' ? colWidths[i] : 15) : 15
       }));
 
+      const currencyKeys = [
+        "niitdun", "tulbur", "khungulult", "discount", "payment",
+        "uldegdel", "paymentamount", "discountamount",
+        "tulsundun", "tulukhdun", "amount", "niittulbur", "undsendun",
+        "bodoosondun", "ekhniiuldegdel"
+      ];
+
       // Add data
       groupData.forEach(item => {
         const rowData = {};
@@ -861,21 +864,31 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
           } else if (typeof value === "object" && value !== null) {
             rowData[key] = value.ner || JSON.stringify(value);
           } else if (typeof value === "number") {
-            rowData[key] = Math.round(value * 100) / 100;
+            const keyLower = String(key || "").toLowerCase();
+            const isCurrency = currencyKeys.some(ck => keyLower.includes(ck));
+            rowData[key] = isCurrency ? Math.round(value * 100) / 100 : value;
           } else {
             rowData[key] = value ?? "";
           }
         });
         const addedRow = worksheet.addRow(rowData);
-        addedRow.eachCell((cell) => {
+        addedRow.eachCell((cell, colNumber) => {
+          const key = headerKeys[colNumber - 1] || "";
+          const keyLower = String(key || "").toLowerCase();
+          const isCurrency = currencyKeys.some(ck => keyLower.includes(ck));
+
           cell.border = {
             top: { style: "thin", color: { argb: "D3D3D3" } },
             left: { style: "thin", color: { argb: "D3D3D3" } },
             bottom: { style: "thin", color: { argb: "D3D3D3" } },
             right: { style: "thin", color: { argb: "D3D3D3" } }
           };
-          if (typeof cell.value === "number") {
+
+          if (isCurrency && typeof cell.value === "number") {
             cell.numFmt = "0.00";
+            cell.alignment = { vertical: "middle", horizontal: "right" };
+          } else {
+            cell.alignment = { vertical: "middle", horizontal: "left" };
           }
         });
       });
@@ -883,19 +896,22 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
       // Calculate numeric column totals if available
       const totalsRow = {};
       let hasNumericSummary = false;
-      const numericKeywords = [
-        "niitdun", "tulbur", "khungulult", "discount", "payment",
-        "uldegdel", "guitsetgel", "paymentamount", "discountamount",
-        "tulsundun", "tulukhdun", "amount", "niittulbur", "undsendun",
-        "khungulultminut", "zogssonminut", "khungulsunminut", "bodoosondun", "ekhniiuldegdel"
-      ];
+
+      // Find first numeric column index to place "НИЙТ" right before totals
+      let firstNumericIndex = headerKeys.findIndex((key, i) => {
+        const keyLower = String(key || "").toLowerCase();
+        const labelLower = String(headerLabels[i] || "").toLowerCase();
+        return currencyKeys.some(ck => keyLower.includes(ck) || labelLower.includes(ck));
+      });
+      if (firstNumericIndex === -1) firstNumericIndex = 0;
+      const labelColIndex = Math.max(0, firstNumericIndex - 1);
 
       headerKeys.forEach((key, colIndex) => {
         const keyLower = String(key || "").toLowerCase();
         const labelLower = String(headerLabels[colIndex] || "").toLowerCase();
-        const isNumericKey = numericKeywords.some(nk => keyLower.includes(nk) || labelLower.includes(nk));
+        const isNumericKey = currencyKeys.some(nk => keyLower.includes(nk) || labelLower.includes(nk));
 
-        if (colIndex === 0) {
+        if (colIndex === labelColIndex) {
           totalsRow[key] = "НИЙТ";
         } else if (isNumericKey) {
           let sum = 0;
@@ -924,16 +940,24 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
 
       if (hasNumericSummary) {
         const summaryRow = worksheet.addRow(totalsRow);
-        // Design matches data cells: clean background, thin borders, same font & 0.00 formatting
-        summaryRow.eachCell((cell) => {
+        summaryRow.font = { bold: true };
+        summaryRow.eachCell((cell, colNumber) => {
+          const key = headerKeys[colNumber - 1] || "";
+          const keyLower = String(key || "").toLowerCase();
+          const isCurrency = currencyKeys.some(ck => keyLower.includes(ck));
+
           cell.border = {
             top: { style: "thin", color: { argb: "D3D3D3" } },
             left: { style: "thin", color: { argb: "D3D3D3" } },
             bottom: { style: "thin", color: { argb: "D3D3D3" } },
             right: { style: "thin", color: { argb: "D3D3D3" } }
           };
-          if (typeof cell.value === "number") {
+
+          if (isCurrency && typeof cell.value === "number") {
             cell.numFmt = "0.00";
+            cell.alignment = { vertical: "middle", horizontal: "right" };
+          } else {
+            cell.alignment = { vertical: "middle", horizontal: "right" };
           }
         });
       }
