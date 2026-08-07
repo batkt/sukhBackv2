@@ -237,7 +237,6 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
           gereeniiDugaar: item.gereeniiDugaar || "", // Гэрээний дугаар (contract number)
           turul: item.turul || (geree ? geree.turul : "") || "Үндсэн", // Төрөл (type)
           gereeniiTuluv: gereeTuluv, // Гэрээний төлөв (contract status)
-          ekhniiUldegdel: Number(item.ekhniiUldegdel || 0), // Эхний үлдэгдэл
           uldegdel: Number(latestUldegdel || item.uldegdel || item.tulbur || 0), // Үлдэгдэл
           khungulult: khungulultVal, // Хөнгөлөлт (discount)
           tuluv: item.tuluv || "", // Төлөв (payment status)
@@ -256,7 +255,6 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
         { key: "gereeniiDugaar", label: "Гэрээний дугаар" },
         { key: "turul", label: "Төрөл" },
         { key: "gereeniiTuluv", label: "Гэрээний төлөв" },
-        { key: "ekhniiUldegdel", label: "Эхний үлдэгдэл" },
         { key: "uldegdel", label: "Үлдэгдэл" },
         { key: "khungulult", label: "Хөнгөлөлт" },
         { key: "tuluv", label: "Төлөв" },
