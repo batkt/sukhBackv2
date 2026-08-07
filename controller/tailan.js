@@ -1532,6 +1532,7 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
       const list = [...(data.paid?.list || []), ...(data.unpaid?.list || [])];
       headers = [
         "Гэрээний дугаар",
+        "Гэрээний төлөв",
         "Овог",
         "Нэр",
         "Утас",
@@ -1542,6 +1543,7 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
         "Огноо",
         "Төлөх огноо",
         "Нийт төлбөр",
+        "Хөнгөлөлт",
         "Төлөв",
       ];
       rows = list.map((r) => {
@@ -1561,8 +1563,18 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
           }
         } catch (e) {}
 
+        const gereeTuluv = (() => {
+          const raw = r.gereeniiTuluv || r.gereeTuluv || r.status;
+          if (!raw) return "Идэвхтэй";
+          const s = String(raw).toLowerCase();
+          if (s.includes("цуцл") || s.includes("cancel")) return "Цуцлагдсан";
+          if (s.includes("идэвх") || s.includes("active")) return "Идэвхтэй";
+          return String(raw);
+        })();
+
         return [
           r.gereeniiDugaar || "",
+          gereeTuluv,
           r.ovog || "",
           r.ner || "",
           Array.isArray(r.utas) ? r.utas.join(", ") : r.utas || "",
@@ -1572,13 +1584,15 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
           r.orts || "",
           ognooStr,
           tulukhOgnooStr,
-          r.niitTulbur || 0,
+          Number(r.niitTulbur || r.tulbur || 0),
+          Number(r.khungulult || r.discount || 0),
           r.tuluv || "",
         ];
       });
 
       // Add Footer Total
-      const totalNiitTulbur = list.reduce((sum, r) => sum + (Number(r.niitTulbur) || 0), 0);
+      const totalNiitTulbur = list.reduce((sum, r) => sum + (Number(r.niitTulbur || r.tulbur) || 0), 0);
+      const totalKhungulult = list.reduce((sum, r) => sum + (Number(r.khungulult || r.discount) || 0), 0);
       rows.push([
         "НИЙТ",
         "",
@@ -1590,11 +1604,13 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
         "",
         "",
         "",
+        "",
         Math.round(totalNiitTulbur * 100) / 100,
+        Math.round(totalKhungulult * 100) / 100,
         "",
       ]);
 
-      fileName = "orlogo_avlaga";
+      fileName = "Орлого_авлагын_тайлан";
     } else if (report === "negtgel") {
       const ExcelJS = require("exceljs");
       const Baiguullaga = require("../models/baiguullaga");
@@ -2141,13 +2157,14 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
         bookType: "xlsx",
       });
 
+      const encodedFileName = encodeURIComponent(fileName);
       res.setHeader(
         "Content-Type",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
       );
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${fileName}_${Date.now()}.xlsx"`
+        `attachment; filename="${encodedFileName}_${Date.now()}.xlsx"; filename*=UTF-8''${encodedFileName}_${Date.now()}.xlsx`
       );
       res.send(excelBuffer);
     } else if (type.toLowerCase() === "csv") {

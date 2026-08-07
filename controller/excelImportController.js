@@ -205,19 +205,29 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
         const latestUldegdel = item.uldegdel || 0;
 
 
+        const gereeTuluv = (() => {
+          const raw = item.gereeniiTuluv || item.gereeTuluv || (geree ? geree.tuluv || geree.status : null);
+          if (!raw) return "Идэвхтэй";
+          const s = String(raw).toLowerCase();
+          if (s.includes("цуцл") || s.includes("cancel")) return "Цуцлагдсан";
+          if (s.includes("идэвх") || s.includes("active")) return "Идэвхтэй";
+          return String(raw);
+        })();
+
         return {
           dugaar: index + 1, // № (row number)
           ner: item.ner || "", // Нэр (name)
-          toot: item.nekhemjlekhiinDugaar || item.dugaalaltDugaar || "", // Тоот (invoice number)
+          toot: geree ? geree.toot || "" : item.toot || "", // Тоот (apartment number)
           utas: utas, // Утас (phone)
+          orts: geree ? geree.orts || "1" : "", // Орц (entrance)
+          davkhar: geree ? geree.davkhar || item.davkhar || "" : item.davkhar || "", // Давхар (floor)
           gereeniiDugaar: item.gereeniiDugaar || "", // Гэрээний дугаар (contract number)
-          uldegdel: formatNumber(latestUldegdel), // Үлдэгдэл (balance) - from latest ledger entry, formatted to 2 decimals
-          guitsetgel: item.tuluv || "", // Гүйцэтгэл (status/performance)
-          orts: geree ? geree.orts || "" : item.davkhar ? "" : "", // Орц (entrance) - from geree
-          davkhar: geree
-            ? geree.davkhar || item.davkhar || ""
-            : item.davkhar || "", // Давхар (floor)
-          tootGeree: geree ? geree.toot || "" : "", // Тоот (apartment number) - from geree
+          gereeniiTuluv: gereeTuluv, // Гэрээний төлөв (active/cancelled)
+          nekhemjlekhiinDugaar: item.nekhemjlekhiinDugaar || item.dugaalaltDugaar || "", // Нэхэмжлэхийн дугаар
+          niitTulbur: Number(item.niitTulbur || item.tulbur || 0), // Нийт төлбөр
+          khungulult: Number(item.khungulult || item.discount || 0), // Хөнгөлөлт
+          uldegdel: Number(latestUldegdel || 0), // Үлдэгдэл
+          guitsetgel: item.tuluv || "", // Төлбөрийн төлөв
         };
       });
 
@@ -228,17 +238,20 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
         { key: "ner", label: "Нэр" },
         { key: "toot", label: "Тоот" },
         { key: "utas", label: "Утас" },
-        { key: "gereeniiDugaar", label: "Гэрээний дугаар" },
-        { key: "uldegdel", label: "Үлдэгдэл" },
-        { key: "guitsetgel", label: "Гүйцэтгэл" },
         { key: "orts", label: "Орц" },
         { key: "davkhar", label: "Давхар" },
-        { key: "tootGeree", label: "Тоот" },
+        { key: "gereeniiDugaar", label: "Гэрээний дугаар" },
+        { key: "gereeniiTuluv", label: "Гэрээний төлөв" },
+        { key: "nekhemjlekhiinDugaar", label: "Нэхэмжлэхийн дугаар" },
+        { key: "niitTulbur", label: "Нийт төлбөр" },
+        { key: "khungulult", label: "Хөнгөлөлт" },
+        { key: "uldegdel", label: "Үлдэгдэл" },
+        { key: "guitsetgel", label: "Төлбөрийн төлөв" },
       ];
       req.body.fileName =
-        req.body.fileName || `nekhemjlekhiinTuukh_${Date.now()}`;
-      req.body.sheetName = req.body.sheetName || "Нэхэмжлэх";
-      req.body.colWidths = [8, 25, 15, 15, 20, 15, 15, 10, 10, 10]; // Column widths
+        req.body.fileName || `Нэхэмжлэхийн_түүх_${Date.now()}`;
+      req.body.sheetName = req.body.sheetName || "Нэхэмжлэхийн түүх";
+      req.body.colWidths = [8, 20, 10, 15, 8, 8, 20, 15, 20, 16, 16, 16, 15]; // Column widths
 
       // Call downloadExcelList function directly
       return exports.downloadExcelList(req, res, next);
@@ -718,6 +731,15 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
         return item.horoo || "";
       })(),
       soh: item.soh || "",
+      gereeniiTuluv: (() => {
+        const raw = item.gereeniiTuluv || item.gereeTuluv || item.tuluv || item.status;
+        if (!raw) return "Идэвхтэй";
+        const s = String(raw).toLowerCase();
+        if (s.includes("цуцл") || s.includes("cancel")) return "Цуцлагдсан";
+        if (s.includes("идэвх") || s.includes("active")) return "Идэвхтэй";
+        return String(raw);
+      })(),
+      ekhniiUldegdel: Number(item.ekhniiUldegdel || item.uldegdel || 0),
       khonogoorBodokhEsekh: item.khonogoorBodokhEsekh ? "Тийм" : "Үгүй",
       bodokhKhonog: item.bodokhKhonog || 0,
     }));
@@ -734,6 +756,8 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
       { key: "davkhar", label: "Давхар" },
       { key: "toot", label: "Тоот" },
       { key: "turul", label: "Төрөл" },
+      { key: "gereeniiTuluv", label: "Гэрээний төлөв" },
+      { key: "ekhniiUldegdel", label: "Эхний үлдэгдэл" },
       { key: "duusakhOgnoo", label: "Гэрээ дуусах огноо" },
       { key: "bairniiNer", label: "Барилгын нэр" },
       { key: "duureg", label: "Дүүрэг" },
@@ -742,9 +766,9 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
       { key: "khonogoorBodokhEsekh", label: "Хоногоор бодох" },
       { key: "bodokhKhonog", label: "Ирээдүйд ашиглах хоног" },
     ];
-    req.body.fileName = req.body.fileName || `orshinSuugch_${Date.now()}`;
+    req.body.fileName = req.body.fileName || `Оршин_суугчдын_жагсаалт_${Date.now()}`;
     req.body.sheetName = req.body.sheetName || "Оршин суугчид";
-    req.body.colWidths = [10, 20, 20, 15, 25, 10, 10, 10, 15, 20, 25, 15, 15, 20, 15, 20];
+    req.body.colWidths = [8, 15, 15, 15, 20, 8, 8, 10, 12, 14, 15, 18, 20, 15, 15, 15, 12, 18];
 
     // Call downloadExcelList function directly
     return exports.downloadExcelList(req, res, next);
@@ -842,6 +866,66 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
         });
         worksheet.addRow(rowData);
       });
+
+      // Calculate numeric column totals if available
+      const totalsRow = {};
+      let hasNumericSummary = false;
+      const numericKeywords = [
+        "niitdun", "tulbur", "khungulult", "discount", "payment",
+        "uldegdel", "guitsetgel", "paymentamount", "discountamount",
+        "tulsundun", "tulukhdun", "amount", "niittulbur", "undsendun",
+        "khungulultminut", "zogssonminut", "khungulsunminut", "bodoosondun"
+      ];
+
+      headerKeys.forEach((key, colIndex) => {
+        const keyLower = String(key || "").toLowerCase();
+        const labelLower = String(headerLabels[colIndex] || "").toLowerCase();
+        const isNumericKey = numericKeywords.some(nk => keyLower.includes(nk) || labelLower.includes(nk));
+
+        if (colIndex === 0) {
+          totalsRow[key] = "НИЙТ";
+        } else if (isNumericKey) {
+          let sum = 0;
+          let foundVal = false;
+          groupData.forEach(item => {
+            let valRaw = item[key];
+            if (key.includes(".")) {
+              valRaw = key.split(".").reduce((obj, prop) => (obj && obj[prop] !== undefined ? obj[prop] : null), item);
+            }
+            const val = Number(valRaw);
+            if (!isNaN(val) && valRaw !== "" && valRaw !== null && valRaw !== undefined) {
+              sum += val;
+              foundVal = true;
+            }
+          });
+          if (foundVal) {
+            totalsRow[key] = Math.round(sum * 100) / 100;
+            hasNumericSummary = true;
+          } else {
+            totalsRow[key] = "";
+          }
+        } else {
+          totalsRow[key] = "";
+        }
+      });
+
+      if (hasNumericSummary) {
+        const summaryRow = worksheet.addRow(totalsRow);
+        summaryRow.font = { bold: true };
+        summaryRow.eachCell((cell) => {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF2F2F2" }
+          };
+          cell.border = {
+            top: { style: "double" },
+            left: { style: "thin" },
+            bottom: { style: "thin" },
+            right: { style: "thin" }
+          };
+        });
+      }
 
       // Style Header
       const headerRow = worksheet.getRow(1);
