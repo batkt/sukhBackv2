@@ -206,10 +206,13 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
 
 
         const gereeTuluv = (() => {
+          if (item.tsutsalsanOgnoo || (geree && geree.tsutsalsanOgnoo) || item.gereeniiTuluv === "Цуцалсан" || (geree && geree.tuluv === "Цуцалсан")) {
+            return "Цуцалсан";
+          }
           const raw = item.gereeniiTuluv || item.gereeTuluv || (geree ? geree.tuluv || geree.status : null);
           if (!raw) return "Идэвхтэй";
           const s = String(raw).toLowerCase();
-          if (s.includes("цуцл") || s.includes("cancel")) return "Цуцлагдсан";
+          if (s.includes("цуц") || s.includes("cancel")) return "Цуцалсан";
           if (s.includes("идэвх") || s.includes("active")) return "Идэвхтэй";
           return String(raw);
         })();
@@ -855,9 +858,10 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
 
       const currencyKeys = [
         "niitdun", "tulbur", "khungulult", "discount", "payment",
-        "uldegdel", "paymentamount", "discountamount",
+        "uldegdel", "guitsetgel", "paymentamount", "discountamount",
         "tulsundun", "tulukhdun", "amount", "niittulbur", "undsendun",
-        "bodoosondun", "ekhniiuldegdel"
+        "bodoosondun", "ekhniiuldegdel", "бодогдсон дүн", "төлбөр",
+        "хөнгөлөлт", "үлдэгдэл", "гүйцэтгэл"
       ];
 
       // Add data
@@ -888,8 +892,14 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
         const addedRow = worksheet.addRow(rowData);
         addedRow.eachCell((cell, colNumber) => {
           const key = headerKeys[colNumber - 1] || "";
-          const keyLower = String(key || "").toLowerCase();
-          const isCurrency = currencyKeys.some(ck => keyLower.includes(ck));
+          const label = headerLabels[colNumber - 1] || "";
+          const keyLower = String(key).toLowerCase();
+          const labelLower = String(label).toLowerCase();
+          const isNonCurrencyID = keyLower === "dugaar" || keyLower === "orts" || keyLower === "davkhar" || labelLower === "№";
+          const isCurrency = !isNonCurrencyID && (
+            currencyKeys.some(ck => keyLower.includes(ck) || labelLower.includes(ck)) ||
+            (typeof cell.value === "number" && !isNonCurrencyID)
+          );
 
           cell.border = {
             top: { style: "thin", color: { argb: "D3D3D3" } },
@@ -957,8 +967,14 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
         summaryRow.font = { bold: true };
         summaryRow.eachCell((cell, colNumber) => {
           const key = headerKeys[colNumber - 1] || "";
-          const keyLower = String(key || "").toLowerCase();
-          const isCurrency = currencyKeys.some(ck => keyLower.includes(ck));
+          const label = headerLabels[colNumber - 1] || "";
+          const keyLower = String(key).toLowerCase();
+          const labelLower = String(label).toLowerCase();
+          const isNonCurrencyID = keyLower === "dugaar" || keyLower === "orts" || keyLower === "davkhar" || labelLower === "№";
+          const isCurrency = !isNonCurrencyID && (
+            currencyKeys.some(ck => keyLower.includes(ck) || labelLower.includes(ck)) ||
+            (typeof cell.value === "number" && !isNonCurrencyID)
+          );
 
           cell.border = {
             top: { style: "thin", color: { argb: "D3D3D3" } },
@@ -1127,7 +1143,6 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
           right: { style: 'thin' }
         };
       } else {
-        // Yellow background for optional
         cell.fill = {
           type: 'pattern',
           pattern: 'solid',
@@ -1143,17 +1158,13 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     });
     headerRow.commit();
 
-    // Row 2: plain empty cells
     const legendRow = worksheet.getRow(2);
     legendRow.commit();
 
-    // Data validation for Orts (Column E) and Davkhar (Column F)
-    // Start from row 3 (row 2 is the legend row)
     const ortsFormula = `"${ortsList.join(",")}"`;
     const davkharFormula =
       davkharList.length > 0 ? `"${davkharList.join(",")}"` : null;
 
-    // Apply to rows 3 to 2000 (row 2 is legend)
     if (ortsFormula && ortsFormula.length < 255) {
       worksheet.dataValidations.add("E3:E2000", {
         type: "list",
