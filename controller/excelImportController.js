@@ -860,11 +860,24 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
             rowData[key] = value.join(", ");
           } else if (typeof value === "object" && value !== null) {
             rowData[key] = value.ner || JSON.stringify(value);
+          } else if (typeof value === "number") {
+            rowData[key] = Math.round(value * 100) / 100;
           } else {
             rowData[key] = value ?? "";
           }
         });
-        worksheet.addRow(rowData);
+        const addedRow = worksheet.addRow(rowData);
+        addedRow.eachCell((cell) => {
+          cell.border = {
+            top: { style: "thin", color: { argb: "D3D3D3" } },
+            left: { style: "thin", color: { argb: "D3D3D3" } },
+            bottom: { style: "thin", color: { argb: "D3D3D3" } },
+            right: { style: "thin", color: { argb: "D3D3D3" } }
+          };
+          if (typeof cell.value === "number") {
+            cell.numFmt = "0.00";
+          }
+        });
       });
 
       // Calculate numeric column totals if available
@@ -874,7 +887,7 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
         "niitdun", "tulbur", "khungulult", "discount", "payment",
         "uldegdel", "guitsetgel", "paymentamount", "discountamount",
         "tulsundun", "tulukhdun", "amount", "niittulbur", "undsendun",
-        "khungulultminut", "zogssonminut", "khungulsunminut", "bodoosondun"
+        "khungulultminut", "zogssonminut", "khungulsunminut", "bodoosondun", "ekhniiuldegdel"
       ];
 
       headerKeys.forEach((key, colIndex) => {
@@ -911,19 +924,17 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
 
       if (hasNumericSummary) {
         const summaryRow = worksheet.addRow(totalsRow);
-        summaryRow.font = { bold: true };
+        // Design matches data cells: clean background, thin borders, same font & 0.00 formatting
         summaryRow.eachCell((cell) => {
-          cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FFF2F2F2" }
-          };
           cell.border = {
-            top: { style: "double" },
-            left: { style: "thin" },
-            bottom: { style: "thin" },
-            right: { style: "thin" }
+            top: { style: "thin", color: { argb: "D3D3D3" } },
+            left: { style: "thin", color: { argb: "D3D3D3" } },
+            bottom: { style: "thin", color: { argb: "D3D3D3" } },
+            right: { style: "thin", color: { argb: "D3D3D3" } }
           };
+          if (typeof cell.value === "number") {
+            cell.numFmt = "0.00";
+          }
         });
       }
 
