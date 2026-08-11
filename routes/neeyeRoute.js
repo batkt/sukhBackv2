@@ -2,23 +2,65 @@ const express = require("express");
 const router = express.Router();
 const { db } = require("zevbackv2");
 const jwt = require("jsonwebtoken");
+const { v4: uuidv4 } = require("uuid");
+const { pubClient, subClient } = require("../utils/redisClient");
 const KhaalgaNeeyeTuukh = require("../models/khaalgaNeeyeTuukh");
 const Ajiltan = require("../models/ajiltan");
 const OrshinSuugch = require("../models/orshinSuugch");
 
+// Tracks GET /neeye requests waiting on a real result from the local gate
+// worker. Process-local, so (same as webrtc signaling in cameraRoute.js) a
+// Redis pub/sub relay bridges PM2 cluster workers: whichever worker actually
+// holds the gate worker's socket publishes the result, and every worker
+// checks its own local map - only the one actually waiting resolves it.
+const pendingGateCommands = new Map();
+const GATE_RESULT_CHANNEL = "gate:execute-open-result";
+
+function resolveGateCommandLocally({ commandId, success, error }) {
+  const pending = pendingGateCommands.get(commandId);
+  if (!pending) return; // Not ours (or already resolved) - normal in cluster mode.
+  clearTimeout(pending.timeout);
+  pendingGateCommands.delete(commandId);
+  pending.resolve({ success, error });
+}
+
+let gateResultSubscribed = false;
+function ensureGateResultSubscribed() {
+  if (gateResultSubscribed) return;
+  gateResultSubscribed = true;
+  subClient
+    .subscribe(GATE_RESULT_CHANNEL, (message) => {
+      try {
+        resolveGateCommandLocally(JSON.parse(message));
+      } catch (err) {
+        console.error("[Gate] Failed to parse execute-open-result pub/sub message:", err.message);
+      }
+    })
+    .catch((err) => {
+      gateResultSubscribed = false;
+      console.error("[Gate] Redis subscribe failed - cross-worker gate acks disabled:", err.message);
+    });
+}
+ensureGateResultSubscribed();
+
 /**
  * Remote Gate Open Route
- * When called, it emits a socket event to the local gate worker and logs the action.
+ * Sends "execute-open" to the local gate worker and waits for its real
+ * success/failure result instead of assuming success. Logs land here on the
+ * server (visible via `pm2 logs` / your log aggregator) so a failure is
+ * diagnosable without needing access to the on-site PC.
  * Path: GET /neeye/:ip
  */
 router.get("/neeye/:ip", async (req, res) => {
+  const startedAt = Date.now();
   try {
     const { ip } = req.params;
     const barilgiinId = req.query.barilgiinId;
     const mashiniiDugaar = req.query.mashiniiDugaar || "";
+    const plateLog = mashiniiDugaar || "-";
 
     if (!barilgiinId) {
-      console.warn(`[Gate] neeye called for ${ip} but barilgiinId is missing`);
+      console.warn(`[Gate] ⚠️ neeye called ip=${ip} plate=${plateLog} but barilgiinId is missing`);
       return res.status(400).json({ aldaa: "barilgiinId missing" });
     }
 
@@ -27,17 +69,12 @@ router.get("/neeye/:ip", async (req, res) => {
       return res.status(500).json({ aldaa: "Socket.io not initialized" });
     }
 
-    console.log(
-      `🚀 [Gate] Triggering remote open for Building: ${barilgiinId}, Camera: ${ip}`,
-    );
-
-    // Emit to the specific building room
-    io.to(`gate-room-${barilgiinId}`).emit("execute-open", { ip });
-
     // 1. Decode JWT and resolve the resident (orshinSuugch) who opened the gate.
-    //    Only resident-initiated opens are recorded as history.
+    //    Only resident-initiated opens are recorded as history, and a resident
+    //    without permission is denied HERE, before any command is sent - not
+    //    after, so a denied resident can never trigger the physical gate.
     //    Opens triggered by staff (ajiltan) or the system (no token / zochin)
-    //    are NOT logged.
+    //    are NOT logged and skip the permission check below.
     let orshinSuugch = null;
 
     if (req.headers.authorization) {
@@ -98,7 +135,47 @@ router.get("/neeye/:ip", async (req, res) => {
       }
     }
 
-    // 2. Save gate open log ONLY for residents (orshinSuugch).
+    // 2. Is a gate worker even connected for this building? Fail fast and
+    //    say so plainly instead of pretending the command was sent.
+    const roomName = `gate-room-${barilgiinId}`;
+    const room = io.sockets.adapter.rooms.get(roomName);
+    const roomSize = room ? room.size : 0;
+
+    console.log(
+      `[Gate] OPEN request ip=${ip} plate=${plateLog} barilgiinId=${barilgiinId} workers=${roomSize}`,
+    );
+
+    if (roomSize === 0) {
+      console.warn(`[Gate] ⚠️ no gate worker connected for building ${barilgiinId} — command not sent`);
+      return res.status(503).json({ aldaa: "Локал төхөөрөмж холбогдоогүй байна" });
+    }
+
+    // 3. Send the command and wait for the worker's real result. A worker
+    //    that never replies (crashed, SDK hung) must not hang this request
+    //    forever, hence the timeout.
+    const commandId = uuidv4();
+    const waitForResult = new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        pendingGateCommands.delete(commandId);
+        resolve({ success: false, error: "timeout" });
+      }, 8000);
+      pendingGateCommands.set(commandId, { resolve, timeout });
+    });
+
+    io.to(roomName).emit("execute-open", { ip, plate: mashiniiDugaar, commandId });
+
+    const result = await waitForResult;
+    const latencyMs = Date.now() - startedAt;
+
+    if (result.success) {
+      console.log(`[Gate] ✅ opened ip=${ip} plate=${plateLog} latency=${latencyMs}ms`);
+    } else {
+      console.error(
+        `[Gate] ❌ failed ip=${ip} plate=${plateLog} reason=${result.error || "unknown"} latency=${latencyMs}ms`,
+      );
+    }
+
+    // 4. Save gate open log ONLY for residents (orshinSuugch).
     if (orshinSuugch) {
       try {
         // Resolve the toot for this building if a toots array is present.
@@ -131,15 +208,27 @@ router.get("/neeye/:ip", async (req, res) => {
       }
     }
 
-    res.json({
-      status: "Amjilttai",
-      message: "Open command sent to local worker",
-    });
+    if (result.success) {
+      return res.json({ status: "Amjilttai", message: "Gate opened" });
+    }
+    return res
+      .status(502)
+      .json({ aldaa: "Хаалга нээгдсэнгүй", reason: result.error || "unknown" });
   } catch (error) {
     console.error("[Gate] neeye error:", error);
     res.status(500).json({ aldaa: "Internal server error" });
   }
 });
+
+router.handleExecuteOpenResult = (data) => {
+  // Resolve immediately if the waiting request is on this same process, and
+  // always publish so the worker actually waiting (if it's a different PM2
+  // process) can pick it up too.
+  resolveGateCommandLocally(data);
+  pubClient.publish(GATE_RESULT_CHANNEL, JSON.stringify(data)).catch((err) => {
+    console.error("[Gate] Redis publish failed for execute-open-result:", err.message);
+  });
+};
 
 /**
  * Gate Open History Stats Route

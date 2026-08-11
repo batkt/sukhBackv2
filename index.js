@@ -137,6 +137,11 @@ process.env.UV_THREADPOOL_SIZE = 20;
       socket.on("webrtc-answer", (data) => {
         cameraRoute.handleWebRTCAnswer(data);
       });
+
+      // Handle gate-open results from local workers
+      socket.on("execute-open-result", (data) => {
+        neeyeRoute.handleExecuteOpenResult(data);
+      });
     });
 
 

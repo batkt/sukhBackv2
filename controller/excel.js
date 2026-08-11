@@ -1145,20 +1145,11 @@ exports.zaaltExcelTemplateAvya = asyncHandler(async (req, res, next) => {
       });
     }
 
-    /** Өмнө = last billing "Нийт (одоо)", not ₮/кВт tariff stored on geree by mistake */
+    /** Өмнө = last billing "Нийт (одоо)", if no prior imported history exists always 0 */
     function templateUmnuValue(geree, orshinSuugch) {
       const fromHistory = latestTotalByGereeId.get(String(geree._id));
       if (fromHistory != null) return fromHistory;
-      const s = Number(geree.suuliinZaalt);
-      const tariff = Number(orshinSuugch?.tsahilgaaniiZaalt);
-      if (
-        Number.isFinite(s) &&
-        Number.isFinite(tariff) &&
-        Math.abs(s - tariff) < 1e-6
-      ) {
-        return 0;
-      }
-      return Number.isFinite(s) ? s : 0;
+      return 0;
     }
 
     // Fetch orshinSuugch data to get name, phone, and electricity tariff (кВт)
@@ -1223,16 +1214,31 @@ exports.zaaltExcelTemplateAvya = asyncHandler(async (req, res, next) => {
       });
     });
 
-    // Add formula for "Нийт (одоо)" column (Өдөр + Шөнө)
+    // Format number columns and right-align
+    worksheet.getColumn("umnu").numFmt = "0.00";
+    worksheet.getColumn("umnu").alignment = { horizontal: "right" };
+    worksheet.getColumn("odor").numFmt = "0.00";
+    worksheet.getColumn("odor").alignment = { horizontal: "right" };
+    worksheet.getColumn("shone").numFmt = "0.00";
+    worksheet.getColumn("shone").alignment = { horizontal: "right" };
+    worksheet.getColumn("niitOdoo").numFmt = "0.00";
+    worksheet.getColumn("niitOdoo").alignment = { horizontal: "right" };
+    worksheet.getColumn("zoruu").numFmt = "0.00";
+    worksheet.getColumn("zoruu").alignment = { horizontal: "right" };
+    worksheet.getColumn("defaultDun").numFmt = "#,##0.00";
+    worksheet.getColumn("defaultDun").alignment = { horizontal: "right" };
+    worksheet.getColumn("kwt").numFmt = "0.00";
+    worksheet.getColumn("kwt").alignment = { horizontal: "right" };
+
+    // Add formula for "Нийт (одоо)" column (SUM(F:G)) and "Зөрүү" (H-E)
     // Columns: A=Гэрээний дугаар, B=Тоот, C=Нэр, D=Утас, E=Өмнө, F=Өдөр, G=Шөнө, H=Нийт (одоо), I=Зөрүү, J=Суурь хураамж, K=кВт
-    // Add formula for "Зөрүү" column (Нийт (одоо) - Өмнө)
     gereenuud.forEach((geree, index) => {
       const rowNumber = index + 2; // +2 because row 1 is header
 
-      // Нийт (одоо) = Өдөр + Шөнө (Column H = F + G)
+      // Нийт (одоо) = Өдөр + Шөнө (SUM ignores blank cells to prevent #VALUE!)
       const niitCell = worksheet.getCell(`H${rowNumber}`);
       niitCell.value = {
-        formula: `F${rowNumber}+G${rowNumber}`,
+        formula: `SUM(F${rowNumber}:G${rowNumber})`,
       };
       niitCell.numFmt = "0.00";
 
@@ -1439,7 +1445,7 @@ exports.zaaltExcelTatya = asyncHandler(async (req, res, next) => {
             continue;
         }
 
-        let umnu = !isEmptyStr(umnuValue) ? parseExcelNum(umnuValue) : (geree.suuliinZaalt || 0);
+        let umnu = !isEmptyStr(umnuValue) ? parseExcelNum(umnuValue) : 0;
         let odor = !isEmptyStr(odorValue) ? parseExcelNum(odorValue) : (geree.zaaltTog || 0);
         let shone = !isEmptyStr(shoneValue) ? parseExcelNum(shoneValue) : (geree.zaaltUs || 0);
         
@@ -1457,9 +1463,7 @@ exports.zaaltExcelTatya = asyncHandler(async (req, res, next) => {
 
         // Usage amount and calculation
         const zoruuValue = Math.abs(niitOdoo - umnu);
-        let finalTariff = (zaaltZardal ? (zaaltZardal.zaaltTariff || zaaltZardal.tariff || 0) : 0);
-        let gereeZaaltTariff = finalTariff; // Keep for tiered calculation fallback
-        
+
         // Base fee: Priority Excel > Global Setting > Default 2000
         const baseFeeUsed = defaultDunFromExcel || (zaaltZardal ? (zaaltZardal.suuriKhuraamj || 0) : 2000);
 
@@ -1477,11 +1481,6 @@ exports.zaaltExcelTatya = asyncHandler(async (req, res, next) => {
           }
         }
 
-        // Row priority: If Excel row has a tariff, use it!
-        if (tsahilgaaniiZaaltFromExcel !== null) {
-          finalTariff = tsahilgaaniiZaaltFromExcel;
-        }
-
         // Validate readings
         if (odor < 0 || shone < 0 || umnu < 0) {
           results.failed.push({
@@ -1492,29 +1491,38 @@ exports.zaaltExcelTatya = asyncHandler(async (req, res, next) => {
           continue;
         }
 
-        // Update Resident latest readings and tariff if record exists
+        // Fetch Resident to get registered tsahilgaaniiZaalt (tariff)
+        let orshinSuugch = null;
         if (geree.orshinSuugchId) {
           const centralConn = db.erunkhiiKholbolt;
-          let orshinSuugch = await OrshinSuugch(centralConn).findById(geree.orshinSuugchId).catch(() => null);
-          
+          orshinSuugch = await OrshinSuugch(centralConn).findById(geree.orshinSuugchId).catch(() => null);
           if (!orshinSuugch && tukhainBaaziinKholbolt) {
             orshinSuugch = await OrshinSuugch(tukhainBaaziinKholbolt).findById(geree.orshinSuugchId).catch(() => null);
           }
+        }
 
+        // Tariff Priority:
+        // 1. Resident registered tariff set during initial registration
+        // 2. Excel row tariff if resident registered tariff is missing
+        // 3. Building global zaaltZardal tariff
+        let finalTariff = 0;
+        if (orshinSuugch && Number(orshinSuugch.tsahilgaaniiZaalt) > 0) {
+          finalTariff = Number(orshinSuugch.tsahilgaaniiZaalt);
+        } else if (tsahilgaaniiZaaltFromExcel !== null && tsahilgaaniiZaaltFromExcel > 0) {
+          finalTariff = tsahilgaaniiZaaltFromExcel;
           if (orshinSuugch) {
-            orshinSuugch.odorZaalt = odor;
-            orshinSuugch.shonoZaalt = shone;
-            orshinSuugch.suuliinZaalt = niitOdoo;
-
-            if (tsahilgaaniiZaaltFromExcel !== null) {
-              orshinSuugch.tsahilgaaniiZaalt = tsahilgaaniiZaaltFromExcel;
-            } else if (orshinSuugch.tsahilgaaniiZaalt > 0 && finalTariff === 0) {
-              // Only fallback to resident tariff if Excel row was empty and building global was 0
-              finalTariff = orshinSuugch.tsahilgaaniiZaalt;
-            }
-
-            await orshinSuugch.save();
+            orshinSuugch.tsahilgaaniiZaalt = tsahilgaaniiZaaltFromExcel;
           }
+        } else {
+          finalTariff = (zaaltZardal ? (zaaltZardal.zaaltTariff || zaaltZardal.tariff || 0) : 0);
+        }
+
+        // Update Resident readings (preserve resident's registered kWh tariff rate)
+        if (orshinSuugch) {
+          orshinSuugch.odorZaalt = odor;
+          orshinSuugch.shonoZaalt = shone;
+          orshinSuugch.suuliinZaalt = niitOdoo;
+          await orshinSuugch.save();
         }
         
         // Sync tiered calculation tariff with finalized resident/row tariff
@@ -2025,15 +2033,23 @@ exports.zaaltExcelDataAvya = asyncHandler(async (req, res, next) => {
       });
     });
 
-    // Format number columns
+    // Format number columns and right-align
     worksheet.getColumn("umnukhZaalt").numFmt = "0.00";
+    worksheet.getColumn("umnukhZaalt").alignment = { horizontal: "right" };
     worksheet.getColumn("zaaltTog").numFmt = "0.00";
+    worksheet.getColumn("zaaltTog").alignment = { horizontal: "right" };
     worksheet.getColumn("zaaltUs").numFmt = "0.00";
+    worksheet.getColumn("zaaltUs").alignment = { horizontal: "right" };
     worksheet.getColumn("suuliinZaalt").numFmt = "0.00";
+    worksheet.getColumn("suuliinZaalt").alignment = { horizontal: "right" };
     worksheet.getColumn("zoruu").numFmt = "0.00";
+    worksheet.getColumn("zoruu").alignment = { horizontal: "right" };
     worksheet.getColumn("tariff").numFmt = "0.00";
-    worksheet.getColumn("defaultDun").numFmt = "#,##0";
-    worksheet.getColumn("zaaltDun").numFmt = "#,##0";
+    worksheet.getColumn("tariff").alignment = { horizontal: "right" };
+    worksheet.getColumn("defaultDun").numFmt = "#,##0.00";
+    worksheet.getColumn("defaultDun").alignment = { horizontal: "right" };
+    worksheet.getColumn("zaaltDun").numFmt = "#,##0.00";
+    worksheet.getColumn("zaaltDun").alignment = { horizontal: "right" };
 
     // Auto-fit columns
     worksheet.columns.forEach((column) => {

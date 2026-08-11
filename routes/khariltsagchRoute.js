@@ -302,11 +302,7 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
               const g = unitGereeMap[tootKey];
               if (g) {
                 if (g.ekhniiUldegdel !== undefined) t.ekhniiUldegdel = g.ekhniiUldegdel;
-                if (g.suuliinZaalt !== undefined && g.suuliinZaalt > 0) {
-                  t.tsahilgaaniiZaalt = g.suuliinZaalt;
-                } else if (g.umnukhZaalt !== undefined) {
-                  t.tsahilgaaniiZaalt = g.umnukhZaalt;
-                }
+
               }
             });
           }
@@ -343,11 +339,7 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
             mur.uldegdel = authoritativeGeree.dynamicUldegdel;
           }
           // Use suuliinZaalt (Last Reading) if available, otherwise umnukhZaalt (Previous Reading)
-          if (authoritativeGeree.suuliinZaalt !== undefined && authoritativeGeree.suuliinZaalt > 0) {
-            mur.tsahilgaaniiZaalt = authoritativeGeree.suuliinZaalt;
-          } else if (authoritativeGeree.umnukhZaalt !== undefined) {
-            mur.tsahilgaaniiZaalt = authoritativeGeree.umnukhZaalt;
-          }
+
 
           // Sync contextually relevant fields from the contract
           if (authoritativeGeree.toot) mur.toot = authoritativeGeree.toot;
@@ -447,11 +439,7 @@ router.get("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
                     t.ekhniiUldegdel = g.dynamicUldegdel;
                     t.uldegdel = g.dynamicUldegdel;
                   }
-                  if (g.suuliinZaalt !== undefined && g.suuliinZaalt > 0) {
-                    t.tsahilgaaniiZaalt = g.suuliinZaalt;
-                  } else if (g.umnukhZaalt !== undefined) {
-                    t.tsahilgaaniiZaalt = g.umnukhZaalt;
-                  }
+
                   if (g.khonogoorBodokhEsekh !== undefined) t.khonogoorBodokhEsekh = g.khonogoorBodokhEsekh;
                   if (g.bodokhKhonog !== undefined) t.bodokhKhonog = g.bodokhKhonog;
                 }
@@ -466,11 +454,7 @@ router.get("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
                 result.ekhniiUldegdel = authoritativeGeree.dynamicUldegdel;
                 result.uldegdel = authoritativeGeree.dynamicUldegdel;
               }
-              if (authoritativeGeree.suuliinZaalt !== undefined && authoritativeGeree.suuliinZaalt > 0) {
-                result.tsahilgaaniiZaalt = authoritativeGeree.suuliinZaalt;
-              } else if (authoritativeGeree.umnukhZaalt !== undefined) {
-                result.tsahilgaaniiZaalt = authoritativeGeree.umnukhZaalt;
-              }
+
 
               if (authoritativeGeree.toot) result.toot = authoritativeGeree.toot;
               if (authoritativeGeree.davkhar) result.davkhar = authoritativeGeree.davkhar;
