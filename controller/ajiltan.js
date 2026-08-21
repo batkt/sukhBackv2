@@ -456,6 +456,10 @@ function msgIlgeeye(
   tukhainBaaziinKholbolt,
   baiguullagiinId,
 ) {
+  // TEMPORARILY DISABLED: Global SMS switch
+  console.log("⚠️ [ajiltan.msgIlgeeye] SMS sending is temporarily disabled.");
+  return;
+
   try {
     if (!jagsaalt || index >= jagsaalt.length) {
       return;

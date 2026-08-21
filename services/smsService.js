@@ -10,6 +10,10 @@ const MsgTuukh = require("../models/msgTuukh");
  * @returns {Promise<Array>} Results array
  */
 async function sendSms(messages, key, senderNumber, kholbolt) {
+  // TEMPORARILY DISABLED: Global SMS switch
+  console.log("⚠️ [smsService] SMS sending is temporarily disabled.");
+  return (messages || []).map((m) => ({ status: "SKIPPED_DISABLED", to: m.to }));
+
   const results = [];
   if (!messages || messages.length === 0) return results;
 

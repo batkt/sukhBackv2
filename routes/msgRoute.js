@@ -20,6 +20,13 @@ function msgIlgeeye(
   baiguullagiinId,
   barilgiinId
 ) {
+  // TEMPORARILY DISABLED: Global SMS switch
+  console.log("⚠️ [msgRoute.msgIlgeeye] SMS sending is temporarily disabled.");
+  if (res && !res.headersSent) {
+    res.send(khariu || { message: "SMS sending disabled" });
+  }
+  return;
+
   try {
     if (!jagsaalt || index >= jagsaalt.length) {
       if (res && !res.headersSent) {
