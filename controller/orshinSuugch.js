@@ -5526,3 +5526,113 @@ exports.syncResidentContracts = async function syncResidentContracts(
 
   return anyReactivated;
 };
+
+exports.massUpdateOrshinSuugchKwt = asyncHandler(async (req, res, next) => {
+  const { db } = require("zevbackv2");
+  const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
+  const GereeModel = Geree;
+
+  const { baiguullagiinId, barilgiinId, kwt, units } = req.body;
+
+  if (!baiguullagiinId) {
+    throw new aldaa("Байгууллагын ID хоосон байна");
+  }
+
+  let updatedCount = 0;
+
+  if (Array.isArray(units) && units.length > 0) {
+    for (const unit of units) {
+      const targetKwt = parseFloat(unit.kwt ?? kwt);
+      if (isNaN(targetKwt)) continue;
+
+      let query = null;
+      if (unit.orshinSuugchId) {
+        query = { _id: unit.orshinSuugchId };
+      } else if (unit.toot) {
+        query = {
+          baiguullagiinId: String(baiguullagiinId),
+          ...(barilgiinId ? { barilgiinId: String(barilgiinId) } : {}),
+          $or: [
+            { toot: String(unit.toot).trim() },
+            { "toots.toot": String(unit.toot).trim() }
+          ]
+        };
+      }
+
+      if (!query) continue;
+
+      const residents = await OrshinSuugchModel.find(query);
+      for (const resident of residents) {
+        resident.tsahilgaaniiZaalt = targetKwt;
+        if (Array.isArray(resident.toots)) {
+          resident.toots.forEach((t) => {
+            if (!barilgiinId || String(t.barilgiinId) === String(barilgiinId)) {
+              t.tsahilgaaniiZaalt = targetKwt;
+            }
+          });
+        }
+        await resident.save();
+        updatedCount++;
+
+        const tukhainBaaziinKholbolt = db.kholboltuud.find(
+          (kholbolt) => String(kholbolt.baiguullagiinId) === String(baiguullagiinId)
+        );
+        if (tukhainBaaziinKholbolt) {
+          const GereeM = GereeModel(tukhainBaaziinKholbolt);
+          await GereeM.updateMany(
+            {
+              orshinSuugchId: resident._id.toString(),
+              baiguullagiinId: String(baiguullagiinId)
+            },
+            { $set: { suuliinZaalt: targetKwt, umnukhZaalt: targetKwt } }
+          );
+        }
+      }
+    }
+  } else {
+    const targetKwt = parseFloat(kwt);
+    if (isNaN(targetKwt)) {
+      throw new aldaa("Заалтын утга (кВт) буруу байна");
+    }
+
+    const query = {
+      baiguullagiinId: String(baiguullagiinId),
+      ...(barilgiinId ? { barilgiinId: String(barilgiinId) } : {})
+    };
+
+    const residents = await OrshinSuugchModel.find(query);
+    for (const resident of residents) {
+      resident.tsahilgaaniiZaalt = targetKwt;
+      if (Array.isArray(resident.toots)) {
+        resident.toots.forEach((t) => {
+          if (!barilgiinId || String(t.barilgiinId) === String(barilgiinId)) {
+            t.tsahilgaaniiZaalt = targetKwt;
+          }
+        });
+      }
+      await resident.save();
+      updatedCount++;
+
+      const tukhainBaaziinKholbolt = db.kholboltuud.find(
+        (kholbolt) => String(kholbolt.baiguullagiinId) === String(baiguullagiinId)
+      );
+      if (tukhainBaaziinKholbolt) {
+        const GereeM = GereeModel(tukhainBaaziinKholbolt);
+        await GereeM.updateMany(
+          {
+            orshinSuugchId: resident._id.toString(),
+            baiguullagiinId: String(baiguullagiinId)
+          },
+          { $set: { suuliinZaalt: targetKwt, umnukhZaalt: targetKwt } }
+        );
+      }
+    }
+  }
+
+  res.status(200).json({
+    success: true,
+    message: `${updatedCount} оршин суугчийн цахилгааны заалт амжилттай шинэчлэгдлээ.`,
+    updatedCount
+  });
+});
+

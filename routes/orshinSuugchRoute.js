@@ -41,6 +41,7 @@ const {
   getBuildingOrts,
   getProfileByPhoneOrCustomer,
   orshinSuugchTootUstgakh,
+  massUpdateOrshinSuugchKwt,
 } = require("../controller/orshinSuugch");
 const aldaa = require("../components/aldaa");
 const session = require("../models/session");
@@ -1401,4 +1402,11 @@ router.post(
   },
 );
 
+router.post(
+  "/orshinSuugch/massUpdateKwt",
+  tokenShalgakh,
+  massUpdateOrshinSuugchKwt
+);
+
 module.exports = router;
+
