@@ -110,6 +110,21 @@ const CONFIG = {
     `tsahilgaan_manual_update_${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
 };
 
+// Reject typos like `--toot21` instead of silently ignoring the filter and
+// processing the whole building.
+const KNOWN_FLAGS = new Set([
+  "from-zaalt", "file", "json", "apply", "dry-run", "org", "barilga", "db", "date",
+  "toot", "recompute", "tariff-source", "any-reading", "include-paid",
+  "merge-duplicates", "report", "help",
+]);
+const unknown = Object.keys(args).filter((k) => k !== "_" && !KNOWN_FLAGS.has(k));
+if (unknown.length) {
+  console.error(`❌ Танихгүй сонголт: ${unknown.map((u) => `--${u}`).join(", ")}`);
+  console.error(`   Боломжтой: ${[...KNOWN_FLAGS].map((f) => `--${f}`).join(" ")}`);
+  console.error("   Санамж: --toot 21 (зайтай), --toot21 биш.");
+  process.exit(1);
+}
+
 const modeCount = [CONFIG.fromZaalt, !!CONFIG.file, !!CONFIG.json].filter(Boolean).length;
 if (modeCount !== 1) {
   console.error(
