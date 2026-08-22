@@ -51,10 +51,14 @@
  *   --report <path>      JSON report output
  */
 
-require("dotenv").config({ path: "./tokhirgoo/tokhirgoo.env" });
-
 const fs = require("fs");
 const path = require("path");
+
+// Resolve the env file against the project root, not the cwd, so the script runs
+// from anywhere (./scripts, cron, pm2) rather than only from the repo root.
+const PROJECT_ROOT = path.resolve(__dirname, "..");
+require("dotenv").config({ path: path.join(PROJECT_ROOT, "tokhirgoo", "tokhirgoo.env") });
+
 const mongoose = require("mongoose");
 const { calculateBillingCycleBounds } = require("../utils/dateUtils");
 
@@ -276,7 +280,11 @@ async function loadFromZaalt(T, startOfCycle, endOfCycle) {
 
 async function main() {
   const uri = process.env.MONGODB_URI;
-  if (!uri) throw new Error("MONGODB_URI тохируулаагүй байна (tokhirgoo/tokhirgoo.env)");
+  if (!uri) {
+    throw new Error(
+      `MONGODB_URI уншигдсангүй. Хайсан файл: ${path.join(PROJECT_ROOT, "tokhirgoo", "tokhirgoo.env")}`
+    );
+  }
 
   const centralConn = await mongoose.createConnection(uri).asPromise();
   const tenantUri = uri.replace(/\/([^/?]+)(\?|$)/, `/${CONFIG.tenantDb}$2`);
