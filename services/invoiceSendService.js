@@ -5,10 +5,6 @@ const { getKholboltByBaiguullagiinId } = require("../utils/dbConnection");
 const axios = require("axios");
 
 async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, options = {}) {
-  // TEMPORARILY DISABLED: Global SMS switch
-  console.log("⚠️ [invoiceSendService] Invoice SMS notification is temporarily disabled.");
-  return { success: true, message: "SMS notification is temporarily disabled" };
-
   try {
     const NekhemjlekhiinTuukhModel = NekhemjlekhiinTuukh(kholbolt);
     const invoice = await NekhemjlekhiinTuukhModel.findById(invoiceId);
