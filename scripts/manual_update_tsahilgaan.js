@@ -1,37 +1,53 @@
 /**
  * Manual electricity (Цахилгаан) correction for an ALREADY-SENT invoice cycle.
  *
- * The normal flow (excel zaalt import -> invoiceService.createInvoiceForContract)
- * refuses to touch a cycle whose invoice already exists, so a late/corrected
- * "Заалтын загвар" spreadsheet cannot be applied through the UI. This script does the
- * same arithmetic the importer does and patches the already-created records in place:
+ * WHY THIS EXISTS
+ * ---------------
+ * The zaalt Excel import already writes zaaltUnshlalt / geree / orshinSuugch correctly, and
+ * then tries to sync the open invoice (controller/excel.js -> invoiceService.createInvoiceForContract).
+ * But it calls it WITHOUT `override`, and createInvoiceForContract returns early with
+ * "Тухайн сарын нэхэмжлэх аль хэдийн үүссэн байна." — so the ledger row and the invoice header
+ * keep last month's amount. This script performs that missing sync.
  *
- *   zaaltUnshlalt       -> reading row for the cycle (upsert)
- *   geree               -> umnukhZaalt/suuliinZaalt/zaaltTog/zaaltUs, zardluud[Цахилгаан].dun, niitTulbur
- *   orshinSuugch        -> odorZaalt/shonoZaalt/suuliinZaalt (+ tsahilgaaniiZaalt when the sheet differs)
- *   guilgeeAvlaguud     -> the Цахилгаан charge row of that invoice (dun/undsenDun/tulukhDun)
- *   nekhemjlekhiinTuukh -> niitTulbur/tsahilgaanNekhemjlekh, then tuluv/uldegdel via FIFO re-sync
+ * WHAT IT PATCHES
+ *   guilgeeAvlaguud     -> the Цахилгаан charge row of the cycle's invoice (dun/undsenDun/tulukhDun)
+ *   nekhemjlekhiinTuukh -> niitTulbur (= Σ positive ledger rows), tsahilgaanNekhemjlekh
+ *   zaaltUnshlalt       -> the cycle's reading row      (only in --file / --json mode)
+ *   geree               -> readings, zardluud[Цахилгаан].dun, niitTulbur
+ *   orshinSuugch        -> odorZaalt/shonoZaalt/suuliinZaalt (+ tsahilgaaniiZaalt if the sheet differs)
+ * then re-runs the FIFO tuluv/uldegdel pass from services/guilgeeService.syncInvoicesStatus
+ * (without its orphan-invoice deletion — this is a correction, not a rebuild).
  *
- * Formula (identical to controller/excel.js):
- *   zaaltDun = |Нийт(одоо) - Өмнө| * тариф + суурь хураамж
- * with geree/building zaaltTariffTiers applied when present.
+ * WHERE THE AMOUNT COMES FROM
+ *   1. a "Төлбөр" column in the sheet, or zaaltUnshlalt.zaaltDun  -> used verbatim
+ *   2. otherwise recomputed as |Нийт(одоо) − Өмнө| × тариф + суурь хураамж,
+ *      with zaaltTariffTiers applied, exactly like controller/excel.js
+ *   Pass --recompute to always recalculate and ignore the stored Төлбөр.
  *
- * DRY RUN BY DEFAULT. Nothing is written until you pass --apply.
+ * INPUT MODES (pick one)
+ *   --from-zaalt         read what the UI import already stored in zaaltUnshlalt.
+ *                        Nothing to copy to the server. Use this on Ubuntu.
+ *   --file <xlsx>        the "Заалтын загвар" template or the exported zaalt workbook
+ *   --json <path>        the same rows as JSON (see scripts/zaalt_data.json)
  *
- *   node scripts/manual_update_tsahilgaan.js --file "C:\path\Заалтын загвар (6).xlsx"
- *   node scripts/manual_update_tsahilgaan.js --file "..." --apply
+ * DRY RUN BY DEFAULT — nothing is written until you pass --apply.
+ *
+ * RUN FROM THE PROJECT ROOT (dotenv reads ./tokhirgoo/tokhirgoo.env):
+ *   node scripts/manual_update_tsahilgaan.js --from-zaalt
+ *   node scripts/manual_update_tsahilgaan.js --from-zaalt --apply
  *
  * Flags:
- *   --file <path>        Excel workbook (required)
- *   --apply              actually write (default: dry run)
+ *   --apply              actually write (default: dry run; --dry-run is accepted as a no-op)
  *   --org <id>           baiguullagiinId          (default: Найрамдал)
  *   --barilga <id>       barilgiinId              (default: Найрамдал building)
  *   --db <name>          tenant database          (default: nairamdalSukh)
- *   --date <YYYY-MM-DD>  reference date used to resolve the billing cycle (default: today)
+ *   --date <YYYY-MM-DD>  reference date that resolves the billing cycle (default: today)
  *   --toot 21,22         only these units
- *   --tariff-source excel|resident   which кВт rate wins (default: excel — the sheet is the correction)
- *   --include-paid       also patch rows on invoices already marked Төлсөн / partially paid
- *   --merge-duplicates   collapse duplicate Цахилгаан ledger rows in the cycle into one
+ *   --recompute          ignore Төлбөр / zaaltDun, recalculate from readings
+ *   --tariff-source excel|resident   which кВт rate wins when recomputing (default: excel)
+ *   --any-reading        --from-zaalt: take each contract's newest reading regardless of cycle
+ *   --include-paid       also patch invoices already marked Төлсөн / partially paid
+ *   --merge-duplicates   collapse duplicate Цахилгаан ledger rows on one invoice into one
  *   --report <path>      JSON report output
  */
 
@@ -40,7 +56,6 @@ require("dotenv").config({ path: "./tokhirgoo/tokhirgoo.env" });
 const fs = require("fs");
 const path = require("path");
 const mongoose = require("mongoose");
-const xlsx = require("xlsx");
 const { calculateBillingCycleBounds } = require("../utils/dateUtils");
 
 // ---------------------------------------------------------------- args
@@ -67,7 +82,9 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv);
 
 const CONFIG = {
-  file: args.file,
+  fromZaalt: args["from-zaalt"] === true,
+  file: typeof args.file === "string" ? args.file : null,
+  json: typeof args.json === "string" ? args.json : null,
   apply: args.apply === true,
   baiguullagiinId: args.org || "697c70e81e782d8110d3b064",
   barilgiinId: args.barilga || "697c71171e782d8110d3be4b",
@@ -79,7 +96,9 @@ const CONFIG = {
         .map((t) => t.trim())
         .filter(Boolean)
     : null,
+  recompute: args.recompute === true,
   tariffSource: args["tariff-source"] === "resident" ? "resident" : "excel",
+  anyReading: args["any-reading"] === true,
   includePaid: args["include-paid"] === true,
   mergeDuplicates: args["merge-duplicates"] === true,
   report:
@@ -87,27 +106,33 @@ const CONFIG = {
     `tsahilgaan_manual_update_${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
 };
 
-if (!CONFIG.file) {
-  console.error('❌ --file шаардлагатай. Ж: --file "C:\\Users\\...\\Заалтын загвар (6).xlsx"');
+const modeCount = [CONFIG.fromZaalt, !!CONFIG.file, !!CONFIG.json].filter(Boolean).length;
+if (modeCount !== 1) {
+  console.error(
+    "❌ Нэг эх сурвалж сонгоно уу: --from-zaalt  |  --file <xlsx>  |  --json <path>\n" +
+      "   Ж: node scripts/manual_update_tsahilgaan.js --from-zaalt"
+  );
   process.exit(1);
 }
-if (!fs.existsSync(CONFIG.file)) {
-  console.error(`❌ Файл олдсонгүй: ${CONFIG.file}`);
-  process.exit(1);
+for (const p of [CONFIG.file, CONFIG.json]) {
+  if (p && !fs.existsSync(p)) {
+    console.error(`❌ Файл олдсонгүй: ${p}`);
+    process.exit(1);
+  }
 }
 
 // ---------------------------------------------------------------- helpers
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
-function parseExcelNum(val) {
+function parseNum(val) {
   if (val === undefined || val === null || val === "") return 0;
   if (typeof val === "number") return val;
   const cleaned = String(val).replace(/,/g, "").replace(/\s/g, "").trim();
   return parseFloat(cleaned) || 0;
 }
 
-const isEmptyStr = (v) => v === undefined || v === null || String(v).trim() === "";
+const isEmpty = (v) => v === undefined || v === null || String(v).trim() === "";
 
 function getVal(row, ...names) {
   for (const name of names) {
@@ -136,23 +161,115 @@ function isElectricityLedgerRow(row) {
 
 /** Tiered tariff selection, mirroring controller/excel.js. */
 function pickTariff(zoruu, baseTariff, tiers) {
-  if (!Array.isArray(tiers) || tiers.length === 0) {
-    return { tariff: baseTariff, tier: null };
-  }
+  if (!Array.isArray(tiers) || tiers.length === 0) return { tariff: baseTariff, tier: null };
   const sorted = [...tiers].sort((a, b) => (a.threshold || 0) - (b.threshold || 0));
   for (const t of sorted) {
     if (zoruu <= (t.threshold || Infinity)) {
-      return {
-        tariff: t.tariff || baseTariff,
-        tier: { threshold: t.threshold, tariff: t.tariff },
-      };
+      return { tariff: t.tariff || baseTariff, tier: { threshold: t.threshold, tariff: t.tariff } };
     }
   }
   const last = sorted[sorted.length - 1];
+  return { tariff: last.tariff || baseTariff, tier: { threshold: last.threshold, tariff: last.tariff } };
+}
+
+// ---------------------------------------------------------------- input sources
+
+/** Normalised shape every source produces. */
+function makeEntry(o) {
   return {
-    tariff: last.tariff || baseTariff,
-    tier: { threshold: last.threshold, tariff: last.tariff },
+    gereeniiDugaar: String(o.gereeniiDugaar || "").trim(),
+    toot: String(o.toot ?? "").trim(),
+    ner: String(o.ner || "").trim(),
+    umnu: o.umnu,
+    odor: o.odor,
+    shone: o.shone,
+    niitOdoo: o.niitOdoo,
+    tariff: o.tariff,
+    baseFee: o.baseFee,
+    tulbur: o.tulbur, // stored amount, used verbatim unless --recompute
+    origin: o.origin,
   };
+}
+
+function loadFromWorkbook(file) {
+  const xlsx = require("xlsx");
+  const wb = xlsx.readFile(file);
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = xlsx.utils.sheet_to_json(sheet, { raw: false });
+  console.log(`📥 ${rows.length} мөр (sheet: "${wb.SheetNames[0]}")`);
+  return rows.map((row) =>
+    makeEntry({
+      gereeniiDugaar: getVal(row, "Гэрээний дугаар", "gereeniiDugaar"),
+      toot: getVal(row, "Тоот", "toot"),
+      ner: getVal(row, "Нэр", "ner"),
+      umnu: getVal(row, "Өмнө", "Өмнөх", "umnu", "Өмнөх заалт"),
+      odor: getVal(row, "Өдөр", "odor", "Өдрийн заалт"),
+      shone: getVal(row, "Шөнө", "shone", "Шөнийн заалт"),
+      niitOdoo: getVal(row, "Нийт (одоо)", "Нийт", "niit", "suuliinZaalt"),
+      tariff: getVal(row, "Цахилгаан кВт", "Цахилгаан тариф", "tsahilgaanTariff"),
+      baseFee: getVal(row, "Суурь хураамж", "Суурь хүраамж", "defaultDun", "baseFee"),
+      tulbur: getVal(row, "Төлбөр", "tulbur", "zaaltDun"),
+      origin: "excel",
+    })
+  );
+}
+
+function loadFromJson(file) {
+  const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+  const rows = Array.isArray(raw) ? raw : raw.rows || [];
+  console.log(`📥 ${rows.length} мөр (json)`);
+  return rows.map((r) =>
+    makeEntry({
+      gereeniiDugaar: r.gereeniiDugaar,
+      toot: r.toot,
+      ner: r.ner,
+      umnu: r.umnu ?? r["Өмнө"],
+      odor: r.odor ?? r["Өдөр"],
+      shone: r.shone ?? r["Шөнө"],
+      niitOdoo: r.niitOdoo ?? r["Нийт (одоо)"],
+      tariff: r.tariff ?? r["Цахилгаан кВт"],
+      baseFee: r.suuriKhuraamj ?? r.baseFee ?? r["Суурь хураамж"],
+      tulbur: r.tulbur ?? r.zaaltDun ?? r["Төлбөр"],
+      origin: "json",
+    })
+  );
+}
+
+/** Newest zaaltUnshlalt row per contract, from the cycle unless --any-reading. */
+async function loadFromZaalt(T, startOfCycle, endOfCycle) {
+  const q = { baiguullagiinId: CONFIG.baiguullagiinId, barilgiinId: CONFIG.barilgiinId };
+  if (!CONFIG.anyReading) {
+    q.$or = [
+      { unshlaltiinOgnoo: { $gte: startOfCycle, $lte: endOfCycle } },
+      { importOgnoo: { $gte: startOfCycle, $lte: endOfCycle } },
+    ];
+  }
+  const docs = await T.zaaltUnshlalt
+    .find(q)
+    .sort({ importOgnoo: -1, unshlaltiinOgnoo: -1 })
+    .toArray();
+
+  const newest = new Map();
+  for (const d of docs) if (!newest.has(d.gereeniiId)) newest.set(d.gereeniiId, d);
+
+  console.log(
+    `📥 ${newest.size} уншилт (zaaltUnshlalt${CONFIG.anyReading ? ", бүх огноо" : ", энэ мөчлөг"}), нийт ${docs.length} мөрөөс`
+  );
+
+  return Array.from(newest.values()).map((d) =>
+    makeEntry({
+      gereeniiDugaar: d.gereeniiDugaar,
+      toot: d.toot,
+      umnu: d.umnukhZaalt ?? d.zaaltCalculation?.umnukhZaalt,
+      odor: d.zaaltTog ?? d.zaaltCalculation?.zaaltTog,
+      shone: d.zaaltUs ?? d.zaaltCalculation?.zaaltUs,
+      niitOdoo: d.suuliinZaalt ?? d.zaaltCalculation?.suuliinZaalt,
+      tariff: d.tariff ?? d.zaaltCalculation?.tariff,
+      baseFee: d.defaultDun ?? d.zaaltCalculation?.defaultDun,
+      tulbur: d.zaaltDun,
+      origin: "zaalt",
+    })
+  );
 }
 
 // ---------------------------------------------------------------- main
@@ -178,10 +295,12 @@ async function main() {
     cron: tenantConn.collection("cronSchedule"),
   };
 
+  const mode = CONFIG.fromZaalt ? "zaaltUnshlalt" : CONFIG.file ? `xlsx ${CONFIG.file}` : `json ${CONFIG.json}`;
   console.log(
     `\n${CONFIG.apply ? "🟥 APPLY" : "🟦 DRY RUN"}  |  db=${CONFIG.tenantDb}  org=${CONFIG.baiguullagiinId}  barilga=${CONFIG.barilgiinId}`
   );
-  console.log(`📄 ${CONFIG.file}`);
+  console.log(`📄 эх сурвалж: ${mode}`);
+  console.log(`💰 дүн: ${CONFIG.recompute ? "заалтаас дахин тооцоолно" : "хадгалагдсан Төлбөр-ийг шууд ашиглана"}`);
 
   // --- building-level electricity settings (tiers / fallback base fee)
   const baiguullaga = await C.baiguullaga.findOne({
@@ -205,7 +324,7 @@ async function main() {
       zaalt: true,
     };
 
-  // --- billing cycle for this correction
+  // --- billing cycle
   const cronDoc = await T.cron
     .find({
       baiguullagiinId: CONFIG.baiguullagiinId,
@@ -217,14 +336,23 @@ async function main() {
   const cronDay = cronDoc[0]?.nekhemjlekhUusgekhOgnoo || 1;
   const { startOfCycle, endOfCycle } = calculateBillingCycleBounds(cronDay, CONFIG.refDate);
   console.log(
-    `🗓  Тооцооны мөчлөг (өдөр=${cronDay}): ${startOfCycle.toISOString()} → ${endOfCycle.toISOString()}\n`
+    `🗓  мөчлөг (өдөр=${cronDay}): ${startOfCycle.toISOString()} → ${endOfCycle.toISOString()}\n`
   );
 
-  // --- spreadsheet
-  const wb = xlsx.readFile(CONFIG.file);
-  const sheet = wb.Sheets[wb.SheetNames[0]];
-  const rows = xlsx.utils.sheet_to_json(sheet, { raw: false });
-  console.log(`📥 ${rows.length} мөр уншлаа (sheet: "${wb.SheetNames[0]}")\n`);
+  // --- entries
+  const entries = CONFIG.fromZaalt
+    ? await loadFromZaalt(T, startOfCycle, endOfCycle)
+    : CONFIG.file
+      ? loadFromWorkbook(CONFIG.file)
+      : loadFromJson(CONFIG.json);
+  console.log("");
+
+  if (!entries.length) {
+    console.log("⚠️  Боловсруулах мөр алга. --any-reading эсвэл --date шалгана уу.\n");
+    await centralConn.close();
+    await tenantConn.close();
+    return;
+  }
 
   const report = {
     config: { ...CONFIG, refDate: CONFIG.refDate.toISOString() },
@@ -235,57 +363,48 @@ async function main() {
   };
   const touchedGereeIds = new Set();
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
     const rowNo = i + 2;
-    const gereeniiDugaar = String(getVal(row, "Гэрээний дугаар", "gereeniiDugaar") || "").trim();
-    const tootFromSheet = String(getVal(row, "Тоот", "toot") || "").trim();
 
-    if (!gereeniiDugaar) {
+    if (!e.gereeniiDugaar) {
       report.skipped.push({ rowNo, reason: "Гэрээний дугаар хоосон" });
       continue;
     }
-    if (CONFIG.toots && !CONFIG.toots.includes(tootFromSheet)) continue;
+    if (CONFIG.toots && !CONFIG.toots.includes(e.toot)) continue;
 
     try {
-      const umnuRaw = getVal(row, "Өмнө", "Өмнөх", "umnu", "Өмнөх заалт");
-      const odorRaw = getVal(row, "Өдөр", "odor", "Өдрийн заалт");
-      const shoneRaw = getVal(row, "Шөнө", "shone", "Шөнийн заалт");
-      const niitRaw = getVal(row, "Нийт (одоо)", "Нийт", "niit", "suuliinZaalt");
-
-      if (isEmptyStr(umnuRaw) && isEmptyStr(odorRaw) && isEmptyStr(shoneRaw) && isEmptyStr(niitRaw)) {
-        report.skipped.push({ rowNo, gereeniiDugaar, toot: tootFromSheet, reason: "Уншилт хоосон" });
+      if (isEmpty(e.umnu) && isEmpty(e.odor) && isEmpty(e.shone) && isEmpty(e.niitOdoo) && isEmpty(e.tulbur)) {
+        report.skipped.push({ rowNo, gereeniiDugaar: e.gereeniiDugaar, toot: e.toot, reason: "Уншилт хоосон" });
         continue;
       }
 
       const geree = await T.geree.findOne({
-        gereeniiDugaar,
+        gereeniiDugaar: e.gereeniiDugaar,
         baiguullagiinId: CONFIG.baiguullagiinId,
         barilgiinId: CONFIG.barilgiinId,
       });
       if (!geree) {
-        report.failed.push({ rowNo, gereeniiDugaar, toot: tootFromSheet, error: "Гэрээ олдсонгүй" });
+        report.failed.push({ rowNo, gereeniiDugaar: e.gereeniiDugaar, toot: e.toot, error: "Гэрээ олдсонгүй" });
         continue;
       }
-
       const gereeId = geree._id.toString();
 
       // ---- readings
-      const umnu = !isEmptyStr(umnuRaw) ? parseExcelNum(umnuRaw) : geree.umnukhZaalt || 0;
-      const odor = !isEmptyStr(odorRaw) ? parseExcelNum(odorRaw) : geree.zaaltTog || 0;
-      const shone = !isEmptyStr(shoneRaw) ? parseExcelNum(shoneRaw) : geree.zaaltUs || 0;
+      const umnu = !isEmpty(e.umnu) ? parseNum(e.umnu) : geree.umnukhZaalt || 0;
+      const odor = !isEmpty(e.odor) ? parseNum(e.odor) : geree.zaaltTog || 0;
+      const shone = !isEmpty(e.shone) ? parseNum(e.shone) : geree.zaaltUs || 0;
       let niitOdoo = geree.suuliinZaalt || 0;
-      if (!isEmptyStr(niitRaw)) niitOdoo = parseExcelNum(niitRaw);
-      else if (!isEmptyStr(odorRaw) || !isEmptyStr(shoneRaw)) niitOdoo = odor + shone;
+      if (!isEmpty(e.niitOdoo)) niitOdoo = parseNum(e.niitOdoo);
+      else if (!isEmpty(e.odor) || !isEmpty(e.shone)) niitOdoo = odor + shone;
 
       if (umnu < 0 || odor < 0 || shone < 0) {
-        report.failed.push({ rowNo, gereeniiDugaar, toot: tootFromSheet, error: "Сөрөг заалт" });
+        report.failed.push({ rowNo, gereeniiDugaar: e.gereeniiDugaar, toot: e.toot, error: "Сөрөг заалт" });
         continue;
       }
-
       const zoruu = round2(Math.abs(niitOdoo - umnu));
 
-      // ---- resident (tenant copy first, then central — importer reads both)
+      // ---- resident
       const osId = geree.orshinSuugchId;
       let osTenant = null;
       let osCentral = null;
@@ -294,44 +413,17 @@ async function main() {
         osTenant = await T.orshinSuugch.findOne({ _id: oid });
         osCentral = await C.orshinSuugch.findOne({ _id: oid });
       }
-      const residentTariff = Number(
-        osCentral?.tsahilgaaniiZaalt || osTenant?.tsahilgaaniiZaalt || 0
-      );
+      const residentTariff = Number(osCentral?.tsahilgaaniiZaalt || osTenant?.tsahilgaaniiZaalt || 0);
 
-      // ---- tariff + base fee
-      const excelTariffRaw = getVal(row, "Цахилгаан кВт", "Цахилгаан тариф", "tsahilgaanTariff");
-      const excelTariff = isEmptyStr(excelTariffRaw) ? 0 : parseExcelNum(excelTariffRaw);
-      const excelBaseFee = parseExcelNum(
-        getVal(row, "Суурь хураамж", "Суурь хүраамж", "defaultDun", "baseFee")
-      );
+      // ---- tariff + base fee (needed for audit fields even when Төлбөр is used verbatim)
+      const sheetTariff = isEmpty(e.tariff) ? 0 : parseNum(e.tariff);
+      const sheetBaseFee = isEmpty(e.baseFee) ? 0 : parseNum(e.baseFee);
 
-      let baseTariff;
-      if (CONFIG.tariffSource === "resident") {
-        baseTariff =
-          residentTariff > 0
-            ? residentTariff
-            : excelTariff > 0
-              ? excelTariff
-              : zaaltZardal.zaaltTariff || zaaltZardal.tariff || 0;
-      } else {
-        baseTariff =
-          excelTariff > 0
-            ? excelTariff
-            : residentTariff > 0
-              ? residentTariff
-              : zaaltZardal.zaaltTariff || zaaltZardal.tariff || 0;
-      }
-      if (!(baseTariff > 0)) {
-        report.failed.push({
-          rowNo,
-          gereeniiDugaar,
-          toot: tootFromSheet,
-          error: "кВт тариф олдсонгүй (0)",
-        });
-        continue;
-      }
-
-      const baseFee = excelBaseFee || zaaltZardal.suuriKhuraamj || 0;
+      const baseTariff =
+        CONFIG.tariffSource === "resident"
+          ? residentTariff || sheetTariff || zaaltZardal.zaaltTariff || zaaltZardal.tariff || 0
+          : sheetTariff || residentTariff || zaaltZardal.zaaltTariff || zaaltZardal.tariff || 0;
+      const baseFee = sheetBaseFee || zaaltZardal.suuriKhuraamj || 0;
 
       const gereeElecZardal = (geree.zardluud || []).find(
         (z) => (z.zaalt === true || z.zardliinTurul === "Хувьсах") && isVariableElectricity(z)
@@ -339,19 +431,42 @@ async function main() {
       const tiers = gereeElecZardal?.zaaltTariffTiers || zaaltZardal.zaaltTariffTiers || [];
       const { tariff: usedTariff, tier: usedTier } = pickTariff(zoruu, baseTariff, tiers);
 
-      const newZaaltDun = round2(zoruu * usedTariff + baseFee);
+      // ---- the amount
+      const storedTulbur = isEmpty(e.tulbur) ? 0 : round2(parseNum(e.tulbur));
+      const recomputed = round2(zoruu * usedTariff + baseFee);
+      let newZaaltDun;
+      let amountFrom;
+      if (!CONFIG.recompute && storedTulbur > 0) {
+        newZaaltDun = storedTulbur;
+        amountFrom = e.origin === "zaalt" ? "zaaltDun" : "Төлбөр";
+      } else {
+        newZaaltDun = recomputed;
+        amountFrom = "тооцоолсон";
+        if (!(baseTariff > 0)) {
+          report.failed.push({
+            rowNo,
+            gereeniiDugaar: e.gereeniiDugaar,
+            toot: e.toot,
+            error: "кВт тариф ч, Төлбөр ч алга",
+          });
+          continue;
+        }
+      }
+      if (!(newZaaltDun > 0)) {
+        report.skipped.push({ rowNo, gereeniiDugaar: e.gereeniiDugaar, toot: e.toot, reason: "Дүн 0" });
+        continue;
+      }
 
       // ---- target invoice for the cycle
       const invoice = await T.nekhemjlekh.findOne(
         { gereeniiId: gereeId, ognoo: { $gte: startOfCycle, $lte: endOfCycle } },
         { sort: { ognoo: -1 } }
       );
-
       if (!invoice) {
         report.failed.push({
           rowNo,
-          gereeniiDugaar,
-          toot: tootFromSheet,
+          gereeniiDugaar: e.gereeniiDugaar,
+          toot: e.toot,
           error: "Энэ мөчлөгт нэхэмжлэх олдсонгүй",
         });
         continue;
@@ -359,17 +474,15 @@ async function main() {
       const invoiceId = invoice._id.toString();
 
       // ---- electricity ledger row(s) on that invoice
-      const invoiceRows = await T.ledger
-        .find({ nekhemjlekhId: invoiceId, gereeniiId: gereeId })
-        .toArray();
+      const invoiceRows = await T.ledger.find({ nekhemjlekhId: invoiceId, gereeniiId: gereeId }).toArray();
       const elecRows = invoiceRows.filter((r) => (r.dun || 0) > 0 && isElectricityLedgerRow(r));
 
       if (elecRows.length > 1 && !CONFIG.mergeDuplicates) {
         report.failed.push({
           rowNo,
-          gereeniiDugaar,
-          toot: tootFromSheet,
-          error: `Нэхэмжлэх дээр ${elecRows.length} цахилгааны мөр байна — --merge-duplicates ашиглана уу`,
+          gereeniiDugaar: e.gereeniiDugaar,
+          toot: e.toot,
+          error: `Нэхэмжлэх дээр ${elecRows.length} цахилгааны мөр — --merge-duplicates ашиглана уу`,
           ledgerIds: elecRows.map((r) => r._id.toString()),
         });
         continue;
@@ -379,8 +492,8 @@ async function main() {
       if (alreadyPaid && !CONFIG.includePaid) {
         report.skipped.push({
           rowNo,
-          gereeniiDugaar,
-          toot: tootFromSheet,
+          gereeniiDugaar: e.gereeniiDugaar,
+          toot: e.toot,
           reason: "Төлөгдсөн — --include-paid өгөөгүй тул алгаслаа",
           invoice: invoice.nekhemjlekhiinDugaar,
           tuluv: invoice.tuluv,
@@ -391,35 +504,46 @@ async function main() {
       const keepRow = elecRows[0] || null;
       const dropRows = elecRows.slice(1);
       const oldDun = keepRow ? round2(keepRow.dun || 0) : 0;
-      const droppedDun = round2(dropRows.reduce((s, r) => s + (r.dun || 0), 0));
 
       const change = {
         rowNo,
-        toot: tootFromSheet || geree.toot,
-        gereeniiDugaar,
-        ner: String(getVal(row, "Нэр", "ner") || "").trim(),
+        toot: e.toot || geree.toot,
+        gereeniiDugaar: e.gereeniiDugaar,
+        ner: e.ner || `${geree.ovog || ""} ${geree.ner || ""}`.trim(),
         invoice: invoice.nekhemjlekhiinDugaar,
         invoiceId,
         readings: { umnu, odor, shone, niitOdoo, zoruu },
-        tariff: {
-          used: usedTariff,
-          excel: excelTariff,
-          resident: residentTariff,
-          source: CONFIG.tariffSource,
-          tier: usedTier,
-        },
+        tariff: { used: usedTariff, sheet: sheetTariff, resident: residentTariff, tier: usedTier },
         baseFee,
+        amountFrom,
+        recomputedWouldBe: recomputed,
         zaaltDun: { old: oldDun, new: newZaaltDun, delta: round2(newZaaltDun - oldDun) },
         ledgerId: keepRow ? keepRow._id.toString() : null,
         createdLedgerRow: !keepRow,
         removedDuplicateLedgerRows: dropRows.map((r) => ({ _id: r._id.toString(), dun: r.dun })),
-        droppedDun,
         invoiceTotal: { old: round2(invoice.niitTulbur || 0) },
       };
+      if (!CONFIG.recompute && storedTulbur > 0 && Math.abs(recomputed - storedTulbur) > 0.5) {
+        change.warning = `Хадгалагдсан дүн (${storedTulbur}) тооцооллоос (${recomputed}) зөрж байна`;
+      }
 
       if (CONFIG.apply) {
         const now = new Date();
         const chargeOgnoo = keepRow?.ognoo || invoice.ognoo || CONFIG.refDate;
+
+        const zaaltCalculation = {
+          umnukhZaalt: umnu,
+          suuliinZaalt: niitOdoo,
+          zaaltTog: odor,
+          zaaltUs: shone,
+          zoruu,
+          tariff: usedTariff,
+          tariffType: zaaltZardal.zardliinTurul,
+          tariffName: zaaltZardal.ner,
+          defaultDun: baseFee,
+          tier: usedTier,
+          calculatedAt: now,
+        };
 
         // 1) ledger
         if (dropRows.length) {
@@ -428,14 +552,7 @@ async function main() {
         if (keepRow) {
           await T.ledger.updateOne(
             { _id: keepRow._id },
-            {
-              $set: {
-                dun: newZaaltDun,
-                undsenDun: newZaaltDun,
-                tulukhDun: newZaaltDun,
-                updatedAt: now,
-              },
-            }
+            { $set: { dun: newZaaltDun, undsenDun: newZaaltDun, tulukhDun: newZaaltDun, updatedAt: now } }
           );
         } else {
           const inserted = await T.ledger.insertOne({
@@ -444,10 +561,10 @@ async function main() {
             baiguullagiinNer: geree.baiguullagiinNer || baiguullaga.ner || "",
             barilgiinId: CONFIG.barilgiinId,
             gereeniiId: gereeId,
-            gereeniiDugaar,
+            gereeniiDugaar: e.gereeniiDugaar,
             orshinSuugchId: geree.orshinSuugchId || "",
             nekhemjlekhId: invoiceId,
-            toot: geree.toot || tootFromSheet,
+            toot: geree.toot || e.toot,
             toots: [],
             ognoo: chargeOgnoo,
             undsenDun: newZaaltDun,
@@ -472,59 +589,48 @@ async function main() {
           change.ledgerId = inserted.insertedId.toString();
         }
 
-        // 2) zaaltUnshlalt — update the cycle's reading, otherwise insert one
-        const zaaltCalculation = {
-          umnukhZaalt: umnu,
-          suuliinZaalt: niitOdoo,
-          zaaltTog: odor,
-          zaaltUs: shone,
-          zoruu,
-          tariff: usedTariff,
-          tariffType: zaaltZardal.zardliinTurul,
-          tariffName: zaaltZardal.ner,
-          defaultDun: baseFee,
-          tier: usedTier,
-          calculatedAt: now,
-        };
-        const readingSet = {
-          umnukhZaalt: umnu,
-          suuliinZaalt: niitOdoo,
-          zaaltTog: odor,
-          zaaltUs: shone,
-          zoruu,
-          tariff: usedTariff,
-          defaultDun: baseFee,
-          usedTier,
-          zaaltDun: newZaaltDun,
-          zaaltCalculation,
-          importOgnoo: now,
-          updatedAt: now,
-          importAjiltniiNer: "Гар засвар (заалт)",
-        };
-        const existingReading = await T.zaaltUnshlalt.findOne(
-          { gereeniiId: gereeId, unshlaltiinOgnoo: { $gte: startOfCycle, $lte: endOfCycle } },
-          { sort: { unshlaltiinOgnoo: -1 } }
-        );
-        if (existingReading) {
-          await T.zaaltUnshlalt.updateOne({ _id: existingReading._id }, { $set: readingSet });
-        } else {
-          await T.zaaltUnshlalt.insertOne({
-            gereeniiId: gereeId,
-            gereeniiDugaar,
-            toot: geree.toot || tootFromSheet,
-            baiguullagiinId: CONFIG.baiguullagiinId,
-            barilgiinId: CONFIG.barilgiinId,
-            unshlaltiinOgnoo: invoice.ognoo || CONFIG.refDate,
-            zaaltZardliinId: zaaltZardal._id ? String(zaaltZardal._id) : "",
-            zaaltZardliinNer: zaaltZardal.ner,
-            zaaltZardliinTurul: zaaltZardal.zardliinTurul,
-            tariffUsgeer: zaaltZardal.tariffUsgeer || "кВт",
-            suuriKhuraamj: zaaltZardal.suuriKhuraamj || 0,
-            nuatNemekhEsekh: zaaltZardal.nuatNemekhEsekh || false,
-            createdAt: now,
-            __v: 0,
-            ...readingSet,
-          });
+        // 2) zaaltUnshlalt — only when the sheet is the source; in --from-zaalt it IS the source
+        if (!CONFIG.fromZaalt) {
+          const readingSet = {
+            umnukhZaalt: umnu,
+            suuliinZaalt: niitOdoo,
+            zaaltTog: odor,
+            zaaltUs: shone,
+            zoruu,
+            tariff: usedTariff,
+            defaultDun: baseFee,
+            usedTier,
+            zaaltDun: newZaaltDun,
+            zaaltCalculation,
+            importOgnoo: now,
+            updatedAt: now,
+            importAjiltniiNer: "Гар засвар (заалт)",
+          };
+          const existingReading = await T.zaaltUnshlalt.findOne(
+            { gereeniiId: gereeId, unshlaltiinOgnoo: { $gte: startOfCycle, $lte: endOfCycle } },
+            { sort: { unshlaltiinOgnoo: -1 } }
+          );
+          if (existingReading) {
+            await T.zaaltUnshlalt.updateOne({ _id: existingReading._id }, { $set: readingSet });
+          } else {
+            await T.zaaltUnshlalt.insertOne({
+              gereeniiId: gereeId,
+              gereeniiDugaar: e.gereeniiDugaar,
+              toot: geree.toot || e.toot,
+              baiguullagiinId: CONFIG.baiguullagiinId,
+              barilgiinId: CONFIG.barilgiinId,
+              unshlaltiinOgnoo: invoice.ognoo || CONFIG.refDate,
+              zaaltZardliinId: zaaltZardal._id ? String(zaaltZardal._id) : "",
+              zaaltZardliinNer: zaaltZardal.ner,
+              zaaltZardliinTurul: zaaltZardal.zardliinTurul,
+              tariffUsgeer: zaaltZardal.tariffUsgeer || "кВт",
+              suuriKhuraamj: zaaltZardal.suuriKhuraamj || 0,
+              nuatNemekhEsekh: zaaltZardal.nuatNemekhEsekh || false,
+              createdAt: now,
+              __v: 0,
+              ...readingSet,
+            });
+          }
         }
 
         // 3) geree — readings + electricity zardal + niitTulbur
@@ -541,9 +647,8 @@ async function main() {
           dun: newZaaltDun,
           zaaltCalculation,
         };
-        if (idx >= 0) {
-          newZardluud[idx] = { ...newZardluud[idx], ...zardalPatch };
-        } else {
+        if (idx >= 0) newZardluud[idx] = { ...newZardluud[idx], ...zardalPatch };
+        else
           newZardluud.push({
             ner: zaaltZardal.ner || "Цахилгаан",
             turul: zaaltZardal.turul,
@@ -551,10 +656,8 @@ async function main() {
             barilgiinId: CONFIG.barilgiinId,
             ...zardalPatch,
           });
-        }
-        const niitTulbur = round2(
-          newZardluud.reduce((s, z) => s + (z.dun || z.tariff || 0), 0)
-        );
+
+        const niitTulbur = round2(newZardluud.reduce((s, z) => s + (z.dun || z.tariff || 0), 0));
         await T.geree.updateOne(
           { _id: geree._id },
           {
@@ -573,15 +676,15 @@ async function main() {
         change.gereeNiitTulbur = niitTulbur;
 
         // 4) resident readings (+ tariff when the sheet overrides it)
-        const osSet = {
-          odorZaalt: odor,
-          shonoZaalt: shone,
-          suuliinZaalt: niitOdoo,
-          updatedAt: now,
-        };
-        if (CONFIG.tariffSource === "excel" && excelTariff > 0 && excelTariff !== residentTariff) {
-          osSet.tsahilgaaniiZaalt = excelTariff;
-          change.residentTariffUpdated = { from: residentTariff, to: excelTariff };
+        const osSet = { odorZaalt: odor, shonoZaalt: shone, suuliinZaalt: niitOdoo, updatedAt: now };
+        if (
+          !CONFIG.fromZaalt &&
+          CONFIG.tariffSource === "excel" &&
+          sheetTariff > 0 &&
+          sheetTariff !== residentTariff
+        ) {
+          osSet.tsahilgaaniiZaalt = sheetTariff;
+          change.residentTariffUpdated = { from: residentTariff, to: sheetTariff };
         }
         if (osId && mongoose.Types.ObjectId.isValid(osId)) {
           const oid = new mongoose.Types.ObjectId(osId);
@@ -590,28 +693,17 @@ async function main() {
         }
 
         // 5) invoice header
-        const freshRows = await T.ledger
-          .find({ nekhemjlekhId: invoiceId, dun: { $gt: 0 } })
-          .toArray();
+        const freshRows = await T.ledger.find({ nekhemjlekhId: invoiceId, dun: { $gt: 0 } }).toArray();
         const invoiceTotal = round2(freshRows.reduce((s, r) => s + (r.dun || 0), 0));
         await T.nekhemjlekh.updateOne(
           { _id: invoice._id },
-          {
-            $set: {
-              niitTulbur: invoiceTotal,
-              tsahilgaanNekhemjlekh: newZaaltDun,
-              updatedAt: now,
-            },
-          }
+          { $set: { niitTulbur: invoiceTotal, tsahilgaanNekhemjlekh: newZaaltDun, updatedAt: now } }
         );
         change.invoiceTotal.new = invoiceTotal;
         touchedGereeIds.add(gereeId);
       } else {
-        // dry run: project what the invoice header would become
         const others = invoiceRows
-          .filter(
-            (r) => (r.dun || 0) > 0 && !elecRows.some((e) => String(e._id) === String(r._id))
-          )
+          .filter((r) => (r.dun || 0) > 0 && !elecRows.some((x) => String(x._id) === String(r._id)))
           .reduce((s, r) => s + (r.dun || 0), 0);
         change.invoiceTotal.new = round2(others + newZaaltDun);
       }
@@ -619,23 +711,24 @@ async function main() {
       change.invoiceTotal.delta = round2(change.invoiceTotal.new - change.invoiceTotal.old);
       report.updated.push(change);
 
+      const nerCol = (change.ner || "").slice(0, 14).padEnd(14);
       console.log(
-        `  ${CONFIG.apply ? "✔" : "·"} тоот ${String(change.toot).padEnd(4)} ${gereeniiDugaar}  ` +
-          `зөрүү ${String(zoruu).padStart(8)} × ${String(usedTariff).padStart(6)} + ${baseFee}  =  ` +
-          `${String(newZaaltDun).padStart(10)}  (өмнө ${String(oldDun).padStart(10)}, Δ ${change.zaaltDun.delta})`
+        `  ${CONFIG.apply ? "✔" : "·"} тоот ${String(change.toot).padEnd(5)} ${nerCol} ` +
+          `${String(newZaaltDun.toLocaleString("mn-MN")).padStart(12)}₮  ` +
+          `(өмнө ${String(oldDun.toLocaleString("mn-MN")).padStart(12)}₮, Δ ${change.zaaltDun.delta.toLocaleString("mn-MN")})  ` +
+          `нэхэмжлэх ${String(change.invoiceTotal.old.toLocaleString("mn-MN")).padStart(12)} → ${String(change.invoiceTotal.new.toLocaleString("mn-MN")).padStart(12)}` +
+          (change.warning ? `  ⚠️ ${change.warning}` : "")
       );
     } catch (err) {
-      report.failed.push({ rowNo, gereeniiDugaar, toot: tootFromSheet, error: err.message });
-      console.log(`  ✖ ${gereeniiDugaar}: ${err.message}`);
+      report.failed.push({ rowNo, gereeniiDugaar: e.gereeniiDugaar, toot: e.toot, error: err.message });
+      console.log(`  ✖ ${e.gereeniiDugaar}: ${err.message}`);
     }
   }
 
   // ---- re-sync invoice statuses (FIFO), mirroring services/guilgeeService.syncInvoicesStatus
   //      but never deleting invoices — this is a correction pass, not a rebuild.
   if (CONFIG.apply && touchedGereeIds.size) {
-    console.log(
-      `\n🔄 ${touchedGereeIds.size} гэрээний нэхэмжлэхийн төлөв/үлдэгдлийг дахин тооцоолж байна...`
-    );
+    console.log(`\n🔄 ${touchedGereeIds.size} гэрээний төлөв/үлдэгдлийг дахин тооцоолж байна...`);
     for (const gereeId of touchedGereeIds) {
       const allLedger = await T.ledger.find({ gereeniiId: gereeId }).toArray();
       const totalPayments = allLedger
@@ -666,36 +759,37 @@ async function main() {
   }
 
   // ---- summary
-  const totalDelta = round2(report.updated.reduce((s, c) => s + c.zaaltDun.delta, 0));
-  console.log("\n──────────────────────────────────────────────");
-  console.log(`  Шинэчилсэн : ${report.updated.length}`);
-  console.log(`  Алгассан   : ${report.skipped.length}`);
-  console.log(`  Алдаатай   : ${report.failed.length}`);
-  console.log(`  Нийт зөрүү : ${totalDelta.toLocaleString("mn-MN")}₮`);
-  console.log("──────────────────────────────────────────────");
+  const totalNew = round2(report.updated.reduce((s, c) => s + c.zaaltDun.new, 0));
+  const totalOld = round2(report.updated.reduce((s, c) => s + c.zaaltDun.old, 0));
+  const totalDelta = round2(totalNew - totalOld);
+  console.log("\n────────────────────────────────────────────────────────");
+  console.log(`  Шинэчлэх       : ${report.updated.length}`);
+  console.log(`  Алгассан       : ${report.skipped.length}`);
+  console.log(`  Алдаатай       : ${report.failed.length}`);
+  console.log(`  Цахилгаан өмнө : ${totalOld.toLocaleString("mn-MN")}₮`);
+  console.log(`  Цахилгаан шинэ : ${totalNew.toLocaleString("mn-MN")}₮`);
+  console.log(`  Зөрүү          : ${totalDelta.toLocaleString("mn-MN")}₮`);
+  console.log("────────────────────────────────────────────────────────");
   if (report.failed.length) {
-    console.log("\n⚠️  Алдаатай мөрүүд:");
-    report.failed.forEach((f) =>
-      console.log(`   тоот ${f.toot || "?"} ${f.gereeniiDugaar}: ${f.error}`)
-    );
+    console.log("\n⚠️  Алдаатай:");
+    report.failed.forEach((f) => console.log(`   тоот ${f.toot || "?"} ${f.gereeniiDugaar}: ${f.error}`));
   }
   if (report.skipped.length) {
-    console.log("\nℹ️  Алгассан мөрүүд:");
-    report.skipped.forEach((s) =>
-      console.log(`   тоот ${s.toot || "?"} ${s.gereeniiDugaar || ""}: ${s.reason}`)
-    );
+    console.log("\nℹ️  Алгассан:");
+    report.skipped.forEach((s) => console.log(`   тоот ${s.toot || "?"} ${s.gereeniiDugaar || ""}: ${s.reason}`));
   }
 
   report.summary = {
     updated: report.updated.length,
     skipped: report.skipped.length,
     failed: report.failed.length,
+    totalOld,
+    totalNew,
     totalDelta,
   };
   fs.writeFileSync(path.resolve(CONFIG.report), JSON.stringify(report, null, 2), "utf8");
   console.log(`\n📝 Тайлан: ${path.resolve(CONFIG.report)}`);
-  if (!CONFIG.apply)
-    console.log("\n🟦 DRY RUN — юу ч бичээгүй. Бодитоор хийхдээ --apply нэмнэ үү.\n");
+  if (!CONFIG.apply) console.log("\n🟦 DRY RUN — юу ч бичээгүй. Бодитоор хийхдээ --apply нэмнэ үү.\n");
 
   await centralConn.close();
   await tenantConn.close();
