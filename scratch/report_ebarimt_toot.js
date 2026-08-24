@@ -6,11 +6,13 @@
 //   node scratch/report_ebarimt_toot.js --apply       -> баазад бичнэ
 //   node scratch/report_ebarimt_toot.js --org=<id>    -> тухайн байгууллагаар шүүнэ
 //   node scratch/report_ebarimt_toot.js --db=nairamdalSukh  -> тухайн баазаар шүүнэ
+//   node scratch/report_ebarimt_toot.js --dump-unresolved   -> тоот олдоогүй баримтуудыг бүтнээр нь хэвлэнэ
 require("dotenv").config({ path: __dirname + "/../tokhirgoo/tokhirgoo.env" });
 const mongoose = require("mongoose");
 const { db } = require("zevbackv2");
 
 const APPLY = process.argv.includes("--apply");
+const DUMP = process.argv.includes("--dump-unresolved");
 const arg = (ner) =>
   (process.argv.find((a) => a.startsWith(`--${ner}=`)) || "").split("=")[1];
 const orgArg = arg("org");
@@ -182,7 +184,9 @@ async function main() {
           ],
         })
         .select(
-          "_id toot date createdAt gereeniiDugaar nekhemjlekhiinId receiptId totalAmount"
+          DUMP
+            ? "-receipts -payments -qrData"
+            : "_id toot date createdAt gereeniiDugaar nekhemjlekhiinId receiptId totalAmount"
         )
         .sort({ createdAt: -1 })
         .lean();
@@ -215,6 +219,18 @@ async function main() {
     console.log(
       `-> Шалгасан: ${durslel.shalgasan}, Олсон: ${durslel.oldson}, Бичсэн: ${durslel.khadgalsan}\n`
     );
+
+    if (DUMP) {
+      const oldoogui = barimtuud.filter((b) => !b.toot);
+      if (oldoogui.length) {
+        console.log(
+          `--- Тоот олдоогүй ${oldoogui.length} баримтын бүрэн мэдээлэл ---`
+        );
+        for (const b of oldoogui) console.dir(b, { depth: 4 });
+        console.log("");
+      }
+    }
+
     niitDutuu += durslel.shalgasan;
     niitOldson += durslel.oldson;
     niitKhadgalsan += durslel.khadgalsan;
