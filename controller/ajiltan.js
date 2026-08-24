@@ -16,6 +16,13 @@ const http = require("http");
 const lodash = require("lodash");
 const { formatNumber, tokenShalgakh } = require("zevbackv2");
 const session = require("../models/session");
+const ZevtabsNevtreltCode = require("../models/zevtabsNevtreltCode");
+const crypto = require("crypto");
+
+
+const ZEVTABS_MASTER_NER = "7221481";
+
+const ZEVTABS_CODE_KHUGATSAA_MS = 60 * 1000;
 
 function duusakhOgnooAvya(ugugdul, onFinish, next) {
   request.get(
@@ -54,10 +61,131 @@ async function nevtreltiinTuukhKhadgalya(tuukh, tukhainBaaziinKholbolt) {
   }
   await tuukh.save();
 }
+ 
+function nevtreltiinKhariuBeltgeye({
+  ajiltan,
+  baiguullaga,
+  req,
+  io,
+  zevtabsAjiltan,
+}) {
+  const { db } = require("zevbackv2");
+  return new Promise((resolve, reject) => {
+    var butsaakhObject = {
+      result: ajiltan,
+      success: true,
+    };
+    if (ajiltan.nevtrekhNer !== "6688845") {
+      io?.emit(`ajiltan${ajiltan._id}`, {
+        ip: req.headers["x-real-ip"],
+        type: "logout",
+      });
+    }
+
+    duusakhOgnooAvya(
+      { register: baiguullaga.register, system: "sukh" },
+      async (khariu) => {
+        try {
+          if (khariu.success) {
+            if (!!khariu.salbaruud) {
+              var butsaakhSalbaruud = [];
+              butsaakhSalbaruud.push({
+                salbariinId: baiguullaga?.barilguud?.[0]?._id,
+                duusakhOgnoo: khariu.duusakhOgnoo,
+              });
+              for await (const salbar of khariu.salbaruud) {
+                var tukhainSalbar = baiguullaga?.barilguud?.find((x) => {
+                  return (
+                    !!x.licenseRegister && x.licenseRegister == salbar.register
+                  );
+                });
+                if (!!tukhainSalbar) {
+                  butsaakhSalbaruud.push({
+                    salbariinId: tukhainSalbar._id,
+                    duusakhOgnoo: salbar.license?.duusakhOgnoo,
+                  });
+                }
+              }
+              butsaakhObject.salbaruud = butsaakhSalbaruud;
+            }
+            const jwt = await ajiltan.tokenUusgeye(
+              khariu.duusakhOgnoo,
+              butsaakhObject.salbaruud,
+              !!zevtabsAjiltan ? { zevtabsAjiltan } : null,
+            );
+
+            butsaakhObject.duusakhOgnoo = khariu.duusakhOgnoo;
+            if (!!butsaakhObject.result) {
+              butsaakhObject.result = JSON.parse(
+                JSON.stringify(butsaakhObject.result),
+              );
+              butsaakhObject.result.salbaruud = butsaakhObject.salbaruud;
+              butsaakhObject.result.duusakhOgnoo = khariu.duusakhOgnoo;
+            }
+            butsaakhObject.token = jwt;
+
+            // Create session for single session policy
+            try {
+              await exports.sessionUusgekh(
+                jwt,
+                ajiltan._id.toString(),
+                ajiltan.baiguullagiinId,
+                req,
+              );
+            } catch (sessionError) {
+              console.error("Session creation failed:", sessionError);
+              // Continue even if session creation fails
+            }
+
+            //doorxiig zogsooliinPos-d zoriulj oruulaw
+            if (!!baiguullaga?.tokhirgoo?.zogsoolNer)
+              butsaakhObject.result.zogsoolNer =
+                baiguullaga?.tokhirgoo?.zogsoolNer;
+            else butsaakhObject.result.zogsoolNer = baiguullaga.ner;
+            if (!!zevtabsAjiltan)
+              butsaakhObject.result.zevtabsAjiltan = zevtabsAjiltan;
+            var source = req.headers["user-agent"];
+            var ua = useragent.parse(source);
+            var tuukh = new NevtreltiinTuukh(db.erunkhiiKholbolt)();
+            tuukh.ajiltniiId = ajiltan._id;
+           
+            tuukh.ajiltniiNer = !!zevtabsAjiltan
+              ? `ZevTabs - ${zevtabsAjiltan.ner}`
+              : ajiltan.ner;
+            if (!!zevtabsAjiltan) {
+              tuukh.zevtabsAjiltniiId = zevtabsAjiltan.id;
+              tuukh.zevtabsAjiltniiNer = zevtabsAjiltan.ner;
+            }
+            tuukh.ognoo = new Date();
+            tuukh.uildliinSystem = ua.os;
+            tuukh.ip = req.headers["x-real-ip"];
+            if (tuukh.ip && tuukh.ip.substr(0, 7) == "::ffff:") {
+              tuukh.ip = tuukh.ip.substr(7);
+            }
+            ua = Object.keys(ua).reduce(function (r, e) {
+              if (ua[e]) r[e] = ua[e];
+              return r;
+            }, {});
+            tuukh.browser = ua.browser;
+            tuukh.useragent = ua;
+            tuukh.baiguullagiinId = ajiltan.baiguullagiinId;
+            tuukh.baiguullagiinRegister = baiguullaga.register;
+            await nevtreltiinTuukhKhadgalya(tuukh, db.erunkhiiKholbolt);
+
+            resolve(butsaakhObject);
+          } else {
+            throw new Error(khariu.msg);
+          }
+        } catch (err) {
+          reject(err);
+        }
+      },
+      reject,
+    );
+  });
+}
 
 exports.ajiltanNevtrey = asyncHandler(async (req, res, next) => {
-  console.log("Энэ рүү орлоо");
-
   const io = req.app.get("socketio");
   const { db } = require("zevbackv2");
 
@@ -83,107 +211,98 @@ exports.ajiltanNevtrey = asyncHandler(async (req, res, next) => {
     ajiltan.baiguullagiinId,
   );
 
-  var butsaakhObject = {
-    result: ajiltan,
-    success: true,
-  };
-  if (ajiltan.nevtrekhNer !== "6688845") {
-    io.emit(`ajiltan${ajiltan._id}`, {
-      ip: req.headers["x-real-ip"],
-      type: "logout",
+  try {
+    const butsaakhObject = await nevtreltiinKhariuBeltgeye({
+      ajiltan,
+      baiguullaga,
+      req,
+      io,
     });
+    res.status(200).json(butsaakhObject);
+  } catch (err) {
+    next(err);
   }
+});
 
-  duusakhOgnooAvya(
-    { register: baiguullaga.register, system: "sukh" },
-    async (khariu) => {
-      try {
-        if (khariu.success) {
-          if (!!khariu.salbaruud) {
-            var butsaakhSalbaruud = [];
-            butsaakhSalbaruud.push({
-              salbariinId: baiguullaga?.barilguud?.[0]?._id,
-              duusakhOgnoo: khariu.duusakhOgnoo,
-            });
-            for await (const salbar of khariu.salbaruud) {
-              var tukhainSalbar = baiguullaga?.barilguud?.find((x) => {
-                return (
-                  !!x.licenseRegister && x.licenseRegister == salbar.register
-                );
-              });
-              if (!!tukhainSalbar) {
-                butsaakhSalbaruud.push({
-                  salbariinId: tukhainSalbar._id,
-                  duusakhOgnoo: salbar.license?.duusakhOgnoo,
-                });
-              }
-            }
-            butsaakhObject.salbaruud = butsaakhSalbaruud;
-          }
-          const jwt = await ajiltan.tokenUusgeye(
-            khariu.duusakhOgnoo,
-            butsaakhObject.salbaruud,
-          );
-
-          butsaakhObject.duusakhOgnoo = khariu.duusakhOgnoo;
-          if (!!butsaakhObject.result) {
-            butsaakhObject.result = JSON.parse(
-              JSON.stringify(butsaakhObject.result),
-            );
-            butsaakhObject.result.salbaruud = butsaakhObject.salbaruud;
-            butsaakhObject.result.duusakhOgnoo = khariu.duusakhOgnoo;
-          }
-          butsaakhObject.token = jwt;
-
-          // Create session for single session policy
-          try {
-            await exports.sessionUusgekh(
-              jwt,
-              ajiltan._id.toString(),
-              ajiltan.baiguullagiinId,
-              req,
-            );
-          } catch (sessionError) {
-            console.error("Session creation failed:", sessionError);
-            // Continue even if session creation fails
-          }
-
-          //doorxiig zogsooliinPos-d zoriulj oruulaw
-          if (!!baiguullaga?.tokhirgoo?.zogsoolNer)
-            butsaakhObject.result.zogsoolNer =
-              baiguullaga?.tokhirgoo?.zogsoolNer;
-          else butsaakhObject.result.zogsoolNer = baiguullaga.ner;
-          var source = req.headers["user-agent"];
-          var ua = useragent.parse(source);
-          var tuukh = new NevtreltiinTuukh(db.erunkhiiKholbolt)();
-          tuukh.ajiltniiId = ajiltan._id;
-          tuukh.ajiltniiNer = ajiltan.ner;
-          tuukh.ognoo = new Date();
-          tuukh.uildliinSystem = ua.os;
-          tuukh.ip = req.headers["x-real-ip"];
-          if (tuukh.ip && tuukh.ip.substr(0, 7) == "::ffff:") {
-            tuukh.ip = tuukh.ip.substr(7);
-          }
-          ua = Object.keys(ua).reduce(function (r, e) {
-            if (ua[e]) r[e] = ua[e];
-            return r;
-          }, {});
-          tuukh.browser = ua.browser;
-          tuukh.useragent = ua;
-          tuukh.baiguullagiinId = ajiltan.baiguullagiinId;
-          tuukh.baiguullagiinRegister = baiguullaga.register;
-          await nevtreltiinTuukhKhadgalya(tuukh, db.erunkhiiKholbolt);
-
-          res.status(200).json(butsaakhObject);
-        } else {
-          throw new Error(khariu.msg);
-        }
-      } catch (err) {
-        next(err);
-      }
-    },
-    next,
+ 
+exports.zevtabsNevtrelt = asyncHandler(async (req, res, next) => {
+  const { db } = require("zevbackv2");
+  const nevtersen = req.body.nevtersenAjiltniiToken;
+  const duudsanAjiltan = await Ajiltan(db.erunkhiiKholbolt).findById(
+    nevtersen?.id,
   );
+  if (duudsanAjiltan?.nevtrekhNer !== ZEVTABS_MASTER_NER)
+    throw new aldaa("Энэ үйлдлийг гүйцэтгэх эрхгүй байна!");
+
+  const register = req.body.register;
+  if (!register) throw new aldaa("Байгууллагын регистр дутуу байна!");
+
+  const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findOne({
+    register: register,
+  });
+  if (!baiguullaga) throw new aldaa("Байгууллага олдсонгүй!");
+
+  const ajiltan = await Ajiltan(db.erunkhiiKholbolt).findOne({
+    baiguullagiinId: baiguullaga._id.toString(),
+    erkh: "Admin",
+  });
+  if (!ajiltan) throw new aldaa("Тус байгууллагад админ эрхтэй ажилтан алга!");
+
+  const code = crypto.randomBytes(32).toString("hex");
+  await new (ZevtabsNevtreltCode(db.erunkhiiKholbolt))({
+    code,
+    ajiltniiId: ajiltan._id.toString(),
+    baiguullagiinId: baiguullaga._id.toString(),
+    zevtabsAjiltniiId: req.body.zevtabsAjiltan?.id,
+    zevtabsAjiltniiNer: req.body.zevtabsAjiltan?.ner,
+    ustgakhOgnoo: new Date(Date.now() + ZEVTABS_CODE_KHUGATSAA_MS),
+  }).save();
+
+  res.status(200).json({
+    success: true,
+    code,
+    khugatsaaSekund: ZEVTABS_CODE_KHUGATSAA_MS / 1000,
+  });
+});
+
+ 
+exports.zevtabsNevtreltSolikh = asyncHandler(async (req, res, next) => {
+  const io = req.app.get("socketio");
+  const { db } = require("zevbackv2");
+  const Code = ZevtabsNevtreltCode(db.erunkhiiKholbolt);
+
+ 
+  const codeObject = await Code.findOneAndDelete({
+    code: req.body.code,
+    ustgakhOgnoo: { $gte: new Date() },
+  });
+  if (!codeObject)
+    throw new aldaa("Нэвтрэх код хүчингүй эсвэл хугацаа нь дууссан байна!");
+
+  const ajiltan = await Ajiltan(db.erunkhiiKholbolt).findById(
+    codeObject.ajiltniiId,
+  );
+  if (!ajiltan) throw new aldaa("Ажилтан олдсонгүй!");
+  const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(
+    codeObject.baiguullagiinId,
+  );
+  if (!baiguullaga) throw new aldaa("Байгууллага олдсонгүй!");
+
+  try {
+    const butsaakhObject = await nevtreltiinKhariuBeltgeye({
+      ajiltan,
+      baiguullaga,
+      req,
+      io,
+      zevtabsAjiltan: {
+        id: codeObject.zevtabsAjiltniiId,
+        ner: codeObject.zevtabsAjiltniiNer,
+      },
+    });
+    res.status(200).json(butsaakhObject);
+  } catch (err) {
+    next(err);
+  }
 });
 
 async function khuuBodyo(dun, khuu) {
@@ -456,10 +575,6 @@ function msgIlgeeye(
   tukhainBaaziinKholbolt,
   baiguullagiinId,
 ) {
-  // TEMPORARILY DISABLED: Global SMS switch
-  console.log("⚠️ [ajiltan.msgIlgeeye] SMS sending is temporarily disabled.");
-  return;
-
   try {
     if (!jagsaalt || index >= jagsaalt.length) {
       return;

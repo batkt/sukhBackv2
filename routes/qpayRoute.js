@@ -3345,10 +3345,6 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
 });
 
 router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (req, res, next) => {
-  // TEMPORARILY DISABLED: Global SMS switch
-  console.log("⚠️ [qpayRoute] Reminder SMS sending is temporarily disabled.");
-  return res.json({ success: true, message: "SMS service is temporarily disabled" });
-
   try {
     const { db } = require("zevbackv2");
     const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
