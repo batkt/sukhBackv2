@@ -873,10 +873,45 @@ router.post("/ebarimtIlgeeye", tokenShalgakh, async (req, res, next) => {
     if (!baseUrl) {
       return next(new Error("EBARIMTSHINE_IP тохируулаагүй байна!"));
     }
-    const url = baseUrl + "rest/send";
+    // ЖИЧ: зам нь "rest/sendData". Өмнө "rest/send" гэж байсан бөгөөд дотоод
+    // и-баримтын үйлчилгээ {"message":"Not Found"} буцаадаг байв - улмаар
+    // татварын алба руу хуримтлагдсан баримт ХЭЗЭЭ Ч илгээгддэггүй байсан.
+    const url = baseUrl + "rest/sendData";
     request.get(url, { json: true }, (err, res1, body) => {
-      if (err) return next(err);
-      res.send(body);
+      if (err) {
+        console.error("[EBARIMT-ILGEEKH] request error:", err.message, { url });
+        return next(err);
+      }
+
+      const statusCode = (res1 && res1.statusCode) || 200;
+      console.log("[EBARIMT-ILGEEKH] response", { url, statusCode, body });
+
+      // Дотоод үйлчилгээний алдааг 200 болгож нуухгүй - эс тэгвэл татвар руу
+      // илгээгдээгүй байхад "болсон" гэж харагдана.
+      const notFound =
+        statusCode === 404 ||
+        (body && typeof body.message === "string" &&
+          /not found/i.test(body.message));
+
+      if (notFound) {
+        return res.status(502).json({
+          success: false,
+          message:
+            `И-баримтын дотоод үйлчилгээ (${url}) "Not Found" буцаалаа — ` +
+            "замын нэр эсвэл үйлчилгээний хувилбар зөрж байна.",
+          tatvariinKhariu: body,
+        });
+      }
+
+      if (statusCode >= 400) {
+        return res.status(502).json({
+          success: false,
+          message: `И-баримтын дотоод үйлчилгээ ${statusCode} буцаалаа`,
+          tatvariinKhariu: body,
+        });
+      }
+
+      res.json({ success: true, message: "Amjilttai", tatvariinKhariu: body });
     });
   } catch (error) {
     next(error);
