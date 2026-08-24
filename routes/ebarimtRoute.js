@@ -356,7 +356,8 @@ router.post("/ebarimtButsaaya", tokenShalgakh, async (req, res, next) => {
     const token = req.body.nevtersenAjiltniiToken || {};
     const barimtiinId = req.body._id || req.body.id;
     const baiguullagiinId = req.body.baiguullagiinId || token.baiguullagiinId;
-    const barilgiinId = req.body.barilgiinId;
+    // Барилгыг баримтаас нь авна - клиент дутуу илгээж мэднэ
+    let barilgiinId = req.body.barilgiinId;
 
     if (!barimtiinId)
       return res
@@ -374,23 +375,13 @@ router.post("/ebarimtButsaaya", tokenShalgakh, async (req, res, next) => {
         message: "Танд и-баримт буцаах эрх байхгүй!",
       });
 
-    // --- 1. Барилгын тохиргоо: шинэ и-баримт эсэх ---
-    const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt)
-      .findById(baiguullagiinId)
-      .lean();
-    const tukhainSalbar = baiguullaga?.barilguud?.find(
-      (e) => String(e._id) === String(barilgiinId)
-    )?.tokhirgoo;
-    const ebarimtShineEsekh = !!tukhainSalbar?.eBarimtShine;
-
-    if (!ebarimtShineEsekh)
-      return res.status(400).json({
-        success: false,
-        message:
-          "Энэ барилга шинэ и-баримт (eBarimtShine) хэрэглэдэггүй тул буцаах боломжгүй!",
-      });
-
-    // --- 2. Баримтыг БААЗААС уншина ---
+    // --- 1. Баримтыг БААЗААС уншина ---
+    //
+    // ЖИЧ: "шинэ и-баримт эсэх"-ийг барилгын тохиргооноос НЕ асууна. Баримт
+    // ebarimtShine коллекцид байгаа нь өөрөө шинэ и-баримтаар бичигдсэн гэдгийн
+    // баталгаа (ebarimtDuudya нь өөр хувилбарыг дэмждэггүй). Барилгын тохиргоо
+    // хойшид өөрчлөгдөж, эсвэл клиент barilgiinId-г дутуу илгээж мэдэх тул
+    // түүнийг гейт болгож хэрэглэвэл хүчинтэй баримт буцаах боломжгүй болно.
     const Model = EbarimtShine(kholbolt);
     const butsaakhBarimt = await Model.findById(barimtiinId);
 
@@ -398,6 +389,15 @@ router.post("/ebarimtButsaaya", tokenShalgakh, async (req, res, next) => {
       return res
         .status(404)
         .json({ success: false, message: "И-баримт олдсонгүй!" });
+
+    // Татварын систем рүү DELETE явуулахад ДДТД (id) шаардлагатай
+    if (!butsaakhBarimt.id && !butsaakhBarimt.receiptId)
+      return res.status(400).json({
+        success: false,
+        message:
+          "Баримтад ДДТД (id) байхгүй — татварын системд бүртгэгдээгүй " +
+          "баримт байж болно. Буцаах боломжгүй.",
+      });
 
     // Байгууллага хоорондын хамгаалалт
     if (
@@ -409,7 +409,9 @@ router.post("/ebarimtButsaaya", tokenShalgakh, async (req, res, next) => {
         message: "Энэ баримт өөр байгууллагад хамаарна!",
       });
 
-    // --- 3. Давхар буцаахаас хамгаална ---
+    if (butsaakhBarimt.barilgiinId) barilgiinId = butsaakhBarimt.barilgiinId;
+
+    // --- 2. Давхар буцаахаас хамгаална ---
     if (butsaakhBarimt.ustgasanOgnoo)
       return res.status(409).json({
         success: false,
@@ -417,7 +419,7 @@ router.post("/ebarimtButsaaya", tokenShalgakh, async (req, res, next) => {
         ustgasanOgnoo: butsaakhBarimt.ustgasanOgnoo,
       });
 
-    // --- 4. Татварын систем рүү залгана ---
+    // --- 3. Татварын систем рүү залгана ---
     const khariu = await ebarimtButsaayaDuudya(butsaakhBarimt, baiguullagiinId);
 
     if (!khariu.ok) {
@@ -430,11 +432,11 @@ router.post("/ebarimtButsaaya", tokenShalgakh, async (req, res, next) => {
       });
     }
 
-    // --- 5. Амжилттай - локал дээр тэмдэглэнэ ---
+    // --- 4. Амжилттай - локал дээр тэмдэглэнэ ---
     butsaakhBarimt.ustgasanOgnoo = new Date();
     await butsaakhBarimt.save();
 
-    // --- 6. Аудит: хэн, хэзээ, яагаад ---
+    // --- 5. Аудит: хэн, хэзээ, яагаад ---
     try {
       const ustsanBarimt = new (UstsanBarimt(kholbolt))();
       ustsanBarimt.class = "eBarimt";
@@ -454,7 +456,7 @@ router.post("/ebarimtButsaaya", tokenShalgakh, async (req, res, next) => {
       console.error("[EBARIMT-BUTSAAKH] ustsanBarimt хадгалахад алдаа:", err.message);
     }
 
-    // --- 7. Эх бичлэгийг дахин баримт бичих боломжтой болгоно ---
+    // --- 6. Эх бичлэгийг дахин баримт бичих боломжтой болгоно ---
     const shinechilsen = [];
     try {
       if (butsaakhBarimt.guilgeeniiId) {
@@ -478,7 +480,7 @@ router.post("/ebarimtButsaaya", tokenShalgakh, async (req, res, next) => {
 
     console.log(
       `✅ [EBARIMT-BUTSAAKH] Буцаагдлаа: ${butsaakhBarimt.id} (${butsaakhBarimt.totalAmount}₮) ` +
-        `ажилтан=${token.ner || token.id}`
+        `barilga=${barilgiinId || "-"} ажилтан=${token.ner || token.id}`
     );
 
     return res.json({
