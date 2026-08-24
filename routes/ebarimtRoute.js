@@ -11,6 +11,7 @@ const {
 } = require("zevbackv2");
 const Baiguullaga = require("../models/baiguullaga");
 const EbarimtShine = require("../models/ebarimtShine");
+const BankniiGuilgee = require("../models/bankniiGuilgee");
 const EasyRegisterUser = require("../models/easyRegisterUser");
 
 // Short-term cache for Easy Register API responses (government APIs are slow)
@@ -157,16 +158,36 @@ async function nekhemjlekheesEbarimtShineUusgye(
   }
 }
 
+/**
+ * И-баримтын API-н суурь хаягийг тодорхойлох.
+ *
+ * Баримт бичих (POST) ба баримт буцаах (DELETE) хоёр ижил хаяг хэрэглэх ёстой -
+ * тиймээс логикийг энд нэг дор байлгаж, хоёр тал үүнийг дуудна. Салангид
+ * байвал нэг нь TEST, нөгөө нь PROD руу залгах эрсдэлтэй.
+ *
+ * Дараалал: 1) дуудлагын override, 2) байгууллагын төрлөөр env, 3) TEST-руу унана.
+ */
+function ebarimtBaseUrlAvya(baiguullagiinId, overrideUrl = null) {
+  const shouldUseTest =
+    baiguullagiinId && String(baiguullagiinId) === "69f3f56a2899d5fdc24251d1";
+
+  return (
+    overrideUrl ||
+    (shouldUseTest
+      ? process.env.EBARIMTSHINE_TEST
+      : process.env.EBARIMTSHINE_IP) ||
+    process.env.EBARIMTSHINE_TEST ||
+    null
+  );
+}
+
 async function ebarimtDuudya(ugugdul, onFinish, next, shine = false, baiguullagiinId = null, overrideUrl = null) {
   try {
     if (!!shine) {
       const orgId = baiguullagiinId || ugugdul?.baiguullagiinId;
       const shouldUseTest = orgId && String(orgId) === "69f3f56a2899d5fdc24251d1";
 
-      // Priority: 1) per-call override, 2) env var for org type, 3) fallback to TEST
-      let baseUrl = overrideUrl
-        || (shouldUseTest ? process.env.EBARIMTSHINE_TEST : process.env.EBARIMTSHINE_IP)
-        || process.env.EBARIMTSHINE_TEST;
+      let baseUrl = ebarimtBaseUrlAvya(orgId, overrideUrl);
 
       if (!baseUrl) {
         const err = new Error("EBARIMTSHINE_IP тохируулаагүй байна — tokhirgoo.env файлд нэмнэ үү");
@@ -233,6 +254,248 @@ async function ebarimtDuudya(ugugdul, onFinish, next, shine = false, baiguullagi
     if (!!next) next(new Error("ИБаримт dll холболт хийгдээгүй байна!"));
   }
 }
+
+/**
+ * И-баримтыг ТАТВАРЫН СИСТЕМЭЭС буцаах (DELETE rest/receipt).
+ *
+ * Зөвхөн локал бичлэгийг устгавал татварын албанд баримт үлдэж, тайлан зөрөх
+ * тул ЭХЛЭЭД татварын систем рүү залгаж, амжилттай болсныг батлаад л локал
+ * дээр устгасан гэж тэмдэглэнэ.
+ *
+ * @returns {Promise<{ok: boolean, body?: any, message?: string}>} - throw хийхгүй
+ */
+function ebarimtButsaayaDuudya(barimt, baiguullagiinId) {
+  return new Promise((resolve) => {
+    const baseUrl = ebarimtBaseUrlAvya(baiguullagiinId);
+    if (!baseUrl) {
+      return resolve({
+        ok: false,
+        message:
+          "EBARIMTSHINE_IP тохируулаагүй байна — tokhirgoo.env файлд нэмнэ үү",
+      });
+    }
+
+    const id = barimt.id || barimt.receiptId;
+    if (!id) {
+      return resolve({
+        ok: false,
+        message: "Баримтын ДДТД (id) байхгүй тул татварын системээс буцаах боломжгүй",
+      });
+    }
+
+    const url = baseUrl + "rest/receipt";
+    const body = { id, date: barimt.date };
+
+    console.log("[EBARIMT-BUTSAAKH] Sending delete", { url, id, date: barimt.date });
+
+    request.delete(url, { json: true, body }, (err, res1, khariu) => {
+      if (err) {
+        console.error("[EBARIMT-BUTSAAKH] request.delete error:", err.message);
+        return resolve({ ok: false, message: err.message });
+      }
+
+      const statusCode = res1 && res1.statusCode;
+      console.log("[EBARIMT-BUTSAAKH] response", {
+        statusCode,
+        status: khariu && khariu.status,
+        success: khariu && khariu.success,
+        message: (khariu && (khariu.message || khariu.error)) || null,
+      });
+
+      // Татварын систем "болсон" гэж хэлээгүй бол УСТГАХГҮЙ.
+      if (statusCode && statusCode >= 400) {
+        return resolve({
+          ok: false,
+          message:
+            (khariu && (khariu.message || khariu.error)) ||
+            `Татварын систем ${statusCode} буцаалаа`,
+          body: khariu,
+        });
+      }
+      if (khariu && khariu.success === false) {
+        return resolve({
+          ok: false,
+          message: khariu.message || khariu.error || "Татварын систем татгалзлаа",
+          body: khariu,
+        });
+      }
+      if (khariu && khariu.status && khariu.status !== "SUCCESS") {
+        return resolve({
+          ok: false,
+          message: khariu.message || khariu.error || `status=${khariu.status}`,
+          body: khariu,
+        });
+      }
+      if (khariu && (khariu.error || khariu.message) && !khariu.success && !khariu.status) {
+        return resolve({
+          ok: false,
+          message: khariu.message || khariu.error,
+          body: khariu,
+        });
+      }
+
+      resolve({ ok: true, body: khariu });
+    });
+  });
+}
+
+/**
+ * POST /ebarimtButsaaya
+ *
+ * И-баримтыг буцаах (устгах). Дараалал:
+ *   1. Баримтыг БААЗААС уншина (клиентээс ирсэн өгөгдөлд итгэхгүй)
+ *   2. Аль хэдийн буцаасан бол зогсоно (татварын систем рүү 2 дахин залгахгүй)
+ *   3. Татварын систем рүү DELETE залгана
+ *   4. ЗӨВХӨН амжилттай бол ustgasanOgnoo тавина
+ *   5. ustsanBarimt дээр аудитын бичлэг хийнэ (ажилтан нь ТОКЕНООС)
+ *   6. Эх бичлэгийн ebarimtAvsanEsekh-ийг false болгож дахин бичих боломж өгнө
+ */
+router.post("/ebarimtButsaaya", tokenShalgakh, async (req, res, next) => {
+  try {
+    const kholbolt = req.body.tukhainBaaziinKholbolt;
+    const token = req.body.nevtersenAjiltniiToken || {};
+    const barimtiinId = req.body._id || req.body.id;
+    const baiguullagiinId = req.body.baiguullagiinId || token.baiguullagiinId;
+    const barilgiinId = req.body.barilgiinId;
+
+    if (!barimtiinId)
+      return res
+        .status(400)
+        .json({ success: false, message: "Баримтын _id шаардлагатай!" });
+    if (!baiguullagiinId)
+      return res
+        .status(400)
+        .json({ success: false, message: "baiguullagiinId шаардлагатай!" });
+
+    // Оршин суугч, зочин баримт устгаж болохгүй - зөвхөн ажилтан
+    if (token.erkh === "OrshinSuugch" || token.id === "zochin")
+      return res.status(403).json({
+        success: false,
+        message: "Танд и-баримт буцаах эрх байхгүй!",
+      });
+
+    // --- 1. Барилгын тохиргоо: шинэ и-баримт эсэх ---
+    const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt)
+      .findById(baiguullagiinId)
+      .lean();
+    const tukhainSalbar = baiguullaga?.barilguud?.find(
+      (e) => String(e._id) === String(barilgiinId)
+    )?.tokhirgoo;
+    const ebarimtShineEsekh = !!tukhainSalbar?.eBarimtShine;
+
+    if (!ebarimtShineEsekh)
+      return res.status(400).json({
+        success: false,
+        message:
+          "Энэ барилга шинэ и-баримт (eBarimtShine) хэрэглэдэггүй тул буцаах боломжгүй!",
+      });
+
+    // --- 2. Баримтыг БААЗААС уншина ---
+    const Model = EbarimtShine(kholbolt);
+    const butsaakhBarimt = await Model.findById(barimtiinId);
+
+    if (!butsaakhBarimt)
+      return res
+        .status(404)
+        .json({ success: false, message: "И-баримт олдсонгүй!" });
+
+    // Байгууллага хоорондын хамгаалалт
+    if (
+      butsaakhBarimt.baiguullagiinId &&
+      String(butsaakhBarimt.baiguullagiinId) !== String(baiguullagiinId)
+    )
+      return res.status(403).json({
+        success: false,
+        message: "Энэ баримт өөр байгууллагад хамаарна!",
+      });
+
+    // --- 3. Давхар буцаахаас хамгаална ---
+    if (butsaakhBarimt.ustgasanOgnoo)
+      return res.status(409).json({
+        success: false,
+        message: "Энэ баримт аль хэдийн буцаагдсан байна!",
+        ustgasanOgnoo: butsaakhBarimt.ustgasanOgnoo,
+      });
+
+    // --- 4. Татварын систем рүү залгана ---
+    const khariu = await ebarimtButsaayaDuudya(butsaakhBarimt, baiguullagiinId);
+
+    if (!khariu.ok) {
+      console.error(
+        `❌ [EBARIMT-BUTSAAKH] Татварын системээс буцаагдсангүй: ${butsaakhBarimt.id} - ${khariu.message}`
+      );
+      return res.status(502).json({
+        success: false,
+        message: `Татварын системээс буцаах үед алдаа: ${khariu.message}`,
+      });
+    }
+
+    // --- 5. Амжилттай - локал дээр тэмдэглэнэ ---
+    butsaakhBarimt.ustgasanOgnoo = new Date();
+    await butsaakhBarimt.save();
+
+    // --- 6. Аудит: хэн, хэзээ, яагаад ---
+    try {
+      const ustsanBarimt = new (UstsanBarimt(kholbolt))();
+      ustsanBarimt.class = "eBarimt";
+      ustsanBarimt.object = butsaakhBarimt.toObject();
+      ustsanBarimt.baiguullagiinId = String(baiguullagiinId);
+      // Ажилтныг ТОКЕНООС авна - body-д итгэвэл хэн ч өөр хүний нэрээр
+      // устгасан гэж бичүүлж чадна.
+      ustsanBarimt.ajiltniiId = token.id ? String(token.id) : undefined;
+      ustsanBarimt.ajiltniiNer = token.ner || "";
+      ustsanBarimt.burtgesenAjiltniiId = token.id ? String(token.id) : undefined;
+      ustsanBarimt.burtgesenAjiltniiNer = token.ner || "";
+      ustsanBarimt.burtgesenOgnoo = new Date();
+      ustsanBarimt.tailbar = req.body.tailbar || "И-баримт буцаасан";
+      await ustsanBarimt.save();
+    } catch (err) {
+      // Аудит бичигдэхгүй байсан ч баримт буцаагдсан хэвээр - лог бичээд үргэлжилнэ
+      console.error("[EBARIMT-BUTSAAKH] ustsanBarimt хадгалахад алдаа:", err.message);
+    }
+
+    // --- 7. Эх бичлэгийг дахин баримт бичих боломжтой болгоно ---
+    const shinechilsen = [];
+    try {
+      if (butsaakhBarimt.guilgeeniiId) {
+        await BankniiGuilgee(kholbolt).findByIdAndUpdate(
+          butsaakhBarimt.guilgeeniiId,
+          { $set: { ebarimtAvsanEsekh: false } }
+        );
+        shinechilsen.push("bankniiGuilgee");
+      }
+      if (butsaakhBarimt.zogsooliinId) {
+        const { Uilchluulegch } = require("sukhParking-v1");
+        await Uilchluulegch(kholbolt).findByIdAndUpdate(
+          butsaakhBarimt.zogsooliinId,
+          { $set: { ebarimtAvsanEsekh: false } }
+        );
+        shinechilsen.push("zogsool");
+      }
+    } catch (err) {
+      console.error("[EBARIMT-BUTSAAKH] эх бичлэг шинэчлэхэд алдаа:", err.message);
+    }
+
+    console.log(
+      `✅ [EBARIMT-BUTSAAKH] Буцаагдлаа: ${butsaakhBarimt.id} (${butsaakhBarimt.totalAmount}₮) ` +
+        `ажилтан=${token.ner || token.id}`
+    );
+
+    return res.json({
+      success: true,
+      message: "Amjilttai",
+      data: {
+        _id: butsaakhBarimt._id,
+        id: butsaakhBarimt.id,
+        ustgasanOgnoo: butsaakhBarimt.ustgasanOgnoo,
+        shinechilsen,
+      },
+    });
+  } catch (error) {
+    console.error("[EBARIMT-BUTSAAKH] Алдаа:", error.message);
+    next(error);
+  }
+});
 
 // Full password login - used as initial login or when refresh fails
 async function ebarimtPasswordLogin(baiguullagiinId, tukhainBaaziinKholbolt, isTest = false) {
@@ -1290,3 +1553,5 @@ module.exports.ebarimtDuudya = ebarimtDuudya;
 module.exports.autoApproveQr = autoApproveQr;
 module.exports.easyRegisterDuudya = easyRegisterDuudya;
 module.exports.getEbarimtToken = getEbarimtToken;
+module.exports.ebarimtButsaayaDuudya = ebarimtButsaayaDuudya;
+module.exports.ebarimtBaseUrlAvya = ebarimtBaseUrlAvya;
