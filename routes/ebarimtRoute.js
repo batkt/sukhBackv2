@@ -18,6 +18,7 @@ const easyRegisterCache = new Map();
 const EASY_REGISTER_CACHE_TTL = 600000; // 10 minutes cache
 const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
 const { resolveDistrictCode } = require("../lib/districtMapping");
+const { ebarimtiinTootNukhye, tootAvya } = require("../lib/tootResolver");
 const { downloadEbarimtExcel } = require("../controller/excelImportController");
 const copyQueryToBody = (req, res, next) => {
   if (req.method === "GET" && Object.keys(req.query).length > 0) {
@@ -95,6 +96,9 @@ async function nekhemjlekheesEbarimtShineUusgye(
     ebarimt.barilgiinId = nekhemjlekh.barilgiinId;
     ebarimt.gereeniiDugaar = nekhemjlekh.gereeniiDugaar;
     ebarimt.utas = nekhemjlekh.utas?.[0] || "";
+    // ЖИЧ: toot-ыг ЭНД оноохгүй. Энэ объект бүхэлдээ e-barimt сервис рүү
+    // POST хийгддэг (ebarimtDuudya) тул татварын payload-д илүү талбар
+    // нэмэхгүйн тулд toot-ыг зөвхөн хадгалахын өмнө (save) оноодог.
 
     ebarimt.totalAmount = dun.toFixed(2);
     ebarimt.totalVAT = !!nuatTulukhEsekh ? nuatBodyo(dun) : 0;
@@ -571,7 +575,19 @@ router.get("/ebarimtJagsaaltAvya", tokenShalgakh, async (req, res, next) => {
     const shine = true;
 
     khuudaslalt(EbarimtShine(req.body.tukhainBaaziinKholbolt), body)
-      .then((result) => {
+      .then(async (result) => {
+        // Хуучин баримтууд дээр toot хоосон үлдсэн тул нэхэмжлэх/гэрээнээс нөхөж бөглөнө
+        try {
+          // Зөвхөн харуулахад зориулж нөхнө — баазад БИЧИХГҮЙ.
+          // Гэрээн дээрх тоот засагдвал жагсаалт автоматаар шинэчлэгдэнэ.
+          await ebarimtiinTootNukhye(
+            req.body.tukhainBaaziinKholbolt,
+            result?.jagsaalt || [],
+            { khadgalakhEsekh: false }
+          );
+        } catch (err) {
+          console.error("[EBARIMT] Тоот нөхөхөд алдаа:", err.message);
+        }
         res.send(result);
       })
       .catch((err) => {
@@ -786,7 +802,7 @@ router.post(
           shineBarimt.barilgiinId = khariuObject.barilgiinId;
           shineBarimt.gereeniiDugaar = khariuObject.gereeniiDugaar;
           shineBarimt.utas = khariuObject.utas;
-          shineBarimt.toot = khariuObject.toot;
+          shineBarimt.toot = tootAvya(nekhemjlekh); // зөвхөн дотоод харуулалтад
           shineBarimt.status = d.status;
           shineBarimt.success = d.success;
 

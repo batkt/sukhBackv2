@@ -2330,14 +2330,21 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
     }
 
     // Update all invoices as paid
-    const updatePromises = invoices.map(async (nekhemjlekh) => {
+    const nekhemjlekhBolovsruulya = async (nekhemjlekh) => {
       try {
         if (nekhemjlekh.tuluv === "Төлсөн") {
           return;
         }
 
+        // Нэг QPay төлөлт олон нэхэмжлэх хамарч болно. Тийм үед түлхүүрийг
+        // нэхэмжлэх тус бүрээр ялгана — эс бөгөөс 2 дахь нэхэмжлэхээс эхлээд
+        // "аль хэдийн бүртгэгдсэн" гэж алгасагдаж, төлөгдсөн гэж тэмдэглэгдэхгүй.
         const bankniiGuilgeeId =
-          paymentTransactionId ||
+          (paymentTransactionId
+            ? invoices.length > 1
+              ? `${paymentTransactionId}-${nekhemjlekh._id?.toString() || ""}`
+              : paymentTransactionId
+            : null) ||
           nekhemjlekh.qpayInvoiceId ||
           "qpay-multi-" + (nekhemjlekh._id?.toString() || "");
 
@@ -2357,8 +2364,12 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
         let geree = null;
 
         // Priority 1: Try to get amount from local QPay record (the intended amount)
+        // ЗӨВХӨН нэг нэхэмжлэхтэй үед. Олон нэхэмжлэхийг нэг төлөлтөөр төлсөн үед
+        // QPay-н НИЙТ дүнг нэхэмжлэх бүрд оноовол баримт бүр нийт дүнгээр гарч,
+        // татварт олон дахин их дүн мэдүүлэгдэнэ. Тийм үед доорх Priority 2
+        // (нэхэмжлэхийн өөрийн niitTulbur) ажиллана.
         try {
-          if (foundQpayRecord) {
+          if (foundQpayRecord && invoices.length === 1) {
             invoicePaidAmount = parseFloat(
               foundQpayRecord.sukhNekhemjlekh?.pay_amount ||
               foundQpayRecord.amount ||
@@ -2671,6 +2682,31 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
                   const nuatTulukhEsekh = !!tuxainSalbar.nuatTulukhEsekh;
 
                   const paidAmountForEbarimt = Number(invoicePaidAmount) || 0;
+
+                  // Идемпотент хамгаалалт: энэ нэхэмжлэх дээр амжилттай баримт
+                  // аль хэдийн байгаа бол дахин үүсгэхгүй. Callback давтагдах,
+                  // эсвэл өөр урсгал зэрэг ажиллах үед давхар баримт гарахаас сэргийлнэ.
+                  const bailgaBarimt = await EbarimtShine(kholbolt)
+                    .findOne({
+                      nekhemjlekhiinId: updatedInvoice._id.toString(),
+                      ustgasanOgnoo: { $exists: false },
+                      $or: [{ success: true }, { status: "SUCCESS" }],
+                    })
+                    .select("_id receiptId totalAmount")
+                    .lean()
+                    .catch(() => null);
+
+                  if (bailgaBarimt) {
+                    console.log(
+                      "ℹ️ [QPAY MULTI CALLBACK] Ebarimt аль хэдийн үүссэн — алгасав",
+                      {
+                        invoiceId: updatedInvoice._id?.toString(),
+                        receiptId: bailgaBarimt.receiptId,
+                        totalAmount: bailgaBarimt.totalAmount,
+                      },
+                    );
+                    return;
+                  }
                   const ebarimtInvoice = {
                     ...(typeof updatedInvoice.toObject === "function"
                       ? updatedInvoice.toObject()
@@ -2730,7 +2766,8 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
                       shineBarimt.barilgiinId = ebarimtObject.barilgiinId;
                       shineBarimt.gereeniiDugaar = ebarimtObject.gereeniiDugaar;
                       shineBarimt.utas = ebarimtObject.utas;
-                      shineBarimt.toot = ebarimtObject.toot;
+                      shineBarimt.toot =
+                        updatedInvoice.toot || nekhemjlekh.toot || "";
                       shineBarimt.status = d.status;
                       shineBarimt.success = d.success;
 
@@ -2953,9 +2990,15 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
           invoiceErr.message,
         );
       }
-    });
+    };
 
-    await Promise.all(updatePromises);
+    // ЧУХАЛ: нэхэмжлэхүүдийг ДАРААЛЛААР боловсруулна.
+    // Өмнө нь Promise.all-аар зэрэг ажилладаг байсан тул давхардлын шалгалтууд
+    // (bankniiGuilgeeId findOne, recordPayment) бүгд бичихээс өмнө уншиж
+    // амждаг байсан => нэг төлөлт дээр олон e-barimt үүсдэг байв.
+    for (const nekhemjlekh of invoices) {
+      await nekhemjlekhBolovsruulya(nekhemjlekh);
+    }
 
     // QuickQpayObject: must use the real QPay invoice UUID (same as invoiceWithQpay), not invoices[0].
     if (qpayInvoiceIdForApi) {
