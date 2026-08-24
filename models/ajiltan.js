@@ -57,14 +57,25 @@ ajiltanSchema.index({ nevtrekhNer: 1 });
 ajiltanSchema.index({ mail: 1 });
 ajiltanSchema.index({ baiguullagiinId: 1 });
 
-ajiltanSchema.methods.tokenUusgeye = function (duusakhOgnoo, salbaruud = null) {
+ajiltanSchema.methods.tokenUusgeye = function (
+  duusakhOgnoo,
+  salbaruud = null,
+   
+  nemelt = null,
+) {
+  // ZevTabs-ийн ажилтан админ эрхээр орсон бол `ner` нь байгууллагын админы
+  // нэр биш, ZevTabs-ийн тухайн ажилтны нэрээр явна. Аудит/түүхийн бичлэгүүд
+  // `nevtersenAjiltniiToken.ner`-ийг шууд бичдэг тул нэг эндээс өөрчилнө.
+  // `id` нь хэвээрээ — эрх, хайлт бүгд түүгээр явдаг.
+  const zevtabsAjiltan = nemelt?.zevtabsAjiltan;
   const token = jwt.sign(
     {
       id: this._id,
-      ner: this.ner,
+      ner: !!zevtabsAjiltan ? `ZevTabs - ${zevtabsAjiltan.ner}` : this.ner,
       baiguullagiinId: this.baiguullagiinId,
       salbaruud: salbaruud,
       duusakhOgnoo: duusakhOgnoo,
+      ...(nemelt || {}),
     },
     process.env.APP_SECRET,
     {

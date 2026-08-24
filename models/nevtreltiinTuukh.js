@@ -14,6 +14,10 @@ const nevtreltiinTuukhSchema = new Schema(
     browser: String,
     baiguullagiinId: String,
     baiguullagiinRegister: String,
+
+ 
+    zevtabsAjiltniiId: String,
+    zevtabsAjiltniiNer: String,
     barilgiinId: String,
     useragent: Schema.Types.Mixed,
   },

@@ -49,6 +49,8 @@ const {
   baiguullagaIdgaarAvya,
   ajiltanGaraa,
   sessionShalgakh,
+  zevtabsNevtrelt,
+  zevtabsNevtreltSolikh,
 } = require("../controller/ajiltan");
 
 crudWithFile(
@@ -160,6 +162,11 @@ router.get("/sessionAvya/:sessionId", async (req, res, next) => {
 });
 
 router.route("/ajiltanNevtrey").post(ajiltanNevtrey);
+// ZevTabs удирдлагын систем сервер талаасаа дуудна (мастер token шаардана).
+router.route("/zevtabsNevtrelt").post(tokenShalgakh, zevtabsNevtrelt);
+// Нэг удаагийн кодыг вэб апп-ын `/nevtrekh` хуудас token болгож солино —
+// код өөрөө нотолгоо тул token шаардахгүй.
+router.route("/zevtabsNevtreltSolikh").post(zevtabsNevtreltSolikh);
 router.route("/tokenoorAjiltanAvya").post(tokenoorAjiltanAvya);
 router.route("/nuutsUgShalgakhAjiltan").post(nuutsUgShalgakhAjiltan);
 router.route("/zochiniiTokenAvya/:baiguullagiinId").get(zochiniiTokenAvya);
