@@ -384,7 +384,7 @@ exports.medegdelZasah = asyncHandler(async (req, res, next) => {
           
           // Add PUSH notification for reply
           try {
-            const resident = await OrshinSuugch(kholbolt).findById(medegdel.orshinSuugchId).select("firebaseToken");
+            const resident = await OrshinSuugch(db.erunkhiiKholbolt).findById(medegdel.orshinSuugchId).select("firebaseToken");
             if (resident && resident.firebaseToken) {
                 orshinSuugchidSonorduulgaIlgeeye(resident.firebaseToken, {
                     title: replyData.title,
@@ -574,7 +574,7 @@ exports.medegdelIlgeeye = asyncHandler(async (req, res, next) => {
 
       // Add PUSH notification for residents
       try {
-        const resident = await OrshinSuugch(kholbolt).findById(id).select("firebaseToken");
+        const resident = await OrshinSuugch(db.erunkhiiKholbolt).findById(id).select("firebaseToken");
         if (resident && resident.firebaseToken) {
           orshinSuugchidSonorduulgaIlgeeye(resident.firebaseToken, {
             title: medegdelObj.title || "Таньд мэдэгдэл ирлээ!",
@@ -905,7 +905,7 @@ exports.medegdelAdminReply = asyncHandler(async (req, res, next) => {
       
       // Add PUSH notification for admin reply
       try {
-        const resident = await OrshinSuugch(kholbolt).findById(userId).select("firebaseToken");
+        const resident = await OrshinSuugch(db.erunkhiiKholbolt).findById(userId).select("firebaseToken");
         if (resident && resident.firebaseToken) {
             orshinSuugchidSonorduulgaIlgeeye(resident.firebaseToken, {
                 title: replyObj.title,
