@@ -14,6 +14,17 @@ const ebarimtSchema = new Schema(
     lottery: String, // Lottery number
     receiptId: String, // Receipt ID (33-digit from e-Barimt)
     ustgasanOgnoo: Date,
+    /**
+     * Баримт буцаах үед татварын системээс ЮУ БУЦСАНЫГ хадгална.
+     * pm2 лог эргэлддэг тул "татварт үнэхээр хүрсэн үү?" гэдгийг дараа нь
+     * зөвхөн эндээс баттай хариулж болно.
+     */
+    butsaasanKhariu: mongoose.Schema.Types.Mixed,
+    /** Ямар хаяг руу залгасан - TEST эсвэл PROD гэдгийг батлахад */
+    butsaasanUrl: String,
+    butsaasanStatusCode: Number,
+    butsaasanAjiltniiId: String,
+    butsaasanAjiltniiNer: String,
     talbainDugaar: String,
     gereeniiDugaar: String,
     utas: String,

@@ -234,7 +234,8 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
           utas: utas, // Утас (phone)
           orts: geree ? geree.orts || "1" : "", // Орц (entrance)
           davkhar: geree ? geree.davkhar || item.davkhar || "" : item.davkhar || "", // Давхар (floor)
-          gereeniiDugaar: item.gereeniiDugaar || "", // Гэрээний дугаар (contract number)
+          toot: item.toot || "-", // Тоот
+        gereeniiDugaar: item.gereeniiDugaar || "", // Гэрээний дугаар (contract number)
           turul: item.turul || (geree ? geree.turul : "") || "Үндсэн", // Төрөл (type)
           gereeniiTuluv: gereeTuluv, // Гэрээний төлөв (contract status)
           uldegdel: Number(latestUldegdel || item.uldegdel || item.tulbur || 0), // Үлдэгдэл
@@ -311,6 +312,16 @@ exports.downloadEbarimtExcel = asyncHandler(async (req, res, next) => {
       .lean()
       .sort({ createdAt: -1 });
 
+    // Хоосон тоотыг нэхэмжлэх/гэрээнээс нөхөж бөглөнө
+    try {
+      const { ebarimtiinTootNukhye } = require("../lib/tootResolver");
+      await ebarimtiinTootNukhye(tukhainBaaziinKholbolt, ebarimtList, {
+        khadgalakhEsekh: false,
+      });
+    } catch (err) {
+      console.error("[EBARIMT EXCEL] Тоот нөхөхөд алдаа:", err.message);
+    }
+
     if (!ebarimtList || ebarimtList.length === 0) {
       return res.status(404).json({
         success: false,
@@ -354,6 +365,7 @@ exports.downloadEbarimtExcel = asyncHandler(async (req, res, next) => {
     req.body.headers = [
       { key: "dugaar", label: "№" },
       { key: "ognoo", label: "Огноо" },
+      { key: "toot", label: "Тоот" },
       { key: "ddtd", label: "ДДТД" },
       { key: "turul", label: "Төрөл" },
       { key: "uilchilgee", label: "Үйлчилгээ" },
@@ -363,7 +375,7 @@ exports.downloadEbarimtExcel = asyncHandler(async (req, res, next) => {
     ];
     req.body.fileName = req.body.fileName || `ebarimt_${Date.now()}`;
     req.body.sheetName = req.body.sheetName || "E-Barimt";
-    req.body.colWidths = [8, 15, 20, 15, 25, 20, 15, 18]; // Column widths
+    req.body.colWidths = [8, 15, 10, 20, 15, 25, 20, 15, 18]; // Column widths
 
     // Call downloadExcelList function directly
     return exports.downloadExcelList(req, res, next);

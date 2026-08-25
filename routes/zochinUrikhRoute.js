@@ -12,6 +12,7 @@ const OrshinSuugch = require("../models/orshinSuugch");
 const Geree = require("../models/geree");
 const router = express.Router();
 const { tokenShalgakh, crud, UstsanBarimt, db } = require("zevbackv2");
+const zochinTureesSyncService = require("../services/zochinTureesSyncService");
 
 // Session validation for multiple device login prevention
 const orshinSuugchSessionShalgaya = async (req, res, next) => {
@@ -218,6 +219,15 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
 
     const savedDoc = await newDoc.save();
 
+    // Түрээсийн зогсоолын системд бүртгүүлэх. Оршин суугч төлбөрийг өөрөө
+    // даах эсэхийг урилга үүсгэхдээ сонгоно (tulburiinTurul: "ezen" | "zochin").
+    // Түрээс тал унасан ч урилга АмарСүх дээр хадгалагдсан хэвээр байна.
+    const tureesKhariu = await zochinTureesSyncService.urilgaSynclii(savedDoc, {
+      kholbolt: tukhainBaaziinKholbolt,
+      tulburiinTurul: req.body.tulburiinTurul,
+      gereeniiId: req.body.gereeniiId,
+    });
+
     // Socket Emit to resident channel
     try {
       const io = req.app.get("socketio");
@@ -235,7 +245,12 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
     return res.status(201).json({
       success: true,
       message: "Зочин амжилттай уригдлаа",
-      data: savedDoc
+      data: savedDoc,
+      turees: {
+        buurtgegdsen: !!(tureesKhariu && tureesKhariu.success),
+        tulburiinTurul: tureesKhariu && tureesKhariu.tulburiinTurul,
+        message: tureesKhariu && tureesKhariu.message,
+      }
     });
 
   } catch (error) {
@@ -257,6 +272,18 @@ router.delete("/ezenUrisanMashin/:id", tokenShalgakh, async (req, res, next) => 
     }
 
     const residentId = doc.ezenId || doc.ezemshigchiinId;
+
+    // Түрээсийн зогсоол дээр цуцлах. Машин зогсоол дээр байвал түрээс тал
+    // 409 буцаана - тэр үед АмарСүх дээрээс ч устгахгүй, эс тэгвэл гарах
+    // болон төлбөрийн логик тасалдана.
+    const tureesKhariu = await zochinTureesSyncService.urilgaTsutslaya(doc);
+    if (tureesKhariu && tureesKhariu.status === 409) {
+      return res.status(409).json({
+        success: false,
+        message: tureesKhariu.message || "Уригдсан машин зогсоол дээр байна. Гарсны дараа цуцлана уу!",
+      });
+    }
+
     await EzenUrisanMashinModel(tukhainBaaziinKholbolt).findByIdAndDelete(req.params.id);
 
     try {
@@ -1031,15 +1058,40 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
 
           // TRACK USAGE: Create EzenUrisanMashin record if it was an invitation
           if (inviterId && inviterSettings) {
+            // ЧУХАЛ: ezenUrisanMashin схем нь strict тул зөвхөн схемд байгаа
+            // талбарууд хадгалагдана. Өмнө нь `ezenId` гэж бичиж байсан бөгөөд
+            // тэр схемд байхгүй тул Mongoose хаяж, checkQuotaAndPermissions
+            // (ezemshigchiinId/orshinSuugchiinId-гаар хайдаг) эдгээр урилгыг
+            // хэзээ ч олдоггүй байв. Мөн tusBurUneguiMinut тавигдаагүй тул
+            // үнэгүй минут 0 болж байлаа.
+            // Үнэгүй минут/давтамжийг байгууллага + барилгын тохиргооноос
+            // зөв шийдэхийн тулд POST /ezenUrisanMashin-тэй ижил helper-ийг
+            // хэрэглэнэ (машины бичлэг дээр тохиргоо байхгүй байж болно).
+            const invQuota = await checkQuotaAndPermissions(
+              inviterId,
+              baiguullagiinId,
+              barilgiinId,
+              tukhainBaaziinKholbolt
+            );
+
             const newInvitation = new EzenUrisanMashin(tukhainBaaziinKholbolt)({
-              baiguullagiinId: baiguullagiinId,
-              ezenId: inviterId,
+              baiguullagiinId: String(baiguullagiinId),
+              barilgiinId: barilgiinId ? String(barilgiinId) : undefined,
+              ezemshigchiinId: String(inviterId),
               urisanMashiniiDugaar: mashiniiDugaar,
-              tuluv: 0,
-              ognoo: new Date()
+              davtamjiinTurul: invQuota.effectiveType,
+              tusBurUneguiMinut: invQuota.effectiveMinutes || 0,
+              tuluv: 0
             });
             await newInvitation.save();
             console.log("✅ [QUOTA] Invitation recorded for", inviterId);
+
+            // Түрээсийн зогсоолд бүртгүүлэх
+            await zochinTureesSyncService.urilgaSynclii(newInvitation, {
+              kholbolt: tukhainBaaziinKholbolt,
+              tulburiinTurul: req.body.tulburiinTurul,
+              gereeniiId: req.body.gereeniiId,
+            });
           }
 
           console.log("✅ [ZOCHIN_URI] Success. OrshinSuugchMashin saved/updated.");

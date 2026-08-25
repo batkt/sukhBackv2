@@ -65,6 +65,7 @@ const guilgeeAvlaguudSchema = new Schema(
         "gar",
         "busad",
         "excel_import",
+        "zogsool",
       ],
       default: "geree",
     },

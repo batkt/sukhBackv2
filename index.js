@@ -42,6 +42,7 @@ const zogsoolRoute = require("./routes/zogsoolRoute");
 const parkingRoute = require("./routes/parkingRoute");
 const uneguiMashinRoute = require("./routes/uneguiMashinRoute");
 const zochinUrikhRoute = require("./routes/zochinUrikhRoute");
+const zochinZogsoolRoute = require("./routes/zochinZogsoolRoute");
 const auditRoute = require("./routes/auditRoute");
 const transformationRoute = require("./routes/transformationRoute");
 const walletQpayRoute = require("./routes/walletQpayRoute");
@@ -193,6 +194,11 @@ app.use(
   express.json({
     limit: "50mb",
     extended: true,
+    // Webhook-ийн HMAC гарын үсгийг шалгахад parse хийхээс өмнөх ХӨНДӨӨГҮЙ
+    // body шаардлагатай (жишээ: түрээсийн зогсоолын /zochin/zogsool/webhook).
+    verify: (req, res, buf) => {
+      if (buf && buf.length) req.rawBody = buf.toString("utf8");
+    },
   }),
 );
 
@@ -316,6 +322,7 @@ app.use(zogsoolRoute);
 app.use(parkingRoute);
 app.use(uneguiMashinRoute);
 app.use(zochinUrikhRoute);
+app.use(zochinZogsoolRoute);
 app.use("/audit", auditRoute);
 app.use(transformationRoute);
 // walletQpayRoute moved to top
