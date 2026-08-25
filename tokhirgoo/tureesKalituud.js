@@ -42,6 +42,15 @@ const KALITUUD = {
     idevkhiteiEsekh: true,
   },
 
+  "69e0858cc63c773bd34d20ef": {
+    ner: "Хархорум Плаза",
+    tureesServer: "https://turees.zevtabs.mn/api",
+    kalit: "525439952d01fa1de63c4609c5ae2bb3843c093bec78ed50caae761925f9929a",
+    webhookSecret:
+      "c1290c323693c6373799c58cc3a052db1aa27342abf252294a96ed844bd7f08a",
+    idevkhiteiEsekh: true,
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // ЖИШЭЭ БИЧЛЭГ - нэмэхдээ доорхийг хуулж, ЗААВАЛ бүх талбарыг сольно.
   // Түлхүүрийг сольтол интеграц автоматаар унтарсан хэвээр байна.
