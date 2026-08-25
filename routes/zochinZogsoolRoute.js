@@ -321,6 +321,29 @@ router.get("/zochin/zogsool/tuukh", tokenShalgakh, async (req, res, next) => {
         .trim()
         .toUpperCase();
 
+    // Олон дугаараар нэг дор (вэб дээр харагдаж буй мөрүүдийн дугаарууд).
+    // Ингэснээр бүх түүхийг татаж клиент дээр шүүхгүй - яг хэрэгтэйг нь авна.
+    if (req.query.mashiniiDugaaruud) {
+      const dugaaruud = String(req.query.mashiniiDugaaruud)
+        .split(",")
+        .map((d) => d.trim().toUpperCase())
+        .filter(Boolean);
+      if (dugaaruud.length) query.mashiniiDugaar = { $in: dugaaruud };
+    }
+
+    // Огнооны завсар - хуудасны шүүлттэй ижил хугацааг харуулахад
+    if (req.query.start || req.query.end) {
+      query.createdAt = {};
+      if (req.query.start) query.createdAt.$gte = new Date(req.query.start);
+      if (req.query.end) {
+        const tugsgul = new Date(req.query.end);
+        // Зөвхөн огноо ирвэл тухайн өдрийн төгсгөл хүртэл хамруулна
+        if (/^\d{4}-\d{2}-\d{2}$/.test(String(req.query.end)))
+          tugsgul.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = tugsgul;
+      }
+    }
+
     // Оршин суугч зөвхөн өөрийн уригсан зочдыг харна
     if (token.erkh === "OrshinSuugch") {
       query.orshinSuugchId = String(token.id);
