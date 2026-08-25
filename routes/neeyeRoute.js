@@ -44,12 +44,10 @@ async function parkEaseMuruudAvya({
       if (end) query.createdAt.$lte = new Date(`${end} 23:59:59`);
     }
 
-    if (searchUtga) {
-      query.$or = [
-        { mashiniiDugaar: { $regex: searchUtga, $options: "i" } },
-        { toot: { $regex: searchUtga, $options: "i" } },
-      ];
-    }
+    // searchUtga-г ЭНД шүүхгүй. Хайлт нь нэр/утсаар ч явдаг ба тэдгээр нь
+    // энэ коллекцид байхгүй (оршин суугчийн бүртгэлээс ирнэ) - Mongo дээр
+    // шүүвэл утсаар хайхад зочны мөр огт олдохгүй. Оршин суугчийг
+    // тодорхойлсны ДАРАА дуудагч тал санах ойд шүүнэ.
 
     const muruud = await ZochinZogsooliinTuukh(kholbolt)
       .find(query)

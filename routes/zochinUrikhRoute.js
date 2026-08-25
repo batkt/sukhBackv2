@@ -1214,6 +1214,63 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
   }
 });
 
+/**
+ * GET /zochin/urisanMashin
+ *
+ * Тухайн оршин суугчийн УРИСАН машинуудын жагсаалт (админ вэбэд).
+ *
+ * /ezenUrisanTuukh нь апп руу зориулагдсан POST бөгөөд Uilchluulegch-тэй
+ * нийлүүлж буцаадаг. Вэб дээр зөвхөн "хэн юу урьсан" гэдгийг харуулахад
+ * тэр нь илүүц тул энгийн жагсаалтыг тусад нь өгнө.
+ */
+router.get("/zochin/urisanMashin", tokenShalgakh, async (req, res, next) => {
+  try {
+    const baiguullagiinId = req.query.baiguullagiinId;
+    if (!baiguullagiinId)
+      return res
+        .status(400)
+        .json({ success: false, message: "baiguullagiinId шаардлагатай" });
+
+    const token = req.body.nevtersenAjiltniiToken || {};
+    const kholbolt =
+      getKholboltByBaiguullagiinId(baiguullagiinId) ||
+      req.body.tukhainBaaziinKholbolt ||
+      db.erunkhiiKholbolt;
+
+    const query = { baiguullagiinId: String(baiguullagiinId) };
+    if (req.query.barilgiinId)
+      query.barilgiinId = String(req.query.barilgiinId);
+
+    // Оршин суугч зөвхөн өөрийнхөө урилгыг харна
+    const orshinSuugchId =
+      token.erkh === "OrshinSuugch" ? token.id : req.query.orshinSuugchId;
+
+    if (orshinSuugchId) {
+      query.$or = [
+        { ezenId: String(orshinSuugchId) },
+        { ezemshigchiinId: String(orshinSuugchId) },
+      ];
+    } else if (req.query.utas) {
+      query.ezemshigchiinUtas = String(req.query.utas);
+    }
+
+    const limit = Math.min(parseInt(req.query.khuudasniiKhemjee) || 50, 200);
+
+    const [jagsaalt, niitMur] = await Promise.all([
+      EzenUrisanMashin(kholbolt)
+        .find(query)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean(),
+      EzenUrisanMashin(kholbolt).countDocuments(query),
+    ]);
+
+    res.json({ success: true, jagsaalt, niitMur });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post("/ezenUrisanTuukh", tokenShalgakh, async (req, res, next) => {
   try {
     const searchId = req.body.ezenId || req.body.nevtersenAjiltniiToken?.id;
