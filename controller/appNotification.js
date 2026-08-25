@@ -85,13 +85,8 @@ async function orshinSuugchidSonorduulgaIlgeeye(
     },
   };
 
-  const options = {
-    priority: "high",
-    timeToLive: 60 * 60 * 24, // 24 hours
-  };
-
   try {
-    const response = await admin.messaging().send(payload, options);
+    const response = await admin.messaging().send(payload);
     console.log("✅ Firebase notification sent successfully:", response);
     if (callback) callback(response);
   } catch (error) {

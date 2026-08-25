@@ -9,3 +9,6 @@ db/*
 /.vscode
 
 /.serviceAccountKey.json
+
+# Firebase service account private key - never commit
+**/serviceAccountKey.json

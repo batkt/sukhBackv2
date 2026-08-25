@@ -27,6 +27,7 @@
     "express": "^5.1.0",
     "express-async-handler": "^1.2.0",
     "express-useragent": "^1.0.15",
+    "firebase-admin": "^10.3.0",
     "form-data": "^4.0.5",
     "got": "^11.8.6",
     "mon_num": "^1.0.3",
