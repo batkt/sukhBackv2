@@ -298,8 +298,17 @@ function sonorduulyaTry({
  */
 router.get("/zochin/zogsool/tuukh", tokenShalgakh, async (req, res, next) => {
   try {
-    const kholbolt = req.body.tukhainBaaziinKholbolt || db.erunkhiiKholbolt;
     const token = req.body.nevtersenAjiltniiToken || {};
+
+    // Webhook нь тухайн байгууллагын холболт руу бичдэг тул УНШИХдаа ч мөн
+    // тэр холболтоор л уншина. GET хүсэлтэд body байхгүй (апп query-ээр
+    // ирдэг) тул baiguullagiinId-гаас холболтыг эхлээд шийднэ - эс тэгвэл
+    // өөрийн баазтай байгууллагын бичлэг олдохгүй хоосон буцна.
+    const orgId = req.query.baiguullagiinId || token.baiguullagiinId;
+    const kholbolt =
+      getKholboltByBaiguullagiinId(orgId) ||
+      req.body.tukhainBaaziinKholbolt ||
+      db.erunkhiiKholbolt;
 
     const query = {};
     if (req.query.baiguullagiinId)
