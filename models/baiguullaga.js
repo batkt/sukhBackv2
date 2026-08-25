@@ -90,6 +90,9 @@ const baiguullagaSchema = new Schema(
             zochinErkhiinToo: Number,
             zochinTusBurUneguiMinut: Number,
             zochinNiitUneguiMinut: Number,
+            // Оршин суугч зочны зогсоолын төлбөрийг өөрийн нэхэмжлэхэд
+            // бичүүлэх боломжтой эсэх. Унтраалттай бол зочин өөрөө төлнө.
+            zochinNekhemjlekhEsekh: Boolean,
             zochinTailbar: String,
             davtamjiinTurul: String,
             davtamjUtga: Number,
@@ -246,6 +249,9 @@ const baiguullagaSchema = new Schema(
         zochinErkhiinToo: Number,
         zochinTusBurUneguiMinut: Number,
         zochinNiitUneguiMinut: Number,
+        // Оршин суугч зочны зогсоолын төлбөрийг өөрийн нэхэмжлэхэд
+        // бичүүлэх боломжтой эсэх. Унтраалттай бол зочин өөрөө төлнө.
+        zochinNekhemjlekhEsekh: Boolean,
         zochinTailbar: String,
         davtamjiinTurul: String,
         davtamjUtga: Number,

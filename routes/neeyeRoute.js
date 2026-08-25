@@ -7,6 +7,112 @@ const { pubClient, subClient } = require("../utils/redisClient");
 const KhaalgaNeeyeTuukh = require("../models/khaalgaNeeyeTuukh");
 const Ajiltan = require("../models/ajiltan");
 const OrshinSuugch = require("../models/orshinSuugch");
+const ZochinZogsooliinTuukh = require("../models/zochinZogsooliinTuukh");
+const {
+  getKholboltByBaiguullagiinId,
+} = require("../utils/dbConnection");
+
+/**
+ * ParkEase (Түрээсийн зогсоол) дээр бүртгэгдсэн зочдыг хаалганы түүхийн
+ * мөр болгон хөрвүүлэх.
+ *
+ * ЯАГААД: "урьсан" мөрийг АмарСүхийн ӨӨРИЙН хаалга (parkingRoute → sdkData)
+ * бичдэг. ParkEase дээр зогссон зочин АмарСүхийн sdkData-г огт дайрдаггүй
+ * тул энэ хөрвүүлэлтгүйгээр тэд жагсаалтад ХЭЗЭЭ Ч гарахгүй.
+ *
+ * Хэзээ ч throw хийхгүй - ParkEase тал унасан ч хаалганы түүх гарна.
+ */
+async function parkEaseMuruudAvya({
+  baiguullagiinId,
+  barilgiinId,
+  start,
+  end,
+  searchUtga,
+}) {
+  try {
+    if (!baiguullagiinId) return [];
+
+    const kholbolt =
+      getKholboltByBaiguullagiinId(baiguullagiinId) || db.erunkhiiKholbolt;
+
+    const query = { baiguullagiinId: String(baiguullagiinId) };
+    if (barilgiinId) query.barilgiinId = String(barilgiinId);
+
+    if (start || end) {
+      query.createdAt = {};
+      if (start) query.createdAt.$gte = new Date(`${start} 00:00:00`);
+      if (end) query.createdAt.$lte = new Date(`${end} 23:59:59`);
+    }
+
+    if (searchUtga) {
+      query.$or = [
+        { mashiniiDugaar: { $regex: searchUtga, $options: "i" } },
+        { toot: { $regex: searchUtga, $options: "i" } },
+      ];
+    }
+
+    const muruud = await ZochinZogsooliinTuukh(kholbolt)
+      .find(query)
+      .sort({ createdAt: -1 })
+      .limit(3000)
+      .lean();
+
+    if (!muruud.length) return [];
+
+    // Оршин суугчийн нэр/утсыг нэг дор татна - мөр бүрээр асуувал удаана
+    const suugchIdnuud = [
+      ...new Set(muruud.map((m) => m.orshinSuugchId).filter(Boolean)),
+    ];
+    const suugchid = suugchIdnuud.length
+      ? await OrshinSuugch(db.erunkhiiKholbolt)
+          .find({ _id: { $in: suugchIdnuud } })
+          .select("ner utas toot toots")
+          .lean()
+      : [];
+    const suugchMap = new Map(suugchid.map((s) => [String(s._id), s]));
+
+    return muruud.map((mur) => {
+      const suugch = suugchMap.get(String(mur.orshinSuugchId || ""));
+      const utas = Array.isArray(suugch?.utas) ? suugch.utas[0] : suugch?.utas;
+
+      return {
+        // Хаалганы түүхийн _id-тэй давхцахгүйн тулд угтвар нэмнэ
+        _id: `parkease-${mur._id}`,
+        ip: mur.orsonKhaalga || mur.garsanKhaalga || "",
+        barilgiinId: mur.barilgiinId,
+        baiguullagiinId: mur.baiguullagiinId,
+        orshinSuugchiinId: mur.orshinSuugchId,
+        orshinSuugchiinNer: suugch?.ner || "",
+        toot: mur.toot || suugch?.toot || "",
+        utas: utas || "",
+        mashiniiDugaar: mur.mashiniiDugaar,
+        turul: "урьсан",
+        ekhSurvalj: "parkease",
+        createdAt: mur.orsonTsag || mur.createdAt,
+        updatedAt: mur.updatedAt,
+        // Вэб дээр дэлгэрэнгүй харуулахад бэлэн
+        parkease: {
+          urilgiinId: mur.urilgiinId,
+          orsonTsag: mur.orsonTsag,
+          garsanTsag: mur.garsanTsag,
+          orsonKhaalga: mur.orsonKhaalga,
+          garsanKhaalga: mur.garsanKhaalga,
+          niitKhugatsaa: mur.niitKhugatsaa,
+          uneguiMinutAshiglasan: mur.uneguiMinutAshiglasan,
+          uneguiMinutUldsen: mur.uneguiMinutUldsen,
+          tulburiinTurul: mur.tulburiinTurul,
+          tulukhDun: mur.tulukhDun,
+          niitDun: mur.niitDun,
+          nekhemjlekhId: mur.nekhemjlekhId,
+          tuluv: mur.tuluv,
+        },
+      };
+    });
+  } catch (err) {
+    console.error("[Gate] ParkEase мөр уншихад алдаа:", err.message);
+    return [];
+  }
+}
 
 // Tracks GET /neeye requests waiting on a real result from the local gate
 // worker. Process-local, so (same as webrtc signaling in cameraRoute.js) a
@@ -278,6 +384,17 @@ router.get("/khaalgaNeeyeTuukh/stats", async (req, res, next) => {
       }
     });
 
+    // Хүснэгтэд ParkEase мөрүүд гарч байгаа тул тоололтод ч оруулна -
+    // эс тэгвэл "Нийт хандалт" мөрийн тоотой таарахгүй
+    const parkEaseMuruud = await parkEaseMuruudAvya({
+      baiguullagiinId,
+      barilgiinId,
+      start,
+      end,
+    });
+    totalCount += parkEaseMuruud.length;
+    urisanCount += parkEaseMuruud.length;
+
     // 2. Top residents
     const topResidents = await KhaalgaNeeyeTuukhModel.aggregate([
       { $match: query },
@@ -409,13 +526,44 @@ router.get("/khaalgaNeeyeTuukh", async (req, res, next) => {
 
     const KhaalgaNeeyeTuukhModel = KhaalgaNeeyeTuukh(db.erunkhiiKholbolt);
 
-    const list = await KhaalgaNeeyeTuukhModel.find(query)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
+    // ParkEase дээр зогссон зочид өөр коллекцид байдаг тул хоёуланг нийлүүлж
+    // огноогоор эрэмбэлээд ДАРАА нь хуудаслана. Мongo дээр skip/limit тавьвал
+    // хоёр эх сурвалжийн мөрүүд хоорондоо холилдохгүй.
+    const parkEaseKhereg = !turul || turul === "all" || turul === "urisan";
+    const [buhList, parkEaseMuruud] = await Promise.all([
+      KhaalgaNeeyeTuukhModel.find(query)
+        .sort({ createdAt: -1 })
+        .limit(5000)
+        .lean(),
+      parkEaseKhereg
+        ? parkEaseMuruudAvya({
+            baiguullagiinId,
+            barilgiinId,
+            start,
+            end,
+            searchUtga,
+          })
+        : Promise.resolve([]),
+    ]);
 
-    const total = await KhaalgaNeeyeTuukhModel.countDocuments(query);
+    // searchUtga нь нэр/утсаар ч хайдаг - ParkEase мөрийн нэр/утас нь
+    // оршин суугчийн бүртгэлээс ирдэг тул энд дахин шүүнэ
+    const shuusenParkEase = searchUtga
+      ? parkEaseMuruud.filter((m) =>
+          [m.mashiniiDugaar, m.orshinSuugchiinNer, m.toot, m.utas, m.ip]
+            .filter(Boolean)
+            .some((utga) =>
+              String(utga).toLowerCase().includes(String(searchUtga).toLowerCase()),
+            ),
+        )
+      : parkEaseMuruud;
+
+    const niiluulsen = [...buhList, ...shuusenParkEase].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+    );
+
+    const total = niiluulsen.length;
+    const list = niiluulsen.slice((page - 1) * limit, page * limit);
 
     res.json({
       success: true,

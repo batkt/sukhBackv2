@@ -111,6 +111,13 @@ async function checkQuotaAndPermissions(residentId, baiguullagiinId, barilgiinId
   const buildingRight = buildingSettings?.zochinUrikhEsekh;
   const residentRight = masterSetting?.zochinUrikhEsekh;
 
+  // Төлбөрийг эзний нэхэмжлэхэд бичих боломжтой эсэх. Тохируулаагүй бол
+  // УНТРААЛТТАЙ гэж үзнэ - оршин суугчийн нэхэмжлэхэд мөнгө бичих нь
+  // санхүүгийн үйлдэл тул зөвхөн ЗӨВШӨӨРСӨН үед л хийнэ.
+  const nekhemjlekhEsekh =
+    buildingSettings?.zochinNekhemjlekhEsekh === true ||
+    masterSetting?.zochinNekhemjlekhEsekh === true;
+
   let hasRight;
   if (typeof buildingRight === 'boolean') {
     hasRight = buildingRight === true && (residentRight === true || residentRight === undefined || residentRight === null);
@@ -152,6 +159,7 @@ async function checkQuotaAndPermissions(residentId, baiguullagiinId, barilgiinId
 
   return {
     hasRight,
+    nekhemjlekhEsekh,
     effectiveTotal,
     usedCount,
     remaining,
@@ -226,9 +234,23 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
     // Түрээсийн зогсоолын системд бүртгүүлэх. Оршин суугч төлбөрийг өөрөө
     // даах эсэхийг урилга үүсгэхдээ сонгоно (tulburiinTurul: "ezen" | "zochin").
     // Түрээс тал унасан ч урилга АмарСүх дээр хадгалагдсан хэвээр байна.
+    // Тохиргоо унтраалттай бол клиент "ezen" гэж илгээсэн ч зөвшөөрөхгүй -
+    // эс тэгвэл апп талын шалгалтыг тойрч оршин суугчийн нэхэмжлэхэд
+    // төлбөр бичүүлэх боломжтой болно.
+    const zuvshuurugdsunTulburiinTurul =
+      req.body.tulburiinTurul === "ezen" && quotaInfo.nekhemjlekhEsekh
+        ? "ezen"
+        : "zochin";
+
+    if (req.body.tulburiinTurul === "ezen" && !quotaInfo.nekhemjlekhEsekh) {
+      console.warn(
+        `⚠️ [ZOCHIN] ${plate}: нэхэмжлэхэд бичих тохиргоо унтраалттай тул зочин өөрөө төлнө`,
+      );
+    }
+
     const tureesKhariu = await zochinTureesSyncService.urilgaSynclii(savedDoc, {
       kholbolt: tukhainBaaziinKholbolt,
-      tulburiinTurul: req.body.tulburiinTurul,
+      tulburiinTurul: zuvshuurugdsunTulburiinTurul,
       gereeniiId: req.body.gereeniiId,
     });
 
@@ -630,7 +652,7 @@ router.get("/zochinQuotaStatus", tokenShalgakh, async (req, res, next) => {
     }
 
     if (!masterSetting && !buildingSettings) {
-      return res.send({ total: 0, used: 0, remaining: 0, hasRight: false, zochinUrikhEsekh: false, success: false });
+      return res.send({ total: 0, used: 0, remaining: 0, hasRight: false, zochinUrikhEsekh: false, nekhemjlekhEsekh: false, success: false });
     }
 
     // Merge logic: Final Effective Config
@@ -646,6 +668,10 @@ router.get("/zochinQuotaStatus", tokenShalgakh, async (req, res, next) => {
     );
     const buildingRight = buildingSettings?.zochinUrikhEsekh;
     const residentRight = masterSetting?.zochinUrikhEsekh;
+    // Тохируулаагүй бол унтраалттай - checkQuotaAndPermissions-той ижил дүрэм
+    const nekhemjlekhEsekh =
+      buildingSettings?.zochinNekhemjlekhEsekh === true ||
+      masterSetting?.zochinNekhemjlekhEsekh === true;
     let hasRight;
     if (typeof buildingRight === 'boolean') {
 
@@ -710,6 +736,8 @@ router.get("/zochinQuotaStatus", tokenShalgakh, async (req, res, next) => {
       freeMinutesPerGuest: effectiveMinutes,
       hasRight: hasRight,
       zochinUrikhEsekh: hasRight,
+      // Апп дээр "Би даана" сонголтыг харуулах эсэх
+      nekhemjlekhEsekh: nekhemjlekhEsekh,
       success: true
     });
   } catch (error) {
