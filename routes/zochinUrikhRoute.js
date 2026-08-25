@@ -13,6 +13,10 @@ const Geree = require("../models/geree");
 const router = express.Router();
 const { tokenShalgakh, crud, UstsanBarimt, db } = require("zevbackv2");
 const zochinTureesSyncService = require("../services/zochinTureesSyncService");
+const ZochinZogsooliinTuukh = require("../models/zochinZogsooliinTuukh");
+const {
+  getKholboltByBaiguullagiinId,
+} = require("../utils/dbConnection");
 
 // Session validation for multiple device login prevention
 const orshinSuugchSessionShalgaya = async (req, res, next) => {
@@ -1252,6 +1256,104 @@ router.post("/ezenUrisanTuukh", tokenShalgakh, async (req, res, next) => {
       }
 
       jagsaalt = processedJagsaalt;
+
+      // ─── Түрээсийн зогсоол дээрх хөдөлгөөнийг мөн нэмнэ ───────────────
+      // Тэнд зогссон машин АмарСүхийн Uilchluulegch дээр ОГТ үүсэхгүй
+      // (өөр систем, өөр бааз). Тиймээс энэ мөргүйгээр зочин орсон ч
+      // урилга апп дээр үүрд "Хүлээлгэ" хэвээр харагдана.
+      try {
+        const zochinKholbolt =
+          getKholboltByBaiguullagiinId(req.body.baiguullagiinId) ||
+          req.body.tukhainBaaziinKholbolt ||
+          db.erunkhiiKholbolt;
+
+        const zogsooliinMuruud = await ZochinZogsooliinTuukh(zochinKholbolt)
+          .find({
+            baiguullagiinId: String(req.body.baiguullagiinId),
+            $or: [
+              { urilgiinId: { $in: invitationIds } },
+              { orshinSuugchId: String(searchId) },
+            ],
+          })
+          .sort({ createdAt: -1 })
+          .lean();
+
+        // Нэг машин хоёр системд зэрэг байвал давхардуулахгүй - АмарСүхийн
+        // өөрийн session нь эрхэм.
+        const durdegdsenDugaaruud = new Set(
+          jagsaalt
+            .map((j) => (j.mashiniiDugaar || "").toString().trim().toUpperCase())
+            .filter(Boolean),
+        );
+
+        const urilgaMap = new Map(
+          ezenJagsaalt.map((e) => [String(e._id), e]),
+        );
+
+        for (const mur of zogsooliinMuruud) {
+          const dugaar = (mur.mashiniiDugaar || "").trim().toUpperCase();
+          if (!dugaar || durdegdsenDugaaruud.has(dugaar)) continue;
+          durdegdsenDugaaruud.add(dugaar);
+
+          const urilga = mur.urilgiinId
+            ? urilgaMap.get(String(mur.urilgiinId))
+            : null;
+          const dotor = !mur.garsanTsag;
+
+          // Апп/вэб нь Uilchluulegch-ийн бүтцээр уншдаг тул яг тэр хэлбэрт
+          // хөрвүүлнэ - хэрэглэгчийн тал өөрчлөх шаардлагагүй.
+          jagsaalt.push({
+            _id: String(mur._id),
+            baiguullagiinId: mur.baiguullagiinId,
+            barilgiinId: mur.barilgiinId,
+            mashiniiDugaar: mur.mashiniiDugaar,
+            turul: "Зочин",
+            tureesEsekh: true,
+            niitDun: mur.niitDun || 0,
+            garakhTsag: mur.garsanTsag,
+            tuukh: [
+              {
+                zogsooliinId: mur.zogsooliinId,
+                orsonKhaalga: mur.orsonKhaalga,
+                garsanKhaalga: mur.garsanKhaalga,
+                niitKhugatsaa: mur.niitKhugatsaa,
+                tulukhDun: mur.tulukhDun || 0,
+                tsagiinTuukh: [
+                  {
+                    orsonTsag: mur.orsonTsag,
+                    garsanTsag: mur.garsanTsag,
+                  },
+                ],
+              },
+            ],
+            urisanMashin: {
+              _id: mur.urilgiinId ? String(mur.urilgiinId) : undefined,
+              urisanMashiniiDugaar: mur.mashiniiDugaar,
+              tuluv: dotor ? 1 : 2,
+              tusBurUneguiMinut: mur.uneguiMinutUldsen,
+              tusBurAshiglasanUneguiMinut: mur.uneguiMinutAshiglasan,
+              tulburiinTurul: mur.tulburiinTurul,
+              davtamjiinTurul: urilga ? urilga.davtamjiinTurul : undefined,
+              ezemshigchiinNer: urilga ? urilga.ezemshigchiinNer : undefined,
+              ezemshigchiinUtas: urilga ? urilga.ezemshigchiinUtas : undefined,
+              createdAt: urilga ? urilga.createdAt : mur.createdAt,
+            },
+            createdAt: mur.createdAt,
+            updatedAt: mur.updatedAt,
+          });
+
+          if (dotor) {
+            activePlates.add(dugaar);
+            if (mur.urilgiinId) activeInvitationIds.add(String(mur.urilgiinId));
+          }
+        }
+      } catch (err) {
+        // Түрээсийн хэсэг унасан ч АмарСүхийн өөрийн жагсаалт гарах ёстой
+        console.error(
+          "[/ezenUrisanTuukh] Түрээсийн зогсоолын түүх уншихад алдаа:",
+          err.message,
+        );
+      }
 
       // Sync tuluv in EzenUrisanMashin if car has entered/active
       for (const ez of ezenJagsaalt) {
