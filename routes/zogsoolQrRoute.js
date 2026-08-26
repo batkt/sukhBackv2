@@ -41,15 +41,31 @@ function nerKhuraangui(ovog, ner) {
   return `${terguun}${n.charAt(0)}${n.length > 1 ? "*".repeat(Math.min(n.length - 1, 5)) : ""}`;
 }
 
-/** Зогсоолыг байгууллага/барилгаар олно */
+/**
+ * Зогсоолыг олно.
+ *
+ * Нэг барилгад хэд хэдэн зогсоол (гадаа/дотор) байж болно. Иймд zogsooliinId
+ * дамжуулсан бол ЯГ түүнийг авна - эс тэгвээс буруу зогсоолын данс руу төлбөр
+ * явуулах эрсдэлтэй. zogsooliinId байхгүй үед хамгийн эртнийхийг тогтвортой
+ * (үргэлж ижил) сонгоно.
+ */
 async function zogsoolOlyo(kholbolt, baiguullagiinId, barilgiinId, zogsooliinId) {
-  const shuult = zogsooliinId
-    ? { _id: zogsooliinId }
-    : {
-        baiguullagiinId: String(baiguullagiinId),
-        barilgiinId: String(barilgiinId),
-      };
-  return Parking(kholbolt).findOne(shuult);
+  if (zogsooliinId) {
+    const zogsool = await Parking(kholbolt).findOne({ _id: zogsooliinId });
+    // Дамжуулсан зогсоол өөр байгууллагад хамаарах бол хүлээж авахгүй
+    if (
+      zogsool &&
+      String(zogsool.baiguullagiinId) === String(baiguullagiinId)
+    )
+      return zogsool;
+    return null;
+  }
+  return Parking(kholbolt)
+    .findOne({
+      baiguullagiinId: String(baiguullagiinId),
+      barilgiinId: String(barilgiinId),
+    })
+    .sort({ createdAt: 1 });
 }
 
 /**
@@ -64,13 +80,21 @@ router.get(
   async (req, res, next) => {
     try {
       const { baiguullagiinId, barilgiinId } = req.params;
+      // Машиныг олсны дараа тухайн машины БОДИТ зогсоолын тохиргоог (данс,
+      // гарах хугацаа) авахын тулд zogsooliinId-аар дахин дуудаж болно.
+      const { zogsooliinId } = req.query;
       const kholbolt = getKholboltByBaiguullagiinId(baiguullagiinId);
       if (!kholbolt)
         return res
           .status(404)
           .json({ success: false, message: "Холболтын мэдээлэл олдсонгүй" });
 
-      const zogsool = await zogsoolOlyo(kholbolt, baiguullagiinId, barilgiinId);
+      const zogsool = await zogsoolOlyo(
+        kholbolt,
+        baiguullagiinId,
+        barilgiinId,
+        zogsooliinId,
+      );
       if (!zogsool)
         return res
           .status(404)
