@@ -12,6 +12,10 @@
  * GET /v1/search_car/:plate_number?baiguullagiinId=&barilgiinId=&freeze=true
  * -аар явна.
  *
+ * ЖИЧ: замд "tokhirgoo" гэсэн үг ХЭРЭГЛЭЖ БОЛОХГҮЙ - index.js дээрх
+ * exploit-bot шүүлтүүр (tokhirgoo.env-ийг хамгаалдаг) URL-д тэр тэмдэгт
+ * орсон бүх хүсэлтийг handler хүртэл хүргэлгүй хоосон 404-ээр тасалдаг.
+ *
  * Хамгаалалт: эдгээр endpoint нэвтрэлтгүй тул
  *   - дүнг клиентээс АВАХГҮЙ, серверт дахин бодно,
  *   - зөвхөн зогсоол дээр байгаа, төлөгдөөгүй session-д л бичнэ,
@@ -69,18 +73,16 @@ async function zogsoolOlyo(kholbolt, baiguullagiinId, barilgiinId, zogsooliinId)
 }
 
 /**
- * GET /zogsool/qr/tokhirgoo/:baiguullagiinId/:barilgiinId
+ * GET /zogsool/qr/medeelel/:baiguullagiinId/:barilgiinId
  *
  * Нийтийн QR хуудсыг зурахад хэрэгтэй ХАМГИЙН БАГА мэдээлэл.
  * Зогсоолын бүтэн бичлэгийг нэвтрэлтгүй гаргах нь зохимжгүй тул
  * зөвхөн шаардлагатай талбаруудыг буцаана.
  */
 router.get(
-  "/zogsool/qr/tokhirgoo/:baiguullagiinId/:barilgiinId",
+  "/zogsool/qr/medeelel/:baiguullagiinId/:barilgiinId",
   async (req, res, next) => {
     try {
-      // ЖИЧ: түр зуурын лог — handler хүрч байгаа эсэхийг батлана.
-      console.log("🅿️ [ZOGSOOL QR] tokhirgoo hit", req.originalUrl);
       const { baiguullagiinId, barilgiinId } = req.params;
       // Машиныг олсны дараа тухайн машины БОДИТ зогсоолын тохиргоог (данс,
       // гарах хугацаа) авахын тулд zogsooliinId-аар дахин дуудаж болно.
