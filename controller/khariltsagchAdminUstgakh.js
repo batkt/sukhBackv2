@@ -2,6 +2,7 @@ const asyncHandler = require("express-async-handler");
 const khariltsagch = require("../models/khariltsagch");
 const Geree = require("../models/geree");
 const Ajiltan = require("../models/ajiltan");
+const OrshinSuugch = require("../models/orshinSuugch");
 const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
 const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
 const aldaa = require("../components/aldaa");
@@ -77,16 +78,38 @@ exports.khariltsagchAdminUstgakh = asyncHandler(async (req, res, next) => {
 
     const zovkhonShalgakh = req.body.zovkhonShalgakh === true;
 
+    // Гэрээний эзэмшигч нь `khariltsagch` эсвэл `orshinSuugch` хоёрын аль нэг
+    // коллекцид байж болно — geree дээр `khariltsagchId`, `orshinSuugchId`
+    // гэсэн ХОЁР талбар байдаг бөгөөд аль нь бөглөгдсөн нь бүртгэлээс
+    // шалтгаална. Тиймээс эхлээд харилцагчаас, олдохгүй бол оршин суугчаас
+    // хайна.
     const khariltsagchModel = khariltsagch(db.erunkhiiKholbolt);
-    const user = await khariltsagchModel.findById(khariltsagchId);
+    const orshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
+
+    let user = await khariltsagchModel.findById(khariltsagchId);
+    let ezemshigchTurul = "khariltsagch";
+    let ezemshigchModel = khariltsagchModel;
+
+    if (!user) {
+      user = await orshinSuugchModel.findById(khariltsagchId);
+      ezemshigchTurul = "orshinSuugch";
+      ezemshigchModel = orshinSuugchModel;
+    }
+
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "Харилцагч олдсонгүй!",
+        message: "Харилцагч/оршин суугч олдсонгүй!",
       });
     }
 
     const orgIds = baiguullagiinIdCollect(user);
+    // Эзэмшигчийн бичлэг дээр байгууллага дутуу байвал админы өөрийнх нь
+    // байгууллагыг нэмнэ — эс тэгвээс ямар ч гэрээ олдохгүй өнгөрнө.
+    if (req.body.baiguullagiinId) {
+      const ownOrg = String(req.body.baiguullagiinId);
+      if (!orgIds.includes(ownOrg)) orgIds.push(ownOrg);
+    }
 
     // ── 1. Гэрээнүүдийг цуглуулж, идэвхтэй нь байгаа эсэхийг шалгана ──────
     /** @type {{ conn: any, orgId: string, gereenuud: any[] }[]} */
@@ -100,8 +123,13 @@ exports.khariltsagchAdminUstgakh = asyncHandler(async (req, res, next) => {
       if (!conn) continue;
 
       const gereenuud = await Geree(conn)
-        .find({ khariltsagchId: String(khariltsagchId) })
-        .select("_id gereeniiDugaar tuluv")
+        .find({
+          $or: [
+            { khariltsagchId: String(khariltsagchId) },
+            { orshinSuugchId: String(khariltsagchId) },
+          ],
+        })
+        .select("_id gereeniiDugaar tuluv barilgiinId")
         .lean();
 
       gereenuud.forEach((g) => {
@@ -162,6 +190,7 @@ exports.khariltsagchAdminUstgakh = asyncHandler(async (req, res, next) => {
           ovog: user.ovog,
           utas: user.utas,
         },
+        ezemshigchTurul,
         tootsoo,
       });
     }
@@ -250,7 +279,7 @@ exports.khariltsagchAdminUstgakh = asyncHandler(async (req, res, next) => {
       await logDelete(
         req,
         db,
-        "khariltsagch",
+        ezemshigchTurul,
         String(khariltsagchId),
         deletedDoc,
         "hard",
@@ -266,11 +295,12 @@ exports.khariltsagchAdminUstgakh = asyncHandler(async (req, res, next) => {
       });
     }
 
-    await khariltsagchModel.findByIdAndDelete(khariltsagchId);
+    await ezemshigchModel.findByIdAndDelete(khariltsagchId);
 
     res.status(200).json({
       success: true,
       message: "Харилцагч болон холбогдох бүх бичлэг устгагдлаа.",
+      ezemshigchTurul,
       tootsoo,
     });
   } catch (error) {
