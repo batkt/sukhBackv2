@@ -50,6 +50,8 @@ const appVersionRoute = require("./routes/appVersionRoute");
 const blogRoute = require("./routes/blogRoute");
 const cameraRoute = require("./routes/cameraRoute");
 const neeyeRoute = require("./routes/neeyeRoute");
+const gerBuliinGishuunRoute = require("./routes/gerBuliinGishuunRoute");
+const gishuuniiKhandalt = require("./middleware/gishuuniiKhandalt");
 
 
 
@@ -288,6 +290,11 @@ const serveMedegdelImage = (req, res, next) => {
     }
   }
 };
+
+// Гэр бүлийн гишүүн бол хүсэлт дэх өөрийн orshinSuugchId-г үндсэн эзэмшигчийнх
+// рүү хөрвүүлнэ. Бүх route-оос ӨМНӨ байх ёстой.
+app.use(gishuuniiKhandalt);
+app.use(gerBuliinGishuunRoute);
 
 // Medegdel API (thread, reply, etc.) must be tried before image route so /medegdel/thread/:id is not matched as image
 app.use("/wallet", walletRoute);

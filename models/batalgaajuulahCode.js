@@ -14,7 +14,13 @@ const batalgaajuulkhCodeSchema = new mongoose.Schema(
     purpose: {
       type: String,
       required: true,
-      enum: ["password_reset", "registration", "login", "signup"],
+      enum: [
+        "password_reset",
+        "registration",
+        "login",
+        "signup",
+        "gishuun_urikh", // Гэр бүлийн гишүүн урих
+      ],
       default: "password_reset",
     },
     expiresAt: {

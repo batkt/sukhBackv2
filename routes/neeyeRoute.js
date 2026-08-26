@@ -197,8 +197,33 @@ router.get("/neeye/:ip", async (req, res) => {
               // Not staff -> try resident
               orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt)
                 .findById(decoded.id)
-                .select("ner utas toot toots baiguullagiinId")
+                .select("ner utas toot toots baiguullagiinId undsenId")
                 .lean();
+
+              // Гэр бүлийн гишүүн өөрийн тоотгүй тул үндсэн эзэмшигчийн
+              // тоот/эрхийг ашиглана. Түүхэнд нь бодит нээсэн хүний нэр,
+              // утас нь хэвээр үлдэнэ.
+              if (orshinSuugch && orshinSuugch.undsenId) {
+                const undsen = await OrshinSuugch(db.erunkhiiKholbolt)
+                  .findById(orshinSuugch.undsenId)
+                  .select("toot toots baiguullagiinId")
+                  .lean();
+                if (undsen) {
+                  orshinSuugch = {
+                    ...orshinSuugch,
+                    toot: undsen.toot,
+                    toots: undsen.toots,
+                    baiguullagiinId: undsen.baiguullagiinId,
+                  };
+                } else {
+                  console.warn(
+                    `[Gate] Гишүүн ${decoded.id} -ийн үндсэн эзэмшигч олдсонгүй`,
+                  );
+                  return res
+                    .status(403)
+                    .json({ aldaa: "Оршин суугч хаалга нээх эрхгүй байна" });
+                }
+              }
 
               if (orshinSuugch) {
                 // Fetch organization settings to check if resident gate open is allowed

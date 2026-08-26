@@ -102,6 +102,23 @@ const orshinSuugchSchema = new Schema(
         nickname: String,
       },
     ],
+
+    // --- Гэр бүлийн гишүүн (sub-account) ---
+    // Гишүүн бүр өөрийн утас/нууц үгтэй тусдаа orshinSuugch бичлэг боловч
+    // бүх тоот, гэрээ, нэхэмжлэх, төлбөрөө үндсэн эзэмшигчээсээ уншина.
+    undsenId: String, // Үндсэн эзэмшигчийн orshinSuugch._id. Үндсэн данс дээр хоосон.
+    gishuuniiKholboo: String, // Эхнэр / Нөхөр / Хүү / Охин / Аав / Ээж гэх мэт
+    gishuuniiTuluv: {
+      type: String,
+      enum: ["Хүлээгдэж буй", "Идэвхтэй", "Цуцлагдсан"],
+    },
+    gishuuniiErkh: {
+      type: String,
+      enum: ["Харах", "Харах + Төлөх"],
+      default: "Харах + Төлөх",
+    },
+    gishuunUrisenOgnoo: Date,
+    gishuunBatalgaajsanOgnoo: Date,
   },
   {
     timestamps: true,
@@ -117,6 +134,12 @@ orshinSuugchSchema.index({ "toots.baiguullagiinId": 1 });
 
 orshinSuugchSchema.index({ nevtrekhNer: 1 });
 orshinSuugchSchema.index({ mail: 1 });
+orshinSuugchSchema.index({ undsenId: 1, gishuuniiTuluv: 1 });
+
+// Гишүүн эсэхийг нэг мөрөөр шалгах туслах
+orshinSuugchSchema.virtual("gishuunEsekh").get(function () {
+  return !!this.undsenId;
+});
 
 orshinSuugchSchema.methods.tokenUusgeye = function (
   duusakhOgnoo,
@@ -130,6 +153,9 @@ orshinSuugchSchema.methods.tokenUusgeye = function (
       salbaruud: salbaruud,
       duusakhOgnoo: duusakhOgnoo,
       sessionId: this.currentSessionId || null,
+      // Гэр бүлийн гишүүн бол өгөгдлөө үндсэн эзэмшигчээс уншина
+      undsenId: this.undsenId || null,
+      gishuuniiErkh: this.undsenId ? this.gishuuniiErkh || "Харах + Төлөх" : null,
     },
     process.env.APP_SECRET,
     {
@@ -182,6 +208,10 @@ orshinSuugchSchema.pre("save", async function (next) {
     this.nuutsUg = await bcrypt.hash(this.nuutsUg, salt);
   }
   if (!this.isNew) return next();
+
+  // Гэр бүлийн гишүүн өөрийн тоот эзэмшдэггүй — үндсэн эзэмшигчийн тоотыг
+  // хардаг тул давхардлын шалгуур энд хамаарахгүй.
+  if (this.undsenId) return next();
 
   const OrshinSuugchModel = this.constructor;
   const toCheck = [];

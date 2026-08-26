@@ -2,6 +2,7 @@ const express = require("express");
 const Baiguullaga = require("../models/baiguullaga");
 const Geree = require("../models/geree");
 const { tokenShalgakh, Dugaarlalt } = require("zevbackv2");
+const { tulukhErkhShalgaya } = require("../middleware/gishuuniiKhandalt");
 const {
   qpayGuilgeeUtgaAvya,
   qpayTulye,
@@ -392,7 +393,7 @@ router.get("/accountNumbers", async (req, res, next) => {
   }
 });
 
-router.post("/qpayGargaya", tokenShalgakh, async (req, res, next) => {
+router.post("/qpayGargaya", tokenShalgakh, tulukhErkhShalgaya, async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
     const OrshinSuugch = require("../models/orshinSuugch");

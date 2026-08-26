@@ -344,6 +344,16 @@ router.get("/geree", tokenShalgakh, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 router.post("/geree", tokenShalgakh, gereeController.createGeree);
+
+// Админ эрхээр ГАНЦ цуцлагдсан гэрээг нэхэмжлэх + гүйлгээ/авлагатай нь хамт
+// устгана. Эзэмшигч болон бусад гэрээнд хүрэхгүй. Ерөнхий crud-аас ӨМНӨ
+// бүртгэсэн нь чухал — эс тэгвээс "/geree/:id" загвар үүнийг залгина.
+router.post(
+  "/geree/:id/adminUstgakh",
+  tokenShalgakh,
+  require("../controller/gereeAdminUstgakh").gereeAdminUstgakh,
+);
+
 crud(
   router,
   "geree",

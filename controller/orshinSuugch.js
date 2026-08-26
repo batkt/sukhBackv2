@@ -21,6 +21,10 @@ const {
 } = require("./negdsenSan");
 const NekhemjlekhCron = require("../models/cronSchedule");
 const { calculateNextDueDate } = require("../utils/dateUtils");
+const {
+  undsenEesKhayagAvya,
+  gishuuniiKhariuBelgeye,
+} = require("../utils/gerBuliinGishuun");
 
 /**
  * Helper to get the correct due date based on billing cycle
@@ -1586,7 +1590,9 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
 
     let walletUserId = walletUserInfo?.userId || null;
 
-    if (orshinSuugch && !walletUserId) {
+    // Гэр бүлийн гишүүн Wallet дээр өөрийн данстай байх шаардлагагүй —
+    // тооцоогоо үндсэн эзэмшигчийнхээр хардаг.
+    if (orshinSuugch && !walletUserId && !orshinSuugch.undsenId) {
 
       const emailToUse = orshinSuugch.mail || "";
 
@@ -1620,6 +1626,52 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
 
     if (!passwordValid) {
       throw new aldaa("Нууц үг буруу байна!");
+    }
+
+    // --- Гэр бүлийн гишүүн ---
+    // Гишүүн өөрийн тоот/гэрээ эзэмшдэггүй тул доорх Wallet бүртгэл, тоот
+    // нэмэх, гэрээ автоматаар үүсгэх логикийг БҮГДИЙГ алгасана. Оронд нь
+    // үндсэн эзэмшигчийн хаяг, тоотыг хуулж өгнө.
+    if (orshinSuugch.undsenId) {
+      const undsen = await OrshinSuugch(db.erunkhiiKholbolt).findById(
+        orshinSuugch.undsenId,
+      );
+      if (!undsen) {
+        throw new aldaa(
+          "Үндсэн эзэмшигчийн бүртгэл олдсонгүй. Гишүүнчлэл хүчингүй болсон байна.",
+        );
+      }
+      if (orshinSuugch.gishuuniiTuluv === "Цуцлагдсан") {
+        throw new aldaa("Таны гэр бүлийн гишүүнчлэл цуцлагдсан байна.");
+      }
+
+      orshinSuugch.currentSessionId = String(
+        Date.now() + Math.random().toString(36).substring(2, 7),
+      );
+      if (req.body.firebaseToken) {
+        orshinSuugch.firebaseToken = req.body.firebaseToken;
+      }
+      // Үндсэн эзэмшигч байгууллага/барилгаа сольсон байж болзошгүй тул
+      // нэвтрэх бүрд дахин тэгшитгэнэ (токен нь baiguullagiinId-аар бааз сонгодог)
+      undsenEesKhayagAvya(orshinSuugch, undsen);
+      orshinSuugch.toots = [];
+      await orshinSuugch.save();
+
+      const gishuuniiToken = orshinSuugch.tokenUusgeye();
+      const gishuuniiKhariu = {
+        result: gishuuniiKhariuBelgeye(orshinSuugch.toJSON(), undsen),
+        success: true,
+        token: gishuuniiToken,
+      };
+
+      const gishuuniiKholbolt = db.kholboltuud.find(
+        (k) => k.baiguullagiinId === String(undsen.baiguullagiinId || ""),
+      );
+      if (gishuuniiKholbolt) {
+        gishuuniiKhariu.tukhainBaaziinKholbolt = gishuuniiKholbolt.kholboltNer;
+      }
+
+      return res.status(200).json(gishuuniiKhariu);
     }
 
     // Send SMS verification code on login
@@ -4085,7 +4137,23 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
         });
       }
 
-      const urdunJson = urDun.toJSON();
+      let urdunJson = urDun.toJSON();
+
+      // Гэр бүлийн гишүүн бол профайлдаа үндсэн эзэмшигчийн тоот, хаяг,
+      // үлдэгдлийг харуулна — апп ижил дэлгэц зурна.
+      if (urDun.undsenId) {
+        const undsen = await OrshinSuugch(db.erunkhiiKholbolt).findById(
+          urDun.undsenId,
+        );
+        if (!undsen) {
+          return res.status(404).json({
+            success: false,
+            message: "Үндсэн эзэмшигчийн бүртгэл олдсонгүй",
+          });
+        }
+        urdunJson = gishuuniiKhariuBelgeye(urdunJson, undsen);
+      }
+
       urdunJson.duusakhOgnoo = tokenObject.duusakhOgnoo;
       urdunJson.salbaruud = tokenObject.salbaruud;
       res.send(urdunJson);
@@ -4570,6 +4638,38 @@ exports.orshinSuugchOorooUstgakh = asyncHandler(async (req, res, next) => {
       throw new aldaa("Нууц код буруу байна!");
     }
 
+    // --- Гэр бүлийн гишүүн өөрөө устгаж байгаа тохиолдол ---
+    // Гишүүн ямар ч гэрээ эзэмшдэггүй тул зөвхөн өөрийн бүртгэлээ хасна.
+    if (orshinSuugch.undsenId) {
+      const GerBuliinUrilga = require("../models/gerBuliinUrilga");
+      await GerBuliinUrilga(db.erunkhiiKholbolt)
+        .deleteMany({
+          utas: orshinSuugch.utas,
+          undsenId: String(orshinSuugch.undsenId),
+        })
+        .catch(() => { });
+      await OrshinSuugchModel.deleteOne({ _id: orshinSuugch._id });
+
+      return res.status(200).json({
+        success: true,
+        message: "Таны гэр бүлийн гишүүний бүртгэл устлаа",
+      });
+    }
+
+    // --- Үндсэн эзэмшигч устаж байвал гишүүд нь ч хамт устана ---
+    try {
+      const GerBuliinUrilga = require("../models/gerBuliinUrilga");
+      await OrshinSuugchModel.deleteMany({ undsenId: userIdString });
+      await GerBuliinUrilga(db.erunkhiiKholbolt).deleteMany({
+        undsenId: userIdString,
+      });
+    } catch (gishuunErr) {
+      console.error(
+        "[OorooUstgakh] Гэр бүлийн гишүүд устгахад алдаа:",
+        gishuunErr.message,
+      );
+    }
+
     // Mark all gerees as "Цуцалсан" (Cancelled) instead of deleting
     const orgIdsForDel = new Set();
     if (orshinSuugch.baiguullagiinId) orgIdsForDel.add(orshinSuugch.baiguullagiinId.toString());
@@ -4673,6 +4773,24 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
         } catch (e) { /* ignore individual db errors */ }
       }
       throw new aldaa("Хэрэглэгч олдсонгүй!");
+    }
+
+    // Энэ хэрэглэгчид харьяалагдах гэр бүлийн гишүүд болон урилгуудыг цэвэрлэнэ.
+    // (Гишүүнийг устгаж байвал энэ хоёулаа хоосон буцна.)
+    try {
+      const GerBuliinUrilga = require("../models/gerBuliinUrilga");
+      await OrshinSuugchModel.deleteMany({ undsenId: userIdString });
+      await GerBuliinUrilga(db.erunkhiiKholbolt).deleteMany({
+        $or: [
+          { undsenId: userIdString },
+          { utas: orshinSuugch.utas, undsenId: String(orshinSuugch.undsenId || "") },
+        ],
+      });
+    } catch (gishuunErr) {
+      console.error(
+        "[Ustgakh] Гэр бүлийн гишүүд устгахад алдаа:",
+        gishuunErr.message,
+      );
     }
 
     // Mark all gerees as "Цуцалсан" (Cancelled) instead of deleting

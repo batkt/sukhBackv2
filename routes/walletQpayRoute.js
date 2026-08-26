@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { tokenShalgakh } = require("zevbackv2");
 const walletQpayController = require("../controller/walletQpayController");
+const { tulukhErkhShalgaya } = require("../middleware/gishuuniiKhandalt");
 
 /**
  * @route POST /walletQpay/create
@@ -15,7 +16,12 @@ const walletQpayController = require("../controller/walletQpayController");
  * Returns: QPay QR data (same shape as /qpayGargaya)
  *        + walletPaymentId, walletInvoiceId
  */
-router.post("/walletQpay/create", tokenShalgakh, walletQpayController.createWalletQpayInvoice);
+router.post(
+  "/walletQpay/create",
+  tokenShalgakh,
+  tulukhErkhShalgaya,
+  walletQpayController.createWalletQpayInvoice,
+);
 
 /**
  * @route GET /walletQpay/callback/:baiguullagiinId/:walletPaymentId

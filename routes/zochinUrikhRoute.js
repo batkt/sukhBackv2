@@ -17,6 +17,7 @@ const ZochinZogsooliinTuukh = require("../models/zochinZogsooliinTuukh");
 const {
   getKholboltByBaiguullagiinId,
 } = require("../utils/dbConnection");
+const { ugugdliinEzniiId } = require("../utils/gerBuliinGishuun");
 
 // Session validation for multiple device login prevention
 const orshinSuugchSessionShalgaya = async (req, res, next) => {
@@ -175,7 +176,7 @@ async function checkQuotaAndPermissions(residentId, baiguullagiinId, barilgiinId
  */
 router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
   try {
-    const residentId = req.body.nevtersenAjiltniiToken?.id || req.body.ezemshigchiinId || req.body.ezenId;
+    const residentId = ugugdliinEzniiId(req.body.nevtersenAjiltniiToken) || req.body.ezemshigchiinId || req.body.ezenId;
     const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
     const plate = String(req.body.urisanMashiniiDugaar || req.body.mashiniiDugaar || "").trim().toUpperCase();
 
@@ -488,7 +489,7 @@ async function mashinHadgalya(mashinMedeelel, tukhainBaaziinKholbolt) {
 router.get("/zochinSettings", tokenShalgakh, async (req, res, next) => {
   try {
     const Mashin = require("../models/mashin");
-    const residentId = req.body.nevtersenAjiltniiToken?.id;
+    const residentId = ugugdliinEzniiId(req.body.nevtersenAjiltniiToken);
     const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
     const Baiguullaga = require("../models/baiguullaga");
 
@@ -571,7 +572,7 @@ router.get("/zochinQuotaStatus", tokenShalgakh, async (req, res, next) => {
   try {
     const Mashin = require("../models/mashin");
     // const EzenUrisanMashin = require("../models/ezenUrisanMashin"); // Using sdk version instead
-    const residentId = req.body.nevtersenAjiltniiToken?.id;
+    const residentId = ugugdliinEzniiId(req.body.nevtersenAjiltniiToken);
     const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
     const baiguullagiinId = req.query.baiguullagiinId || req.body.baiguullagiinId;
     const barilgiinId = req.query.barilgiinId || req.body.barilgiinId;
@@ -784,7 +785,7 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
     }
 
     let inviterSettings = null;
-    const inviterId = req.body.nevtersenAjiltniiToken?.id;
+    const inviterId = ugugdliinEzniiId(req.body.nevtersenAjiltniiToken);
     const requesterRole = req.body.nevtersenAjiltniiToken?.erkh;
 
     // Fetch inviter's master settings (Primary resident car info)
@@ -1273,7 +1274,7 @@ router.get("/zochin/urisanMashin", tokenShalgakh, async (req, res, next) => {
 
 router.post("/ezenUrisanTuukh", tokenShalgakh, async (req, res, next) => {
   try {
-    const searchId = req.body.ezenId || req.body.nevtersenAjiltniiToken?.id;
+    const searchId = req.body.ezenId || ugugdliinEzniiId(req.body.nevtersenAjiltniiToken);
     if (!searchId) {
       return res.send({ ezenList: [], jagsaalt: [] });
     }
