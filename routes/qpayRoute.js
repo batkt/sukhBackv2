@@ -302,10 +302,10 @@ router.get(
       } else {
         console.warn("⚠️ [QPAY CALLBACK GADAA] socketio not set; skip emit");
       }
-      if (qpayObject.zogsooliinId) {
+      if (qpayObject.zogsooliinId && qpayObject.zogsoolUilchluulegch?.uId) {
         const body = {
           tukhainBaaziinKholbolt: kholbolt,
-          turul: req.params.cameraIP == "dotor" ? "qpayUridchilsan" : "qpay",
+          turul: req.params.cameraIP == "dotor" ? "DotorQR" : "GadaaQR",
           uilchluulegchiinId: qpayObject.zogsoolUilchluulegch.uId,
           paid_amount: qpayObject.zogsoolUilchluulegch.pay_amount,
           plate_number: qpayObject.zogsoolUilchluulegch.plate_number,
@@ -313,6 +313,43 @@ router.get(
           ajiltniiNer: "qpaySticker",
           zogsooliinId: qpayObject.zogsooliinId,
         };
+        // Төлбөрийг зогсоолын session (Uilchluulegch.tuukh.0.tulbur) дээр хадгална.
+        // Үүнгүйгээр QPay төлөгдсөн ч зогсоол дээр төлбөр бүртгэгдэхгүй байв.
+        try {
+          const { tulburUridchiljTulukh } = require("../controller/zogsool");
+          // next-ийг өгөхгүй: дотроо next(err) дуудвал доорх sendStatus(200)-той
+          // давхцаж "headers already sent" болно.
+          const durslel = await tulburUridchiljTulukh(body, (tulburNextErr) => {
+            console.error(
+              "❌ [QPAY CALLBACK GADAA] session шинэчлэхэд алдаа:",
+              tulburNextErr?.message,
+            );
+          });
+          console.log(
+            "✅ [QPAY CALLBACK GADAA] төлбөр session-д хадгалагдлаа:",
+            durslel,
+          );
+        } catch (tulburAldaa) {
+          console.error(
+            "❌ [QPAY CALLBACK GADAA] tulburUridchiljTulukh алдаа:",
+            tulburAldaa.message,
+          );
+        }
+      }
+      try {
+        const { Uilchluulegch } = require("sukhParking-v1");
+        if (qpayObject?.zogsoolUilchluulegch?.uId) {
+          const oldsonMashin = await Uilchluulegch(kholbolt, true).findById(
+            qpayObject.zogsoolUilchluulegch.uId,
+          );
+          const garsanKhaalga = oldsonMashin?.tuukh?.[0]?.garsanKhaalga;
+          if (garsanKhaalga) req.params.cameraIP = garsanKhaalga;
+        }
+      } catch (khaalgaAldaa) {
+        console.warn(
+          "⚠️ [QPAY CALLBACK GADAA] гарсан хаалга уншиж чадсангүй:",
+          khaalgaAldaa.message,
+        );
       }
       if (
         !!req.params.mashiniiDugaar &&
@@ -1108,11 +1145,13 @@ router.post("/qpayGargaya", tokenShalgakh, tulukhErkhShalgaya, async (req, res, 
         req.body.baiguullagiinId +
         "/" +
         req.body?.zakhialgiinDugaar;
-      if (
+      // Гадаа наалтын QR (зогсоол) - өөрийн тусгай callback-тай тул доорх
+      // ерөнхий салаанууд үүнийг дарж бичих ёсгүй.
+      const zogsoolQrGadaaEsekh =
         req.body.turul === "QRGadaa" &&
         !!req.body.mashiniiDugaar &&
-        !!req.body.cameraIP
-      ) {
+        !!req.body.cameraIP;
+      if (zogsoolQrGadaaEsekh) {
         callback_url =
           process.env.UNDSEN_SERVER +
           "/qpaycallbackGadaaSticker/" +
@@ -1127,7 +1166,12 @@ router.post("/qpayGargaya", tokenShalgakh, tulukhErkhShalgaya, async (req, res, 
           req.body?.zakhialgiinDugaar;
       }
 
-      if (req.body.barilgiinId && !req.body.nekhemjlekhiinId && !req.body.nekhemjlekhiinTuukh) {
+      if (
+        !zogsoolQrGadaaEsekh &&
+        req.body.barilgiinId &&
+        !req.body.nekhemjlekhiinId &&
+        !req.body.nekhemjlekhiinTuukh
+      ) {
         // Generic payment (no specific invoice) → use legacy /qpayTulye callback
         callback_url =
           process.env.UNDSEN_SERVER +

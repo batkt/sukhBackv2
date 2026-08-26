@@ -1236,7 +1236,17 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       ? { baiguullagiinId: req.params.baiguullagiinId, ...(req.method === "GET" ? req.query : req.body) }
       : (req.method === "GET" ? req.query : req.body);
 
-    const { baiguullagiinId, barilgiinId, search, orshinSuugch, toot, khuudasniiDugaar = 1, khuudasniiKhemjee = 200 } = source || {};
+    const {
+      baiguullagiinId,
+      barilgiinId,
+      search,
+      orshinSuugch,
+      toot,
+      ekhlekhOgnoo,
+      duusakhOgnoo,
+      khuudasniiDugaar = 1,
+      khuudasniiKhemjee = 200,
+    } = source || {};
 
     if (!baiguullagiinId) return res.status(400).json({ success: false, message: "baiguullagiinId is required" });
 
@@ -1300,10 +1310,18 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       const rid = String(r._id);
       const obj = {
         _id: rid,
+        gereeniiDugaar: "",
         ner: r.ner || "",
+        register: r.register || "",
+        utas: r.utas || [],
+        davkhar: r.davkhar || r.medeelel?.davkhar || (r.toots && r.toots[0]?.davkhar) || "",
         toot: r.toot || r.medeelel?.toot || (r.toots && r.toots[0]?.toot) || "",
         undsenDun: 0, tulsunDun: 0, uldegdel: 0,
-        p0_30: 0, p31_60: 0, p61_90: 0, p91_120: 0, p120plus: 0
+        p0_30: 0, p31_60: 0, p61_90: 0, p91_120: 0, p120plus: 0,
+        avlagiinKhonog: 0,
+        khamgiinKhuuchinOgnoo: null,
+        _charges: [],
+        _payments: 0,
       };
       residentMap.set(rid, obj);
       contractToResidentMap.set(rid, obj);
@@ -1315,85 +1333,138 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       if (res) {
         contractToResidentMap.set(String(c._id), res);
         if (c.gereeniiDugaar) contractToResidentMap.set(String(c.gereeniiDugaar), res);
+        if (!res.gereeniiDugaar && c.gereeniiDugaar) res.gereeniiDugaar = String(c.gereeniiDugaar);
+        if (!res.davkhar && c.davkhar) res.davkhar = String(c.davkhar);
+        if (!res.toot && c.toot) res.toot = String(c.toot);
       }
     });
 
-    const now = new Date();
+    // Насжилт бодох мэдэгдэх огноо: duusakhOgnoo байвал түүгээр, байхгүй бол өнөөдрөөр.
+    const refDate = duusakhOgnoo ? new Date(duusakhOgnoo) : new Date();
+    if (duusakhOgnoo) refDate.setHours(23, 59, 59, 999);
+    const fromDate = ekhlekhOgnoo ? new Date(ekhlekhOgnoo) : null;
+    if (fromDate) fromDate.setHours(0, 0, 0, 0);
 
-    // 6. Process Invoices
-    allInvoices.forEach(inv => {
-      const res = contractToResidentMap.get(String(inv.gereeniiId || "")) || 
-                  contractToResidentMap.get(String(inv.gereeniiDugaar || "")) || 
-                  contractToResidentMap.get(String(inv.residentId || ""));
-      if (!res) return;
+    const inRange = (d) => {
+      const t = d ? new Date(d).getTime() : NaN;
+      if (!Number.isFinite(t)) return false;
+      if (t > refDate.getTime()) return false;
+      if (fromDate && t < fromDate.getTime()) return false;
+      return true;
+    };
 
-      const billed = Number(inv.niitTulburOriginal ?? inv.niitTulbur ?? inv.niitDun) || 0;
-      const uldegdel = Number(inv.uldegdel || 0);
-      res.undsenDun += billed;
-      res.tulsunDun += (billed - uldegdel);
-      res.uldegdel += uldegdel;
+    // Барилгын хамаарлыг шалгана — өөр барилгын бичилтийг оршин суугчийн ID-аар
+    // санамсаргүй оноож нийлүүлэхээс сэргийлнэ.
+    const sameBuilding = (doc) => {
+      if (!barilgiinId) return true;
+      const b = String(doc.barilgiinId || "");
+      return !b || b === buildingFilter;
+    };
 
-      if (uldegdel > 0) {
-        const diff = Math.floor((now.getTime() - new Date(inv.ognoo || inv.createdAt).getTime()) / 86400000);
-        if (diff <= 30) res.p0_30 += uldegdel;
-        else if (diff <= 60) res.p31_60 += uldegdel;
-        else if (diff <= 90) res.p61_90 += uldegdel;
-        else if (diff <= 120) res.p91_120 += uldegdel;
-        else res.p120plus += uldegdel;
-      }
-    });
+    const findResident = (doc) => {
+      if (!sameBuilding(doc)) return null;
+      return (
+        contractToResidentMap.get(String(doc.gereeniiId || "")) ||
+        contractToResidentMap.get(String(doc.gereeniiDugaar || "")) ||
+        contractToResidentMap.get(String(doc.orshinSuugchId || doc.residentId || ""))
+      );
+    };
 
-    // 7. Process Ledger (FIFO for credits)
+    // 6. Төлбөрийн бүртгэл (GuilgeeAvlaguud) — авлага/төлөлтийн үнэн эх сурвалж.
+    //    dun > 0 → авлага (төлөх), dun < 0 → төлөлт (төлсөн).
+    //    NekhemjlekhiinTuukh дээр uldegdel талбар байхгүй (схемд байхгүй тул хадгалагддаггүй),
+    //    иймд өмнө нь tulsunDun = niitTulbur - 0 болж "Төлөх" ба "Төлсөн" ижил гарч байсан.
+    const invoiceHasLedgerCharge = new Set();
+
     allLedgerEntries.forEach(s => {
-      if (s.nekhemjlekhId) return; // Already handled via invoice
-      const res = contractToResidentMap.get(String(s.gereeniiId || "")) || contractToResidentMap.get(String(s.residentId || ""));
+      const res = findResident(s);
       if (!res) return;
+      if (!inRange(s.ognoo || s.createdAt)) return;
 
       const dun = Number(s.dun || 0);
-      if (dun > 0) {
-        const uld = Number(s.uldegdel || 0);
-        res.undsenDun += dun;
-        res.tulsunDun += (dun - uld);
-        res.uldegdel += uld;
-        if (uld > 0) {
-          const diff = Math.floor((now.getTime() - new Date(s.ognoo || s.createdAt).getTime()) / 86400000);
-          if (diff <= 30) res.p0_30 += uld;
-          else if (diff <= 60) res.p31_60 += uld;
-          else if (diff <= 90) res.p61_90 += uld;
-          else if (diff <= 120) res.p91_120 += uld;
-          else res.p120plus += uld;
-        }
-      } else if (dun < 0) {
-        const credit = Math.abs(dun);
-        res.tulsunDun += credit;
-        res.uldegdel -= credit;
-        let rem = credit;
-        const buckets = ["p120plus", "p91_120", "p61_90", "p31_60", "p0_30"];
-        for (const b of buckets) {
-          if (rem <= 0) break;
-          const take = Math.min(rem, res[b]);
-          res[b] -= take;
-          rem -= take;
-        }
+      const charge = dun > 0 ? dun : dun === 0 ? Number(s.undsenDun || s.tulukhDun || 0) : 0;
+      const payment = dun < 0 ? Math.abs(dun) : dun === 0 ? Number(s.tulsunDun || 0) : 0;
+
+      if (charge > 0) {
+        if (s.nekhemjlekhId) invoiceHasLedgerCharge.add(String(s.nekhemjlekhId));
+        res._charges.push({ ognoo: new Date(s.ognoo || s.createdAt), dun: charge });
       }
+      if (payment > 0) res._payments += payment;
+    });
+
+    // 7. Хуучин дата: төлбөрийн бүртгэлд бичилтгүй нэхэмжлэхийн дүнг авлага болгож нэмнэ.
+    allInvoices.forEach(inv => {
+      if (invoiceHasLedgerCharge.has(String(inv._id))) return;
+      const res = findResident(inv);
+      if (!res) return;
+      if (!inRange(inv.ognoo || inv.createdAt)) return;
+      const billed = Number(inv.niitTulburOriginal ?? inv.niitTulbur ?? inv.niitDun) || 0;
+      if (billed <= 0) return;
+      res._charges.push({ ognoo: new Date(inv.ognoo || inv.createdAt), dun: billed });
+    });
+
+    // 8. Оршин суугч тус бүрээр FIFO-гоор төлөлтийг хамгийн хуучин авлагад хааж насжилтыг бодно.
+    const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+    residentMap.forEach(res => {
+      res._charges.sort((a, b) => a.ognoo.getTime() - b.ognoo.getTime());
+      const billed = res._charges.reduce((s, c) => s + c.dun, 0);
+      const paid = res._payments;
+
+      res.undsenDun = round2(billed);
+      res.tulsunDun = round2(paid);
+      res.uldegdel = round2(billed - paid);
+
+      let available = paid;
+      let oldestOpen = null;
+      res._charges.forEach(c => {
+        const covered = Math.min(available, c.dun);
+        available -= covered;
+        const open = c.dun - covered;
+        if (open <= 0.009) return;
+        if (!oldestOpen) oldestOpen = c.ognoo;
+        const diff = Math.floor((refDate.getTime() - c.ognoo.getTime()) / 86400000);
+        if (diff <= 30) res.p0_30 += open;
+        else if (diff <= 60) res.p31_60 += open;
+        else if (diff <= 90) res.p61_90 += open;
+        else if (diff <= 120) res.p91_120 += open;
+        else res.p120plus += open;
+      });
+
+      res.p0_30 = round2(res.p0_30);
+      res.p31_60 = round2(res.p31_60);
+      res.p61_90 = round2(res.p61_90);
+      res.p91_120 = round2(res.p91_120);
+      res.p120plus = round2(res.p120plus);
+
+      // Авлагын хоног = хамгийн хуучин хаагдаагүй авлагаас хойш өнгөрсөн хоног.
+      res.khamgiinKhuuchinOgnoo = oldestOpen || null;
+      res.avlagiinKhonog = oldestOpen
+        ? Math.max(0, Math.floor((refDate.getTime() - oldestOpen.getTime()) / 86400000))
+        : 0;
+
+      delete res._charges;
+      delete res._payments;
     });
 
     const list = Array.from(residentMap.values()).sort((a, b) => String(a.toot).localeCompare(String(b.toot), undefined, { numeric: true }));
     const totalCount = list.length;
     const paginated = list.slice((khuudasniiDugaar - 1) * khuudasniiKhemjee, khuudasniiDugaar * khuudasniiKhemjee);
 
+    const sumBy = (f) => round2(list.reduce((s, r) => s + (Number(r[f]) || 0), 0));
     const totals = {
-      undsenDun: list.reduce((s, r) => s + r.undsenDun, 0),
-      tulsunDun: list.reduce((s, r) => s + r.tulsunDun, 0),
-      uldegdel: list.reduce((s, r) => s + r.uldegdel, 0),
-      p0_30: list.reduce((s, r) => s + r.p0_30, 0),
-      p31_60: list.reduce((s, r) => s + r.p31_60, 0),
-      p61_90: list.reduce((s, r) => s + r.p61_90, 0),
-      p91_120: list.reduce((s, r) => s + r.p91_120, 0),
-      p120plus: list.reduce((s, r) => s + r.p120plus, 0),
+      undsenDun: sumBy("undsenDun"),
+      tulsunDun: sumBy("tulsunDun"),
+      uldegdel: sumBy("uldegdel"),
+      p0_30: sumBy("p0_30"),
+      p31_60: sumBy("p31_60"),
+      p61_90: sumBy("p61_90"),
+      p91_120: sumBy("p91_120"),
+      p120plus: sumBy("p120plus"),
+      avlagiinKhonog: list.reduce((s, r) => Math.max(s, Number(r.avlagiinKhonog) || 0), 0),
     };
 
-    res.json({ success: true, data: paginated, totalCount, totals });
+    res.json({ success: true, data: paginated, totalCount, totals, refDate });
   } catch (error) {
     next(error);
   }
@@ -2031,12 +2102,14 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
         "Төлөх",
         "Төлсөн",
         "Нийт үлдэгдэл",
+        "Авлагын хоног",
         "0-30",
         "31-60",
         "61-90",
+        "91-120",
         "120+",
       ];
-      const list = data.detailed?.list || [];
+      const list = data.data || data.detailed?.list || data.list || [];
       rows = list.map((r) => {
         return [
           r.gereeniiDugaar || "",
@@ -2047,23 +2120,26 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
           r.undsenDun || 0,
           r.tulsunDun || 0,
           r.uldegdel || 0,
+          r.avlagiinKhonog || 0,
           r.p0_30 || 0,
           r.p31_60 || 0,
           r.p61_90 || 0,
+          r.p91_120 || 0,
           r.p120plus || 0,
         ];
       });
 
       // Add Footer Totals
-      const sums = new Array(12).fill(0);
+      const sums = new Array(headers.length).fill(0);
       list.forEach((r) => {
         sums[5] += r.undsenDun || 0;
         sums[6] += r.tulsunDun || 0;
         sums[7] += r.uldegdel || 0;
-        sums[8] += r.p0_30 || 0;
-        sums[9] += r.p31_60 || 0;
-        sums[10] += r.p61_90 || 0;
-        sums[11] += r.p120plus || 0;
+        sums[9] += r.p0_30 || 0;
+        sums[10] += r.p31_60 || 0;
+        sums[11] += r.p61_90 || 0;
+        sums[12] += r.p91_120 || 0;
+        sums[13] += r.p120plus || 0;
       });
 
       rows.push([
@@ -2075,10 +2151,12 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
         Math.round(sums[5] * 100) / 100,
         Math.round(sums[6] * 100) / 100,
         Math.round(sums[7] * 100) / 100,
-        Math.round(sums[8] * 100) / 100,
+        "",
         Math.round(sums[9] * 100) / 100,
         Math.round(sums[10] * 100) / 100,
         Math.round(sums[11] * 100) / 100,
+        Math.round(sums[12] * 100) / 100,
+        Math.round(sums[13] * 100) / 100,
       ]);
 
       fileName = "avlagiin_nasjilt";
