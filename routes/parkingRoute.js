@@ -1527,7 +1527,6 @@ router.post(
       const qrTypes = [
         "GadaaQR",
         "DotorQR",
-        "EzenTulukh",
         "bankQR",
         "toki",
         "киоск",
