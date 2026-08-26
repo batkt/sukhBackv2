@@ -1152,16 +1152,23 @@ router.post("/qpayGargaya", tokenShalgakh, tulukhErkhShalgaya, async (req, res, 
         !!req.body.mashiniiDugaar &&
         !!req.body.cameraIP;
       if (zogsoolQrGadaaEsekh) {
+        // ЧУХАЛ: nginx зөвхөн /api/* -ыг backend руу дамжуулдаг. UNDSEN_SERVER
+        // нь "https://amarhome.mn" (префиксгүй) тул "/api"-г ЗААВАЛ нэмнэ - эс
+        // тэгвээс callback frontend (Next.js) дээр буугаад 404 болж, төлбөр
+        // бүртгэгдэхгүй үлдэнэ.
+        //
+        // Мөн машины дугаар кирилээр байдаг тул percent-encode хийнэ: raw
+        // кирил замд байвал HTTP клиент/nginx дээр таслагдаж route таарахгүй.
         callback_url =
           process.env.UNDSEN_SERVER +
-          "/qpaycallbackGadaaSticker/" +
+          "/api/qpaycallbackGadaaSticker/" +
           req.body.baiguullagiinId +
           "/" +
           req.body.barilgiinId.toString() +
           "/" +
-          req.body.mashiniiDugaar +
+          encodeURIComponent(req.body.mashiniiDugaar) +
           "/" +
-          req.body.cameraIP +
+          encodeURIComponent(req.body.cameraIP) +
           "/" +
           req.body?.zakhialgiinDugaar;
       }
