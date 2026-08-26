@@ -20,6 +20,9 @@ const {
   khariltsagchOorooUstgakh,
 } = require("../controller/khariltsagch");
 const aldaa = require("../components/aldaa");
+const {
+  khariltsagchAdminUstgakh,
+} = require("../controller/khariltsagchAdminUstgakh");
 const session = require("../models/session");
 const multer = require("multer");
 const {
@@ -84,6 +87,15 @@ router.use(khariltsagchSessionShalgaya);
 const cacheMiddleware = require("../middleware/cacheMiddleware");
 
 router.delete("/khariltsagch/:id", tokenShalgakh, khariltsagchUstgakh);
+
+// Админ эрхээр цуцлагдсан гэрээтэй харилцагчийг гэрээ + нэхэмжлэх +
+// гүйлгээ/авлагатай нь хамт бүрмөсөн устгана. `zovkhonShalgakh: true` үед
+// юу ч устгахгүй, зөвхөн юу устгагдахыг тоолж буцаана.
+router.post(
+  "/khariltsagch/:id/adminUstgakh",
+  tokenShalgakh,
+  khariltsagchAdminUstgakh,
+);
 
 router.post("/khariltsagch/remove-toot", tokenShalgakh, khariltsagchTootUstgakh);
 
