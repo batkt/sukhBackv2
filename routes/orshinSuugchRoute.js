@@ -1408,5 +1408,14 @@ router.post(
   massUpdateOrshinSuugchKwt
 );
 
+// Оршин суугчийн БҮХ байгууллага, БҮХ тоотын үлдэгдлийг нэг дор буцаана.
+// tokenShalgakh хүсэлтийг token-ы байгууллагад хатуу тогтоодог тул клиентээс
+// өөр байгууллагын гэрээ татах боломжгүй — иймд сервер талд нэгтгэв.
+router.post(
+  "/orshinSuugch/niitTulbur",
+  tokenShalgakh,
+  require("../controller/orshinSuugchNiitTulbur").orshinSuugchNiitTulbur,
+);
+
 module.exports = router;
 

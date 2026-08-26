@@ -129,7 +129,7 @@ exports.khariltsagchTootUstgakh = asyncHandler(async (req, res, next) => {
   }
 });
 
-exports.updateDavkharWithToot = async function (baiguullaga, barilgiinId, davkhar, toot, kholbolt) {};
+exports.updateDavkharWithToot = async function (baiguullaga, barilgiinId, davkhar, toot, kholbolt) { };
 
 const orshinSuugchController = require("./orshinSuugch");
 exports.syncResidentContracts = orshinSuugchController.syncResidentContracts;
@@ -233,7 +233,7 @@ exports.khariltsagchOorooUstgakh = asyncHandler(async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: "Хэрэглэгчийн данс устгагдлаа. Бүх мэдээлэл хадгалагдсан байна.",
+      message: "Хэрэглэгчийн хаяг устгагдлаа. Бүх мэдээлэл хадгалагдсан байна.",
       data: {
         userId: userId,
         status: "Cancelled"

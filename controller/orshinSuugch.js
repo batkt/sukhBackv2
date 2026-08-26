@@ -4722,7 +4722,7 @@ exports.orshinSuugchOorooUstgakh = asyncHandler(async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: "Хэрэглэгчийн данс устгагдлаа. Бүх мэдээлэл хадгалагдсан байна.",
+      message: "Хэрэглэгчийн хаяг устгагдлаа. Бүх мэдээлэл хадгалагдсан байна.",
       data: {
         userId: userId,
         status: "Cancelled"
@@ -4856,7 +4856,7 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: "Хэрэглэгчийн данс устгагдлаа.",
+      message: "Хэрэглэгчийн хаяг устгагдлаа.",
       data: {
         userId: userId,
         status: "Deleted"
