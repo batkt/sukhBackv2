@@ -332,6 +332,22 @@ app.use(uneguiMashinRoute);
 app.use(zochinUrikhRoute);
 app.use(zochinZogsoolRoute);
 app.use(zogsoolQrRoute);
+// ЖИЧ: түр зуурын лог — gadaa QR route бүртгэгдсэн эсэхийг ачаалалтад хэвлэнэ.
+// Асуудал шийдэгдсэний дараа хасна.
+console.log(
+  "🅿️ [ZOGSOOL QR] type=" +
+    typeof zogsoolQrRoute +
+    " замууд=" +
+    ((zogsoolQrRoute && zogsoolQrRoute.stack ? zogsoolQrRoute.stack : [])
+      .filter((l) => l.route)
+      .map(
+        (l) =>
+          Object.keys(l.route.methods).join(",").toUpperCase() +
+          " " +
+          l.route.path,
+      )
+      .join(" | ") || "БАЙХГҮЙ"),
+);
 app.use("/audit", auditRoute);
 app.use(transformationRoute);
 // walletQpayRoute moved to top

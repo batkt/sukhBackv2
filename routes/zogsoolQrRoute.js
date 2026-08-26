@@ -79,6 +79,8 @@ router.get(
   "/zogsool/qr/tokhirgoo/:baiguullagiinId/:barilgiinId",
   async (req, res, next) => {
     try {
+      // ЖИЧ: түр зуурын лог — handler хүрч байгаа эсэхийг батлана.
+      console.log("🅿️ [ZOGSOOL QR] tokhirgoo hit", req.originalUrl);
       const { baiguullagiinId, barilgiinId } = req.params;
       // Машиныг олсны дараа тухайн машины БОДИТ зогсоолын тохиргоог (данс,
       // гарах хугацаа) авахын тулд zogsooliinId-аар дахин дуудаж болно.
