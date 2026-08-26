@@ -12,6 +12,104 @@ const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
 const { Dans } = require("zevbackv2");
 
 /**
+ * Тоотын бичиглэлийн зөрүүг тэсвэрлэх хувилбарууд ("05" ↔ "5" гэх мэт).
+ * Гэрээ хайхад яг тэнцүү тааруулбал форматын зөрүүгээс болж олдохгүй,
+ * улмаар давхар гэрээ + бүтэн нэхэмжлэх үүсэх эрсдэлтэй.
+ */
+function tootiinKhuvilbaruud(toot) {
+  const tsever = String(toot ?? "").trim();
+  if (!tsever) return [];
+  const jagsaalt = new Set([tsever]);
+  const teggui = tsever.replace(/^0+/, "");
+  if (teggui) jagsaalt.add(teggui);
+  if (/^\d+$/.test(tsever)) jagsaalt.add(String(Number(tsever)));
+  return Array.from(jagsaalt);
+}
+
+/** Гүйлгээний мөрийн бодит тэмдэгтэй дүн */
+function murniiDun(mur) {
+  const dun = Number(mur?.dun ?? 0);
+  if (dun !== 0) return dun;
+  return (Number(mur?.undsenDun) || 0) - (Number(mur?.tulsunDun) || 0);
+}
+
+/**
+ * Гэрээний эхний үлдэгдлийг Excel-ээс ирсэн дүнд тэнцүүлнэ.
+ *
+ * Эхний үлдэгдэл нь guilgeeAvlaguud дээр `ekhniiUldegdelEsekh: true` бичлэг
+ * болж хадгалагддаг. Энэ функц тэр бичлэгийг зорилтот дүнд хүргэж
+ * ТОХИРУУЛНА — шинэ нэхэмжлэх ҮҮСГЭХГҮЙ, ашиглалтын зардал ХӨНДӨХГҮЙ.
+ *
+ * Өмнөх хувилбар зөвхөн нэмэгдүүлж чаддаг (`delta > 0.01`) бөгөөд одоогийн
+ * дүнг `undsenDun`-аас уншдаг байсан. Сөрөг эхний үлдэгдэл дээр `undsenDun`
+ * нь 0 байдаг (models/guilgeeAvlaguud.js pre-save) тул дүн давхарладаг байв.
+ *
+ * @returns {Promise<number>} хийгдсэн өөрчлөлт (delta). 0 бол хөндөөгүй.
+ */
+async function ekhniiUldegdelTokhiruulya(
+  kholbolt,
+  { gereeniiId, baiguullagiinId, targetEkhnii, gereeDoc, orshinSuugchId },
+) {
+  const Model = GuilgeeAvlaguud(kholbolt);
+
+  const murnuud = await Model.find({
+    gereeniiId: String(gereeniiId),
+    baiguullagiinId: String(baiguullagiinId),
+    ekhniiUldegdelEsekh: true,
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const odooBui = murnuud.reduce((niit, m) => niit + murniiDun(m), 0);
+  const delta = Math.round((Number(targetEkhnii || 0) - odooBui) * 100) / 100;
+
+  if (Math.abs(delta) < 0.01) return 0;
+
+  if (murnuud.length > 0) {
+    // Хамгийн сүүлийн бичлэгийг зорилтод хүргэж засна (нэмэх, хасах хоёулаа).
+    // updateOne нь pre-save hook-ыг тойрдог тул талбар бүрийг гараар нийцүүлнэ.
+    const shineDun =
+      Math.round((murniiDun(murnuud[0]) + delta) * 100) / 100;
+
+    await Model.updateOne(
+      { _id: murnuud[0]._id },
+      {
+        $set: {
+          dun: shineDun,
+          undsenDun: shineDun > 0 ? shineDun : 0,
+          tulukhDun: shineDun > 0 ? shineDun : 0,
+          tulsunDun: shineDun < 0 ? Math.abs(shineDun) : 0,
+          tailbar: "Excel-ээр засварласан эхний үлдэгдэл",
+        },
+      },
+    );
+  } else {
+    await Model.create({
+      baiguullagiinId: String(baiguullagiinId),
+      baiguullagiinNer: gereeDoc?.baiguullagiinNer || "",
+      barilgiinId: gereeDoc?.barilgiinId || "",
+      gereeniiId: String(gereeniiId),
+      gereeniiDugaar: gereeDoc?.gereeniiDugaar || "",
+      orshinSuugchId: gereeDoc?.orshinSuugchId || orshinSuugchId || "",
+      ognoo: gereeDoc?.gereeniiOgnoo || new Date(),
+      dun: delta,
+      undsenDun: delta > 0 ? delta : 0,
+      tulukhDun: delta > 0 ? delta : 0,
+      tulsunDun: delta < 0 ? Math.abs(delta) : 0,
+      turul: "avlaga",
+      zardliinNer: "Эхний үлдэгдэл",
+      ekhniiUldegdelEsekh: true,
+      source: "excel_import",
+      tailbar: "Excel-ээр оруулсан эхний үлдэгдэл",
+      guilgeeKhiisenAjiltniiNer: "System",
+      guilgeeKhiisenAjiltniiId: null,
+    });
+  }
+
+  return delta;
+}
+
+/**
  * Helper to parse numbers from Excel, supporting accounting format like (22) for -22
  * @param {any} val - Value from Excel cell
  * @returns {number} - Parsed number
@@ -1458,73 +1556,27 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
               }
 
               if (userData.ekhniiUldegdel !== undefined) {
-                const NekhemjlekhModel = require("../models/nekhemjlekhiinTuukh")(
-                  tukhainBaaziinKholbolt,
-                );
-                const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-
                 const affectedGerees = await GereeModel.find({
                   orshinSuugchId: existingOrshinSuugch._id.toString(),
                   baiguullagiinId: String(baiguullaga._id),
                   tuluv: "Идэвхтэй",
-                }).select("_id");
+                }).lean();
 
-                const GuilgeeAvlaguudTulukhModel = GuilgeeAvlaguud(tukhainBaaziinKholbolt);
                 const targetEkhnii = Number(userData.ekhniiUldegdel) || 0;
 
-                for (const g of affectedGerees) {
-                  const rows = await GuilgeeAvlaguudTulukhModel.find({
-                    gereeniiId: String(g._id),
-                    baiguullagiinId: String(baiguullaga._id),
-                    ekhniiUldegdelEsekh: true,
-                  })
-                    .sort({ createdAt: -1 })
-                    .lean();
+                for (const gereeDoc of affectedGerees) {
+                  await ekhniiUldegdelTokhiruulya(tukhainBaaziinKholbolt, {
+                    gereeniiId: gereeDoc._id,
+                    baiguullagiinId: baiguullaga._id,
+                    targetEkhnii,
+                    gereeDoc,
+                    orshinSuugchId: existingOrshinSuugch._id.toString(),
+                  });
 
-                  const currentTotal = rows.reduce(
-                    (sum, r) => sum + (Number(r.undsenDun) || 0),
-                    0,
+                  await GereeModel.updateOne(
+                    { _id: gereeDoc._id },
+                    { $set: { ekhniiUldegdel: targetEkhnii } },
                   );
-                  const delta = Math.round((targetEkhnii - currentTotal) * 100) / 100;
-
-                  if (delta > 0.01) {
-                    if (rows.length > 0) {
-                      await GuilgeeAvlaguudTulukhModel.updateOne(
-                        { _id: rows[0]._id },
-                        {
-                          $inc: {
-                            undsenDun: delta,
-                            tulukhDun: delta,
-                            // uldegdel removed
-                            dun: delta,
-                          },
-                        },
-                      );
-                    } else {
-                      const gereeDoc = await GereeModel.findById(g._id).lean();
-                      await GuilgeeAvlaguudTulukhModel.create({
-                        baiguullagiinId: String(baiguullaga._id),
-                        baiguullagiinNer: gereeDoc?.baiguullagiinNer || "",
-                        barilgiinId: gereeDoc?.barilgiinId || "",
-                        gereeniiId: String(g._id),
-                        gereeniiDugaar: gereeDoc?.gereeniiDugaar || "",
-                        orshinSuugchId:
-                          gereeDoc?.orshinSuugchId || existingOrshinSuugch._id.toString(),
-                        ognoo: new Date(),
-                        undsenDun: delta,
-                        tulukhDun: delta,
-                        uldegdel: delta,
-                        turul: "avlaga",
-                        zardliinNer: "Эхний үлдэгдэл",
-                        ekhniiUldegdelEsekh: true,
-                        source: "excel_import",
-                        tailbar: "Excel-ээр засварласан эхний үлдэгдэл",
-                        guilgeeKhiisenAjiltniiNer: "System",
-                        guilgeeKhiisenAjiltniiId: null,
-                      });
-                    }
-                  }
-
                 }
               }
             }
@@ -2039,13 +2091,41 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
 
           for (const tootEntry of ownOrgToots) {
             try {
-              // Check if geree already exists for this specific toot (user + barilgiinId + toot combination)
+              // Тухайн тоотод гэрээ АЛЬ ХЭДИЙН байгаа эсэхийг шалгана.
+              //
+              // Энэ шалгалт алдвал доор шинэ гэрээ үүсгээд, дараа нь түүнд
+              // нэхэмжлэх (ашиглалтын зардал орсон) үүсгэдэг. Тиймээс зөвхөн
+              // эхний үлдэгдэл оруулах гэсэн импорт дээр зарим айлд ашиглалтын
+              // зардал нэмэгдэж байсан шалтгаан яг энэ.
+              //
+              // Хоёр зүйлийг өргөтгөв:
+              //   1. Гэрээ эзэмшигчээ `orshinSuugchId` ЭСВЭЛ `khariltsagchId`-аар
+              //      холбодог — зөвхөн эхнийхээр хайвал хоёр дахиар холбогдсон
+              //      гэрээ "олдохгүй" гэж үзэгдэнэ.
+              //   2. `toot` нь заримдаа тоо, заримдаа зайтай мөр хэлбэрээр
+              //      хадгалагдсан байдаг тул боломжит хувилбаруудыг нь бүгдийг
+              //      тулгана.
               const GereeModel = Geree(tukhainBaaziinKholbolt);
+              const residentIdStr = orshinSuugch._id.toString();
+              const tootStr = String(tootEntry.toot ?? "").trim();
+              const tootOnooluud = [tootEntry.toot, tootStr];
+              if (tootStr !== "" && Number.isFinite(Number(tootStr))) {
+                tootOnooluud.push(Number(tootStr));
+              }
+              // Мөр хэлбэрийн тэргүүлэх тэг ("05" ↔ "5") — Number хувилбар нь
+              // мөр талбартай тулгагдахгүй тул мөр хэлбэрийг нь бас нэмнэ
+              tootiinKhuvilbaruud(tootEntry.toot).forEach((t) => {
+                if (!tootOnooluud.includes(t)) tootOnooluud.push(t);
+              });
+
               const existingGeree = await GereeModel.findOne({
-                orshinSuugchId: orshinSuugch._id.toString(),
                 barilgiinId: tootEntry.barilgiinId,
-                toot: tootEntry.toot,
                 tuluv: { $ne: "Цуцалсан" }, // Only check active gerees
+                toot: { $in: tootOnooluud },
+                $or: [
+                  { orshinSuugchId: residentIdStr },
+                  { khariltsagchId: residentIdStr },
+                ],
               });
 
               if (existingGeree) {
@@ -2059,6 +2139,23 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                   suuliinZaalt: userData.tsahilgaaniiZaalt || userData.initialMeterReading || existingGeree.suuliinZaalt,
                   umnukhZaalt: userData.tsahilgaaniiZaalt || userData.initialMeterReading || existingGeree.umnukhZaalt,
                 };
+
+                // Excel-д эхний үлдэгдэл өгсөн бол ЗӨВХӨН түүнийг тохируулна.
+                // Өмнө нь syncData дотор ekhniiUldegdel байхгүй байсан тул
+                // гэрээтэй айл дээр Excel-ийн дүн чимээгүй алга болдог байв.
+                // Шинэ гэрээ ч, нэхэмжлэх ч энд үүсэхгүй тул ашиглалтын
+                // зардал нэмэгдэхгүй.
+                if (userData.ekhniiUldegdel !== undefined) {
+                  const targetEkhnii = Number(userData.ekhniiUldegdel) || 0;
+                  await ekhniiUldegdelTokhiruulya(tukhainBaaziinKholbolt, {
+                    gereeniiId: existingGeree._id,
+                    baiguullagiinId: baiguullaga._id,
+                    targetEkhnii,
+                    gereeDoc: existingGeree,
+                    orshinSuugchId: residentIdStr,
+                  });
+                  syncData.ekhniiUldegdel = targetEkhnii;
+                }
 
                 await GereeModel.findByIdAndUpdate(existingGeree._id, { $set: syncData });
                 continue;
