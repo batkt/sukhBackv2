@@ -1070,7 +1070,7 @@ exports.gereeniiExcelTatya = asyncHandler(async (req, res, next) => {
 /**
  * Download Excel template for electricity readings
  * Columns: … Өмнө, Өдөр, Шөнө, Нийт (одоо), Зөрүү, Суурь хураамж, Цахилгаан кВт
- * Өмнө = сүүлийн импортын "Нийт (одоо)" (zaaltUnshlalt); байхгүй бол гэрээний suuliinZaalt
+ * Өмнө = загварт хоосон; операторыг өөрөө бөглөнө
  * (хэрэв энэ нь оршин суугчийн тарифтай ижил биш — олон тохиолдолд тарифыг тоолуур гэж буруу хадгалсан)
  * Formulas: Нийт (одоо) = Өдөр + Шөнө; Зөрүү = Нийт (одоо) - Өмнө
  */
@@ -1118,40 +1118,6 @@ exports.zaaltExcelTemplateAvya = asyncHandler(async (req, res, next) => {
       .select("gereeniiDugaar toot orshinSuugchId suuliinZaalt _id")
       .lean();
 
-    const ZaaltUnshlalt = require("../models/zaaltUnshlalt");
-    const gereeIdStrings = gereenuud.map((g) => String(g._id));
-    const latestTotalByGereeId = new Map();
-    if (gereeIdStrings.length > 0) {
-      const latestRows = await ZaaltUnshlalt(tukhainBaaziinKholbolt).aggregate([
-        {
-          $match: {
-            baiguullagiinId: baiguullaga._id.toString(),
-            barilgiinId: String(barilgiinId),
-            gereeniiId: { $in: gereeIdStrings },
-          },
-        },
-        { $sort: { unshlaltiinOgnoo: -1, importOgnoo: -1, createdAt: -1 } },
-        {
-          $group: {
-            _id: "$gereeniiId",
-            suuliinZaalt: { $first: "$suuliinZaalt" },
-          },
-        },
-      ]);
-      latestRows.forEach((r) => {
-        if (r.suuliinZaalt != null && !Number.isNaN(Number(r.suuliinZaalt))) {
-          latestTotalByGereeId.set(String(r._id), Number(r.suuliinZaalt));
-        }
-      });
-    }
-
-    /** Өмнө = last billing "Нийт (одоо)", if no prior imported history exists always 0 */
-    function templateUmnuValue(geree, orshinSuugch) {
-      const fromHistory = latestTotalByGereeId.get(String(geree._id));
-      if (fromHistory != null) return fromHistory;
-      return 0;
-    }
-
     // Fetch orshinSuugch data to get name, phone, and electricity tariff (кВт)
     const orshinSuugchIds = [...new Set(gereenuud.map(g => g.orshinSuugchId).filter(id => id))];
     const orshinSuugchuud = await OrshinSuugch(db.erunkhiiKholbolt)
@@ -1193,6 +1159,40 @@ exports.zaaltExcelTemplateAvya = asyncHandler(async (req, res, next) => {
       fgColor: { argb: "FFE0E0E0" },
     };
 
+    // "Нийт (одоо)" ба "Зөрүү" нь томьёогоор бодогддог — хэрэглэгч гараар
+    // бөглөвөл томьёо нь дарагдаж, буруу тооцоо гарна. Тиймээс гарчгийг нь
+    // улбар шар өнгөөр ялгаж, хулганаа тавихад гарах тайлбар бичив.
+    const AVTOMAT_BAGANA = [
+      { nud: "H1", ner: "Нийт (одоо)", tailbar: "Өдөр + Шөнө" },
+      { nud: "I1", ner: "Зөрүү", tailbar: "Нийт (одоо) - Өмнө" },
+    ];
+
+    AVTOMAT_BAGANA.forEach(({ nud, ner, tailbar }) => {
+      const cell = worksheet.getCell(nud);
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFFFC000" },
+      };
+      cell.font = { bold: true, color: { argb: "FF7F3F00" } };
+      cell.note = {
+        texts: [
+          {
+            font: { bold: true, size: 10, name: "Calibri" },
+            text: "БӨГЛӨХ ШААРДЛАГАГҮЙ\n",
+          },
+          {
+            font: { size: 10, name: "Calibri" },
+            text:
+              `"${ner}" багана автоматаар бодогдоно (${tailbar}).\n` +
+              "Энэ баганад гараар утга бичвэл томьёо устаж, тооцоо буруу гарна.\n" +
+              "Зөвхөн «Өдөр», «Шөнө» баганыг бөглөнө үү.",
+          },
+        ],
+        margins: { insetmode: "custom", inset: [0.13, 0.13, 0.25, 0.25] },
+      };
+    });
+
     // Add data rows with geree numbers
     gereenuud.forEach((geree) => {
       const orshinSuugch = geree.orshinSuugchId
@@ -1204,7 +1204,7 @@ exports.zaaltExcelTemplateAvya = asyncHandler(async (req, res, next) => {
         toot: geree.toot || "",
         ner: orshinSuugch?.ner || "",
         utas: orshinSuugch?.utas || "",
-        umnu: templateUmnuValue(geree, orshinSuugch),
+        umnu: "",
         odor: "",
         shone: "",
         niitOdoo: "",
@@ -1509,15 +1509,21 @@ exports.zaaltExcelTatya = asyncHandler(async (req, res, next) => {
         if (orshinSuugch && Number(orshinSuugch.tsahilgaaniiZaalt) > 0) {
           finalTariff = Number(orshinSuugch.tsahilgaaniiZaalt);
         } else if (tsahilgaaniiZaaltFromExcel !== null && tsahilgaaniiZaaltFromExcel > 0) {
+          // Excel дэх тарифыг ЗӨВХӨН энэ импортын тооцоонд ашиглана.
+          //
+          // Өмнө нь энд `orshinSuugch.tsahilgaaniiZaalt`-ыг дарж бичээд, доорх
+          // `orshinSuugch.save()`-аар хамт хадгалдаг байсан. Улмаар цахилгааны
+          // Excel импорт бүр оршин суугчийн БҮРТГЭЛТЭЙ кВт тарифыг чимээгүйхэн
+          // өөрчилдөг байв — хэн ч гараар засаагүй атал утга нь солигдоно.
+          // Тарифыг зөвхөн оршин суугчийн бүртгэлээс шууд өөрчлөх ёстой.
           finalTariff = tsahilgaaniiZaaltFromExcel;
-          if (orshinSuugch) {
-            orshinSuugch.tsahilgaaniiZaalt = tsahilgaaniiZaaltFromExcel;
-          }
         } else {
           finalTariff = (zaaltZardal ? (zaaltZardal.zaaltTariff || zaaltZardal.tariff || 0) : 0);
         }
 
-        // Update Resident readings (preserve resident's registered kWh tariff rate)
+        // Зөвхөн заалтуудыг шинэчилнэ. `tsahilgaaniiZaalt` (тариф) энд ОГТ
+        // хөндөгдөхгүй — дээрх салаа түүнийг өөрчлөхөө больсон тул энэ save
+        // нь тарифыг хэвээр нь үлдээнэ.
         if (orshinSuugch) {
           orshinSuugch.odorZaalt = odor;
           orshinSuugch.shonoZaalt = shone;

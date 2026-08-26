@@ -1491,6 +1491,14 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
       reportParams.khuudasniiKhemjee = 30000; // Get all records for export (larger for nasjilt)
     }
 
+    // Нэгтгэл тайлангийн үндсэн хуудасны хэмжээ 500 байдаг тул экспорт нь
+    // дэлгэц дээр харагдахаас ЦӨӨН мөртэй гарч байв. Тайлангийн хязгаар
+    // (Math.min(1000, ...)) хүртэл нь дүүргэнэ.
+    if (report === "negtgel" && !reportParams.khuudasniiKhemjee) {
+      reportParams.khuudasniiDugaar = 1;
+      reportParams.khuudasniiKhemjee = 1000;
+    }
+
     // Create a mock request with report parameters
     const mockReq = {
       ...req,
@@ -1624,22 +1632,48 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Нэгтгэл тайлан");
 
+      // Дэлгэц дээрх хүснэгттэй ИЖИЛ дүрэм ашиглана. Өмнө нь Excel нь
+      //   1) zardluud хоосон нэхэмжлэхэд fallback хийдэггүй тул дүн 0 болж,
+      //      "Ерөнхий Нийт" багана дутуу/хоосон гардаг байсан;
+      //   2) "Нэхэмжлэх", "Авлага" зэрэг хогийн нэрийг шүүдэггүй тул дэлгэцээс
+      //      өөр багана гардаг байсан.
+      const KHOG_NER = new Set([
+        "Бусад",
+        "Бусад зардал",
+        "Нэхэмжлэх",
+        "Авлага",
+        "Авлага (Нэхэмжлэхгүй)",
+      ]);
+
+      const khogEsekh = (ner) =>
+        !ner || KHOG_NER.has(ner) || ner.length > 50;
+
+      /** Нэхэмжлэхийн зардлууд — хоосон бол тайлбар/дүнгээр нь нөхнө */
+      const zardluudAvya = (inv) =>
+        Array.isArray(inv.zardluud) && inv.zardluud.length > 0
+          ? inv.zardluud
+          : [{ ner: inv.tailbar, dun: inv.tulukhDun }];
+
+      const khugatsaaAvya = (ognoo) => {
+        const d = new Date(ognoo);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      };
+
       // Group data by year-month for headers
       const periods = new Set();
       const allChargeNames = new Set();
 
       data.data.forEach((group) => {
-        group.avlaga.forEach((inv) => {
-          if (inv.ognoo) {
-            const d = new Date(inv.ognoo);
-            const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-            periods.add(ym);
-            
-            (inv.zardluud || []).forEach(z => {
-              const name = z.ner || z.tailbar || "Бусад";
-              allChargeNames.add(name);
-            });
-          }
+        (group.avlaga || []).forEach((inv) => {
+          if (!inv.ognoo) return;
+          periods.add(khugatsaaAvya(inv.ognoo));
+
+          zardluudAvya(inv).forEach((z) => {
+            if (Number(z.dun || z.tulukhDun || 0) <= 0) return;
+            const name = String(z.ner || z.tailbar || "").trim();
+            if (khogEsekh(name)) return;
+            allChargeNames.add(name);
+          });
         });
       });
 
@@ -1674,16 +1708,27 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
       subTitle.value = "Хугацаа: " + rangeStr;
       subTitle.alignment = { horizontal: "center" };
 
-      // Row 4: Period headers
-      const row4Data = new Array(headerRow2.length).fill("");
+      // Хугацааны бүлгийн мөр.
+      //
+      // Өмнө нь mergeCells(4, ...) -ыг addRow-оос ӨМНӨ дуудаж байсан. ExcelJS
+      // нь merge хийхдээ 4-р мөрийг үүсгэдэг тул дараагийн addRow нь 5-р мөр
+      // болж, нэгтгэл нь өгөгдөлгүй хоосон мөрөнд буудаг байв. Иймд эхлээд
+      // мөрөө нэмээд, ЯГ түүний дугаараар нь нэгтгэнэ.
+      const bulgiinMur = new Array(headerRow2.length).fill("");
       let currentCol = fixedHeaders.length + 1;
+      const negtgekhMuruud = [];
       sortedPeriods.forEach(p => {
-        row4Data[currentCol - 1] = p;
-        worksheet.mergeCells(4, currentCol, 4, currentCol + sortedChargeNames.length);
+        bulgiinMur[currentCol - 1] = p;
+        negtgekhMuruud.push([currentCol, currentCol + sortedChargeNames.length]);
         currentCol += sortedChargeNames.length + 1;
       });
-      const periodRow = worksheet.addRow(row4Data);
-      periodRow.eachCell(cell => {
+
+      const periodRow = worksheet.addRow(bulgiinMur);
+      negtgekhMuruud.forEach(([ekhlekh, duusakh]) => {
+        worksheet.mergeCells(periodRow.number, ekhlekh, periodRow.number, duusakh);
+      });
+
+      periodRow.eachCell({ includeEmpty: true }, cell => {
         cell.font = { bold: true };
         cell.alignment = { horizontal: 'center' };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
@@ -1722,19 +1767,23 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
           const periodCosts = new Array(sortedChargeNames.length).fill(0);
           let periodTotal = 0;
 
-          group.avlaga.forEach(inv => {
+          (group.avlaga || []).forEach(inv => {
             if (!inv.ognoo) return;
-            const d = new Date(inv.ognoo);
-            const invP = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-            if (invP !== period) return;
+            if (khugatsaaAvya(inv.ognoo) !== period) return;
 
-            (inv.zardluud || []).forEach(z => {
-              const name = z.ner || z.tailbar || "Бусад";
+            zardluudAvya(inv).forEach(z => {
               const amount = Number(z.dun || z.tulukhDun || 0);
-              const colIdx = sortedChargeNames.indexOf(name);
+              if (amount <= 0) return;
+
+              const name = String(z.ner || z.tailbar || "").trim();
+              const colIdx = khogEsekh(name)
+                ? -1
+                : sortedChargeNames.indexOf(name);
               if (colIdx >= 0) {
                 periodCosts[colIdx] += amount;
               }
+              // Хогийн нэртэй зардал багана авахгүй ч нийт дүнд ОРНО —
+              // эс тэгвээс "Ерөнхий Нийт" бодит дүнгээс бага гарна
               periodTotal += amount;
             });
           });
@@ -3129,7 +3178,9 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
     }
 
     // ── Convert map to array ──────────────────────────────────────────────────
-    const groups = Array.from(new Set(groupMap.values()));
+    // `let` байх ёстой — доорх хайлт үүн рүү дахин олгодог. `const` үед хайлт
+    // хийхэд "Assignment to constant variable" алдаагаар хүсэлт унадаг байв.
+    let groups = Array.from(new Set(groupMap.values()));
 
     // ── Post-group search ─────────────────────────────────────────────────────
     if (search && String(search).trim()) {
@@ -3167,9 +3218,26 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
     const pageSize = Math.min(1000, Math.max(1, Number(khuudasniiKhemjee)));
     const paginatedGroups = groups.slice((page - 1) * pageSize, page * pageSize);
 
+    // Хөлийн дүн. Хуудаслалт/хайлтын дараах БҮХ бичлэгээр бодно — хүснэгтэд
+    // зөвхөн нэг хуудас харагддаг тул хуудсаар нь нийлбэрлэвэл хөл таарахгүй.
+    const niitDun = groups.reduce(
+      (dun, g) => {
+        dun.niitTulukhDun += Number(g.niitTulukhDun || 0);
+        dun.niitTulsunDun += Number(g.niitTulsunDun || 0);
+        dun.niitUldegdel += Number(g.niitUldegdel || 0);
+        return dun;
+      },
+      { niitTulukhDun: 0, niitTulsunDun: 0, niitUldegdel: 0 },
+    );
+
+    Object.keys(niitDun).forEach((t) => {
+      niitDun[t] = Math.round(niitDun[t] * 100) / 100;
+    });
+
     res.json({
       success: true,
       niitToo,
+      niitDun,
       khuudasniiDugaar: page,
       khuudasniiKhemjee: pageSize,
       data: paginatedGroups,
