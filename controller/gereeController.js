@@ -211,30 +211,11 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   let totalTulbur = 0;
   let totalTulsun = 0;
 
-  const invoiceCharges = {};
-  const byGeree = {};
-
+  const invoiceCharges = {}; 
+  
   allItems.forEach((it) => {
     const dun = Number(it.dun || 0);
     const invId = it.nekhemjlekhId ? String(it.nekhemjlekhId) : null;
-    const gKey = it.gereeniiId ? String(it.gereeniiId) : (it.gereeniiDugaar ? String(it.gereeniiDugaar) : null);
-
-    if (gKey) {
-      if (!byGeree[gKey]) {
-        byGeree[gKey] = {
-          gereeniiId: it.gereeniiId ? String(it.gereeniiId) : null,
-          gereeniiDugaar: it.gereeniiDugaar || "",
-          totalTulbur: 0,
-          totalTulsun: 0,
-          uldegdel: 0,
-        };
-      }
-      if (dun > 0) {
-        byGeree[gKey].totalTulbur += dun;
-      } else {
-        byGeree[gKey].totalTulsun += Math.abs(dun);
-      }
-    }
 
     if (dun > 0) {
       totalTulbur += dun;
@@ -248,13 +229,6 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
       totalTulsun += Math.abs(dun);
     }
   });
-
-  const summaries = Object.values(byGeree).map((s) => ({
-    ...s,
-    totalTulbur: Number(s.totalTulbur.toFixed(2)),
-    totalTulsun: Number(s.totalTulsun.toFixed(2)),
-    uldegdel: Number((s.totalTulbur - s.totalTulsun).toFixed(2)),
-  }));
 
   // FIFO: sort invoices by date (oldest first), distribute total payments across them
   const sortedInvoices = Object.values(invoiceCharges).sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -295,7 +269,7 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     }
   }
 
-  const summaryOnly = req.body.summaryOnly || req.query.summaryOnly;
+
 
   res.json({
     success: true,
@@ -306,8 +280,7 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
       gereeniiId,
       nekhemjlekhuud,
     },
-    summaries,
-    items: summaryOnly ? [] : allItems,
+    items: allItems,
   });
 });
 
