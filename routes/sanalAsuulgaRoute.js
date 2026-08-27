@@ -176,7 +176,18 @@ router.get("/sanalAsuulga/:id", tokenShalgakh, async (req, res, next) => {
 
 router.put("/sanalAsuulga/:id", tokenShalgakh, async (req, res, next) => {
   try {
-    const { baiguullagiinId, ...uurchlult } = req.body || {};
+    const {
+      baiguullagiinId,
+      tukhainBaaziinKholbolt,
+      erunkhiiKholbolt,
+      nevtersenAjiltniiToken,
+      ...uurchlult
+    } = req.body || {};
+
+    delete uurchlult.tukhainBaaziinKholbolt;
+    delete uurchlult.erunkhiiKholbolt;
+    delete uurchlult.nevtersenAjiltniiToken;
+
     const kholbolt = kholboltAvya(res, baiguullagiinId);
     if (!kholbolt) return;
 
