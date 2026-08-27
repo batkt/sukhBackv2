@@ -120,18 +120,33 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
       const EzenUrisanMashinModel = EzenUrisanMashin(kholbolt);
       const ezenList = await EzenUrisanMashinModel.find({}).lean();
       for (const ez of ezenList) {
-        const plate = (ez.mashiniiDugaar || "").trim().toUpperCase();
-        if (!plate) continue;
-        const rid = String(ez.orshinSuugchId || ez.orshinSuugchiinId || "");
-        if (rid && residentMapById[rid] && !plateToResidentMap[plate]) {
+        // ЖИЧ: ezenUrisanMashin схемийн талбарууд нь `urisanMashiniiDugaar`,
+        // `ezemshigchiinId`, `ezemshigchiinNer`, `ezemshigchiinUtas` юм.
+        // Урьд нь `mashiniiDugaar` / `orshinSuugchId` / `ezenToot` гэж уншиж
+        // байсан тул ЭНЭ ЭХ СУРВАЛЖ ОГТ АЖИЛЛАДАГГҮЙ, өөрөөр хэлбэл оршин
+        // суугчийн урьсан зочид тайланд ОРДОГГҮЙ байв.
+        const plate = String(ez.urisanMashiniiDugaar || ez.mashiniiDugaar || "")
+          .trim()
+          .toUpperCase();
+        if (!plate || plateToResidentMap[plate]) continue;
+
+        const rid = String(
+          ez.ezemshigchiinId || ez.orshinSuugchId || ez.orshinSuugchiinId || "",
+        );
+        if (rid && residentMapById[rid]) {
           plateToResidentMap[plate] = residentMapById[rid];
-        } else if (!plateToResidentMap[plate] && (ez.ezenToot || ez.ner)) {
+          continue;
+        }
+
+        const ner = ez.ezemshigchiinNer || ez.ner || ez.orshinSuugchNer || "";
+        const toot = ez.ezenToot || "";
+        if (ner || toot) {
           plateToResidentMap[plate] = {
-            orshinSuugchiinId: rid || `toot_${ez.ezenToot || ez.ner}`,
-            ner: ez.ner || ez.orshinSuugchNer || `Тоот ${ez.ezenToot}`,
-            toot: ez.ezenToot || "",
+            orshinSuugchiinId: rid || `toot_${toot || ner}`,
+            ner: ner || `Тоот ${toot}`,
+            toot: String(toot || ""),
             davkhar: "",
-            utas: ez.utas || "",
+            utas: ez.ezemshigchiinUtas || ez.utas || "",
           };
         }
       }
@@ -145,13 +160,10 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
     // оршин суугчтай холбогдож чадахгүй, зогсоолын бичлэг бүр
     // `if (!resident) continue` дээр таслагдаж тайлан хоосон гардаг байв.
     try {
+      // Tenant DB нь аль хэдийн нэг байгууллагынх тул baiguullagiinId-гаар
+      // дахин шүүхгүй — тэр талбар нь хоосон бичлэгүүд байдаг.
       const MashinModel = require("../models/mashin")(kholbolt);
-      const mashinuud = await MashinModel.find({
-        $or: [
-          { baiguullagiinId: String(baiguullagiinId) },
-          { baiguullagiinId: baiguullagiinId },
-        ],
-      }).lean();
+      const mashinuud = await MashinModel.find({}).lean();
 
       for (const m of mashinuud) {
         const plate = String(m.dugaar || m.mashiniiDugaar || "")
@@ -244,7 +256,7 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
     // 5. Aggregate parking sessions by resident
     const residentSummaryMap = {};
     const guestCarList = [];
-    const guestCarSeen = new Set();
+    const guestCarSeen = new Map();
 
     for (const u of uilchluulegchuud) {
       const plate = (u.mashiniiDugaar || "").trim().toUpperCase();
@@ -300,6 +312,9 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
 
       const detailRow = {
         mashiniiDugaar: u.mashiniiDugaar || plate,
+        // Тайланд огноо огт харагддаггүй байсан — орсон цагийг нэмнэ.
+        ognoo: orsonTsag || u.createdAt || null,
+        garsanOgnoo: garsanTsag || null,
         zogssonMinut,
         khungulsunMinut,
         tulbur,
@@ -337,15 +352,28 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
       residentSummaryMap[rid].details.push(detailRow);
 
       const carKey = `${plate}|${rid}`;
-      if (!guestCarSeen.has(carKey)) {
-        guestCarSeen.add(carKey);
-        guestCarList.push({
+      const irsenOgnoo = orsonTsag || (u.createdAt ? new Date(u.createdAt) : null);
+      const buiCar = guestCarSeen.get(carKey);
+      if (!buiCar) {
+        const shineCar = {
           mashiniiDugaar: u.mashiniiDugaar || plate,
           orshinSuugchiinNer: resident.ner,
           davkhar: resident.davkhar,
           toot: resident.toot,
           utas: resident.utas,
-        });
+          suuliinIrsenOgnoo: irsenOgnoo,
+          irsenToo: 1,
+        };
+        guestCarSeen.set(carKey, shineCar);
+        guestCarList.push(shineCar);
+      } else {
+        buiCar.irsenToo += 1;
+        if (
+          irsenOgnoo &&
+          (!buiCar.suuliinIrsenOgnoo || irsenOgnoo > buiCar.suuliinIrsenOgnoo)
+        ) {
+          buiCar.suuliinIrsenOgnoo = irsenOgnoo;
+        }
       }
     }
 
