@@ -372,15 +372,17 @@ router.get(
           orshinSuugchId: String(orshinSuugchId),
           asuulgiinId: { $in: jagsaalt.map((a) => String(a._id)) },
         })
-        .select("asuulgiinId")
         .lean();
-      const khariulsan = new Set(minii.map((m) => String(m.asuulgiinId)));
+      const miniiMap = new Map(
+        minii.map((m) => [String(m.asuulgiinId), m.khariultuud || []])
+      );
 
       return res.json({
         success: true,
         data: jagsaalt.map((a) => ({
           ...a,
-          khariulsanEsekh: khariulsan.has(String(a._id)),
+          khariulsanEsekh: miniiMap.has(String(a._id)),
+          miniiKhariult: miniiMap.get(String(a._id)) || [],
         })),
       });
     } catch (err) {
