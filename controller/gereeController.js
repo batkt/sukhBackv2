@@ -162,8 +162,17 @@ exports.zaaltOlnoorOruulya = asyncHandler(async (req, res, next) => {
 
 exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   const { db } = require("zevbackv2");
-  const { baiguullagiinId, barilgiinId, gereeniiId, gereeniiDugaar, ognoo } =
-    req.body;
+  const {
+    baiguullagiinId,
+    barilgiinId,
+    gereeniiId,
+    gereeniiDugaar,
+    ognoo,
+    // Зөвхөн summary хэрэгтэй бол гүйлгээний жагсаалтыг татахгүй.
+    // Төлбөрийн хуудас гэрээ тус бүрд нэг хүсэлт явуулдаг тул үүнгүйгээр
+    // 100 гэрээ = 100 удаа бүтэн сарын ledger дамждаг байв.
+    summaryOnly,
+  } = req.body;
 
   const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
   const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
@@ -214,9 +223,11 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     summaryQuery.ognoo = { $lte: end };
   }
 
-  const allItems = await GuilgeeAvlaguudModel.find(query)
-    .sort({ ognoo: 1, createdAt: 1 })
-    .lean();
+  const allItems = summaryOnly
+    ? []
+    : await GuilgeeAvlaguudModel.find(query)
+        .sort({ ognoo: 1, createdAt: 1 })
+        .lean();
 
   // Үлдэгдэл, нэхэмжлэхийн төлөв бодоход хуримтлагдсан багц хэрэглэнэ
   const summaryItems = await GuilgeeAvlaguudModel.find(summaryQuery)
