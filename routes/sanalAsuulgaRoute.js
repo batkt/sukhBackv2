@@ -391,6 +391,33 @@ router.get(
   },
 );
 
+/** Оршин суугч өөрийн тухайн санал асуулгын хариултыг авна */
+router.get(
+  "/sanalAsuulga/:id/miniiKhariult",
+  tokenShalgakh,
+  async (req, res, next) => {
+    try {
+      const { baiguullagiinId, orshinSuugchId } = req.query || {};
+      const kholbolt = kholboltAvya(res, baiguullagiinId);
+      if (!kholbolt) return;
+
+      const bichleg = await SanalAsuulgiinKhariult(kholbolt)
+        .findOne({
+          asuulgiinId: String(req.params.id),
+          orshinSuugchId: String(orshinSuugchId),
+        })
+        .lean();
+
+      return res.json({
+        success: true,
+        data: bichleg?.khariultuud || [],
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 /** Оршин суугч хариултаа илгээнэ */
 router.post(
   "/sanalAsuulga/:id/khariulya",
