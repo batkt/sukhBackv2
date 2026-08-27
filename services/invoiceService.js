@@ -150,6 +150,95 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     }
   }
 
+  // Auto-calculate Parking (Зогсоол/Гараж) and Storage (Агуулах) charges & unbilled receivables for this contract
+  try {
+    const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
+    const unbilledAvlaguud = await GuilgeeAvlaguudModel.find({
+      gereeniiId: String(geree._id),
+      nekhemjlekhId: { $exists: false },
+      dun: { $gt: 0 },
+    }).lean();
+
+    const existingAvlaguudNames = new Set(
+      unbilledAvlaguud.map((a) => (a.tailbar || "").toLowerCase().trim())
+    );
+
+    // 1. Include any pre-existing unbilled guilgeeAvlaguud items
+    for (const av of unbilledAvlaguud) {
+      const dun = Number(av.tulukhDun || av.dun || 0) - Number(av.tulsunDun || 0);
+      if (dun > 0) {
+        charges.push({
+          ner: av.tailbar || "Авлага",
+          dun: dun,
+          turul: "Авлага",
+          zardliinTurul: "Авлага",
+        });
+      }
+    }
+
+    // 2. Auto-include active parking & storage slots if not already in unbilledAvlaguud
+    const gEnabled = barilga?.tokhirgoo?.garsiinTolborEnabled !== false;
+    const gValue = Number(barilga?.tokhirgoo?.garsiinTolborUtga || baiguullaga?.zogsoolUusgekhTulbur || 0);
+
+    const sEnabled = barilga?.tokhirgoo?.aguulakhTolborEnabled !== false;
+    const sValue = Number(barilga?.tokhirgoo?.aguulakhTolborUtga || baiguullaga?.aguulakhUusgekhTulbur || 0);
+
+    if (geree.orshinSuugchId) {
+      const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
+      const resident = await OrshinSuugchModel.findById(geree.orshinSuugchId).lean();
+
+      if (resident && Array.isArray(resident.toots)) {
+        if (gEnabled && gValue > 0) {
+          const parkingSlots = resident.toots.filter((t) => {
+            const isG = t.turul === "Гараж" || t.turul === "Зогсоол";
+            if (!isG) return false;
+            if (t.gereeniiId) return String(t.gereeniiId) === String(geree._id);
+            if (t.linkedAptToot) return String(t.linkedAptToot).trim() === String(geree.toot).trim();
+            return String(geree.toot).trim() === String(resident.toot).trim();
+          });
+
+          for (const p of parkingSlots) {
+            const parkingName = `зогсоол (тоот ${p.toot})`.toLowerCase();
+            const hasExisting = Array.from(existingAvlaguudNames).some((n) => n.includes(`зогсоол`) && n.includes(String(p.toot).toLowerCase()));
+            if (!hasExisting) {
+              charges.push({
+                ner: `Зогсоолын төлбөр (тоот ${p.toot})`,
+                dun: gValue,
+                turul: "Авлага",
+                zardliinTurul: "Зогсоол",
+              });
+            }
+          }
+        }
+
+        if (sEnabled && sValue > 0) {
+          const storageSlots = resident.toots.filter((t) => {
+            const isS = t.turul === "Агуулах";
+            if (!isS) return false;
+            if (t.gereeniiId) return String(t.gereeniiId) === String(geree._id);
+            if (t.linkedAptToot) return String(t.linkedAptToot).trim() === String(geree.toot).trim();
+            return String(geree.toot).trim() === String(resident.toot).trim();
+          });
+
+          for (const s of storageSlots) {
+            const storageName = `агуулах (тоот ${s.toot})`.toLowerCase();
+            const hasExisting = Array.from(existingAvlaguudNames).some((n) => n.includes(`агуулах`) && n.includes(String(s.toot).toLowerCase()));
+            if (!hasExisting) {
+              charges.push({
+                ner: `Агуулахын төлбөр (тоот ${s.toot})`,
+                dun: sValue,
+                turul: "Авлага",
+                zardliinTurul: "Агуулах",
+              });
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error auto-calculating parking/storage charges in invoiceService:", err);
+  }
+
   const total = charges.reduce((sum, c) => sum + c.dun, 0);
   console.log(`🔎 [calculateGereeCharges] charges:`, JSON.stringify(charges, null, 2), `Total: ${total}`);
   return { charges, total };
