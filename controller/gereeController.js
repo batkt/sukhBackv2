@@ -193,6 +193,14 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     query.barilgiinId = barilgiinId;
   }
 
+  // Хугацааны шүүлт нь ХОЁР өөр зорилготой:
+  //   items   - тухайн үеийн гүйлгээний ЖАГСААЛТ (доод хязгаартай)
+  //   summary - тэр үеийн ЭЦСИЙН ҮЛДЭГДЭЛ (доод хязгааргүй, хуримтлагдсан)
+  //
+  // Өмнө нь хоёулаа доод хязгаартай нэг query ашигладаг байсан тул
+  // "Үлдэгдэл" багана сарын ЗӨРҮҮ болж гарч байв - өмнөх саруудын өр алга
+  // болж, хуучин өрөө төлсөн хүн сөрөг үлдэгдэлтэй харагддаг байсан.
+  const summaryQuery = { ...query };
   if (ognoo && Array.isArray(ognoo) && ognoo.length === 2) {
     const start = new Date(ognoo[0]);
     start.setHours(0, 0, 0, 0);
@@ -202,9 +210,16 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
       $gte: start,
       $lte: end,
     };
+    // Үлдэгдэл нь эхнээс нь тухайн үеийн ЭЦЭС хүртэлх бүх хөдөлгөөнөөс бүрдэнэ
+    summaryQuery.ognoo = { $lte: end };
   }
 
   const allItems = await GuilgeeAvlaguudModel.find(query)
+    .sort({ ognoo: 1, createdAt: 1 })
+    .lean();
+
+  // Үлдэгдэл, нэхэмжлэхийн төлөв бодоход хуримтлагдсан багц хэрэглэнэ
+  const summaryItems = await GuilgeeAvlaguudModel.find(summaryQuery)
     .sort({ ognoo: 1, createdAt: 1 })
     .lean();
 
@@ -213,7 +228,7 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
 
   const invoiceCharges = {};
 
-  allItems.forEach((it) => {
+  summaryItems.forEach((it) => {
     const dun = Number(it.dun || 0);
     const invId = it.nekhemjlekhId ? String(it.nekhemjlekhId) : null;
 
