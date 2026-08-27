@@ -211,21 +211,9 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   let totalTulbur = 0;
   let totalTulsun = 0;
 
-  const invoiceCharges = {}; 
-  
-  allItems.forEach((it) => {
-    // Auto-heal initial balance records with crippled zero undsenDun
-    if (it.dun && (!it.undsenDun || it.undsenDun === 0)) {
-      it.undsenDun = Math.abs(Number(it.dun));
-      if (!it.tulukhDun || it.tulukhDun === 0) {
-        it.tulukhDun = Math.abs(Number(it.dun));
-      }
-      GuilgeeAvlaguudModel.updateOne(
-        { _id: it._id },
-        { $set: { undsenDun: it.undsenDun, tulukhDun: it.tulukhDun } }
-      ).catch(() => {});
-    }
+  const invoiceCharges = {};
 
+  allItems.forEach((it) => {
     const dun = Number(it.dun || 0);
     const invId = it.nekhemjlekhId ? String(it.nekhemjlekhId) : null;
 
@@ -264,14 +252,14 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     if (inv.id !== "uninvoiced") {
       await NekhemjlekhiinTuukhModel.updateOne(
         { _id: inv.id },
-        { 
-          $set: { 
+        {
+          $set: {
             tuluv: status,
             uldegdel: Number(uld.toFixed(2)),
             niitTulbur: inv.charges
-          } 
+          }
         }
-      ).catch(() => {});
+      ).catch(() => { });
     }
 
     if (isPaid) {
@@ -351,20 +339,20 @@ exports.createGeree = asyncHandler(async (req, res) => {
       req.body.zardluud && req.body.zardluud.length > 0
         ? req.body.zardluud
         : defaultZardluud.map((z) => ({
-            ner: z.ner,
-            turul: z.turul,
-            zardliinTurul: z.zardliinTurul,
-            tariff: z.tariff,
-            tariffUsgeer: z.tariffUsgeer,
-            bodokhArga: z.bodokhArga,
-            tseverUsDun: z.tseverUsDun,
-            bokhirUsDun: z.bokhirUsDun,
-            usKhalaasniiDun: z.usKhalaasniiDun,
-            tsakhilgaanUrjver: z.tsakhilgaanUrjver || 1,
-            suuriKhuraamj: z.suuriKhuraamj || 0,
-            nuatNemekhEsekh: z.nuatNemekhEsekh || false,
-            barilgiinId: barilgiinId,
-          })),
+          ner: z.ner,
+          turul: z.turul,
+          zardliinTurul: z.zardliinTurul,
+          tariff: z.tariff,
+          tariffUsgeer: z.tariffUsgeer,
+          bodokhArga: z.bodokhArga,
+          tseverUsDun: z.tseverUsDun,
+          bokhirUsDun: z.bokhirUsDun,
+          usKhalaasniiDun: z.usKhalaasniiDun,
+          tsakhilgaanUrjver: z.tsakhilgaanUrjver || 1,
+          suuriKhuraamj: z.suuriKhuraamj || 0,
+          nuatNemekhEsekh: z.nuatNemekhEsekh || false,
+          barilgiinId: barilgiinId,
+        })),
   };
 
   const geree = new GereeModel(contractData);
@@ -379,7 +367,7 @@ exports.createGeree = asyncHandler(async (req, res) => {
       {
         billingDate: new Date(),
         forceEmpty: true,
-        
+
         ajiltanId: req.ajiltan?._id,
         ajiltanNer: req.ajiltan?.ner,
       },
