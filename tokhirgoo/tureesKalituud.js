@@ -35,7 +35,7 @@ const KALITUUD = {
   "69f3f56a2899d5fdc24251d1": {
     ner: "Testiin org",
     // Эхлээд ТЕСТ. Прод руу шилжихдээ: "https://turees.zevtabs.mn/api"
-    tureesServer: "https://rently.zevtabs.mn/api",
+    tureesServer: "https://turees.zevtabs.mn/api",
     kalit: "220c6efb95dce10a822723f09ed46eb81bf07902cdc5b681219c14fdda519069",
     webhookSecret:
       "7ec45a6fd82d05fa0ce8f4322623d1509e71cf3ebc3e87dd2a363a88d5af1ed9",
