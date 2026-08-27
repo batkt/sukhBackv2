@@ -44,6 +44,7 @@ const uneguiMashinRoute = require("./routes/uneguiMashinRoute");
 const zochinUrikhRoute = require("./routes/zochinUrikhRoute");
 const zochinZogsoolRoute = require("./routes/zochinZogsoolRoute");
 const zogsoolQrRoute = require("./routes/zogsoolQrRoute");
+const sanalAsuulgaRoute = require("./routes/sanalAsuulgaRoute");
 const auditRoute = require("./routes/auditRoute");
 const transformationRoute = require("./routes/transformationRoute");
 const walletQpayRoute = require("./routes/walletQpayRoute");
@@ -332,6 +333,7 @@ app.use(uneguiMashinRoute);
 app.use(zochinUrikhRoute);
 app.use(zochinZogsoolRoute);
 app.use(zogsoolQrRoute);
+app.use(sanalAsuulgaRoute);
 app.use("/audit", auditRoute);
 app.use(transformationRoute);
 // walletQpayRoute moved to top
