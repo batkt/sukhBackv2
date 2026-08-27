@@ -311,7 +311,10 @@ const qpaycallbackGadaaStickerHandler = async (req, res, next) => {
     if (qpayObject.zogsooliinId && qpayObject.zogsoolUilchluulegch?.uId) {
       const body = {
         tukhainBaaziinKholbolt: kholbolt,
-        turul: req.params.cameraIP == "dotor" ? "DotorQR" : "GadaaQR",
+        // Төлбөрийн ТӨРӨЛ нь төлсөн сувгийг заана - жагсаалт дээр түүхийгээр
+        // харагддаг тул "QPay" гэж бичнэ. Машин дотор/гадаа байсан эсэх нь
+        // төлбөрийн төрөл БИШ (өмнө нь "DotorQR" гэж буруу гардаг байв).
+        turul: "QPay",
         uilchluulegchiinId: qpayObject.zogsoolUilchluulegch.uId,
         paid_amount: qpayObject.zogsoolUilchluulegch.pay_amount,
         plate_number: qpayObject.zogsoolUilchluulegch.plate_number,

@@ -217,13 +217,26 @@ module.exports.tulburUridchiljTulukh = async (body, next) => {
         )
           tukhainObject.tuukh[0].tulbur.push(...tulbur);
         else tukhainObject.tuukh[0].tulbur = tulbur;
+      const tulsunDun = Number(body.paid_amount) || 0;
+      const garsanTsag = tukhainObject?.tuukh[0].tsagiinTuukh[0].garsanTsag;
+      // Бодогдсон дүнг бүрэн нөхсөн эсэх (bodsonDun 0 бол төлбөр байхгүй)
+      const burenTulsun =
+        tulsunDun > 0 && (bodsonDun <= 0 || tulsunDun + 0.01 >= bodsonDun);
+
       var set = {
         "tuukh.0.tulbur": tukhainObject?.tuukh?.[0]?.tulbur || 0,
-        "tuukh.0.tuluv": tukhainObject?.tuukh[0].tsagiinTuukh[0].garsanTsag
-          ? 1
-          : 0,
+        // Төлбөр бүрэн төлөгдсөн бол машин ХАРААХАН ГАРААГҮЙ байсан ч "Төлсөн"
+        // болно. Өмнө нь зөвхөн garsanTsag байхад л 1 болгодог байсан тул
+        // QR-аар урьдчилж төлсөн машин 0 (төлөөгүй) хэвээр үлдэж, гарсныхаа
+        // дараа саарал "Үнэгүй" гэж харагддаг байв. Мөн /v1/search_car түүнийг
+        // дахин төлүүлэхээр олсоор байсан.
+        "tuukh.0.tuluv": burenTulsun || garsanTsag ? 1 : 0,
         "tuukh.0.tulukhDun": 0,
       };
+      // "ДҮН" багана session-ий niitDun-аас уншдаг. Урьдчилж төлсөн үед энэ нь
+      // 0 хэвээр үлдэж, төлбөртэй машин үнэгүй мэт харагддаг байв.
+      if (burenTulsun && !(Number(tukhainObject.niitDun) > 0))
+        set["niitDun"] = bodsonDun > 0 ? bodsonDun : tulsunDun;
       if (!tukhainObject?.tuukh[0].tsagiinTuukh[0].garsanTsag)
         set["garakhTsag"] = new Date(
           Date.now() + (tukhainZogsool?.garakhTsag || 30) * 60000
