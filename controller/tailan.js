@@ -377,6 +377,156 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
       }
     }
 
+    // 5b. ParkEase (Түрээсийн зогсоол) дээр зогссон зочид
+    //
+    // ParkEase-ийн зочин АмарСүхийн sdkData-г огт дайрдаггүй тул `Uilchluulegch`
+    // цуглуулгад БАЙХГҮЙ — tureesBack webhook-оор `zochinZogsooliinTuukh` руу
+    // шууд бичигддэг (routes/neeyeRoute.js-ийн parkEaseMuruudAvya мөн эндээс
+    // уншдаг). Тайлан үүнийг уншдаггүй байсан тул оршин суугчийн урьсан зочдын
+    // нэлээд хэсэг нь огт харагдахгүй байв.
+    try {
+      const ZochinZogsooliinTuukh = require("../models/zochinZogsooliinTuukh");
+      const pzQuery = {
+        baiguullagiinId: String(baiguullagiinId),
+        createdAt: { $gte: startDate, $lte: endDate },
+      };
+      if (barilgiinId) pzQuery.barilgiinId = String(barilgiinId);
+
+      const parkEaseMuruud = await ZochinZogsooliinTuukh(kholbolt)
+        .find(pzQuery)
+        .lean();
+
+      for (const pz of parkEaseMuruud) {
+        const plate = String(pz.mashiniiDugaar || "").trim().toUpperCase();
+
+        const rid0 = String(pz.orshinSuugchId || "");
+        let resident =
+          (rid0 && residentMapById[rid0]) || plateToResidentMap[plate] || null;
+
+        if (!resident && (rid0 || pz.toot)) {
+          resident = {
+            orshinSuugchiinId: rid0 || `toot_${pz.toot}`,
+            ner: pz.toot ? `Тоот ${pz.toot}` : "Оршин суугч",
+            toot: pz.toot || "",
+            davkhar: "",
+            utas: "",
+          };
+        }
+        if (!resident) continue;
+
+        if (orshinSuugch) {
+          const searchStr = String(orshinSuugch).toLowerCase();
+          const rName = String(resident.ner || "").toLowerCase();
+          const rToot = String(resident.toot || "").toLowerCase();
+          if (!rName.includes(searchStr) && !rToot.includes(searchStr)) continue;
+        }
+        if (toot) {
+          const tStr = String(toot).toLowerCase();
+          if (!String(resident.toot || "").toLowerCase().includes(tStr)) continue;
+        }
+
+        const orsonTsag = pz.orsonTsag ? new Date(pz.orsonTsag) : null;
+        const garsanTsag = pz.garsanTsag ? new Date(pz.garsanTsag) : null;
+        const zogssonMinut =
+          Number(pz.niitKhugatsaa) > 0
+            ? Math.round(Number(pz.niitKhugatsaa))
+            : orsonTsag && garsanTsag
+              ? Math.max(1, Math.round((garsanTsag - orsonTsag) / 60000))
+              : orsonTsag
+                ? Math.max(1, Math.round((new Date() - orsonTsag) / 60000))
+                : 0;
+
+        const khungulsunMinut = Number(pz.uneguiMinutAshiglasan || 0) || 0;
+        const tulbur = Number(pz.niitDun || pz.tulukhDun || 0) || 0;
+        // tulburiinTurul: "zochin" — зочин зогсоол дээрээ өөрөө төлсөн,
+        // "ezen" — эзний нэхэмжлэхэд бичигдсэн тул оршин суугчийн өр болно.
+        const ezendNekhemjelsen = pz.tulburiinTurul === "ezen";
+        const tulsunDun = ezendNekhemjelsen ? 0 : tulbur;
+        const tuluvLabel =
+          tulbur <= 0
+            ? "Үнэгүй"
+            : ezendNekhemjelsen
+              ? "Эзэнд нэхэмжилсэн"
+              : "Төлсөн";
+
+        const rid = resident.orshinSuugchiinId;
+        if (!residentSummaryMap[rid]) {
+          residentSummaryMap[rid] = {
+            orshinSuugchiinId: rid,
+            ner: resident.ner,
+            toot: resident.toot,
+            davkhar: resident.davkhar,
+            utas: resident.utas,
+            urisanMachinToo: 0,
+            uniquePlates: new Set(),
+            niitTulbur: 0,
+            khungulultMinut: 0,
+            tulsunDun: 0,
+            uldegdelTulbur: 0,
+            details: [],
+          };
+        }
+
+        residentSummaryMap[rid].uniquePlates.add(plate);
+        residentSummaryMap[rid].urisanMachinToo =
+          residentSummaryMap[rid].uniquePlates.size;
+        residentSummaryMap[rid].niitTulbur += tulbur;
+        residentSummaryMap[rid].khungulultMinut += khungulsunMinut;
+        residentSummaryMap[rid].tulsunDun += tulsunDun;
+        residentSummaryMap[rid].details.push({
+          mashiniiDugaar: pz.mashiniiDugaar || plate,
+          ognoo: orsonTsag || pz.createdAt || null,
+          garsanOgnoo: garsanTsag || null,
+          zogssonMinut,
+          khungulsunMinut,
+          tulbur,
+          tuluv: tuluvLabel,
+          ekhSurvalj: "parkease",
+          orshinSuugchiinId: rid,
+          ner: resident.ner,
+          toot: resident.toot,
+          davkhar: resident.davkhar,
+          utas: resident.utas,
+        });
+
+        const carKey = `${plate}|${rid}`;
+        const irsenOgnoo = orsonTsag || (pz.createdAt ? new Date(pz.createdAt) : null);
+        const buiCar = guestCarSeen.get(carKey);
+        if (!buiCar) {
+          const shineCar = {
+            mashiniiDugaar: pz.mashiniiDugaar || plate,
+            orshinSuugchiinNer: resident.ner,
+            davkhar: resident.davkhar,
+            toot: resident.toot,
+            utas: resident.utas,
+            suuliinIrsenOgnoo: irsenOgnoo,
+            irsenToo: 1,
+            ekhSurvalj: "parkease",
+          };
+          guestCarSeen.set(carKey, shineCar);
+          guestCarList.push(shineCar);
+        } else {
+          buiCar.irsenToo += 1;
+          if (
+            irsenOgnoo &&
+            (!buiCar.suuliinIrsenOgnoo || irsenOgnoo > buiCar.suuliinIrsenOgnoo)
+          ) {
+            buiCar.suuliinIrsenOgnoo = irsenOgnoo;
+          }
+        }
+      }
+    } catch (pzErr) {
+      console.error("ParkEase (zochinZogsooliinTuukh) notice:", pzErr.message);
+    }
+
+    // Дэлгэрэнгүй мөрүүдийг огноогоор нь эрэмбэлнэ — хоёр эх сурвалж
+    // холилдож ирдэг тул эс тэгвэл дараалал нь эмх замбараагүй харагдана.
+    for (const rid of Object.keys(residentSummaryMap)) {
+      residentSummaryMap[rid].details.sort(
+        (a, b) => new Date(b.ognoo || 0) - new Date(a.ognoo || 0),
+      );
+    }
+
     for (const rid of Object.keys(residentSummaryMap)) {
       const r = residentSummaryMap[rid];
       r.uldegdelTulbur = Math.max(0, r.niitTulbur - r.tulsunDun);
