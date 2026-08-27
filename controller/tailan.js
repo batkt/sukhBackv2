@@ -37,12 +37,21 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
         .json({ success: false, message: "Холболтын мэдээлэл олдсонгүй" });
     }
 
-    const startDate = ekhlekhOgnoo
-      ? new Date(ekhlekhOgnoo)
-      : new Date(new Date().setHours(0, 0, 0, 0));
-    const endDate = duusakhOgnoo
-      ? new Date(duusakhOgnoo)
-      : new Date(new Date().setHours(23, 59, 59, 999));
+    // Вэбээс "YYYY-MM-DD" гэж цаггүй ирдэг. new Date("2026-08-31") нь UTC
+    // шөнө дунд болж хөрвөх тул сүүлийн өдрийн бичлэгүүд мужаас гарч
+    // унадаг байв. Цаггүй утга ирвэл өдрийн эхлэл/төгсгөлд нь бариулна.
+    const ognooTsaggui = (utga) =>
+      typeof utga === "string" && /^\d{4}-\d{2}-\d{2}$/.test(utga.trim());
+
+    const startDate = ekhlekhOgnoo ? new Date(ekhlekhOgnoo) : new Date();
+    if (!ekhlekhOgnoo || ognooTsaggui(ekhlekhOgnoo)) {
+      startDate.setHours(0, 0, 0, 0);
+    }
+
+    const endDate = duusakhOgnoo ? new Date(duusakhOgnoo) : new Date();
+    if (!duusakhOgnoo || ognooTsaggui(duusakhOgnoo)) {
+      endDate.setHours(23, 59, 59, 999);
+    }
 
     const mongoose = require("mongoose");
 
@@ -130,13 +139,107 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
       console.error("EzenUrisanMashin fetch notice:", ezenErr.message);
     }
 
+    // 3b. Оршин суугчийн болон зочны машин вэбээс бүртгэхэд tenant DB-ийн
+    // `mashin` цуглуулгад орно (/zochinHadgalya энд бичдэг). Тайлан урьд нь
+    // энэ цуглуулгыг ОГТ уншдаггүй байсан тул вэбээс бүртгэсэн машинууд
+    // оршин суугчтай холбогдож чадахгүй, зогсоолын бичлэг бүр
+    // `if (!resident) continue` дээр таслагдаж тайлан хоосон гардаг байв.
+    try {
+      const MashinModel = require("../models/mashin")(kholbolt);
+      const mashinuud = await MashinModel.find({
+        $or: [
+          { baiguullagiinId: String(baiguullagiinId) },
+          { baiguullagiinId: baiguullagiinId },
+        ],
+      }).lean();
+
+      for (const m of mashinuud) {
+        const plate = String(m.dugaar || m.mashiniiDugaar || "")
+          .trim()
+          .toUpperCase();
+        if (!plate || plateToResidentMap[plate]) continue;
+
+        const rid = String(m.orshinSuugchiinId || m.ezemshigchiinId || "");
+        if (rid && residentMapById[rid]) {
+          plateToResidentMap[plate] = residentMapById[rid];
+          continue;
+        }
+
+        const toot = m.ezenToot || m.ezemshigchiinTalbainDugaar || "";
+        const ner = m.ezemshigchiinNer || m.orshinSuugchiinNer || "";
+        if (toot || ner) {
+          plateToResidentMap[plate] = {
+            orshinSuugchiinId: rid || `toot_${toot || ner}`,
+            ner: ner || `Тоот ${toot}`,
+            toot: String(toot || ""),
+            davkhar: "",
+            utas: m.ezemshigchiinUtas || m.utas || "",
+          };
+        }
+      }
+    } catch (mashinErr) {
+      console.error("Mashin fetch notice:", mashinErr.message);
+    }
+
     // 4. Fetch Uilchluulegch parking records for date range
+    //
+    // Дууссан зогсоолын бичлэгүүд өдөр бүр 07:20-д `Uilchluulegch{YYYYMM}`
+    // архив цуглуулга руу зөөгдөж, үндсэн цуглуулгаас УСТГАГДДАГ
+    // (index.js cron → controller/zogsool.js:archiveUilchluulegchKhonog).
+    // Тайлан зөвхөн үндсэн цуглуулгыг уншдаг байсан тул өчигдрөөс хуучин
+    // бүх өгөгдөл алга болж, сараар авахад тайлан хоосон гардаг байв.
+    // Иймд мужид хамаарах архивуудыг ч уншиж, _id-гаар давхардлыг арилгана.
     const ulMatch = {
       createdAt: { $gte: startDate, $lte: endDate },
     };
 
-    const UilchluulegchModel = Uilchluulegch(kholbolt, true);
-    const uilchluulegchuud = await UilchluulegchModel.find(ulMatch).lean();
+    // Архивын нэр нь бичлэг архивлагдсан ӨДРИЙН сараар үүсдэг тул сарын
+    // зааг дээрх бичлэг хөрш сарын архивт унах боломжтой — хоёр талд нэг
+    // сарын нөөц авна.
+    const arkhivNeruud = [];
+    {
+      const ekhlel = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth() - 1,
+        1,
+      );
+      const tugsgul = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 1);
+      for (
+        let d = ekhlel;
+        d <= tugsgul;
+        d = new Date(d.getFullYear(), d.getMonth() + 1, 1)
+      ) {
+        arkhivNeruud.push(
+          `Uilchluulegch${d.getFullYear()}${String(d.getMonth() + 1).padStart(
+            2,
+            "0",
+          )}`,
+        );
+      }
+    }
+
+    const uilchluulegchMap = new Map();
+    const uilchluulegchNemey = (jagsaalt) => {
+      for (const doc of jagsaalt || []) {
+        const key = String(doc?._id || "");
+        if (key && !uilchluulegchMap.has(key)) uilchluulegchMap.set(key, doc);
+      }
+    };
+
+    uilchluulegchNemey(await Uilchluulegch(kholbolt, true).find(ulMatch).lean());
+
+    for (const arkhivNer of arkhivNeruud) {
+      try {
+        uilchluulegchNemey(
+          await Uilchluulegch(kholbolt, true, arkhivNer).find(ulMatch).lean(),
+        );
+      } catch (arkhivErr) {
+        // Тухайн сарын архив байхгүй бол зүгээр алгасна
+        console.error(`Archive ${arkhivNer} notice:`, arkhivErr.message);
+      }
+    }
+
+    const uilchluulegchuud = Array.from(uilchluulegchMap.values());
 
     // 5. Aggregate parking sessions by resident
     const residentSummaryMap = {};
