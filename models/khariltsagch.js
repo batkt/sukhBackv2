@@ -38,6 +38,8 @@ const khariltsagchSchema = new Schema(
         walletCustomerCode: String, // Added: For multiple wallet accounts
         walletBairId: String, // For WALLET_API source
         walletDoorNo: String, // Keer multiple wallet accounts
+        gereeniiId: String,
+        linkedAptToot: String,
         ekhniiUldegdel: Number,
         tsahilgaaniiZaalt: Number,
         khonogoorBodokhEsekh: {
