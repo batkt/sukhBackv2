@@ -194,12 +194,14 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   }
 
   if (ognoo && Array.isArray(ognoo) && ognoo.length === 2) {
+    const start = new Date(ognoo[0]);
+    start.setHours(0, 0, 0, 0);
     const end = new Date(ognoo[1]);
     end.setHours(23, 59, 59, 999);
-    query.$or = [
-      { ekhniiUldegdelEsekh: true },
-      { ognoo: { $lte: end } },
-    ];
+    query.ognoo = {
+      $gte: start,
+      $lte: end,
+    };
   }
 
   const allItems = await GuilgeeAvlaguudModel.find(query)
