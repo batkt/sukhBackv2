@@ -2407,14 +2407,23 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
         // Нэг QPay төлөлт олон нэхэмжлэх хамарч болно. Тийм үед түлхүүрийг
         // нэхэмжлэх тус бүрээр ялгана — эс бөгөөс 2 дахь нэхэмжлэхээс эхлээд
         // "аль хэдийн бүртгэгдсэн" гэж алгасагдаж, төлөгдсөн гэж тэмдэглэгдэхгүй.
-        const bankniiGuilgeeId =
-          (paymentTransactionId
-            ? invoices.length > 1
-              ? `${paymentTransactionId}-${nekhemjlekh._id?.toString() || ""}`
-              : paymentTransactionId
-            : null) ||
+        //
+        // ЧУХАЛ: өмнө нь нэхэмжлэхийн дугаарыг ЗӨВХӨН paymentTransactionId
+        // дээр нэмдэг байв. qpayShalgay гүйлгээний дугаар буцаагаагүй үед
+        // (сүлжээний алдаа, эсвэл QPay төлөлтийг хараахан бүртгээгүй) бүх
+        // нэхэмжлэх нэг л qpayInvoiceId дээр буудаг — нэг QPay нэхэмжлэхэд
+        // хамаарах бүх мөрд updateMany-аар ижил UUID тавьдаг тул. Улмаас 2
+        // дахь нэхэмжлэхээс эхлээд давхардлын шалгалтад баригдаж, төлөлт нь
+        // огт бүртгэгдэхгүй үлддэг байсан.
+        const nekhId = nekhemjlekh._id?.toString() || "";
+        const suuriTulkhuur =
+          paymentTransactionId ||
           nekhemjlekh.qpayInvoiceId ||
-          "qpay-multi-" + (nekhemjlekh._id?.toString() || "");
+          `qpay-multi-${nekhId}`;
+        const bankniiGuilgeeId =
+          invoices.length > 1 && nekhId && !suuriTulkhuur.endsWith(nekhId)
+            ? `${suuriTulkhuur}-${nekhId}`
+            : suuriTulkhuur;
 
         // 1. Quick check if already processed in ledger
         const existingLedgerPayment = await GuilgeeAvlaguud(kholbolt).findOne({
