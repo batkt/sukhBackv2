@@ -14,7 +14,7 @@ if (fs.existsSync(envPath)) {
   });
 }
 
-async function extractBpayData() {
+async function extractBpayPayments() {
   const uri =
     process.env.MONGODB_URI ||
     "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSukh?authSource=admin";
@@ -23,127 +23,140 @@ async function extractBpayData() {
   await mongoose.connect(uri);
   const mainDb = mongoose.connection.db;
 
-  console.log("📊 Analyzing BPay / Wallet Payments & eBarimts...\n");
+  console.log("📊 Analyzing BPay Invoices, QPay settlements & eBarimts...\n");
 
-  // 1. Check walletInvoice collection (Main DB)
-  const walletInvoices = await mainDb.collection("walletInvoice").find({}).toArray();
+  // 1. Fetch all wallet invoices from Main DB
+  const walletInvoices = await mainDb.collection("walletInvoice").find({}).sort({ createdAt: -1 }).toArray();
+  console.log(`🔎 Нийт шалгах Wallet/BPay нэхэмжлэлийн тоо: ${walletInvoices.length}`);
 
-  // 2. Check ebarimtShine collection for Wallet/BPay sources
-  const walletEbarimts = await mainDb
-    .collection("ebarimtShine")
-    .find({
-      $or: [
-        { source: "WALLET_API" },
-        { source: "WALLET_QPAY" },
-        { source: "WALLET" },
-        { source: "wallet" },
-        { source: "bpay" },
-        { source: "BPAY" },
-        { walletPaymentId: { $exists: true, $ne: null } },
-        { walletInvoiceId: { $exists: true, $ne: null } },
-      ],
-    })
-    .toArray();
-
-  // 3. Check all tenant databases for guilgeeAvlaguud & ebarimtShine
+  // 2. Collect all tenant databases
   const adminDb = mainDb.admin();
   const dbsInfo = await adminDb.listDatabases();
   const excluded = ["admin", "config", "local"];
   const tenantDbs = dbsInfo.databases.filter((d) => !excluded.includes(d.name));
 
-  const allTenantLedgerPayments = [];
-  const allTenantEbarimts = [];
+  // Build a lookup map of all QPay objects across all tenant databases
+  const qpayObjectsMap = new Map(); // key: walletPaymentId / zakhialgiinDugaar / invoice_id -> object
+  const allPaidQpayList = [];
 
   for (const dbInfo of tenantDbs) {
-    const tDb = mongoose.connection.useDb(dbInfo.name);
-    const rawTDb = tDb.db;
+    const tDb = mongoose.connection.useDb(dbInfo.name).db;
 
-    // Check guilgeeAvlaguud
-    try {
-      const gColl = rawTDb.collection("guilgeeAvlaguud");
-      const walletLedgers = await gColl
-        .find({
-          $or: [
-            { source: "wallet" },
-            { source: "WALLET_API" },
-            { source: "bpay" },
-            { source: "BPAY" },
-            { tailbar: { $regex: "bpay|wallet", $options: "i" } },
-          ],
-        })
-        .toArray();
+    // Check quickqpayobjects or quickQpayObject or qpay
+    const collections = await tDb.listCollections().toArray();
+    const qpayCollName = collections.find((c) => c.name.toLowerCase().includes("quickqpay") || c.name.toLowerCase() === "qpay")?.name;
 
-      walletLedgers.forEach((l) => {
-        allTenantLedgerPayments.push({ ...l, _db: dbInfo.name });
-      });
-    } catch (e) {}
+    if (qpayCollName) {
+      const qpayDocs = await tDb.collection(qpayCollName).find({}).toArray();
+      for (const q of qpayDocs) {
+        q._dbName = dbInfo.name;
+        if (q.walletPaymentId) qpayObjectsMap.set(String(q.walletPaymentId), q);
+        if (q.zakhialgiinDugaar) qpayObjectsMap.set(String(q.zakhialgiinDugaar), q);
+        if (q.invoice_id) qpayObjectsMap.set(String(q.invoice_id), q);
+        if (q.qpay_payment_id) qpayObjectsMap.set(String(q.qpay_payment_id), q);
 
-    // Check ebarimtShine in tenant DB
-    try {
-      const eColl = rawTDb.collection("ebarimtShine");
-      const tEbarimts = await eColl
-        .find({
-          $or: [
-            { source: "WALLET_API" },
-            { source: "WALLET_QPAY" },
-            { source: "WALLET" },
-            { source: "wallet" },
-            { walletPaymentId: { $exists: true, $ne: null } },
-          ],
-        })
-        .toArray();
+        const isPaid =
+          q.tulsunEsekh === true ||
+          q.status === "PAID" ||
+          q.invoice_status === "PAID" ||
+          (Array.isArray(q.payments) && q.payments.some((p) => p.payment_status === "PAID" || p.status === "PAID")) ||
+          (q.qpay && Array.isArray(q.qpay.payments) && q.qpay.payments.some((p) => p.payment_status === "PAID"));
 
-      tEbarimts.forEach((e) => {
-        allTenantEbarimts.push({ ...e, _db: dbInfo.name });
-      });
-    } catch (e) {}
+        if (isPaid && (q.walletPaymentId || q.source === "WALLET_API" || q.source === "WALLET_QPAY" || q.billingId)) {
+          allPaidQpayList.push(q);
+        }
+      }
+    }
   }
 
-  // Combine eBarimts
-  const totalEbarimts = [...walletEbarimts, ...allTenantEbarimts];
-  const successfulEbarimts = totalEbarimts.filter(
-    (e) => e.lottery || e.qrData || e.status === "SUCCESS" || e.ebarimtId
-  );
+  // 3. Match walletInvoices with QPay objects & check payment status
+  const paidInvoices = [];
+  const unpaidInvoices = [];
+
+  for (const inv of walletInvoices) {
+    let matchedQpay = null;
+    if (inv.walletPaymentId && qpayObjectsMap.has(String(inv.walletPaymentId))) {
+      matchedQpay = qpayObjectsMap.get(String(inv.walletPaymentId));
+    } else if (inv.zakhialgiinDugaar && qpayObjectsMap.has(String(inv.zakhialgiinDugaar))) {
+      matchedQpay = qpayObjectsMap.get(String(inv.zakhialgiinDugaar));
+    } else if (inv.walletInvoiceId && qpayObjectsMap.has(String(inv.walletInvoiceId))) {
+      matchedQpay = qpayObjectsMap.get(String(inv.walletInvoiceId));
+    }
+
+    const isPaid =
+      matchedQpay &&
+      (matchedQpay.tulsunEsekh === true ||
+        matchedQpay.status === "PAID" ||
+        matchedQpay.invoice_status === "PAID" ||
+        (Array.isArray(matchedQpay.payments) && matchedQpay.payments.some((p) => p.payment_status === "PAID")) ||
+        (matchedQpay.qpay && Array.isArray(matchedQpay.qpay.payments) && matchedQpay.qpay.payments.some((p) => p.payment_status === "PAID")));
+
+    const item = {
+      userId: inv.userId,
+      customerName: inv.customerName || "-",
+      billingName: inv.billingName || "-",
+      amount: inv.totalAmount || (matchedQpay && (matchedQpay.dun || matchedQpay.amount || matchedQpay.qpay?.amount)) || 0,
+      createdAt: inv.createdAt,
+      paidAt: matchedQpay?.updatedAt || matchedQpay?.tulsunOgnoo,
+      walletPaymentId: inv.walletPaymentId,
+      zakhialgiinDugaar: inv.zakhialgiinDugaar,
+      qpayId: matchedQpay?._id,
+      qpayStatus: matchedQpay?.tulsunEsekh ? "PAID" : matchedQpay?.invoice_status || "PENDING",
+      matchedQpay,
+    };
+
+    if (isPaid) {
+      paidInvoices.push(item);
+    } else {
+      unpaidInvoices.push(item);
+    }
+  }
+
+  // Also include any orphan paid QPay records
+  for (const q of allPaidQpayList) {
+    const alreadyFound = paidInvoices.some(
+      (p) => String(p.qpayId) === String(q._id) || (q.walletPaymentId && p.walletPaymentId === q.walletPaymentId)
+    );
+    if (!alreadyFound) {
+      paidInvoices.push({
+        userId: q.utas || q.userId || q.orshinSuugchId || "-",
+        customerName: q.ner || q.customerName || "-",
+        billingName: q.tailbar || q.bairniiNer || "-",
+        amount: q.dun || q.amount || q.qpay?.amount || 0,
+        createdAt: q.createdAt,
+        paidAt: q.updatedAt || q.tulsunOgnoo,
+        walletPaymentId: q.walletPaymentId,
+        zakhialgiinDugaar: q.zakhialgiinDugaar,
+        qpayId: q._id,
+        qpayStatus: "PAID",
+        matchedQpay: q,
+      });
+    }
+  }
+
+  // Check eBarimt details for paid invoices
+  const totalPaidAmount = paidInvoices.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const totalUnpaidAmount = unpaidInvoices.reduce((sum, p) => sum + (p.amount || 0), 0);
 
   console.log("========================================================");
-  console.log("💳 [1] BPAY / WALLET НЭХЭМЖЛЭХҮҮД (walletInvoice):");
-  console.log(`Нийт үүссэн Wallet нэхэмжлэх: ${walletInvoices.length}`);
-  const totalInvoiceAmount = walletInvoices.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
-  console.log(`Нийт дүн: ${totalInvoiceAmount.toLocaleString()} ₮`);
+  console.log("💰 [1] ТӨЛБӨРИЙН ЕРӨНХИЙ НЭГТГЭЛ:");
+  console.log(`• Нийт үүссэн BPay нэхэмжлэх: ${walletInvoices.length}`);
+  console.log(`• ✅ БОДИТОЙ ТӨЛӨГДСӨН: ${paidInvoices.length} ширхэг (Нийт дүн: ${totalPaidAmount.toLocaleString()} ₮)`);
+  console.log(`• ⏳ ТӨЛӨГДӨӨГҮЙ (PENDING): ${unpaidInvoices.length} ширхэг (Нийт дүн: ${totalUnpaidAmount.toLocaleString()} ₮)`);
 
-  console.log("\n========================================================");
-  console.log("🧾 [2] BPAY-Р ТӨЛӨГДӨЖ И-БАРИМТ ҮҮССЭН БАЙДАЛ (ebarimtShine):");
-  console.log(`Нийт BPay холбогдолтой И-Баримт: ${totalEbarimts.length}`);
-  console.log(`✅ Амжилттай гарсан И-Баримт (Сугалаа/QR кодтой): ${successfulEbarimts.length}`);
-  const totalEbarimtAmount = successfulEbarimts.reduce((sum, eb) => sum + (eb.dun || eb.amount || 0), 0);
-  console.log(`Амжилттай баримтын нийт төлбөрийн дүн: ${totalEbarimtAmount.toLocaleString()} ₮`);
-
-  console.log("\n========================================================");
-  console.log("📒 [3] ГҮЙЛГЭЭНИЙ ДЭВТЭРТ (guilgeeAvlaguud) СУУСАН BPAY ТӨЛӨЛТҮҮД:");
-  console.log(`Нийт бүртгэгдсэн төлөлт: ${allTenantLedgerPayments.length}`);
-  const totalLedgerPaid = allTenantLedgerPayments.reduce(
-    (sum, l) => sum + Math.abs(l.dun || l.tulsunDun || 0),
-    0
-  );
-  console.log(`Нийт гүйлгээний дүн: ${totalLedgerPaid.toLocaleString()} ₮`);
-
-  // Sample Details
-  if (successfulEbarimts.length > 0) {
+  if (paidInvoices.length > 0) {
     console.log("\n========================================================");
-    console.log("📋 АМЖИЛТТАЙ ТӨЛӨГДӨЖ БАРИМТ АВСАН ЖИШЭЭ ГҮЙЛГЭЭНҮҮД:");
-    successfulEbarimts.slice(0, 10).forEach((e, idx) => {
+    console.log("✅ [2] BPAY-ЭЭР АМЖИЛТТАЙ ТӨЛСӨН ХЭРЭГЛЭГЧДИЙН ДЭЛГЭРЭНГҮЙ:");
+    paidInvoices.forEach((p, idx) => {
+      const qp = p.matchedQpay;
+      const lottery = qp?.lottery || qp?.ebarimt?.lottery || qp?.qpay?.lottery || "-";
+      const qr = qp?.qrData || qp?.ebarimt?.qrData ? "Тийм" : "Үгүй";
       console.log(
-        `[${idx + 1}] Огноо: ${e.createdAt ? new Date(e.createdAt).toLocaleString("mn-MN") : "-"} | Дүн: ${(e.dun || e.amount || 0).toLocaleString()} ₮ | Сугалаа: ${e.lottery || "-"} | Хэрэглэгч/Утас: ${e.utas || e.userId || "-"}`
+        `[${idx + 1}] Утас/Хэрэглэгч: ${p.userId} | Нэр: ${p.customerName} | Дүн: ${(p.amount || 0).toLocaleString()} ₮ | Огноо: ${p.paidAt ? new Date(p.paidAt).toLocaleString("mn-MN") : "-"} | Сугалаа: ${lottery} | Баримт гарсан: ${qr}`
       );
     });
-  } else if (walletInvoices.length > 0) {
-    console.log("\n========================================================");
-    console.log("📋 ҮҮССЭН BPAY НЭХЭМЖЛЭХҮҮДИЙН ЖАГСААЛТ:");
-    walletInvoices.slice(0, 10).forEach((inv, idx) => {
-      console.log(
-        `[${idx + 1}] Хэрэглэгч: ${inv.userId} (${inv.customerName || "-"}) | Дүн: ${(inv.totalAmount || 0).toLocaleString()} ₮ | Байр: ${inv.billingName || "-"} | Огноо: ${inv.createdAt ? new Date(inv.createdAt).toLocaleString("mn-MN") : "-"}`
-      );
-    });
+  } else {
+    console.log("\n⚠️ Одоогоор бүртгэгдсэн 93 нэхэмжлэл нь үүссэн боловч QPay банкны гүйлгээгээр эцсийн төлөлт нь гүйцэтгэгдээгүй (хэрэглэгч QR код хараад төлөлгүй орхисон эсвэл тест хийсэн) байна.");
   }
 
   console.log("========================================================\n");
@@ -151,4 +164,4 @@ async function extractBpayData() {
   await mongoose.disconnect();
 }
 
-extractBpayData().catch(console.error);
+extractBpayPayments().catch(console.error);
