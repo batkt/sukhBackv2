@@ -97,8 +97,8 @@ process.env.UV_THREADPOOL_SIZE = 20;
 
     if (redisOk) {
       try {
-        io.adapter(createAdapter(pubClient, subClient));
-        console.log("✅ [INIT] Socket.IO Redis adapter attached");
+        io.adapter(createAdapter(pubClient, subClient, { key: "amarSukh" }));
+        console.log("✅ [INIT] Socket.IO Redis adapter attached (key: amarSukh)");
       } catch (adapterErr) {
         console.error("❌ [INIT] Failed to attach Socket.IO Redis adapter:", adapterErr.message);
       }
@@ -119,6 +119,16 @@ process.env.UV_THREADPOOL_SIZE = 20;
 
     db.kholboltUusgey(app, MONGODB_URI);
     console.log("✅ MongoDB initialization started");
+
+    // Automatically sync compound indexes in the background on primary worker
+    if (!process.env.NODE_APP_INSTANCE || process.env.NODE_APP_INSTANCE === "0") {
+      setTimeout(() => {
+        const { syncAllTenantIndexes } = require("./utils/autoIndexer");
+        syncAllTenantIndexes().catch((err) =>
+          console.error("❌ [INDEX] Background sync error:", err.message)
+        );
+      }, 5000);
+    }
 
     // --- DISABLE BROWSER CACHING ---
     app.use((req, res, next) => {
