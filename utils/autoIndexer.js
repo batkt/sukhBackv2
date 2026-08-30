@@ -1,60 +1,68 @@
 const mongoose = require("mongoose");
 
 /**
- * High-performance Compound Indexes for AmarSukh Multi-Tenant MongoDB Databases.
- * These indexes eliminate slow queries (full collection scans) on:
- * - guilgeeAvlaguud (Ledger transactions)
- * - geree (Contracts)
- * - nekhemjlekhiinTuukh (Invoices)
- * - orshinSuugch (Residents)
- * - bankniiGuilgee (Bank transactions)
- * - toot (Units)
+ * Exact High-Performance Compound Indexes for AmarSukh Multi-Tenant MongoDB Databases.
  */
 const INDEX_DEFINITIONS = {
-  guilgeeavlaguuds: [
+  guilgeeavlaguud: [
+    { spec: { baiguullagiinId: 1, barilgiinId: 1 }, options: { background: true, name: "idx_org_bldg" } },
     { spec: { baiguullagiinId: 1, barilgiinId: 1, ognoo: -1 }, options: { background: true, name: "idx_org_bldg_ognoo" } },
+    { spec: { baiguullagiinId: 1, barilgiinId: 1, dun: 1 }, options: { background: true, name: "idx_org_bldg_dun" } },
     { spec: { baiguullagiinId: 1, gereeniiId: 1, ognoo: -1 }, options: { background: true, name: "idx_org_geree_ognoo" } },
+    { spec: { baiguullagiinId: 1, gereeniiId: 1 }, options: { background: true, name: "idx_org_geree" } },
     { spec: { baiguullagiinId: 1, ognoo: -1 }, options: { background: true, name: "idx_org_ognoo" } },
+    { spec: { baiguullagiinId: 1 }, options: { background: true, name: "idx_org" } },
     { spec: { gereeniiId: 1, ognoo: -1 }, options: { background: true, name: "idx_geree_ognoo" } },
+    { spec: { gereeniiId: 1 }, options: { background: true, name: "idx_geree" } },
     { spec: { nekhemjlekhId: 1 }, options: { background: true, name: "idx_nekhemjlekhId" } },
     { spec: { baiguullagiinId: 1, dun: 1, ognoo: -1 }, options: { background: true, name: "idx_org_dun_ognoo" } },
     { spec: { bankniiGuilgeeId: 1 }, options: { background: true, name: "idx_bankniiGuilgeeId" } },
     { spec: { tulburGuilgeeId: 1 }, options: { background: true, name: "idx_tulburGuilgeeId" } },
   ],
-  gerees: [
-    { spec: { baiguullagiinId: 1, barilgiinId: 1, tuluv: 1 }, options: { background: true, name: "idx_org_bldg_tuluv" } },
+  geree: [
     { spec: { baiguullagiinId: 1, barilgiinId: 1 }, options: { background: true, name: "idx_org_bldg" } },
+    { spec: { baiguullagiinId: 1, barilgiinId: 1, tuluv: 1 }, options: { background: true, name: "idx_org_bldg_tuluv" } },
     { spec: { barilgiinId: 1 }, options: { background: true, name: "idx_barilgiinId" } },
     { spec: { baiguullagiinId: 1, gereeniiDugaar: 1 }, options: { background: true, name: "idx_org_gereeniiDugaar" } },
     { spec: { orshinSuugchId: 1 }, options: { background: true, name: "idx_orshinSuugchId" } },
     { spec: { baiguullagiinId: 1, toot: 1 }, options: { background: true, name: "idx_org_toot" } },
+    { spec: { toot: 1 }, options: { background: true, name: "idx_toot" } },
   ],
-  nekhemjleks: [
+  nekhemjlekh: [
     { spec: { baiguullagiinId: 1, barilgiinId: 1, ognoo: -1 }, options: { background: true, name: "idx_org_bldg_ognoo" } },
+    { spec: { baiguullagiinId: 1, barilgiinId: 1 }, options: { background: true, name: "idx_org_bldg" } },
     { spec: { baiguullagiinId: 1, gereeniiId: 1, ognoo: -1 }, options: { background: true, name: "idx_org_geree_ognoo" } },
+    { spec: { baiguullagiinId: 1, gereeniiId: 1 }, options: { background: true, name: "idx_org_geree" } },
     { spec: { gereeniiId: 1, ognoo: -1 }, options: { background: true, name: "idx_geree_ognoo" } },
     { spec: { ognoo: -1 }, options: { background: true, name: "idx_ognoo" } },
     { spec: { tuluv: 1 }, options: { background: true, name: "idx_tuluv" } },
+    { spec: { baiguullagiinId: 1 }, options: { background: true, name: "idx_org" } },
   ],
-  nekhemjlekhiintuukhs: [
+  nekhemjlekhiintuukh: [
     { spec: { baiguullagiinId: 1, barilgiinId: 1, ognoo: -1 }, options: { background: true, name: "idx_org_bldg_ognoo" } },
+    { spec: { baiguullagiinId: 1, barilgiinId: 1 }, options: { background: true, name: "idx_org_bldg" } },
     { spec: { baiguullagiinId: 1, gereeniiId: 1, ognoo: -1 }, options: { background: true, name: "idx_org_geree_ognoo" } },
+    { spec: { baiguullagiinId: 1, gereeniiId: 1 }, options: { background: true, name: "idx_org_geree" } },
     { spec: { gereeniiId: 1, ognoo: -1 }, options: { background: true, name: "idx_geree_ognoo" } },
     { spec: { ognoo: -1 }, options: { background: true, name: "idx_ognoo" } },
     { spec: { tuluv: 1 }, options: { background: true, name: "idx_tuluv" } },
+    { spec: { baiguullagiinId: 1, ognoo: -1, tuluv: 1 }, options: { background: true, name: "idx_org_ognoo_tuluv" } },
+    { spec: { baiguullagiinId: 1 }, options: { background: true, name: "idx_org" } },
   ],
-  orshinsuugches: [
+  orshinsuugch: [
     { spec: { baiguullagiinId: 1, barilgiinId: 1 }, options: { background: true, name: "idx_org_bldg" } },
     { spec: { baiguullagiinId: 1, utas: 1 }, options: { background: true, name: "idx_org_utas" } },
     { spec: { baiguullagiinId: 1, register: 1 }, options: { background: true, name: "idx_org_register" } },
+    { spec: { barilgiinId: 1 }, options: { background: true, name: "idx_bldg" } },
   ],
-  bankniiguilgees: [
+  bankniiguilgee: [
     { spec: { baiguullagiinId: 1, ognoo: -1 }, options: { background: true, name: "idx_org_ognoo" } },
     { spec: { baiguullagiinId: 1, tulsunEsekh: 1 }, options: { background: true, name: "idx_org_tulsun" } },
     { spec: { journalId: 1 }, options: { background: true, name: "idx_journalId" } },
   ],
-  toots: [
+  toot: [
     { spec: { baiguullagiinId: 1, barilgiinId: 1, davkhar: 1, orts: 1 }, options: { background: true, name: "idx_org_bldg_davkhar_orts" } },
+    { spec: { baiguullagiinId: 1, barilgiinId: 1 }, options: { background: true, name: "idx_org_bldg" } },
   ],
 };
 
@@ -70,25 +78,27 @@ async function ensureConnectionIndexes(conn, dbLabel = "unknown") {
     if (!rawDb) return 0;
 
     const collections = await rawDb.listCollections().toArray();
-    const collNames = new Set(collections.map((c) => c.name.toLowerCase()));
 
     for (const [collKey, indexes] of Object.entries(INDEX_DEFINITIONS)) {
-      // Find matching collection (case-insensitive)
-      const targetCollName = collections.find(
-        (c) => c.name.toLowerCase() === collKey || c.name.toLowerCase() === collKey.replace(/s$/, "")
-      )?.name;
+      // Find matching collection (case-insensitive, handles singular/plural)
+      const targetColl = collections.find(
+        (c) =>
+          c.name.toLowerCase() === collKey ||
+          c.name.toLowerCase() === collKey + "s" ||
+          c.name.toLowerCase() === collKey + "es" ||
+          c.name.toLowerCase().replace(/s$/, "") === collKey
+      );
 
-      if (!targetCollName) continue;
+      if (!targetColl) continue;
 
-      const coll = rawDb.collection(targetCollName);
+      const coll = rawDb.collection(targetColl.name);
       for (const { spec, options } of indexes) {
         try {
           await coll.createIndex(spec, options);
           createdCount++;
         } catch (idxErr) {
-          // Ignore index already exists with different options or duplicate index errors
           if (!idxErr.message.includes("already exists") && idxErr.code !== 85 && idxErr.code !== 86) {
-            console.warn(`⚠️ [INDEX] ${dbLabel} ${targetCollName}: ${idxErr.message}`);
+            console.warn(`⚠️ [INDEX] ${dbLabel} ${targetColl.name}: ${idxErr.message}`);
           }
         }
       }
