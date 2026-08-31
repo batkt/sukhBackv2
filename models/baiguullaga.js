@@ -141,7 +141,11 @@ const baiguullagaSchema = new Schema(
         cameraIp: { type: String, default: "" },
         cameraPort: { type: Number, default: 554 },
         cameraUsername: { type: String, default: "admin" },
-        cameraPassword: { type: String, default: "Admin123" },
+        // Deliberately empty, NOT a placeholder password. A fake default here
+        // reaches the NVR as a wrong login and gets a 401, which looks
+        // identical to a misconfigured camera; empty means "not set yet" and
+        // lets the anonymous path work.
+        cameraPassword: { type: String, default: "" },
         cameruud: [
           {
             id: String,
@@ -149,7 +153,8 @@ const baiguullagaSchema = new Schema(
             ip: String,
             port: { type: Number, default: 554 },
             username: { type: String, default: "admin" },
-            password: { type: String, default: "Admin123" },
+            // Empty = inherit the building-level cameraPassword at read time.
+            password: { type: String, default: "" },
             root: { type: String, default: "Streaming/Channels/102" },
             enabled: { type: Boolean, default: true },
             residentVisible: { type: Boolean, default: false },
@@ -162,7 +167,8 @@ const baiguullagaSchema = new Schema(
             ip: String,
             port: { type: Number, default: 554 },
             username: { type: String, default: "admin" },
-            password: { type: String, default: "Admin123" },
+            // Empty = inherit the building-level cameraPassword at read time.
+            password: { type: String, default: "" },
             root: { type: String, default: "Streaming/Channels/102" },
             enabled: { type: Boolean, default: true },
             residentVisible: { type: Boolean, default: false },
