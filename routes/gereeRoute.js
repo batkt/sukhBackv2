@@ -244,7 +244,10 @@ router.get("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
     if (!!body?.query) body.query = JSON.parse(body.query);
     if (!!body?.order) body.order = JSON.parse(body.order);
 
-    // Always enforce tenant/building scoping server-side.
+    // Always enforce tenant/building scoping server-side. Some callers send
+    // baiguullagiinId/barilgiinId as flat query params instead of wrapping them
+    // in `query` - without this, khuudaslalt() defaults to an empty filter and
+    // scans/returns the entire tenant collection across every building.
     const query = body.query || {};
     if (body.baiguullagiinId && query.baiguullagiinId === undefined) query.baiguullagiinId = body.baiguullagiinId;
     if (body.barilgiinId && query.barilgiinId === undefined) query.barilgiinId = body.barilgiinId;
@@ -255,25 +258,19 @@ router.get("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
       endDate.setHours(23, 59, 59, 999);
       query.ognoo = { $gte: startDate, $lte: endDate };
     }
+    body.query = query;
 
-    const page = Math.max(1, parseInt(body.khuudasniiDugaar || "1", 10));
-    const limit = Math.max(1, parseInt(body.khuudasniiKhemjee || "50", 10));
-    const skip = (page - 1) * limit;
-    const order = body.order || { ognoo: -1 };
+    // NOTE: no page-size cap here (removed MAX_KHUUDASNII_KHEMJEE=2000). The
+    // tulbur/guilgeeTuukh dashboard and useTulburFooterTotals both intentionally
+    // request the full ledger (khuudasniiKhemjee up to 20000) to derive each
+    // contract's latest balance client-side and sum it into the footer total -
+    // capping the page size silently truncated that fetch and produced an
+    // inflated total (missing recent payments past the cutoff). Revisit only
+    // alongside fixing the frontend to use a real server-side aggregation
+    // (controller/tailan.js:3354 tailanTulburDugnelt already does this correctly
+    // via $group/$sum) instead of fetch-everything-then-sum-client-side.
 
-    const Model = GuilgeeAvlaguud(req.body.tukhainBaaziinKholbolt);
-    const [jagsaalt, niit] = await Promise.all([
-      Model.find(query).sort(order).skip(skip).limit(limit).lean(),
-      Model.countDocuments(query),
-    ]);
-
-    res.json({
-      jagsaalt,
-      niit,
-      huudas: page,
-      huudasniiKhemjee: limit,
-      niitHuudas: Math.ceil(niit / limit) || 1,
-    });
+    khuudaslalt(GuilgeeAvlaguud(req.body.tukhainBaaziinKholbolt), body).then(res.send.bind(res)).catch(next);
   } catch (e) { next(e); }
 });
 // Main GuilgeeAvlaguud CRUD
@@ -300,7 +297,9 @@ router.get("/geree", tokenShalgakh, async (req, res, next) => {
     if (!!body?.query) body.query = JSON.parse(body.query);
     if (!!body?.order) body.order = JSON.parse(body.order);
 
-    // Strip no-op empty-string $regex clauses
+    // Strip no-op empty-string $regex clauses (matches everything, but still
+    // forces a full collection scan since Mongo can't use an index for them) -
+    // seen sent by the client on every request even with an empty search box.
     if (body.query && Array.isArray(body.query.$or)) {
       body.query.$or = body.query.$or.filter(
         (clause) => !Object.values(clause).some((v) => v && v.$regex === ""),
@@ -308,26 +307,11 @@ router.get("/geree", tokenShalgakh, async (req, res, next) => {
       if (body.query.$or.length === 0) delete body.query.$or;
     }
 
-    const page = Math.max(1, parseInt(body.khuudasniiDugaar || "1", 10));
-    let limit = parseInt(body.khuudasniiKhemjee || "50", 10);
-    if (limit > MAX_KHUUDASNII_KHEMJEE) limit = MAX_KHUUDASNII_KHEMJEE;
-    const skip = (page - 1) * limit;
-    const order = body.order || { createdAt: -1 };
-    const query = body.query || {};
+    if (Number(body.khuudasniiKhemjee) > MAX_KHUUDASNII_KHEMJEE) {
+      body.khuudasniiKhemjee = MAX_KHUUDASNII_KHEMJEE;
+    }
 
-    const GereeModel = Geree(req.body.tukhainBaaziinKholbolt);
-    const [jagsaalt, niit] = await Promise.all([
-      GereeModel.find(query).sort(order).skip(skip).limit(limit).lean(),
-      GereeModel.countDocuments(query),
-    ]);
-
-    const result = {
-      jagsaalt,
-      niit,
-      huudas: page,
-      huudasniiKhemjee: limit,
-      niitHuudas: Math.ceil(niit / limit) || 1,
-    };
+    const result = await khuudaslalt(Geree(req.body.tukhainBaaziinKholbolt), body);
 
     // Calculate uldegdel for each returned geree based on ledger
     if (result.jagsaalt && result.jagsaalt.length > 0) {
@@ -350,8 +334,9 @@ router.get("/geree", tokenShalgakh, async (req, res, next) => {
       });
 
       result.jagsaalt = result.jagsaalt.map(g => {
-        g.uldegdel = balanceMap[String(g._id)] || 0;
-        return g;
+        const gObj = g.toObject ? g.toObject() : g;
+        gObj.uldegdel = balanceMap[String(g._id)] || 0;
+        return gObj;
       });
     }
 
