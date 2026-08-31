@@ -576,7 +576,7 @@ function msgIlgeeye(
   baiguullagiinId,
 ) {
   try {
-    const ENABLE_SMS = false; // Set to true to re-enable SMS service
+    const ENABLE_SMS = true; // Set to true to re-enable SMS service
     if (!ENABLE_SMS) {
       console.log("⚠️ [ajiltan.msgIlgeeye] SMS service is temporarily disabled.");
       return;

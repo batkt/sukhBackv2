@@ -21,7 +21,7 @@ function msgIlgeeye(
   barilgiinId
 ) {
   try {
-    const ENABLE_SMS = false; // Set to true to re-enable SMS service
+    const ENABLE_SMS = true; // Set to true to re-enable SMS service
     if (!ENABLE_SMS) {
       console.log("⚠️ [msgIlgeeye] SMS service is temporarily disabled.");
       if (res && !res.headersSent) {
@@ -143,7 +143,7 @@ async function msgIlgeeyeUnitel(
   barilgiinId
 ) {
   try {
-    const ENABLE_SMS = false; // Set to true to re-enable SMS service
+    const ENABLE_SMS = true; // Set to true to re-enable SMS service
     if (!ENABLE_SMS) {
       console.log("⚠️ [msgIlgeeyeUnitel] SMS service is temporarily disabled.");
       if (res && !res.headersSent) {

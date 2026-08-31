@@ -5,7 +5,7 @@ const { getKholboltByBaiguullagiinId } = require("../utils/dbConnection");
 const axios = require("axios");
 
 async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, options = {}) {
-  const ENABLE_SMS = false; // Set to true to re-enable SMS service
+  const ENABLE_SMS = true; // Set to true to re-enable SMS service
   if (!ENABLE_SMS) {
     console.log(`⚠️ [SMS Notification] SMS sending is temporarily disabled for invoiceId: ${invoiceId}`);
     return { success: true, message: "SMS service temporarily disabled" };
