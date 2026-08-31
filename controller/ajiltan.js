@@ -576,6 +576,12 @@ function msgIlgeeye(
   baiguullagiinId,
 ) {
   try {
+    const ENABLE_SMS = false; // Set to true to re-enable SMS service
+    if (!ENABLE_SMS) {
+      console.log("⚠️ [ajiltan.msgIlgeeye] SMS service is temporarily disabled.");
+      return;
+    }
+
     if (!jagsaalt || index >= jagsaalt.length) {
       return;
     }

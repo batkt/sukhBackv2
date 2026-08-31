@@ -10,6 +10,12 @@ const MsgTuukh = require("../models/msgTuukh");
  * @returns {Promise<Array>} Results array
  */
 async function sendSms(messages, key, senderNumber, kholbolt) {
+  const ENABLE_SMS = false; // Set to true to re-enable SMS service
+  if (!ENABLE_SMS) {
+    console.log("⚠️ [smsService] SMS sending is temporarily disabled.");
+    return (messages || []).map(m => ({ status: "DISABLED", to: m.to, message: "SMS service disabled" }));
+  }
+
   const results = [];
   if (!messages || messages.length === 0) return results;
 

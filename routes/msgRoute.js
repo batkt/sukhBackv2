@@ -21,6 +21,15 @@ function msgIlgeeye(
   barilgiinId
 ) {
   try {
+    const ENABLE_SMS = false; // Set to true to re-enable SMS service
+    if (!ENABLE_SMS) {
+      console.log("⚠️ [msgIlgeeye] SMS service is temporarily disabled.");
+      if (res && !res.headersSent) {
+        res.send([{ Result: "DISABLED", message: "SMS service temporarily disabled" }]);
+      }
+      return;
+    }
+
     if (!jagsaalt || index >= jagsaalt.length) {
       if (res && !res.headersSent) {
         res.send(khariu);
@@ -134,6 +143,15 @@ async function msgIlgeeyeUnitel(
   barilgiinId
 ) {
   try {
+    const ENABLE_SMS = false; // Set to true to re-enable SMS service
+    if (!ENABLE_SMS) {
+      console.log("⚠️ [msgIlgeeyeUnitel] SMS service is temporarily disabled.");
+      if (res && !res.headersSent) {
+        res.send([{ status: "DISABLED", message: "SMS service temporarily disabled" }]);
+      }
+      return;
+    }
+
     for await (const data of jagsaalt) {
       const form = new FormData();
       form.append("token_id", key);

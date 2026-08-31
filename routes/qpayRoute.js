@@ -3551,6 +3551,16 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
     const msgText = `Tulbur sanuulakh. ${tootStr} uldegdel dun: ${new Intl.NumberFormat("mn-MN").format(overallUldegdel)}. Tulukh kholboos: ${paymentLink}`;
 
     // 3. CallPro SMS API Settings
+    const ENABLE_SMS = false; // Set to true to re-enable SMS service
+    if (!ENABLE_SMS) {
+      console.log(`⚠️ [qpayRoute] Reminder SMS sending is temporarily disabled.`);
+      return res.status(200).send({
+        status: true,
+        message: "SMS сервис түр идэвхгүй байна (SMS disabled)",
+        disabled: true
+      });
+    }
+
     const key = "aa8e588459fdd9b7ac0b809fc29cfae3";
     const dugaar = "72002002";
     const activeUrl = "https://api-text.callpro.mn/v1/sms/send";
