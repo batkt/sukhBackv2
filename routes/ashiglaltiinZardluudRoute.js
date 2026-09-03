@@ -72,6 +72,83 @@ router.get("/ashiglaltiinZardluudAvya", async (req, res, next) => {
   }
 });
 
+// POST route to sync/cleanup stale zardal entries on existing contracts
+router.post("/zardalTseverlekhiya", async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const { baiguullagiinId, barilgiinId } = req.body;
+
+    if (!baiguullagiinId) {
+      return res.status(400).send({
+        success: false,
+        message: "baiguullagiinId is required",
+      });
+    }
+
+    const tukhainBaaziinKholbolt = db.kholboltuud.find(
+      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
+    );
+
+    if (!tukhainBaaziinKholbolt) {
+      return res.status(404).send({
+        success: false,
+        message: "Organization connection not found",
+      });
+    }
+
+    // 1. Fetch all active valid zardluud for this org
+    const activeZardluud = await ashiglaltiinZardluud(tukhainBaaziinKholbolt).find({
+      baiguullagiinId: String(baiguullagiinId),
+    });
+
+    const activeNamesSet = new Set(
+      activeZardluud.map((z) => String(z.ner || "").trim().toLowerCase())
+    );
+
+    // 2. Query all contracts for this organization
+    const gereeQuery = { baiguullagiinId: String(baiguullagiinId) };
+    if (barilgiinId) {
+      gereeQuery.$or = [
+        { barilgiinId: String(barilgiinId) },
+        { barilgiinId: barilgiinId },
+        { barilgiinId: { $exists: false } },
+        { barilgiinId: null },
+        { barilgiinId: "" },
+      ];
+    }
+
+    const gereenuud = await Geree(tukhainBaaziinKholbolt, true).find(gereeQuery);
+    let updatedCount = 0;
+
+    for (const geree of gereenuud) {
+      if (!geree.zardluud || geree.zardluud.length === 0) continue;
+
+      const origLen = geree.zardluud.length;
+      geree.zardluud = geree.zardluud.filter((z) => {
+        const zName = String(z.ner || "").trim().toLowerCase();
+        return activeNamesSet.has(zName);
+      });
+
+      if (geree.zardluud.length !== origLen) {
+        geree.niitTulbur = geree.zardluud.reduce(
+          (sum, zardal) => sum + (zardal.tariff || 0),
+          0
+        );
+        await geree.save();
+        updatedCount++;
+      }
+    }
+
+    res.send({
+      success: true,
+      message: `Амжилттай ${updatedCount} гэрээнээс хуучин зардлуудыг цэвэрлэлээ`,
+      updatedContractsCount: updatedCount,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST route to create new ashiglaltiinZardluud
 router.post("/ashiglaltiinZardluudNemekh", async (req, res, next) => {
   try {

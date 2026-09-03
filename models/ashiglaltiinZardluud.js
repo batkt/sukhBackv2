@@ -41,6 +41,30 @@ const ashiglaltiinZardluudSchema = new Schema(
   }
 );
 
+// Helper function to check if two zardals match (flexible case & whitespace)
+function isSameZardal(z1, z2) {
+  if (!z1 || !z2) return false;
+  const ner1 = String(z1.ner || "").trim().toLowerCase();
+  const ner2 = String(z2.ner || "").trim().toLowerCase();
+  if (!ner1 || !ner2 || ner1 !== ner2) return false;
+
+  const turul1 = String(z1.turul || "").trim().toLowerCase();
+  const turul2 = String(z2.turul || "").trim().toLowerCase();
+  if (turul1 && turul2 && turul1 !== turul2) return false;
+
+  return true;
+}
+
+// Pre-deletion hook: Store document before query execution so we never lose it in post hook
+ashiglaltiinZardluudSchema.pre(
+  ["findOneAndDelete", "deleteOne", "findOneAndRemove", "deleteMany"],
+  async function () {
+    try {
+      this._docToDelete = await this.model.findOne(this.getQuery()).lean();
+    } catch (_) {}
+  }
+);
+
 ashiglaltiinZardluudSchema.post("save", async function (doc) {
   await handleZardluudUpdate(doc);
 });
@@ -58,33 +82,48 @@ ashiglaltiinZardluudSchema.post("updateOne", async function () {
   }
 });
 
+ashiglaltiinZardluudSchema.post(
+  ["findOneAndDelete", "deleteOne", "findOneAndRemove", "deleteMany"],
+  async function (resDoc) {
+    try {
+      const doc = resDoc || this._docToDelete;
+      if (!doc) return;
+      await handleZardluudDelete(doc);
+    } catch (err) {
+      console.error("Error in post-delete hook for ashiglaltiinZardluud:", err);
+    }
+  }
+);
+
 async function handleZardluudUpdate(doc) {
   try {
-    if (!doc) {
-      console.log("❌ No document found, exiting");
+    if (!doc || !doc.baiguullagiinId) {
       return;
     }
 
     const { db } = require("zevbackv2");
     const Geree = require("./geree");
-    const nekhemjlekhiinTuukh = require("./nekhemjlekhiinTuukh");
 
     const kholbolt = db.kholboltuud.find(
-      (a) => a.baiguullagiinId == doc.baiguullagiinId
+      (a) => String(a.baiguullagiinId) === String(doc.baiguullagiinId)
     );
 
     if (!kholbolt) return;
 
-    // Filter geree documents by both baiguullagiinId AND barilgiinId
-    // This ensures ashiglaltiinZardluud updates only affect the correct barilga
+    // Build flexible geree query for organization & building
     const gereeQuery = {
-      baiguullagiinId: doc.baiguullagiinId,
+      baiguullagiinId: String(doc.baiguullagiinId),
     };
 
-    // Only filter by barilgiinId if it exists in the doc
-    // This maintains backward compatibility for existing data
     if (doc.barilgiinId) {
-      gereeQuery.barilgiinId = doc.barilgiinId;
+      const bIdStr = String(doc.barilgiinId);
+      gereeQuery.$or = [
+        { barilgiinId: bIdStr },
+        { barilgiinId: doc.barilgiinId },
+        { barilgiinId: { $exists: false } },
+        { barilgiinId: null },
+        { barilgiinId: "" },
+      ];
     }
 
     const gereenuud = await Geree(kholbolt, true).find(gereeQuery);
@@ -94,49 +133,17 @@ async function handleZardluudUpdate(doc) {
         geree.zardluud = [];
       }
 
-      // First, remove ALL duplicates of this zardal (by ner, turul, zardliinTurul, and barilgiinId)
-      // This prevents duplicate entries from being added multiple times
-      // Also match by barilgiinId to ensure zardluud from different barilgas are kept separate
-      const matchingZardluudIndices = [];
-      for (let i = geree.zardluud.length - 1; i >= 0; i--) {
-        const z = geree.zardluud[i];
-        const matchesNer = z.ner === doc.ner;
-        const matchesTurul = z.turul === doc.turul;
-        const matchesZardliinTurul = z.zardliinTurul === doc.zardliinTurul;
-        const matchesBarilgiinId =
-          (!doc.barilgiinId && !z.barilgiinId) ||
-          (doc.barilgiinId &&
-            z.barilgiinId &&
-            String(doc.barilgiinId) === String(z.barilgiinId));
+      // Remove any pre-existing entry with matching name/turul
+      geree.zardluud = geree.zardluud.filter((z) => !isSameZardal(z, doc));
 
-        if (
-          matchesNer &&
-          matchesTurul &&
-          matchesZardliinTurul &&
-          matchesBarilgiinId
-        ) {
-          matchingZardluudIndices.push(i);
-        }
-      }
-
-      // If we found matches, remove all but keep track for updating
-      // If multiple duplicates exist, remove all and add one fresh entry
-      if (matchingZardluudIndices.length > 0) {
-        // Remove all duplicates (in reverse order to maintain indices)
-        for (let i = matchingZardluudIndices.length - 1; i >= 0; i--) {
-          geree.zardluud.splice(matchingZardluudIndices[i], 1);
-        }
-      }
-
-      // Now add/update with the new zardal (only one entry)
-      // Include barilgiinId to track which barilga this zardal came from
+      // Construct fresh zardal entry
       const newZardal = {
         ner: doc.ner,
         turul: doc.turul,
-        tariff: doc.tariff,
-        tariffUsgeer: doc.tariffUsgeer,
-        zardliinTurul: doc.zardliinTurul,
-        barilgiinId: doc.barilgiinId || "", // Track which barilga this zardal belongs to
+        tariff: doc.tariff || 0,
+        tariffUsgeer: doc.tariffUsgeer || "",
+        zardliinTurul: doc.zardliinTurul || "Энгийн",
+        barilgiinId: doc.barilgiinId || "",
         tulukhDun: 0,
         dun: doc.dun || 0,
         bodokhArga: doc.bodokhArga || "",
@@ -150,7 +157,6 @@ async function handleZardluudUpdate(doc) {
         suuriKhuraamj: doc.suuriKhuraamj || 0,
         nuatNemekhEsekh: doc.nuatNemekhEsekh || false,
         ognoonuud: doc.ognoonuud || [],
-        // Include electricity-specific fields
         zaalt: doc.zaalt || false,
         zaaltTariff: doc.zaaltTariff || 0,
         zaaltDefaultDun: doc.zaaltDefaultDun || 0,
@@ -164,16 +170,64 @@ async function handleZardluudUpdate(doc) {
       }, 0);
 
       geree.niitTulbur = niitTulbur;
-
-      // Save the updated geree
       await geree.save();
-
-      // NOTE: Do NOT update existing nekhemjlekhiinTuukh records
-      // Once an invoice is created, it should NEVER be modified
     }
   } catch (error) {
     console.error(
-      "Error updating geree and nekhemjlekh after ashiglaltiinZardluud update:",
+      "Error updating geree after ashiglaltiinZardluud update:",
+      error
+    );
+  }
+}
+
+async function handleZardluudDelete(doc) {
+  try {
+    if (!doc || !doc.baiguullagiinId) return;
+
+    const { db } = require("zevbackv2");
+    const Geree = require("./geree");
+
+    const kholbolt = db.kholboltuud.find(
+      (a) => String(a.baiguullagiinId) === String(doc.baiguullagiinId)
+    );
+
+    if (!kholbolt) return;
+
+    const gereeQuery = {
+      baiguullagiinId: String(doc.baiguullagiinId),
+    };
+
+    if (doc.barilgiinId) {
+      const bIdStr = String(doc.barilgiinId);
+      gereeQuery.$or = [
+        { barilgiinId: bIdStr },
+        { barilgiinId: doc.barilgiinId },
+        { barilgiinId: { $exists: false } },
+        { barilgiinId: null },
+        { barilgiinId: "" },
+      ];
+    }
+
+    const gereenuud = await Geree(kholbolt, true).find(gereeQuery);
+
+    for (const geree of gereenuud) {
+      if (!geree.zardluud || geree.zardluud.length === 0) continue;
+
+      const initialLength = geree.zardluud.length;
+      geree.zardluud = geree.zardluud.filter((z) => !isSameZardal(z, doc));
+
+      if (geree.zardluud.length !== initialLength) {
+        const niitTulbur = geree.zardluud.reduce((sum, zardal) => {
+          return sum + (zardal.tariff || 0);
+        }, 0);
+
+        geree.niitTulbur = niitTulbur;
+        await geree.save();
+      }
+    }
+  } catch (error) {
+    console.error(
+      "Error updating geree after ashiglaltiinZardluud deletion:",
       error
     );
   }
@@ -182,72 +236,6 @@ async function handleZardluudUpdate(doc) {
 // Add audit hooks for tracking changes
 const { addAuditHooks } = require("../utils/auditHooks");
 addAuditHooks(ashiglaltiinZardluudSchema, "ashiglaltiinZardluud");
-
-ashiglaltiinZardluudSchema.post(
-  ["findOneAndDelete", "deleteOne"],
-  async function (doc) {
-    try {
-      if (!doc) return;
-
-      const { db } = require("zevbackv2");
-      const Geree = require("./geree");
-      const nekhemjlekhiinTuukh = require("./nekhemjlekhiinTuukh");
-
-      const kholbolt = db.kholboltuud.find(
-        (a) => a.baiguullagiinId == doc.baiguullagiinId
-      );
-
-      if (!kholbolt) return;
-
-      // Filter geree documents by both baiguullagiinId AND barilgiinId
-      // This ensures ashiglaltiinZardluud deletions only affect the correct barilga
-      const gereeQuery = {
-        baiguullagiinId: doc.baiguullagiinId,
-      };
-
-      // Only filter by barilgiinId if it exists in the doc
-      // This maintains backward compatibility for existing data
-      if (doc.barilgiinId) {
-        gereeQuery.barilgiinId = doc.barilgiinId;
-      }
-
-      const gereenuud = await Geree(kholbolt, true).find(gereeQuery);
-
-      for (const geree of gereenuud) {
-        if (!geree.zardluud) {
-          geree.zardluud = [];
-        }
-
-        geree.zardluud = geree.zardluud.filter(
-          (z) =>
-            !(
-              z.ner === doc.ner &&
-              z.turul === doc.turul &&
-              z.zardliinTurul === doc.zardliinTurul
-            )
-        );
-
-        const niitTulbur = geree.zardluud.reduce((sum, zardal) => {
-          return sum + (zardal.tariff || 0);
-        }, 0);
-
-        geree.niitTulbur = niitTulbur;
-
-        await geree.save();
-
-        // NOTE: Do NOT update existing nekhemjlekhiinTuukh records
-        // Once an invoice is created, it should NEVER be modified
-      }
-    } catch (error) {
-      console.error(
-        "Error updating geree and nekhemjlekh after ashiglaltiinZardluud deletion:",
-        error
-      );
-    }
-  }
-);
-
-//module.exports = mongoose.model("ashiglaltiinZardluud", ashiglaltiinZardluudSchema);
 
 module.exports = function a(conn) {
   if (!conn || !conn.kholbolt)
