@@ -2318,6 +2318,25 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
         return res.sendStatus(200);
       }
       foundQpayRecord = lockedRecord;
+
+      // Mark all individual QuickQpayObject records for these invoiceIds as paid to prevent duplicate single callbacks
+      try {
+        const idRegexes = invoiceIds.map((id) => ({ "qpay.callback_url": { $regex: id } }));
+        await QuickQpayModel.updateMany(
+          {
+            baiguullagiinId: baiguullagiinId,
+            $or: [
+              ...invoiceIds.map((id) => ({ "sukhNekhemjlekh.nekhemjlekhiinId": id })),
+              ...idRegexes,
+            ],
+          },
+          {
+            $set: { tulsunEsekh: true, status: "paid" },
+          }
+        );
+      } catch (mErr) {
+        console.error("⚠️ [QPAY MULTI CALLBACK] Failed marking related QuickQpayObjects:", mErr.message);
+      }
     }
 
     // Try normal invoices for invoice ID if not resolved
@@ -2447,12 +2466,18 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
         // (нэхэмжлэхийн өөрийн niitTulbur) ажиллана.
         try {
           if (foundQpayRecord && invoices.length === 1) {
-            invoicePaidAmount = parseFloat(
+            const recordAmount = parseFloat(
               foundQpayRecord.sukhNekhemjlekh?.pay_amount ||
               foundQpayRecord.amount ||
               foundQpayRecord.qpay?.amount ||
               0,
             );
+            const invTotal = nekhemjlekh.niitTulbur || 0;
+            if (invTotal > 0 && invTotal < recordAmount) {
+              invoicePaidAmount = invTotal;
+            } else if (recordAmount > 0) {
+              invoicePaidAmount = recordAmount;
+            }
           }
         } catch (qpErr) { }
 

@@ -275,15 +275,16 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
   let paymentTransactionId = req.query.qpay_payment_id || nekhemjlekh.qpayPaymentId;
 
   // Try to lock/update the QuickQpayObject atomically to prevent double execution
-  if (nekhemjlekh.qpayInvoiceId) {
+  if (nekhemjlekh.qpayInvoiceId || nekhemjlekhiinId) {
     const { QuickQpayObject } = require("quickqpaypackvSukh");
     const QuickQpayModel = QuickQpayObject(kholbolt);
 
     const lockedQpayRecord = await QuickQpayModel.findOneAndUpdate(
       {
         $or: [
-          { invoice_id: nekhemjlekh.qpayInvoiceId },
-          { "sukhNekhemjlekh.nekhemjlekhiinId": nekhemjlekhiinId }
+          ...(nekhemjlekh.qpayInvoiceId ? [{ invoice_id: nekhemjlekh.qpayInvoiceId }] : []),
+          { "sukhNekhemjlekh.nekhemjlekhiinId": nekhemjlekhiinId },
+          { "qpay.callback_url": { $regex: nekhemjlekhiinId } },
         ],
         tulsunEsekh: { $ne: true }
       },
