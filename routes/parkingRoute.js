@@ -749,10 +749,44 @@ router.post("/zogsoolUstgay", tokenShalgakh, async (req, res, next) => {
   }
 });
 
+/**
+ * Латин/кирилл ижил дүрст үсгийг кирилл рүү нэгтгэнэ. Улсын дугаар кирилл
+ * бичигтэй тул ANPR-ийн буцаасан латин хувилбарыг ижилтгэж харьцуулна.
+ */
+const IJIL_DURST = {
+  A: "А", B: "В", C: "С", E: "Е", H: "Н", K: "К", M: "М",
+  O: "О", P: "Р", T: "Т", X: "Х", Y: "У",
+};
+
+/**
+ * Харьцуулахад зориулж дугаарыг жишсэн хэлбэрт оруулна. ЗӨВХӨН харьцуулахад
+ * хэрэглэнэ — хадгалах утгыг өөрчлөхгүй.
+ */
+function dugaarJishikh(dugaar) {
+  return String(dugaar || "")
+    // Зай, тэг өргөнтэй болон удирдах тэмдэгтүүдийг бүрэн хасна.
+    .replace(/[\s\u200B-\u200D\uFEFF\u0000-\u001F]/g, "")
+    .toUpperCase()
+    .split("")
+    .map((u) => IJIL_DURST[u] || u)
+    .join("");
+}
+
+/** Алдаа мөшгихөд туслах: тэмдэгт бүрийн Unicode код. */
+function kodJagsaalt(dugaar) {
+  return String(dugaar || "")
+    .split("")
+    .map((u) => "U+" + u.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0"))
+    .join(" ");
+}
+
 router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
   try {
     if (req.body.mashiniiDugaar)
-      req.body.mashiniiDugaar = req.body.mashiniiDugaar.replace(/\0/g, "");
+      // .trim() to match how CAMERA_IP is handled two lines down. Without it a
+      // trailing space from the ANPR read makes the plate a different string
+      // than the one stored at entry, and every lookup misses.
+      req.body.mashiniiDugaar = req.body.mashiniiDugaar.replace(/\0/g, "").trim();
     if (req.body.CAMERA_IP)
       req.body.CAMERA_IP = req.body.CAMERA_IP.replace(/\0/g, "").trim();
     if (req.body.camerA_IP)
@@ -937,6 +971,56 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
       } catch (e) {
         console.error("[Gate] Зочин pre-check error:", e.message);
       }
+    }
+
+    // ── ANPR plate reconciliation ─────────────────────────────────────────
+    // sdkData looks the session up with an EXACT string match on
+    // mashiniiDugaar. A manual exit from the web always succeeds because it
+    // sends the plate read back out of the database — it is matching a value
+    // against itself. An automatic exit sends a fresh OCR read, from a
+    // different camera than the one that opened the session, so any trailing
+    // whitespace or Cyrillic/Latin homoglyph (У U+0423 vs Y U+0059, Е vs E,
+    // О vs O …) produces a string that looks identical on screen but does not
+    // match, and the car is refused with "Машин бүртгэгдээгүй байна".
+    //
+    // Here we look for an OPEN session whose plate is equivalent once
+    // normalised, and if the raw strings differ, rewrite the request to carry
+    // the stored spelling. sdkData then matches exactly, exactly as it does
+    // for a manual exit.
+    //
+    // This is a no-op whenever the strings already agree, which is the normal
+    // case — nothing is rewritten and no query result changes.
+    try {
+      const irsenDugaar = req.body.mashiniiDugaar;
+      if (irsenDugaar && req.body.tukhainBaaziinKholbolt) {
+        const ongorkhoiJagsaalt = await Uilchluulegch(req.body.tukhainBaaziinKholbolt)
+          .find({
+            baiguullagiinId: req.body.baiguullagiinId,
+            "tuukh.0.tsagiinTuukh.0.garsanTsag": { $exists: false },
+            "tuukh.0.tuluv": { $ne: -2 },
+          })
+          .select({ mashiniiDugaar: 1 })
+          .lean();
+
+        const tokhirokh = ongorkhoiJagsaalt.find(
+          (a) =>
+            a.mashiniiDugaar &&
+            a.mashiniiDugaar !== irsenDugaar &&
+            dugaarJishikh(a.mashiniiDugaar) === dugaarJishikh(irsenDugaar),
+        );
+
+        if (tokhirokh) {
+          console.log(
+            `🔤 [Gate] Улсын дугаар тохируулав: уншсан "${irsenDugaar}" ` +
+              `[${kodJagsaalt(irsenDugaar)}] → хадгалсан "${tokhirokh.mashiniiDugaar}" ` +
+              `[${kodJagsaalt(tokhirokh.mashiniiDugaar)}]`,
+          );
+          req.body.mashiniiDugaar = tokhirokh.mashiniiDugaar;
+        }
+      }
+    } catch (e) {
+      // Reconciliation is best-effort — never block a gate on it.
+      console.error("[Gate] Дугаар тохируулахад алдаа:", e.message);
     }
 
     const khariu = await sdkData(req, medegdel);
