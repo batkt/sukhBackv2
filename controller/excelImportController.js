@@ -2012,8 +2012,8 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             // Check if this toot already exists in user's toots array
             const existingTootIndex = orshinSuugch.toots?.findIndex(
               (t) =>
-                t.toot === tootEntry.toot &&
-                t.barilgiinId === tootEntry.barilgiinId,
+                String(t.toot || "").trim() === String(tootEntry.toot || "").trim() &&
+                String(t.barilgiinId || orshinSuugch.barilgiinId || "") === String(tootEntry.barilgiinId || "")
             );
 
             if (existingTootIndex >= 0) {
