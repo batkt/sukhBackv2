@@ -101,11 +101,35 @@ router.post("/zardalTseverlekhiya", async (req, res, next) => {
       baiguullagiinId: String(baiguullagiinId),
     });
 
-    const activeNamesSet = new Set(
-      activeZardluud.map((z) => String(z.ner || "").trim().toLowerCase())
-    );
+    // Construct master zardluud array from activeZardluud
+    const masterZardluud = activeZardluud.map((doc) => ({
+      ner: doc.ner,
+      turul: doc.turul,
+      tariff: doc.tariff || 0,
+      tariffUsgeer: doc.tariffUsgeer || "",
+      zardliinTurul: doc.zardliinTurul || "Энгийн",
+      barilgiinId: doc.barilgiinId || "",
+      tulukhDun: 0,
+      dun: doc.dun || 0,
+      bodokhArga: doc.bodokhArga || "",
+      tseverUsDun: doc.tseverUsDun || 0,
+      bokhirUsDun: doc.bokhirUsDun || 0,
+      usKhalaasniiDun: doc.usKhalaasniiDun || 0,
+      tsakhilgaanUrjver: doc.tsakhilgaanUrjver || 1,
+      tsakhilgaanChadal: doc.tsakhilgaanChadal || 0,
+      tsakhilgaanDemjikh: doc.tsakhilgaanDemjikh || 0,
+      tailbar: doc.tailbar || "",
+      suuriKhuraamj: doc.suuriKhuraamj || 0,
+      nuatNemekhEsekh: doc.nuatNemekhEsekh || false,
+      ognoonuud: doc.ognoonuud || [],
+      zaalt: doc.zaalt || false,
+      zaaltTariff: doc.zaaltTariff || 0,
+      zaaltDefaultDun: doc.zaaltDefaultDun || 0,
+      zaaltTariffTiers: doc.zaaltTariffTiers || [],
+    }));
 
-    // 2. Query all contracts for this organization
+    const masterTotal = masterZardluud.reduce((sum, z) => sum + (z.tariff || 0), 0);
+
     const gereeQuery = { baiguullagiinId: String(baiguullagiinId) };
     if (barilgiinId) {
       gereeQuery.$or = [
@@ -121,27 +145,15 @@ router.post("/zardalTseverlekhiya", async (req, res, next) => {
     let updatedCount = 0;
 
     for (const geree of gereenuud) {
-      if (!geree.zardluud || geree.zardluud.length === 0) continue;
-
-      const origLen = geree.zardluud.length;
-      geree.zardluud = geree.zardluud.filter((z) => {
-        const zName = String(z.ner || "").trim().toLowerCase();
-        return activeNamesSet.has(zName);
-      });
-
-      if (geree.zardluud.length !== origLen) {
-        geree.niitTulbur = geree.zardluud.reduce(
-          (sum, zardal) => sum + (zardal.tariff || 0),
-          0
-        );
-        await geree.save();
-        updatedCount++;
-      }
+      geree.zardluud = masterZardluud;
+      geree.niitTulbur = masterTotal;
+      await geree.save();
+      updatedCount++;
     }
 
     res.send({
       success: true,
-      message: `Амжилттай ${updatedCount} гэрээнээс хуучин зардлуудыг цэвэрлэлээ`,
+      message: `Амжилттай ${updatedCount} гэрээний зардлыг синк хийж шинэчиллээ`,
       updatedContractsCount: updatedCount,
     });
   } catch (err) {
