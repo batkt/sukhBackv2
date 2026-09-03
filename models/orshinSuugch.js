@@ -273,12 +273,11 @@ orshinSuugchSchema.pre("save", async function (next) {
     if (bId) {
       orConditions.push({ ...baseMatch, barilgiinId: bId });
       orConditions.push({
-        toots: { $elemMatch: { ...baseTootMatch, barilgiinId: bId } },
+        barilgiinId: bId,
+        toots: { $elemMatch: baseTootMatch },
       });
-    } else if (baId) {
-      orConditions.push({ ...baseMatch, baiguullagiinId: baId });
       orConditions.push({
-        toots: { $elemMatch: { ...baseTootMatch, baiguullagiinId: baId } },
+        toots: { $elemMatch: { ...baseTootMatch, barilgiinId: bId } },
       });
     }
     if (orConditions.length > 0) {

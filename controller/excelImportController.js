@@ -1664,6 +1664,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             finalBarilgiinId = String(matchingBarilga._id);
           }
         } else if (
+          !barilgiinId &&
           userData.toot &&
           userData.davkhar &&
           baiguullaga.barilguud &&
@@ -1800,8 +1801,15 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             baseMatch.orts = ortsToCheck;
             baseTootMatch.orts = ortsToCheck;
           }
+          const elemMatchNoBId = { toot: tootToCheck };
+          if (davkharToCheck) elemMatchNoBId.davkhar = davkharToCheck;
+          if (ortsToCheck) elemMatchNoBId.orts = ortsToCheck;
           const duplicateQuery = {
-            $or: [baseMatch, { toots: { $elemMatch: baseTootMatch } }],
+            $or: [
+              baseMatch,
+              { barilgiinId: finalBarilgiinId, toots: { $elemMatch: elemMatchNoBId } },
+              { toots: { $elemMatch: baseTootMatch } },
+            ],
           };
           if (existingUser) {
             duplicateQuery._id = { $ne: existingUser._id };

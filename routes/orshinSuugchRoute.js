@@ -572,12 +572,11 @@ router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
       if (barilgiinId) {
         orConditions.push({ ...baseMatch, barilgiinId });
         orConditions.push({
-          toots: { $elemMatch: { ...baseTootMatch, barilgiinId } },
+          barilgiinId,
+          toots: { $elemMatch: baseTootMatch },
         });
-      } else if (baiguullagiinId) {
-        orConditions.push({ ...baseMatch, baiguullagiinId });
         orConditions.push({
-          toots: { $elemMatch: { ...baseTootMatch, baiguullagiinId } },
+          toots: { $elemMatch: { ...baseTootMatch, barilgiinId } },
         });
       }
       if (orConditions.length > 0) {
@@ -810,21 +809,12 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
       if (updateBarilgiinId) {
         orConditions.push({ ...baseMatch, barilgiinId: updateBarilgiinId });
         orConditions.push({
+          barilgiinId: updateBarilgiinId,
+          toots: { $elemMatch: baseTootMatch },
+        });
+        orConditions.push({
           toots: {
             $elemMatch: { ...baseTootMatch, barilgiinId: updateBarilgiinId },
-          },
-        });
-      } else if (updateBaiguullagiinId) {
-        orConditions.push({
-          ...baseMatch,
-          baiguullagiinId: updateBaiguullagiinId,
-        });
-        orConditions.push({
-          toots: {
-            $elemMatch: {
-              ...baseTootMatch,
-              baiguullagiinId: updateBaiguullagiinId,
-            },
           },
         });
       }
