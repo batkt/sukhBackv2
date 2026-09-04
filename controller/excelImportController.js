@@ -226,7 +226,7 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
         const gereeList = await GereeModel.find({
           _id: { $in: gereeniiIds },
         })
-          .select("_id toot davkhar orts utas")
+          .select("_id toot davkhar orts utas tuluv status")
           .lean();
 
         gereeList.forEach((geree) => {
@@ -304,8 +304,15 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
 
 
         const gereeTuluv = (() => {
-          if (item.tsutsalsanOgnoo || (geree && geree.tsutsalsanOgnoo) || item.gereeniiTuluv === "Цуцалсан" || (geree && geree.tuluv === "Цуцалсан")) {
+          const status = String(geree?.tuluv || geree?.status || "").trim().toLowerCase();
+          if (status === "цуцалсан" || status === "tsutlsasan" || status === "cancel" || status === "cancelled") {
             return "Цуцалсан";
+          }
+          if (status === "идэвхгүй" || status === "inactive") {
+            return "Идэвхгүй";
+          }
+          if (status === "идэвхтэй" || status === "active") {
+            return "Идэвхтэй";
           }
           const raw = item.gereeniiTuluv || item.gereeTuluv || (geree ? geree.tuluv || geree.status : null);
           if (!raw) return "Идэвхтэй";
