@@ -1029,6 +1029,40 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
           } else {
             cell.alignment = { vertical: "middle", horizontal: "left" };
           }
+
+          // Status cell styling (Active = Soft Green, Cancelled = Soft Red)
+          const cellStr = String(cell.value || "").trim().toLowerCase();
+          const isStatusCol =
+            keyLower.includes("tuluv") ||
+            labelLower.includes("төлөв") ||
+            keyLower === "status" ||
+            labelLower === "status";
+
+          if (isStatusCol || cellStr.includes("идэвх") || cellStr.includes("цуц")) {
+            if (cellStr === "идэвхтэй" || cellStr === "active" || cellStr.includes("идэвх")) {
+              cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "E8F5E9" }, // Soft light green (#E8F5E9)
+              };
+              cell.font = {
+                color: { argb: "1B5E20" }, // Dark forest green (#1B5E20)
+                bold: true,
+              };
+              cell.alignment = { vertical: "middle", horizontal: "center" };
+            } else if (cellStr === "цуцалсан" || cellStr === "cancel" || cellStr === "cancelled" || cellStr.includes("цуц")) {
+              cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FFEBEE" }, // Soft light red (#FFEBEE)
+              };
+              cell.font = {
+                color: { argb: "B71C1C" }, // Dark crimson red (#B71C1C)
+                bold: true,
+              };
+              cell.alignment = { vertical: "middle", horizontal: "center" };
+            }
+          }
         });
       });
 
