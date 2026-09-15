@@ -408,6 +408,15 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
         if (result) kholbolt = tenantKholbolt;
       }
     }
+    // Дэлгэрэнгүй горим: оршин суугчтай холбоотой БҮХ мэдээллийг нэг
+    // дуудалтаар буцаана (вебийн "нүд" товч, аппын дэлгэрэнгүй дэлгэц).
+    // Заавал opt-in — эс тэгвээс жагсаалт татдаг бусад дуудагчид дээр
+    // хэрэггүй ачаалал нэмнэ.
+    const delgerenguiEsekh =
+      req.query.delgerengui === "true" || req.query.delgerengui === "1";
+    let buhGeree = [];
+    let tenantKholbolt = null;
+
     if (result != null) {
       result.key = result._id;
 
@@ -416,6 +425,7 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
         const tukhainBaaziinKholbolt = db.kholboltuud.find(
           (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
         );
+        tenantKholbolt = tukhainBaaziinKholbolt || null;
 
         if (tukhainBaaziinKholbolt) {
           try {
@@ -425,6 +435,7 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             const allGerees = await GereeModel.find({
               orshinSuugchId: result._id.toString(),
             }).lean();
+            buhGeree = allGerees;
 
             const activeGereeIds = allGerees.map((g) => g._id.toString());
             const activeGereeObjectIds = activeGereeIds.map(id => {
@@ -508,6 +519,74 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
         }
       }
     }
+
+    // ── Дэлгэрэнгүй: холбоотой бүх мэдээллийг хавсаргана ────────────────
+    if (result != null && delgerenguiEsekh) {
+      const khariu =
+        typeof result.toObject === "function"
+          ? result.toObject({ virtuals: true })
+          : { ...result };
+      // toObject() нь схемд байхгүй талбарыг (жишээ нь дээр тооцсон
+      // t.uldegdel) хаядаг тул тоот тус бүрийн үлдэгдлийг буцааж тавина.
+      if (Array.isArray(result.toots) && Array.isArray(khariu.toots)) {
+        result.toots.forEach((t, i) => {
+          if (khariu.toots[i] && t.uldegdel !== undefined)
+            khariu.toots[i].uldegdel = t.uldegdel;
+        });
+      }
+      khariu.gereenuud = buhGeree;
+
+      try {
+        // Гэр бүлийн гишүүд — эдгээр нь оршин суугчийн бичлэг тул үндсэн
+        // (erunkhii) холболтод байна.
+        khariu.gerBuliinGishuud = await OrshinSuugch(kholbolt)
+          .find({ undsenId: String(result._id) })
+          .select("ner ovog utas mail gishuuniiKholboo gishuuniiTuluv gishuuniiErkh gishuunUrisenOgnoo gishuunBatalgaajsanOgnoo")
+          .lean();
+      } catch (e) {
+        khariu.gerBuliinGishuud = [];
+      }
+
+      if (tenantKholbolt) {
+        try {
+          const OrshinSuugchMashin = require("../models/orshinSuugchMashin")(
+            tenantKholbolt,
+          );
+          khariu.mashinuud = await OrshinSuugchMashin.find({
+            orshinSuugchiinId: String(result._id),
+          }).lean();
+        } catch (e) {
+          khariu.mashinuud = [];
+        }
+
+        try {
+          const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud")(
+            tenantKholbolt,
+          );
+          // Эрсдлийн үнэлгээнд БҮХ түүх хэрэгтэй (өрийн насыг тооцоход), харин
+          // дэлгэц дээр сүүлийн 50-г л харуулна.
+          const buhGuilgee = await GuilgeeAvlaguud.find({
+            orshinSuugchId: String(result._id),
+          })
+            .select("ognoo dun turul toot gereeniiDugaar tulukhDun tulsunDun")
+            .sort({ ognoo: -1 })
+            .lean();
+          khariu.suuliinGuilgeenuud = buhGuilgee.slice(0, 50);
+          khariu.guilgeeniiNiitToo = buhGuilgee.length;
+          khariu.erslediinUnelgee = erslediinUnelgeeBodyo({
+            guilgeenuud: buhGuilgee,
+            orshinSuugch: khariu,
+            gereenuud: buhGeree,
+          });
+        } catch (e) {
+          khariu.suuliinGuilgeenuud = [];
+          khariu.guilgeeniiNiitToo = 0;
+        }
+      }
+
+      return res.send(khariu);
+    }
+
     res.send(result);
   } catch (error) {
     next(error);
@@ -763,10 +842,10 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
         req.body.toots = req.body.toots.map((t) => {
           const oldToot = Array.isArray(oldDoc.toots)
             ? oldDoc.toots.find(
-                (ot) =>
-                  String(ot.toot) === String(t.toot) &&
-                  String(ot.barilgiinId) === String(t.barilgiinId)
-              )
+              (ot) =>
+                String(ot.toot) === String(t.toot) &&
+                String(ot.barilgiinId) === String(t.barilgiinId)
+            )
             : null;
           if (oldToot && oldToot.ekhniiUldegdel !== undefined) {
             t.ekhniiUldegdel = oldToot.ekhniiUldegdel;
