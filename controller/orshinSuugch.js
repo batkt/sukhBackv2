@@ -5648,6 +5648,50 @@ exports.syncResidentContracts = async function syncResidentContracts(
     }
   }
 
+  // ── Эцсийн давхардлын цэвэрлэгээ ─────────────────────────────────────
+  // Гэрээ үүсгэх шийдвэрийг дээр нь "энэ тоот дээр идэвхтэй гэрээ байна уу"
+  // гэж УНШИЖ байж гаргадаг. Хэрэв хоёр хүсэлт зэрэгцэн ирвэл (оршин суугч
+  // бүртгэхэд POST + шууд дараа нь PUT явах, хадгалах товч давхар дарагдах,
+  // эсвэл зогсоол/агуулах нэмэх нь нэмэлт хадгалалт үүсгэх) хоёулаа "байхгүй"
+  // гэж уншаад хоёулаа үүсгэдэг — ингэж нэг тоот дээр ХОЁР идэвхтэй гэрээ
+  // үлддэг байв. Дээрх 3-р алхмын цэвэрлэгээ нь үүсгэхээс ӨМНӨ ажилладаг тул
+  // нөгөө хүсэлтийн үүсгэсэн гэрээг олж чаддаггүй.
+  //
+  // Уншилт/бичилтийн хооронд түгжээ тавих боломжгүй тул үүсгэсний ДАРАА дахин
+  // нэг шүүлт хийнэ: тоот бүрд хамгийн ЭРТ үүссэнийг үлдээж, бусдыг болон
+  // хүчинтэй тоотод хамаарахгүй (жишээ нь гараж/агуулахын нэр дээр үүссэн)
+  // гэрээг цуцална. Аль хүсэлт нь сүүлд дуусна тэр нь илүүдлийг цэвэрлэнэ.
+  try {
+    const idevkhteiGereenuud = await GereeModel.find({
+      orshinSuugchId: orshinSuugch._id.toString(),
+      tuluv: "Идэвхтэй",
+    })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    const kharagdsanTuulkhuur = new Set();
+    for (const g of idevkhteiGereenuud) {
+      const key = `${String(g.barilgiinId)}|${String(g.toot).trim()}`;
+      const khuchingui = !validUnitKeys.has(key);
+      const davkhardsan = kharagdsanTuulkhuur.has(key);
+      if (!khuchingui && !davkhardsan) {
+        kharagdsanTuulkhuur.add(key);
+        continue;
+      }
+      await GereeModel.findByIdAndUpdate(g._id, {
+        $set: {
+          tuluv: "Цуцалсан",
+          tsutsalsanOgnoo: new Date(),
+          temdeglel: khuchingui
+            ? "Системээс автоматаар цуцлагдсан (Тоот өөрчлөгдсөн эсвэл нэгдсэн гэрээ рүү шилжсэн)"
+            : "Системээс автоматаар цуцлагдсан (Давхардсан гэрээ цэвэрлэгээ)",
+        },
+      });
+    }
+  } catch (e) {
+    console.error("Давхардсан гэрээ цэвэрлэхэд алдаа:", e);
+  }
+
   return anyReactivated;
 };
 
