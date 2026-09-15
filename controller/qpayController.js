@@ -224,6 +224,9 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
             orshinSuugchNer: `${geree?.ovog || ""} ${geree?.ner || ""}`.trim() || qpayBarimt.ner || "",
             orshinSuugchUtas: (Array.isArray(geree?.utas) ? geree?.utas[0] : geree?.utas) || qpayBarimt.utas || "",
             gereeniiDugaar: geree?.gereeniiDugaar || qpayBarimt.gereeniiDugaar || "",
+            // Хүснэгтэд шууд ашиглах бүтэцтэй талбарууд (текстээс задлахгүй).
+            toot: geree?.toot || qpayBarimt.toot || "",
+            dun: amount,
             kharsanEsekh: false,
             status: "pending",
             turul: "medegdel",
@@ -549,6 +552,8 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
             orshinSuugchNer: `${geree?.ovog || ""} ${geree?.ner || ""}`.trim() || nekhemjlekh.ner || "",
             orshinSuugchUtas: (Array.isArray(geree?.utas) ? geree?.utas[0] : geree?.utas) || nekhemjlekh.utas || "",
             gereeniiDugaar: geree?.gereeniiDugaar || nekhemjlekh.gereeniiDugaar || "",
+            toot: geree?.toot || nekhemjlekh.toot || "",
+            dun: paidAmount,
             kharsanEsekh: false,
             status: "pending",
             turul: "medegdel",

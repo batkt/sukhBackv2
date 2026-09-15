@@ -3062,6 +3062,8 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
                     "",
                   gereeniiDugaar:
                     geree?.gereeniiDugaar || updatedInvoice.gereeniiDugaar || "",
+                  toot: geree?.toot || updatedInvoice.toot || "",
+                  dun: invoicePaidAmount,
                   kharsanEsekh: false,
                   status: "pending",
                   turul: "medegdel",

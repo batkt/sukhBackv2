@@ -15,6 +15,13 @@ const medegdelSchema = new Schema(
     gereeniiDugaar: String,
     message: String,
     orshinSuugchGereeniiDugaar: String,
+    // Төлөлтийн мэдэгдлийн ТООТ ба ДҮН. Өмнө нь эдгээр нь зөвхөн
+    // `message` текст дотор ("54 тоот, ... 128,158₮ төллөө.") байсан тул
+    // веб тал түүнийг regex-ээр задалж байж хүснэгт үзүүлдэг, эрэмбэлэх
+    // ч, нийлбэр бодох ч найдваргүй байв. Шинэ бичлэгүүд дээр эндээс
+    // шууд уншина (хуучин бичлэг дээр веб тал текстээс уншсаар байна).
+    toot: String,
+    dun: Number,
     orshinSuugchId: String,
     orshinSuugchNer: String,
     orshinSuugchUtas: String,
