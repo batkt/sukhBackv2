@@ -3571,7 +3571,9 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
         console.error("❌ Failed to save generated paymentToken:", saveErr.message);
       }
     }
-    const paymentLink = `https://amarhome.mn/pay/${paymentToken}`;
+    const rawServer = (process.env.UNDSEN_SERVER || process.env.API_URL || process.env.WEB_URL || "https://amarhome.mn").trim().replace(/\/+$/, "");
+    const webBase = rawServer.startsWith("http") ? rawServer : `https://${rawServer}`;
+    const paymentLink = `${webBase}/pay/${paymentToken}`;
 
     const msgText = `Tulbur sanuulakh. ${tootStr} uldegdel dun: ${new Intl.NumberFormat("mn-MN").format(overallUldegdel)}. Tulukh kholboos: ${paymentLink}`;
 

@@ -92,7 +92,9 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
         console.error("❌ Failed to save generated paymentToken in invoiceSendService:", saveErr.message);
       }
     }
-    const paymentLink = `https://amarhome.mn/pay/${paymentToken}`;
+    const rawServer = (process.env.UNDSEN_SERVER || process.env.API_URL || process.env.WEB_URL || "https://amarhome.mn").trim().replace(/\/+$/, "");
+    const webBase = rawServer.startsWith("http") ? rawServer : `https://${rawServer}`;
+    const paymentLink = `${webBase}/pay/${paymentToken}`;
     const appLink = `https://zevtabs.mn/qr/amarhome/`;
     let msgText;
 
