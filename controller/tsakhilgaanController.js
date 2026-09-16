@@ -19,7 +19,6 @@
  */
 
 const asyncHandler = require("express-async-handler");
-const mongoose = require("mongoose");
 const aldaa = require("../components/aldaa");
 const xlsx = require("xlsx");
 const excel = require("exceljs");
@@ -142,80 +141,6 @@ function baganaAvya(mur, ...nerus) {
   }
   return undefined;
 }
-
-/* ------------------------------------------------------------------ *
- *  Тохируулга унших / хадгалах
- * ------------------------------------------------------------------ */
-
-/** GET /tsakhilgaanBodolt?baiguullagiinId=...&barilgiinId=... */
-exports.tsakhilgaanBodoltAvya = asyncHandler(async (req, res, next) => {
-  try {
-    const { baiguullagiinId, barilgiinId } = req.query;
-    const { barilga } = await kheregteiZuilsiigOlyo(baiguullagiinId, barilgiinId);
-
-    res.status(200).json({
-      success: true,
-      data: {
-        baiguullagiinId: String(baiguullagiinId),
-        barilgiinId: String(barilgiinId),
-        zaaltaarTsakhilgaanBodokhEsekh: zaaltaarBodokhEsekh(barilga),
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/** POST /tsakhilgaanBodolt  { baiguullagiinId, barilgiinId, zaaltaarTsakhilgaanBodokhEsekh } */
-exports.tsakhilgaanBodoltKhadgalya = asyncHandler(async (req, res, next) => {
-  try {
-    const { baiguullagiinId, barilgiinId } = req.body;
-    const utga = req.body.zaaltaarTsakhilgaanBodokhEsekh;
-
-    if (typeof utga !== "boolean") {
-      throw new aldaa("«Заалтаар цахилгаан бодох» утга true/false байх ёстой");
-    }
-
-    const { db, baiguullaga } = await kheregteiZuilsiigOlyo(
-      baiguullagiinId,
-      barilgiinId
-    );
-
-    // Барилгын тохиргоо нь маш том, схемээс гадуурх талбаруудтай (жишээ нь
-    // `ashiglaltiinZardluud`) баримт учир liftShalgaya-тай ижилхэн шууд
-    // драйвераар нэг замыг л шинэчилнэ. Ингэснээр бусад талбар хөндөгдөхгүй.
-    const baiguullagiinObjectId = mongoose.Types.ObjectId.isValid(baiguullagiinId)
-      ? new mongoose.Types.ObjectId(baiguullagiinId)
-      : baiguullagiinId;
-    const barilgiinObjectId = mongoose.Types.ObjectId.isValid(barilgiinId)
-      ? new mongoose.Types.ObjectId(barilgiinId)
-      : barilgiinId;
-
-    await Baiguullaga(db.erunkhiiKholbolt).collection.updateOne(
-      { _id: baiguullagiinObjectId },
-      {
-        $set: {
-          "barilguud.$[barilga].tokhirgoo.zaaltaarTsakhilgaanBodokhEsekh": utga,
-        },
-      },
-      { arrayFilters: [{ "barilga._id": barilgiinObjectId }] }
-    );
-
-    res.status(200).json({
-      success: true,
-      message: utga
-        ? "Цахилгааныг заалтаар бодохоор тохирууллаа"
-        : "Цахилгааны дүнг гараар оруулахаар тохирууллаа",
-      data: {
-        baiguullagiinId: String(baiguullaga._id),
-        barilgiinId: String(barilgiinId),
-        zaaltaarTsakhilgaanBodokhEsekh: utga,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-});
 
 /* ------------------------------------------------------------------ *
  *  Цахилгааны дүнгийн Excel загвар

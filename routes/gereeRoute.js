@@ -25,8 +25,6 @@ const {
   importInitialBalanceFromExcel,
 } = require("../controller/excelImportController");
 const {
-  tsakhilgaanBodoltAvya,
-  tsakhilgaanBodoltKhadgalya,
   tsakhilgaanExcelTemplateAvya,
   tsakhilgaanExcelTatya,
 } = require("../controller/tsakhilgaanController");
@@ -53,15 +51,10 @@ router
 // Electricity data export
 router.post("/zaaltExcelDataAvya", tokenShalgakh, zaaltExcelDataAvya);
 
-// Цахилгааныг заалтаар бодох эсэх тохируулга (барилга тус бүрээр).
-// ЗӨВЛӨМЖ: замын нэрэнд "tokhirgoo" гэсэн үг бүү оруул — index.js дахь
-// exploit-bot шүүлтүүр тийм URL-ийг чимээгүйхэн 404 болгодог.
-router
-  .route("/tsakhilgaanBodolt")
-  .get(tokenShalgakh, tsakhilgaanBodoltAvya)
-  .post(tokenShalgakh, tsakhilgaanBodoltKhadgalya);
-
-// Заалтгүй горим: эцсийн дүнг шууд оруулах Excel
+// Заалтгүй горим: эцсийн дүнг шууд оруулах Excel.
+// Тохируулга нь барилгын `tokhirgoo.zaaltaarTsakhilgaanBodokhEsekh` талбарт
+// хадгалагддаг ба `/baiguullaga`-гийн энгийн update-аар (бусад нэмэлт
+// тохиргоотой ижил) бичигддэг тул тусдаа зам шаардлагагүй.
 router
   .route("/tsakhilgaanExcelTemplateAvya")
   .post(tokenShalgakh, tsakhilgaanExcelTemplateAvya);
