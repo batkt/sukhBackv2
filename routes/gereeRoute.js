@@ -28,6 +28,10 @@ const {
   tsakhilgaanExcelTemplateAvya,
   tsakhilgaanExcelTatya,
 } = require("../controller/tsakhilgaanController");
+const {
+  khungulultKhadgalya,
+  khungulultUstgaya,
+} = require("../controller/khungulultController");
 const gereeController = require("../controller/gereeController");
 
 const storage = multer.memoryStorage();
@@ -182,39 +186,9 @@ router.use((req, res, next) => {
 
 // Intercept manual receivable creation to ensure they get a nekhemjlekhId
 // and to prevent duplicate garage/storage avlaga within the same billing cycle.
-/**
- * Ажилтан «Хөнгөлөлт» гүйлгээ бүртгэх эрхтэй эсэхийг шалгана.
- *
- * Токен нь зөвхөн `id`-г авч явдаг (эрхийн жагсаалтыг агуулдаггүй) тул
- * ажилтныг баазаас уншина. Админ бүх эрхтэй.
- *
- * Дэлгэц дээр энэ сонголтыг нуудаг ч (`tulbur.khungulultOruulakh`), API
- * руу шууд хандахад нуулт нь хамгаалалт болохгүй тул энд давхар шалгав.
- */
-async function khungulultOruulakhErkhteiEsekh(ajiltniiId) {
-  if (!ajiltniiId) return false;
-  try {
-    const { db } = require("zevbackv2");
-    const Ajiltan = require("../models/ajiltan");
-    const ajiltan = await Ajiltan(db.erunkhiiKholbolt)
-      .findById(ajiltniiId)
-      .select("erkh tsonkhniiErkhuud")
-      .lean();
-    if (!ajiltan) return false;
-    if (String(ajiltan.erkh || "").toLowerCase() === "admin") return true;
-
-    const erkhuud = Array.isArray(ajiltan.tsonkhniiErkhuud)
-      ? ajiltan.tsonkhniiErkhuud
-      : [];
-    return (
-      erkhuud.includes("/tulbur/khungulultOruulakh") ||
-      erkhuud.includes("tulbur.khungulultOruulakh")
-    );
-  } catch (err) {
-    console.error("Хөнгөлөлтийн эрх шалгахад алдаа:", err.message);
-    return false;
-  }
-}
+const {
+  khungulultOruulakhErkhteiEsekh,
+} = require("../utils/khungulultErkh");
 
 router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
   const { gereeniiId, nekhemjlekhId, tukhainBaaziinKholbolt, tailbar, baiguullagiinId, barilgiinId } = req.body;
@@ -451,5 +425,9 @@ router.put(
   uploadFile.single("excelFile"),
   importTootBurtgelFromExcel,
 );
+
+// Хөнгөлөлт — бөөнөөр бүртгэх, устгах
+router.route("/khungulultKhadgalya").post(tokenShalgakh, khungulultKhadgalya);
+router.route("/khungulultUstgaya").post(tokenShalgakh, khungulultUstgaya);
 
 module.exports = router;
