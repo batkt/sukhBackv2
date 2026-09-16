@@ -2000,11 +2000,41 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
       const khogEsekh = (ner) =>
         !ner || KHOG_NER.has(ner) || ner.length > 50;
 
+      const isParkingCharge = (name, turul) => {
+        const n = String(name || "").trim().toLowerCase();
+        const t = String(turul || "").trim().toLowerCase();
+        if (t === "зогсоол" || t === "гараж") return true;
+        if (!n) return false;
+        if (n.includes("зочны")) return false;
+        return n.includes("зогсоол") || n.includes("гараж");
+      };
+
+      const extractParkingToot = (z, fallbackToot) => {
+        if (z.toot && String(z.toot).trim()) {
+          return String(z.toot).replace(/^тоот\s*[:#-]?\s*/i, "").trim();
+        }
+        const text = `${z.ner || ""} ${z.tailbar || ""}`.trim();
+        if (!text) return fallbackToot ? String(fallbackToot).trim() : "";
+        const m1 = text.match(/тоот\s*[:#-]?\s*([a-zA-Z0-9_\u0400-\u04FF-]+)/i);
+        if (m1 && m1[1]) return m1[1].replace(/[()]/g, "").trim();
+        const m2 = text.match(/(?:зогсоол|гараж)[^\d(]*\(([a-zA-Z0-9_\u0400-\u04FF-]+)\)/i);
+        if (m2 && m2[1]) {
+          const c = m2[1].trim();
+          if (!/^(нэхэмжлэх|авлага|бусад|төлбөр)/i.test(c)) return c.replace(/^тоот\s*[:#-]?\s*/i, "").trim();
+        }
+        const m3 = text.match(/(?:зогсоол|гараж)\s+([a-zA-Z0-9_\u0400-\u04FF-]+)/i);
+        if (m3 && m3[1]) {
+          const c = m3[1].trim();
+          if (!/^(төлбөр|хураамж|авлага|сарын)/i.test(c)) return c.replace(/^тоот\s*[:#-]?\s*/i, "").trim();
+        }
+        return fallbackToot ? String(fallbackToot).trim() : "";
+      };
+
       /** Нэхэмжлэхийн зардлууд — хоосон бол тайлбар/дүнгээр нь нөхнө */
       const zardluudAvya = (inv) =>
         Array.isArray(inv.zardluud) && inv.zardluud.length > 0
           ? inv.zardluud
-          : [{ ner: inv.tailbar, dun: inv.tulukhDun }];
+          : [{ ner: inv.tailbar, dun: inv.tulukhDun, toot: inv.toot }];
 
       const khugatsaaAvya = (ognoo) => {
         const d = new Date(ognoo);
@@ -2022,8 +2052,11 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
 
           zardluudAvya(inv).forEach((z) => {
             if (Number(z.dun || z.tulukhDun || 0) <= 0) return;
-            const name = String(z.ner || z.tailbar || "").trim();
+            let name = String(z.ner || z.tailbar || "").trim();
             if (khogEsekh(name)) return;
+            if (isParkingCharge(name, z.turul)) {
+              name = "Зогсоол";
+            }
             allChargeNames.add(name);
           });
         });
@@ -2114,6 +2147,7 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
         let grandTotal = 0;
         sortedPeriods.forEach(period => {
           const periodCosts = new Array(sortedChargeNames.length).fill(0);
+          const periodParking = new Map(); // toot -> dun
           let periodTotal = 0;
 
           (group.avlaga || []).forEach(inv => {
@@ -2124,12 +2158,22 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
               const amount = Number(z.dun || z.tulukhDun || 0);
               if (amount <= 0) return;
 
-              const name = String(z.ner || z.tailbar || "").trim();
+              let name = String(z.ner || z.tailbar || "").trim();
+              const isParking = isParkingCharge(name, z.turul);
+              if (isParking) {
+                name = "Зогсоол";
+              }
+
               const colIdx = khogEsekh(name)
                 ? -1
                 : sortedChargeNames.indexOf(name);
               if (colIdx >= 0) {
-                periodCosts[colIdx] += amount;
+                if (isParking) {
+                  const pToot = extractParkingToot(z, inv.toot) || "";
+                  periodParking.set(pToot, (periodParking.get(pToot) || 0) + amount);
+                } else {
+                  periodCosts[colIdx] += amount;
+                }
               }
               // Хогийн нэртэй зардал багана авахгүй ч нийт дүнд ОРНО —
               // эс тэгвээс "Ерөнхий Нийт" бодит дүнгээс бага гарна
@@ -2137,7 +2181,21 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
             });
           });
 
-          periodCosts.forEach(c => rowData.push(c));
+          periodCosts.forEach((c, idx) => {
+            if (sortedChargeNames[idx] === "Зогсоол") {
+              if (periodParking.size > 0) {
+                const parts = [];
+                periodParking.forEach((amt, t) => {
+                  parts.push(t ? `${t} тоот: ${amt.toLocaleString()}` : `${amt.toLocaleString()}`);
+                });
+                rowData.push(parts.join(", "));
+              } else {
+                rowData.push("");
+              }
+            } else {
+              rowData.push(c || "");
+            }
+          });
           rowData.push(periodTotal);
           grandTotal += periodTotal;
         });
@@ -2146,7 +2204,7 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
         const row = worksheet.addRow(rowData);
         row.eachCell((cell, colNumber) => {
           cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-          if (colNumber > 4) {
+          if (colNumber > 4 && typeof cell.value === "number") {
              cell.numFmt = '#,##0.00';
           }
         });
@@ -3359,6 +3417,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
           dun: Number(r.tulukhDun || r.undsenDun || 0),
           tailbar: r.tailbar || "",
           turul: r.zardliinTurul || "",
+          toot: r.toot || "",
           isEkhniiUldegdel: r.ekhniiUldegdelEsekh
         }));
       } else {
@@ -3373,6 +3432,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
             dun: Number(z.tulukhDun || z.dun || 0),
             tailbar: z.tailbar || "",
             turul: z.turul || "",
+            toot: z.toot || inv.toot || "",
             isEkhniiUldegdel: z.isEkhniiUldegdel
           }));
       }
@@ -3477,6 +3537,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
           ner: s.zardliinNer || "Авлага",
           dun: Number(s.tulukhDun || s.undsenDun || 0),
           tailbar: s.tailbar || "",
+          toot: s.toot || "",
         }],
         khungulultuud: [],
       };
