@@ -528,6 +528,9 @@ exports.medegdelIlgeeye = asyncHandler(async (req, res, next) => {
 
     const medegdelList = [];
     const io = req.app.get("socketio");
+    let pushSentCount = 0;
+    let pushFailedCount = 0;
+    const pushFailedList = [];
 
     for (const id of orshinSuugchIds) {
       const medegdel = new Medegdel(kholbolt)();
@@ -574,7 +577,7 @@ exports.medegdelIlgeeye = asyncHandler(async (req, res, next) => {
 
       // Add PUSH notification for residents
       try {
-        const resident = await OrshinSuugch(db.erunkhiiKholbolt).findById(id).select("firebaseToken");
+        const resident = await OrshinSuugch(db.erunkhiiKholbolt).findById(id).select("firebaseToken ner ovog toot");
         if (resident && resident.firebaseToken) {
           orshinSuugchidSonorduulgaIlgeeye(resident.firebaseToken, {
             title: medegdelObj.title || "Таньд мэдэгдэл ирлээ!",
@@ -582,9 +585,21 @@ exports.medegdelIlgeeye = asyncHandler(async (req, res, next) => {
             type: "medegdel",
             data: { id: String(medegdel._id) }
           });
+          pushSentCount++;
+        } else {
+          pushFailedCount++;
+          if (resident) {
+            pushFailedList.push({
+              id,
+              ner: `${resident.ovog || ""} ${resident.ner || ""}`.trim() || "Оршин суугч",
+              toot: resident.toot || "",
+              shaltgaan: "Апп холбогдоогүй",
+            });
+          }
         }
       } catch (pushErr) {
         console.error("Resident push error:", pushErr.message);
+        pushFailedCount++;
       }
     }
 
@@ -615,6 +630,11 @@ exports.medegdelIlgeeye = asyncHandler(async (req, res, next) => {
       success: true,
       data: medegdelList.length === 1 ? medegdelList[0] : medegdelList,
       count: medegdelList.length,
+      pushSentCount,
+      pushFailedCount,
+      pushFailedList,
+      ilgeesenCount: pushSentCount > 0 ? pushSentCount : medegdelList.length,
+      ilgeegeeguiCount: pushFailedCount,
       message: "Мэдэгдэл амжилттай илгээгдлээ",
     });
   } catch (error) {

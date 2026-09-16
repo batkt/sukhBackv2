@@ -71,6 +71,14 @@ const guilgeeAvlaguudSchema = new Schema(
     },
     guilgeeKhiisenAjiltniiNer: String,
     guilgeeKhiisenAjiltniiId: String,
+
+    // Хөнгөлөлтийн нэмэлт мэдээлэл (turees-тэй ижил ойлголт).
+    /** Хоногоор тооцсон хөнгөлөлт эсэх. */
+    khonogTootsokhEsekh: Boolean,
+    /** Хэдэн хоногийн хөнгөлөлт болохыг тэмдэглэнэ. */
+    khungulultKhonog: Number,
+    /** Хувиар тооцсон бол тухайн хувь. */
+    khungulultKhuvi: Number,
     avlagaGuilgeeIndex: Number,
   },
   {
