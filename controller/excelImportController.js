@@ -831,47 +831,138 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
       });
     }
 
+    // Fetch registered cars for these residents
+    const OrshinSuugchMashin = require("../models/orshinSuugchMashin");
+    const Mashin = require("../models/mashin");
+    const residentIds = orshinSuugchList.map((r) => String(r._id));
+    const residentToots = orshinSuugchList
+      .map((r) => String(r.toot || ""))
+      .filter(Boolean);
+
+    // 1. Central OrshinSuugchMashin
+    let centralCars = [];
+    try {
+      centralCars = await OrshinSuugchMashin(db.erunkhiiKholbolt)
+        .find({
+          baiguullagiinId: String(baiguullagiinId),
+          $or: [
+            { orshinSuugchiinId: { $in: residentIds } },
+            { ezenToot: { $in: residentToots } },
+          ],
+        })
+        .lean();
+    } catch (e) {}
+
+    // 2. Tenant DB OrshinSuugchMashin & Mashin
+    let tenantCars = [];
+    const tukhainBaaziinKholbolt = db.kholboltuud.find(
+      (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+    );
+    if (tukhainBaaziinKholbolt) {
+      try {
+        const osmTenant = await OrshinSuugchMashin(tukhainBaaziinKholbolt)
+          .find({
+            baiguullagiinId: String(baiguullagiinId),
+            $or: [
+              { orshinSuugchiinId: { $in: residentIds } },
+              { ezenToot: { $in: residentToots } },
+            ],
+          })
+          .lean();
+        tenantCars.push(...osmTenant);
+      } catch (e) {}
+
+      try {
+        const mashinTenant = await Mashin(tukhainBaaziinKholbolt)
+          .find({
+            baiguullagiinId: String(baiguullagiinId),
+            $or: [
+              { ezemshigchiinId: { $in: residentIds } },
+              { orshinSuugchiinId: { $in: residentIds } },
+              { ezenToot: { $in: residentToots } },
+            ],
+          })
+          .lean();
+        tenantCars.push(...mashinTenant);
+      } catch (e) {}
+    }
+
+    // Build map: residentId / toot -> Set of plate strings
+    const carMapById = new Map();
+    const carMapByToot = new Map();
+
+    const addPlate = (resId, toot, plate) => {
+      const p = String(plate || "").trim().toUpperCase().replace(/\s+/g, "");
+      if (!p || p === "БҮРТГЭЛГҮЙ") return;
+      if (resId) {
+        if (!carMapById.has(String(resId))) carMapById.set(String(resId), new Set());
+        carMapById.get(String(resId)).add(p);
+      }
+      if (toot) {
+        if (!carMapByToot.has(String(toot))) carMapByToot.set(String(toot), new Set());
+        carMapByToot.get(String(toot)).add(p);
+      }
+    };
+
+    [...centralCars, ...tenantCars].forEach((c) => {
+      const plate = c.mashiniiDugaar || c.dugaar;
+      const resId = c.orshinSuugchiinId || c.ezemshigchiinId;
+      const toot = c.ezenToot || c.toot;
+      addPlate(resId, toot, plate);
+    });
+
     // Format data for Excel
-    const formattedData = orshinSuugchList.map((item, index) => ({
-      dugaar: index + 1,
-      ovog: item.ovog || "",
-      ner: item.ner || "",
-      utas: item.utas || "",
-      mail: item.mail || "",
-      orts: item.orts || "1",
-      davkhar: item.davkhar || "",
-      toot: item.toot || "",
-      turul: item.turul || "Үндсэн",
-      duusakhOgnoo: item.duusakhOgnoo ? new Date(item.duusakhOgnoo).toISOString().split("T")[0] : "",
-      bairniiNer: item.bairniiNer || "",
-      duureg: item.duureg || "",
-      horoo: (() => {
-        if (typeof item.horoo === "object" && item.horoo !== null) {
-          return item.horoo.ner || "";
-        }
-        if (typeof item.horoo === "string" && item.horoo.trim().startsWith("{")) {
-          try {
-            return JSON.parse(item.horoo).ner || item.horoo;
-          } catch (e) {
-            const match = item.horoo.match(/ner['"]?\s*:\s*['"]([^'"]+)['"]/);
-            return match ? match[1] : item.horoo;
+    const formattedData = orshinSuugchList.map((item, index) => {
+      const resId = String(item._id);
+      const toot = String(item.toot || "");
+      const platesSet = new Set([
+        ...(carMapById.get(resId) || []),
+        ...(carMapByToot.get(toot) || []),
+      ]);
+      const mashiniiDugaar = Array.from(platesSet).join(", ");
+
+      return {
+        dugaar: index + 1,
+        ovog: item.ovog || "",
+        ner: item.ner || "",
+        utas: item.utas || "",
+        mail: item.mail || "",
+        orts: item.orts || "1",
+        davkhar: item.davkhar || "",
+        toot: item.toot || "",
+        mashiniiDugaar: mashiniiDugaar || "",
+        turul: item.turul || "Үндсэн",
+        gereeniiTuluv: (() => {
+          const raw = item.gereeniiTuluv || item.gereeTuluv || item.tuluv || item.status;
+          if (!raw) return "Идэвхтэй";
+          const s = String(raw).toLowerCase();
+          if (s.includes("цуцл") || s.includes("cancel")) return "Цуцлагдсан";
+          if (s.includes("идэвх") || s.includes("active")) return "Идэвхтэй";
+          return String(raw);
+        })(),
+        ekhniiUldegdel: Number(item.ekhniiUldegdel || item.uldegdel || 0),
+        duusakhOgnoo: item.duusakhOgnoo ? new Date(item.duusakhOgnoo).toISOString().split("T")[0] : "",
+        bairniiNer: item.bairniiNer || "",
+        duureg: item.duureg || "",
+        horoo: (() => {
+          if (typeof item.horoo === "object" && item.horoo !== null) {
+            return item.horoo.ner || "";
           }
-        }
-        return item.horoo || "";
-      })(),
-      soh: item.soh || "",
-      gereeniiTuluv: (() => {
-        const raw = item.gereeniiTuluv || item.gereeTuluv || item.tuluv || item.status;
-        if (!raw) return "Идэвхтэй";
-        const s = String(raw).toLowerCase();
-        if (s.includes("цуцл") || s.includes("cancel")) return "Цуцлагдсан";
-        if (s.includes("идэвх") || s.includes("active")) return "Идэвхтэй";
-        return String(raw);
-      })(),
-      ekhniiUldegdel: Number(item.ekhniiUldegdel || item.uldegdel || 0),
-      khonogoorBodokhEsekh: item.khonogoorBodokhEsekh ? "Тийм" : "Үгүй",
-      bodokhKhonog: item.bodokhKhonog || 0,
-    }));
+          if (typeof item.horoo === "string" && item.horoo.trim().startsWith("{")) {
+            try {
+              return JSON.parse(item.horoo).ner || item.horoo;
+            } catch (e) {
+              const match = item.horoo.match(/ner['"]?\s*:\s*['"]([^'"]+)['"]/);
+              return match ? match[1] : item.horoo;
+            }
+          }
+          return item.horoo || "";
+        })(),
+        soh: item.soh || "",
+        khonogoorBodokhEsekh: item.khonogoorBodokhEsekh ? "Тийм" : "Үгүй",
+        bodokhKhonog: item.bodokhKhonog || 0,
+      };
+    });
 
     // Set data for download
     req.body.data = formattedData;
@@ -884,6 +975,7 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
       { key: "orts", label: "Орц" },
       { key: "davkhar", label: "Давхар" },
       { key: "toot", label: "Тоот" },
+      { key: "mashiniiDugaar", label: "Машины дугаар" },
       { key: "turul", label: "Төрөл" },
       { key: "gereeniiTuluv", label: "Гэрээний төлөв" },
       { key: "ekhniiUldegdel", label: "Эхний үлдэгдэл" },
@@ -897,7 +989,7 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
     ];
     req.body.fileName = req.body.fileName || `Оршин_суугчдын_жагсаалт_${Date.now()}`;
     req.body.sheetName = req.body.sheetName || "Оршин суугчид";
-    req.body.colWidths = [8, 15, 15, 15, 20, 8, 8, 10, 12, 14, 15, 18, 20, 15, 15, 15, 12, 18];
+    req.body.colWidths = [8, 15, 15, 15, 20, 8, 8, 10, 18, 12, 14, 15, 18, 20, 15, 15, 15, 12, 18];
 
     // Call downloadExcelList function directly
     return exports.downloadExcelList(req, res, next);
@@ -1276,6 +1368,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
       "Орц",
       "Давхар",
       "Тоот",
+      "Машины дугаар",
       "Төрөл",
       "Гэрээ дуусах огноо",
       "Эхний үлдэгдэл",
@@ -1291,7 +1384,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     worksheet.columns = headers.map((h, i) => ({
       header: h,
       key: h,
-      width: [15, 15, 12, 25, 10, 10, 10, 15, 20, 15, 22, 22, 15, 20][i] || 15,
+      width: [15, 15, 12, 25, 10, 10, 10, 18, 15, 20, 15, 22, 22, 15, 20][i] || 15,
     }));
 
     // Style the header row (Row 1)
@@ -1337,8 +1430,8 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
       });
     }
 
-    // Data validation for Turul (Column H) - "Үндсэн", "Түр"
-    worksheet.dataValidations.add("H2:H2000", {
+    // Data validation for Turul (Column I) - "Үндсэн", "Түр"
+    worksheet.dataValidations.add("I2:I2000", {
       type: "list",
       allowBlank: true,
       formulae: ['"Үндсэн,Түр"'],
@@ -1347,8 +1440,8 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
       error: "Жагсаалтаас сонгоно уу!",
     });
 
-    // Data validation for KhonogoorBodokh (Column M) - "Тийм", "Үгүй"
-    worksheet.dataValidations.add("M2:M2000", {
+    // Data validation for KhonogoorBodokh (Column N) - "Тийм", "Үгүй"
+    worksheet.dataValidations.add("N2:N2000", {
       type: "list",
       allowBlank: true,
       formulae: ['"Тийм,Үгүй"'],
@@ -1434,7 +1527,128 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
       throw new aldaa("Холболт олдсонгүй");
     }
 
-    // Note: ashiglaltiinZardluudData will be fetched per row from baiguullaga.barilguud[].tokhirgoo
+    // Helper to register cars for a resident
+    const registerCars = async (resDoc, carPlates, targetBarilgaId, tootVal, phoneVal) => {
+      if (!Array.isArray(carPlates) || carPlates.length === 0) return;
+      try {
+        const OrshinSuugchMashin = require("../models/orshinSuugchMashin");
+        const Mashin = require("../models/mashin");
+        const CentralOSM = OrshinSuugchMashin(db.erunkhiiKholbolt);
+
+        const rowBuilding = baiguullaga.barilguud?.find(
+          (b) => String(b._id) === String(targetBarilgaId),
+        );
+        const buildingSettings = rowBuilding?.tokhirgoo?.zochinTokhirgoo;
+        const orgSettings = baiguullaga.tokhirgoo?.zochinTokhirgoo;
+        const defaultSettings =
+          buildingSettings && buildingSettings.zochinUrikhEsekh !== undefined
+            ? buildingSettings
+            : orgSettings;
+
+        for (const carPlate of carPlates) {
+          if (!carPlate || carPlate === "БҮРТГЭЛГҮЙ" || carPlate === "-") continue;
+
+          // 1. Central OrshinSuugchMashin
+          let existingCentral = await CentralOSM.findOne({
+            baiguullagiinId: baiguullaga._id.toString(),
+            mashiniiDugaar: carPlate,
+          });
+
+          if (!existingCentral) {
+            await CentralOSM.create({
+              orshinSuugchiinId: resDoc._id.toString(),
+              baiguullagiinId: baiguullaga._id.toString(),
+              barilgiinId: targetBarilgaId,
+              mashiniiDugaar: carPlate,
+              ezenToot: tootVal || resDoc.toot || "",
+              zochinUrikhEsekh: defaultSettings?.zochinUrikhEsekh !== false,
+              zochinTurul: "Оршин суугч",
+              zochinErkhiinToo: defaultSettings?.zochinErkhiinToo || 0,
+              zochinTusBurUneguiMinut: defaultSettings?.zochinTusBurUneguiMinut || 0,
+              zochinNiitUneguiMinut: defaultSettings?.zochinNiitUneguiMinut || 0,
+              zochinTailbar: defaultSettings?.zochinTailbar || "",
+              davtamjiinTurul: defaultSettings?.davtamjiinTurul || "saraar",
+              davtamjUtga: defaultSettings?.davtamjUtga,
+              utas: phoneVal || resDoc.utas || "",
+            });
+          } else if (!existingCentral.orshinSuugchiinId || existingCentral.orshinSuugchiinId !== resDoc._id.toString()) {
+            existingCentral.orshinSuugchiinId = resDoc._id.toString();
+            existingCentral.ezenToot = tootVal || resDoc.toot || existingCentral.ezenToot;
+            existingCentral.barilgiinId = targetBarilgaId || existingCentral.barilgiinId;
+            await existingCentral.save();
+          }
+
+          // 2. Tenant DB OrshinSuugchMashin & Mashin
+          if (tukhainBaaziinKholbolt) {
+            try {
+              const TenantOSM = OrshinSuugchMashin(tukhainBaaziinKholbolt);
+              let existingTenant = await TenantOSM.findOne({
+                baiguullagiinId: baiguullaga._id.toString(),
+                mashiniiDugaar: carPlate,
+              });
+
+              if (!existingTenant) {
+                await TenantOSM.create({
+                  orshinSuugchiinId: resDoc._id.toString(),
+                  baiguullagiinId: baiguullaga._id.toString(),
+                  barilgiinId: targetBarilgaId,
+                  mashiniiDugaar: carPlate,
+                  ezenToot: tootVal || resDoc.toot || "",
+                  zochinUrikhEsekh: defaultSettings?.zochinUrikhEsekh !== false,
+                  zochinTurul: "Оршин суугч",
+                  zochinErkhiinToo: defaultSettings?.zochinErkhiinToo || 0,
+                  zochinTusBurUneguiMinut: defaultSettings?.zochinTusBurUneguiMinut || 0,
+                  zochinNiitUneguiMinut: defaultSettings?.zochinNiitUneguiMinut || 0,
+                  zochinTailbar: defaultSettings?.zochinTailbar || "",
+                  davtamjiinTurul: defaultSettings?.davtamjiinTurul || "saraar",
+                  davtamjUtga: defaultSettings?.davtamjUtga,
+                  utas: phoneVal || resDoc.utas || "",
+                });
+              } else if (!existingTenant.orshinSuugchiinId || existingTenant.orshinSuugchiinId !== resDoc._id.toString()) {
+                existingTenant.orshinSuugchiinId = resDoc._id.toString();
+                existingTenant.ezenToot = tootVal || resDoc.toot || existingTenant.ezenToot;
+                existingTenant.barilgiinId = targetBarilgaId || existingTenant.barilgiinId;
+                await existingTenant.save();
+              }
+            } catch (e) {}
+
+            try {
+              const MashinModel = Mashin(tukhainBaaziinKholbolt);
+              let existingMashin = await MashinModel.findOne({
+                baiguullagiinId: baiguullaga._id.toString(),
+                dugaar: carPlate,
+              });
+
+              if (!existingMashin) {
+                await MashinModel.create({
+                  baiguullagiinId: baiguullaga._id.toString(),
+                  barilgiinId: targetBarilgaId,
+                  dugaar: carPlate,
+                  mashiniiDugaar: carPlate,
+                  ezemshigchiinId: resDoc._id.toString(),
+                  orshinSuugchiinId: resDoc._id.toString(),
+                  ezemshigchiinNer: resDoc.ner || "",
+                  ezemshigchiinUtas: phoneVal || resDoc.utas || "",
+                  ezenToot: tootVal || resDoc.toot || "",
+                  turul: "Оршин суугч",
+                  tuluv: "Идэвхтэй",
+                  zochinUrikhEsekh: defaultSettings?.zochinUrikhEsekh !== false,
+                  zochinTurul: "Оршин суугч",
+                });
+              } else if (!existingMashin.ezemshigchiinId || existingMashin.ezemshigchiinId !== resDoc._id.toString()) {
+                existingMashin.ezemshigchiinId = resDoc._id.toString();
+                existingMashin.orshinSuugchiinId = resDoc._id.toString();
+                existingMashin.ezenToot = tootVal || resDoc.toot || existingMashin.ezenToot;
+                existingMashin.barilgiinId = targetBarilgaId || existingMashin.barilgiinId;
+                await existingMashin.save();
+              }
+            } catch (e) {}
+          }
+        }
+      } catch (err) {
+        console.error("Error in registerCars:", err);
+      }
+    };
 
     const results = {
       success: [],
@@ -1498,6 +1712,17 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             ? legacySingleCol
             : 0;
 
+        const carRaw =
+          row["Машины дугаар"] ||
+          row["Машин"] ||
+          row["Улсын дугаар"] ||
+          row["Автомашин"] ||
+          "";
+        const carList = String(carRaw)
+          .split(/[,;\/\n\r]+/)
+          .map((c) => c.trim().toUpperCase().replace(/\s+/g, ""))
+          .filter((c) => Boolean(c) && c !== "БҮРТГЭЛГҮЙ" && c !== "-");
+
         const userData = {
           ovog: ovog,
           ner: ner,
@@ -1506,6 +1731,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           davkhar: row["Давхар"]?.toString().trim() || "",
           toot: row["Тоот"]?.toString().trim() || "",
           orts: row["Орц"]?.toString().trim() || "",
+          mashinuud: carList,
           ekhniiUldegdel: row["Эхний үлдэгдэл"]
             ? parseFloat(row["Эхний үлдэгдэл"]) || 0
             : 0,
@@ -1521,7 +1747,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           bodokhKhonog: parseInt(row["Ирээдүйд ашиглах хоног"]) || parseInt(row["Ашиглах хоног"]) || parseInt(row["Эхний сарын ашиглах хоног"]) || 0,
         };
 
-        // Check if this is an update-only row (only toot, davkhar, ekhniiUldegdel, and possibly tsahilgaaniiZaalt)
+        // Check if this is an update-only row (only toot, davkhar, ekhniiUldegdel, and possibly tsahilgaaniiZaalt or mashin)
         const isUpdateOnlyRow =
           (!userData.ner || userData.ner.length === 0) &&
           (!userData.utas || userData.utas.length === 0) &&
@@ -1533,7 +1759,8 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           userData.davkhar.length > 0 &&
           (userData.ekhniiUldegdel !== undefined ||
             userData.tsahilgaaniiZaalt !== undefined ||
-            userData.initialMeterReading !== undefined);
+            userData.initialMeterReading !== undefined ||
+            (userData.mashinuud && userData.mashinuud.length > 0));
 
         if (isUpdateOnlyRow) {
           // Find existing user by toot, davkhar, and orts
@@ -1622,6 +1849,17 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                   );
                 }
               }
+            }
+
+            // Register car(s) if provided in update row
+            if (userData.mashinuud && userData.mashinuud.length > 0) {
+              await registerCars(
+                existingOrshinSuugch,
+                userData.mashinuud,
+                existingOrshinSuugch.barilgiinId || defaultBarilgiinId,
+                userData.toot || existingOrshinSuugch.toot,
+                existingOrshinSuugch.utas,
+              );
             }
 
             results.success.push({
@@ -2079,6 +2317,17 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           orshinSuugch.bodokhKhonog = userData.bodokhKhonog;
         }
         await orshinSuugch.save();
+
+        // Register car(s) if provided
+        if (userData.mashinuud && userData.mashinuud.length > 0) {
+          await registerCars(
+            orshinSuugch,
+            userData.mashinuud,
+            finalBarilgiinId,
+            orshinSuugch.toot || userData.toot,
+            orshinSuugch.utas || userData.utas,
+          );
+        }
 
         // --- AUTO CREATE GUEST SETTINGS (OrshinSuugchMashin) ---
         try {
