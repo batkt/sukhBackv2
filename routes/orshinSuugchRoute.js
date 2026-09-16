@@ -245,7 +245,7 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
             orshinSuugchId: { $in: residentIds },
           })
             .select(
-              "_id orshinSuugchId baiguullagiinId ekhniiUldegdel umnukhZaalt suuliinZaalt toot davkhar tuluv",
+              "_id orshinSuugchId baiguullagiinId ekhniiUldegdel umnukhZaalt suuliinZaalt toot davkhar orts tuluv turesiinOrlogo sariniiTureeSan",
             )
             .lean();
 
@@ -325,6 +325,11 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
               const tootKey = `${resId}|${String(t.toot).trim()}`;
               const g = unitGereeMap[tootKey];
               if (g) {
+                t.gereeniiId = g._id.toString();
+                t.uldegdel = g.dynamicUldegdel !== undefined ? g.dynamicUldegdel : g.ekhniiUldegdel;
+                if (g.orts && !t.orts) t.orts = g.orts;
+                if (g.davkhar && !t.davkhar) t.davkhar = g.davkhar;
+                if (g.turesiinOrlogo !== undefined) t.turesiinOrlogo = g.turesiinOrlogo;
                 if (g.ekhniiUldegdel !== undefined) t.ekhniiUldegdel = g.ekhniiUldegdel;
 
                 if (g.khonogoorBodokhEsekh !== undefined) t.khonogoorBodokhEsekh = g.khonogoorBodokhEsekh;
@@ -360,6 +365,7 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
         // --- FINAL AUTHORITATIVE OVERLAY (Source of Truth: Geree) ---
         // If an active contract exists, it overrides everything else for billing display
         if (authoritativeGeree) {
+          mur.gereeniiId = authoritativeGeree._id.toString();
           if (authoritativeGeree.dynamicUldegdel !== undefined) {
             mur.ekhniiUldegdel = authoritativeGeree.dynamicUldegdel;
             mur.uldegdel = authoritativeGeree.dynamicUldegdel;
