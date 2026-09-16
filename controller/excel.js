@@ -1100,6 +1100,15 @@ exports.zaaltExcelTemplateAvya = asyncHandler(async (req, res, next) => {
       throw new aldaa("Барилга олдсонгүй");
     }
 
+    // Барилга «Заалтаар цахилгаан бодох»-ыг унтраасан бол цахилгааны дүнг
+    // хэрэглэгч өөрөө оруулдаг тул заалтын хоолойг хаана. Эс бөгөөс хоёр
+    // горим зэрэг бичиж, аль нь эцсийн дүн болсон нь ойлгомжгүй болно.
+    if (targetBarilga.tokhirgoo?.zaaltaarTsakhilgaanBodokhEsekh === false) {
+      throw new aldaa(
+        "«Заалтаар цахилгаан бодох» тохиргоо унтарсан байна. Цахилгааны дүнгийн Excel-ийг ашиглана уу."
+      );
+    }
+
     const tukhainBaaziinKholbolt = db.kholboltuud.find(
       (kholbolt) => kholbolt.baiguullagiinId === baiguullaga._id.toString()
     );
@@ -1303,6 +1312,15 @@ exports.zaaltExcelTatya = asyncHandler(async (req, res, next) => {
     );
     if (!targetBarilga) {
       throw new aldaa("Барилга олдсонгүй");
+    }
+
+    // Барилга «Заалтаар цахилгаан бодох»-ыг унтраасан бол цахилгааны дүнг
+    // хэрэглэгч өөрөө оруулдаг тул заалтын хоолойг хаана. Эс бөгөөс хоёр
+    // горим зэрэг бичиж, аль нь эцсийн дүн болсон нь ойлгомжгүй болно.
+    if (targetBarilga.tokhirgoo?.zaaltaarTsakhilgaanBodokhEsekh === false) {
+      throw new aldaa(
+        "«Заалтаар цахилгаан бодох» тохиргоо унтарсан байна. Цахилгааны дүнгийн Excel-ийг ашиглана уу."
+      );
     }
 
     // Find electricity zardal (zaalt = true AND is a VARIABLE electricity charge)

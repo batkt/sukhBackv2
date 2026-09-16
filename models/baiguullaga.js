@@ -122,6 +122,15 @@ const baiguullagaSchema = new Schema(
           liftShalgaya: {
             choloolugdokhDavkhar: [String],
           },
+          /** Цахилгааныг заалтаар бодох эсэх.
+           *  true  - тоолуурын заалт (Өдөр/Шөнө/Өмнө) уншиж, кВт тарифаар бодно.
+           *  false - хэрэглэгч эцсийн дүнг Excel-ээр шууд оруулж, тэр дүн нь
+           *          Цахилгааны төлбөр болно. Тооцоолол хийхгүй.
+           *  Хоосон бол `true` гэж үзнэ (хуучин барилгуудын зан төлөв хэвээр). */
+          zaaltaarTsakhilgaanBodokhEsekh: {
+            type: Boolean,
+            default: true,
+          },
           /** Дансны мэдээлэл - барилга тус бүрт тусдаа */
           dans: {
             dugaar: String, // Дансны дугаар

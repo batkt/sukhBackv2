@@ -24,6 +24,12 @@ const {
   generateInitialBalanceTemplate,
   importInitialBalanceFromExcel,
 } = require("../controller/excelImportController");
+const {
+  tsakhilgaanBodoltAvya,
+  tsakhilgaanBodoltKhadgalya,
+  tsakhilgaanExcelTemplateAvya,
+  tsakhilgaanExcelTatya,
+} = require("../controller/tsakhilgaanController");
 const gereeController = require("../controller/gereeController");
 
 const storage = multer.memoryStorage();
@@ -46,6 +52,22 @@ router
 
 // Electricity data export
 router.post("/zaaltExcelDataAvya", tokenShalgakh, zaaltExcelDataAvya);
+
+// Цахилгааныг заалтаар бодох эсэх тохируулга (барилга тус бүрээр).
+// ЗӨВЛӨМЖ: замын нэрэнд "tokhirgoo" гэсэн үг бүү оруул — index.js дахь
+// exploit-bot шүүлтүүр тийм URL-ийг чимээгүйхэн 404 болгодог.
+router
+  .route("/tsakhilgaanBodolt")
+  .get(tokenShalgakh, tsakhilgaanBodoltAvya)
+  .post(tokenShalgakh, tsakhilgaanBodoltKhadgalya);
+
+// Заалтгүй горим: эцсийн дүнг шууд оруулах Excel
+router
+  .route("/tsakhilgaanExcelTemplateAvya")
+  .post(tokenShalgakh, tsakhilgaanExcelTemplateAvya);
+router
+  .route("/tsakhilgaanExcelTatya")
+  .post(uploadFile.single("file"), tokenShalgakh, tsakhilgaanExcelTatya);
 
 // GuilgeeniiTuukh Excel download
 router.post(
