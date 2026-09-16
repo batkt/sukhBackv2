@@ -40,6 +40,12 @@ const guilgeeAvlaguudSchema = new Schema(
     turul: String,
     aldangiinTurul: String,
     zardliinTurul: String,
+    /**
+     * Гүйлгээний ХАРАГДАХ хэлбэр (Төлбөр / Бартер / Нэхэмжлэх ...).
+     * Дэлгэц нь `khelber || "Төлбөр"` гэж уншдаг тул бартер мэтийн
+     * мөнгөн бус төлөлтийг ялгаж харуулахад хэрэгтэй.
+     */
+    khelber: String,
     zardliinId: String,
     zardliinNer: String,
 

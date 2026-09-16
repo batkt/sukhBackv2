@@ -65,18 +65,40 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
 
     const allResidents = await OrshinSuugch(db.erunkhiiKholbolt).find(resQuery).lean();
     const residentMapById = {};
+    const residentByToot = {};
     const plateToResidentMap = {};
 
     for (const r of allResidents) {
       const rId = String(r._id);
+      let toot = r.toot || "";
+      let davkhar = r.davkhar || "";
+      let orts = r.orts || "";
+      if (Array.isArray(r.toots) && r.toots.length > 0) {
+        const matchingToot =
+          (barilgiinId &&
+            r.toots.find(
+              (t) => String(t.barilgiinId || "") === String(barilgiinId)
+            )) ||
+          r.toots[0];
+        if (matchingToot) {
+          toot = matchingToot.toot || toot;
+          davkhar = matchingToot.davkhar || davkhar;
+          orts = matchingToot.orts || orts;
+        }
+      }
       const resInfo = {
         orshinSuugchiinId: rId,
-        ner: [r.ovog, r.ner].filter(Boolean).join(" ") || r.ner || r.toot || "Оршин суугч",
-        toot: r.toot || "",
-        davkhar: r.davkhar || "",
-        utas: Array.isArray(r.utas) ? (r.utas[0] || "") : (r.utas || ""),
+        ner: [r.ovog, r.ner].filter(Boolean).join(" ") || r.ner || (toot ? `Тоот ${toot}` : "Оршин суугч"),
+        toot: String(toot || ""),
+        davkhar: String(davkhar || ""),
+        orts: String(orts || ""),
+        utas: Array.isArray(r.utas) ? (r.utas[0] || "") : String(r.utas || ""),
       };
       residentMapById[rId] = resInfo;
+      if (toot) {
+        const tKey = String(toot).toLowerCase().trim();
+        if (!residentByToot[tKey]) residentByToot[tKey] = resInfo;
+      }
 
       if (Array.isArray(r.mashinuud)) {
         for (const m of r.mashinuud) {
@@ -102,14 +124,18 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
       const plate = (osm.mashiniiDugaar || "").trim().toUpperCase();
       if (!plate) continue;
       const rid = String(osm.orshinSuugchiinId || "");
+      const tKey = String(osm.ezenToot || "").toLowerCase().trim();
       if (rid && residentMapById[rid] && !plateToResidentMap[plate]) {
         plateToResidentMap[plate] = residentMapById[rid];
+      } else if (!plateToResidentMap[plate] && tKey && residentByToot[tKey]) {
+        plateToResidentMap[plate] = residentByToot[tKey];
       } else if (!plateToResidentMap[plate] && osm.ezenToot) {
         plateToResidentMap[plate] = {
           orshinSuugchiinId: rid || `toot_${osm.ezenToot}`,
           ner: `Тоот ${osm.ezenToot}`,
-          toot: osm.ezenToot,
+          toot: String(osm.ezenToot),
           davkhar: "",
+          orts: "",
           utas: "",
         };
       }
@@ -122,9 +148,6 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
       for (const ez of ezenList) {
         // ЖИЧ: ezenUrisanMashin схемийн талбарууд нь `urisanMashiniiDugaar`,
         // `ezemshigchiinId`, `ezemshigchiinNer`, `ezemshigchiinUtas` юм.
-        // Урьд нь `mashiniiDugaar` / `orshinSuugchId` / `ezenToot` гэж уншиж
-        // байсан тул ЭНЭ ЭХ СУРВАЛЖ ОГТ АЖИЛЛАДАГГҮЙ, өөрөөр хэлбэл оршин
-        // суугчийн урьсан зочид тайланд ОРДОГГҮЙ байв.
         const plate = String(ez.urisanMashiniiDugaar || ez.mashiniiDugaar || "")
           .trim()
           .toUpperCase();
@@ -140,12 +163,18 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
 
         const ner = ez.ezemshigchiinNer || ez.ner || ez.orshinSuugchNer || "";
         const toot = ez.ezenToot || "";
+        const tKey = String(toot || "").toLowerCase().trim();
+        if (tKey && residentByToot[tKey]) {
+          plateToResidentMap[plate] = residentByToot[tKey];
+          continue;
+        }
         if (ner || toot) {
           plateToResidentMap[plate] = {
             orshinSuugchiinId: rid || `toot_${toot || ner}`,
             ner: ner || `Тоот ${toot}`,
             toot: String(toot || ""),
             davkhar: "",
+            orts: "",
             utas: ez.ezemshigchiinUtas || ez.utas || "",
           };
         }
@@ -155,13 +184,8 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
     }
 
     // 3b. Оршин суугчийн болон зочны машин вэбээс бүртгэхэд tenant DB-ийн
-    // `mashin` цуглуулгад орно (/zochinHadgalya энд бичдэг). Тайлан урьд нь
-    // энэ цуглуулгыг ОГТ уншдаггүй байсан тул вэбээс бүртгэсэн машинууд
-    // оршин суугчтай холбогдож чадахгүй, зогсоолын бичлэг бүр
-    // `if (!resident) continue` дээр таслагдаж тайлан хоосон гардаг байв.
+    // `mashin` цуглуулгад орно (/zochinHadgalya энд бичдэг).
     try {
-      // Tenant DB нь аль хэдийн нэг байгууллагынх тул baiguullagiinId-гаар
-      // дахин шүүхгүй — тэр талбар нь хоосон бичлэгүүд байдаг.
       const MashinModel = require("../models/mashin")(kholbolt);
       const mashinuud = await MashinModel.find({}).lean();
 
@@ -179,12 +203,18 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
 
         const toot = m.ezenToot || m.ezemshigchiinTalbainDugaar || "";
         const ner = m.ezemshigchiinNer || m.orshinSuugchiinNer || "";
+        const tKey = String(toot || "").toLowerCase().trim();
+        if (tKey && residentByToot[tKey]) {
+          plateToResidentMap[plate] = residentByToot[tKey];
+          continue;
+        }
         if (toot || ner) {
           plateToResidentMap[plate] = {
             orshinSuugchiinId: rid || `toot_${toot || ner}`,
             ner: ner || `Тоот ${toot}`,
             toot: String(toot || ""),
             davkhar: "",
+            orts: "",
             utas: m.ezemshigchiinUtas || m.utas || "",
           };
         }
@@ -264,14 +294,18 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
 
       if (!resident && (u.orshinSuugchiinId || u.ezenToot)) {
         const rid = String(u.orshinSuugchiinId || "");
+        const tKey = String(u.ezenToot || "").toLowerCase().trim();
         if (rid && residentMapById[rid]) {
           resident = residentMapById[rid];
+        } else if (tKey && residentByToot[tKey]) {
+          resident = residentByToot[tKey];
         } else if (u.ezenToot) {
           resident = {
             orshinSuugchiinId: rid || `toot_${u.ezenToot}`,
             ner: u.orshinSuugchNer || `Тоот ${u.ezenToot}`,
-            toot: u.ezenToot,
+            toot: String(u.ezenToot),
             davkhar: "",
+            orts: "",
             utas: "",
           };
         }
@@ -323,6 +357,7 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
         ner: resident.ner,
         toot: resident.toot,
         davkhar: resident.davkhar,
+        orts: resident.orts,
         utas: resident.utas,
       };
 
@@ -333,6 +368,7 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
           ner: resident.ner,
           toot: resident.toot,
           davkhar: resident.davkhar,
+          orts: resident.orts,
           utas: resident.utas,
           urisanMachinToo: 0,
           uniquePlates: new Set(),
@@ -359,6 +395,7 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
           mashiniiDugaar: u.mashiniiDugaar || plate,
           orshinSuugchiinNer: resident.ner,
           davkhar: resident.davkhar,
+          orts: resident.orts,
           toot: resident.toot,
           utas: resident.utas,
           suuliinIrsenOgnoo: irsenOgnoo,
@@ -378,12 +415,6 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
     }
 
     // 5b. ParkEase (Түрээсийн зогсоол) дээр зогссон зочид
-    //
-    // ParkEase-ийн зочин АмарСүхийн sdkData-г огт дайрдаггүй тул `Uilchluulegch`
-    // цуглуулгад БАЙХГҮЙ — tureesBack webhook-оор `zochinZogsooliinTuukh` руу
-    // шууд бичигддэг (routes/neeyeRoute.js-ийн parkEaseMuruudAvya мөн эндээс
-    // уншдаг). Тайлан үүнийг уншдаггүй байсан тул оршин суугчийн урьсан зочдын
-    // нэлээд хэсэг нь огт харагдахгүй байв.
     try {
       const ZochinZogsooliinTuukh = require("../models/zochinZogsooliinTuukh");
       const pzQuery = {
@@ -404,13 +435,19 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
           (rid0 && residentMapById[rid0]) || plateToResidentMap[plate] || null;
 
         if (!resident && (rid0 || pz.toot)) {
-          resident = {
-            orshinSuugchiinId: rid0 || `toot_${pz.toot}`,
-            ner: pz.toot ? `Тоот ${pz.toot}` : "Оршин суугч",
-            toot: pz.toot || "",
-            davkhar: "",
-            utas: "",
-          };
+          const tKey = String(pz.toot || "").toLowerCase().trim();
+          if (tKey && residentByToot[tKey]) {
+            resident = residentByToot[tKey];
+          } else {
+            resident = {
+              orshinSuugchiinId: rid0 || `toot_${pz.toot}`,
+              ner: pz.toot ? `Тоот ${pz.toot}` : "Оршин суугч",
+              toot: String(pz.toot || ""),
+              davkhar: "",
+              orts: "",
+              utas: "",
+            };
+          }
         }
         if (!resident) continue;
 
@@ -438,8 +475,6 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
 
         const khungulsunMinut = Number(pz.uneguiMinutAshiglasan || 0) || 0;
         const tulbur = Number(pz.niitDun || pz.tulukhDun || 0) || 0;
-        // tulburiinTurul: "zochin" — зочин зогсоол дээрээ өөрөө төлсөн,
-        // "ezen" — эзний нэхэмжлэхэд бичигдсэн тул оршин суугчийн өр болно.
         const ezendNekhemjelsen = pz.tulburiinTurul === "ezen";
         const tulsunDun = ezendNekhemjelsen ? 0 : tulbur;
         const tuluvLabel =
@@ -456,6 +491,7 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
             ner: resident.ner,
             toot: resident.toot,
             davkhar: resident.davkhar,
+            orts: resident.orts,
             utas: resident.utas,
             urisanMachinToo: 0,
             uniquePlates: new Set(),
@@ -486,6 +522,7 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
           ner: resident.ner,
           toot: resident.toot,
           davkhar: resident.davkhar,
+          orts: resident.orts,
           utas: resident.utas,
         });
 
@@ -497,6 +534,7 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
             mashiniiDugaar: pz.mashiniiDugaar || plate,
             orshinSuugchiinNer: resident.ner,
             davkhar: resident.davkhar,
+            orts: resident.orts,
             toot: resident.toot,
             utas: resident.utas,
             suuliinIrsenOgnoo: irsenOgnoo,
@@ -536,6 +574,9 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
       orshinSuugchiinId: r.orshinSuugchiinId,
       ner: r.ner,
       toot: r.toot,
+      davkhar: r.davkhar,
+      orts: r.orts,
+      utas: r.utas,
       urisanMachinToo: r.urisanMachinToo,
       niitTulbur: r.niitTulbur,
       khungulultMinut: r.khungulultMinut,
@@ -1312,6 +1353,7 @@ exports.tailanNekhemjlekhiinTuukh = asyncHandler(async (req, res, next) => {
       baiguullagiinId: String(baiguullagiinId),
       gereeniiId: { $in: gereeIds },
       nekhemjlekhId: { $in: [null, ""] },
+      dun: { $gt: 0 },
     };
     if (dateFilter.$gte) tulukhMatch.ognoo = dateFilter;
     if (tuluv && tuluv !== "Төлөөгүй") {
@@ -1323,19 +1365,34 @@ exports.tailanNekhemjlekhiinTuukh = asyncHandler(async (req, res, next) => {
       baiguullagiinId: String(baiguullagiinId),
       gereeniiId: { $in: gereeIds },
       nekhemjlekhId: { $in: [null, ""] },
+      dun: { $lt: 0 },
+      turul: { $nin: ["khungulult", "Хөнгөлөлт", "discount"] },
+      zardliinTurul: { $nin: ["khungulult", "Хөнгөлөлт", "discount"] },
+      source: { $ne: "khungulult" },
     };
     if (dateFilter.$gte) tulsunMatch.ognoo = dateFilter;
     if (tuluv && tuluv !== "Төлсөн") {
       tulsunMatch._id = null; // Forces empty result if searching specifically for unpaid
     }
 
+    const khungulultMatch = {
+      baiguullagiinId: String(baiguullagiinId),
+      gereeniiId: { $in: gereeIds },
+      nekhemjlekhId: { $in: [null, ""] },
+      $or: [
+        { turul: { $in: ["khungulult", "Хөнгөлөлт", "discount"] } },
+        { zardliinTurul: { $in: ["khungulult", "Хөнгөлөлт", "discount"] } },
+        { source: "khungulult" },
+      ],
+    };
+    if (dateFilter.$gte) khungulultMatch.ognoo = dateFilter;
+
     // 5. Execute Queries (For history, we fetch all and then paginate manually to handle merging)
-    // Alternatively, we could query just the invoices if stats are the main concern, 
-    // but for "Tuukh" users expect to see everything.
-    const [invoices, standaloneTulukh, standaloneTulsun] = await Promise.all([
+    const [invoices, standaloneTulukh, standaloneTulsun, standaloneKhungulult] = await Promise.all([
       NekhemjlekhiinTuukh(kholbolt).find(invoiceMatch).lean().sort({ ognoo: -1 }),
       GuilgeeAvlaguud(kholbolt).find(tulukhMatch).lean().sort({ ognoo: -1 }),
       GuilgeeAvlaguud(kholbolt).find(tulsunMatch).lean().sort({ ognoo: -1 }),
+      GuilgeeAvlaguud(kholbolt).find(khungulultMatch).lean().sort({ ognoo: -1 }),
     ]);
 
     // Merge and format
@@ -1343,6 +1400,17 @@ exports.tailanNekhemjlekhiinTuukh = asyncHandler(async (req, res, next) => {
 
     // Add Invoices
     for (const d of invoices) {
+      let invKhungulult = Number(d.khungulult || 0);
+      (d.medeelel?.khungulultuud || []).forEach((k) => {
+        invKhungulult += Number(k.khungulultiinDun || k.tulukhDun || k.dun || 0);
+      });
+      (d.paymentHistory || []).forEach((p) => {
+        const pTurul = String(p.turul || "").toLowerCase();
+        if (pTurul === "khungulult" || pTurul === "хөнгөлөлт" || pTurul === "discount") {
+          invKhungulult += Number(p.dun || p.tulsunDun || 0);
+        }
+      });
+
       combinedList.push({
         _id: d._id,
         gereeniiDugaar: d.gereeniiDugaar || "",
@@ -1358,6 +1426,7 @@ exports.tailanNekhemjlekhiinTuukh = asyncHandler(async (req, res, next) => {
         tulukhOgnoo: d.tulukhOgnoo || null,
         tulsunOgnoo: d.tulsunOgnoo || null,
         niitTulbur: d.niitTulbur || 0,
+        khungulult: invKhungulult,
         ekhniiUldegdel: d.ekhniiUldegdel,
         tuluv: d.tuluv || "Төлөөгүй",
         nememjlekh: {
@@ -1385,7 +1454,8 @@ exports.tailanNekhemjlekhiinTuukh = asyncHandler(async (req, res, next) => {
         orts: g.orts || "1",
         ognoo: s.ognoo || s.createdAt || null,
         tulukhOgnoo: s.ognoo || null,
-        niitTulbur: s.undsenDun || 0,
+        niitTulbur: s.undsenDun || s.tulukhDun || 0,
+        khungulult: 0,
         uldegdel: s.uldegdel || 0,
         tuluv: "Төлөөгүй",
         nememjlekh: {
@@ -1421,19 +1491,55 @@ exports.tailanNekhemjlekhiinTuukh = asyncHandler(async (req, res, next) => {
         orts: g.orts || "1",
         ognoo: p.ognoo || p.tulsunOgnoo || p.createdAt || null,
         tulsunOgnoo: p.tulsunOgnoo || p.createdAt || null,
-        niitTulbur: p.tulsunDun || 0,
+        niitTulbur: p.tulsunDun || Math.abs(p.dun || 0),
+        khungulult: 0,
         tuluv: "Төлсөн",
         nememjlekh: {
           zardluud: [],
           guilgeenuud: [
             {
               tailbar: p.tailbar || "Төлөлт (Нэхэмжлэхгүй)",
-              tulsunDun: p.tulsunDun || 0,
+              tulsunDun: p.tulsunDun || Math.abs(p.dun || 0),
               ognoo: p.ognoo || p.createdAt,
             },
           ],
         },
         type: "payment",
+      });
+    }
+
+    // Add Standalone Discounts
+    for (const k of standaloneKhungulult) {
+      const g = gereeMap[String(k.gereeniiId)];
+      if (!g) continue;
+      const kDun = Math.abs(Number(k.dun || k.undsenDun || k.tulukhDun || 0));
+      combinedList.push({
+        _id: k._id,
+        gereeniiDugaar: k.gereeniiDugaar || g.gereeniiDugaar || "",
+        gereeniiId: String(k.gereeniiId),
+        ovog: g.ovog || "",
+        ner: g.ner || "",
+        utas: g.utas || [],
+        toot: g.toot || "",
+        davkhar: g.davkhar || "",
+        bairNer: g.bairNer || "",
+        orts: g.orts || "1",
+        ognoo: k.ognoo || k.createdAt || null,
+        tulsunOgnoo: k.ognoo || k.createdAt || null,
+        niitTulbur: kDun,
+        khungulult: kDun,
+        tuluv: "Хөнгөлөлт",
+        nememjlekh: {
+          zardluud: [],
+          guilgeenuud: [
+            {
+              tailbar: k.tailbar || "Хөнгөлөлт",
+              tulsunDun: kDun,
+              ognoo: k.ognoo || k.createdAt,
+            },
+          ],
+        },
+        type: "khungulult",
       });
     }
 
@@ -1597,11 +1703,12 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
         utas: r.utas || [],
         davkhar: r.davkhar || r.medeelel?.davkhar || (r.toots && r.toots[0]?.davkhar) || "",
         toot: r.toot || r.medeelel?.toot || (r.toots && r.toots[0]?.toot) || "",
-        undsenDun: 0, tulsunDun: 0, uldegdel: 0,
+        undsenDun: 0, khungulult: 0, tulsunDun: 0, uldegdel: 0,
         p0_30: 0, p31_60: 0, p61_90: 0, p91_120: 0, p120plus: 0,
         avlagiinKhonog: 0,
         khamgiinKhuuchinOgnoo: null,
         _charges: [],
+        _discounts: 0,
         _payments: 0,
       };
       residentMap.set(rid, obj);
@@ -1651,10 +1758,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       );
     };
 
-    // 6. Төлбөрийн бүртгэл (GuilgeeAvlaguud) — авлага/төлөлтийн үнэн эх сурвалж.
-    //    dun > 0 → авлага (төлөх), dun < 0 → төлөлт (төлсөн).
-    //    NekhemjlekhiinTuukh дээр uldegdel талбар байхгүй (схемд байхгүй тул хадгалагддаггүй),
-    //    иймд өмнө нь tulsunDun = niitTulbur - 0 болж "Төлөх" ба "Төлсөн" ижил гарч байсан.
+    // 6. Төлбөрийн бүртгэл (GuilgeeAvlaguud) — авлага/хөнгөлөлт/төлөлтийн үнэн эх сурвалж.
     const invoiceHasLedgerCharge = new Set();
 
     allLedgerEntries.forEach(s => {
@@ -1663,22 +1767,48 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       if (!inRange(s.ognoo || s.createdAt)) return;
 
       const dun = Number(s.dun || 0);
-      const charge = dun > 0 ? dun : dun === 0 ? Number(s.undsenDun || s.tulukhDun || 0) : 0;
-      const payment = dun < 0 ? Math.abs(dun) : dun === 0 ? Number(s.tulsunDun || 0) : 0;
+      const isDiscount =
+        s.turul === "khungulult" ||
+        s.turul === "Хөнгөлөлт" ||
+        s.turul === "discount" ||
+        s.source === "khungulult" ||
+        s.zardliinTurul === "Хөнгөлөлт";
 
-      if (charge > 0) {
-        if (s.nekhemjlekhId) invoiceHasLedgerCharge.add(String(s.nekhemjlekhId));
-        res._charges.push({ ognoo: new Date(s.ognoo || s.createdAt), dun: charge });
+      if (isDiscount) {
+        res._discounts += Math.abs(dun || s.undsenDun || s.tulukhDun || 0);
+      } else {
+        const charge = dun > 0 ? dun : dun === 0 ? Number(s.undsenDun || s.tulukhDun || 0) : 0;
+        const payment = dun < 0 ? Math.abs(dun) : dun === 0 ? Number(s.tulsunDun || 0) : 0;
+
+        if (charge > 0) {
+          if (s.nekhemjlekhId) invoiceHasLedgerCharge.add(String(s.nekhemjlekhId));
+          res._charges.push({ ognoo: new Date(s.ognoo || s.createdAt), dun: charge });
+        }
+        if (payment > 0) res._payments += payment;
       }
-      if (payment > 0) res._payments += payment;
     });
 
     // 7. Хуучин дата: төлбөрийн бүртгэлд бичилтгүй нэхэмжлэхийн дүнг авлага болгож нэмнэ.
     allInvoices.forEach(inv => {
-      if (invoiceHasLedgerCharge.has(String(inv._id))) return;
       const res = findResident(inv);
       if (!res) return;
       if (!inRange(inv.ognoo || inv.createdAt)) return;
+
+      let invDisc = Number(inv.khungulult || 0);
+      (inv.medeelel?.khungulultuud || []).forEach(k => {
+        invDisc += Number(k.khungulultiinDun || k.tulukhDun || k.dun || 0);
+      });
+      (inv.paymentHistory || []).forEach((p) => {
+        const pTurul = String(p.turul || "").toLowerCase();
+        if (pTurul === "khungulult" || pTurul === "хөнгөлөлт" || pTurul === "discount") {
+          invDisc += Number(p.dun || p.tulsunDun || 0);
+        }
+      });
+      if (invDisc > 0) {
+        res._discounts += invDisc;
+      }
+
+      if (invoiceHasLedgerCharge.has(String(inv._id))) return;
       const billed = Number(inv.niitTulburOriginal ?? inv.niitTulbur ?? inv.niitDun) || 0;
       if (billed <= 0) return;
       res._charges.push({ ognoo: new Date(inv.ognoo || inv.createdAt), dun: billed });
@@ -1691,12 +1821,14 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
       res._charges.sort((a, b) => a.ognoo.getTime() - b.ognoo.getTime());
       const billed = res._charges.reduce((s, c) => s + c.dun, 0);
       const paid = res._payments;
+      const disc = res._discounts;
 
       res.undsenDun = round2(billed);
+      res.khungulult = round2(disc);
       res.tulsunDun = round2(paid);
-      res.uldegdel = round2(billed - paid);
+      res.uldegdel = round2(billed - paid - disc);
 
-      let available = paid;
+      let available = paid + disc;
       let oldestOpen = null;
       res._charges.forEach(c => {
         const covered = Math.min(available, c.dun);
@@ -1726,6 +1858,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
 
       delete res._charges;
       delete res._payments;
+      delete res._discounts;
     });
 
     const list = Array.from(residentMap.values()).sort((a, b) => String(a.toot).localeCompare(String(b.toot), undefined, { numeric: true }));
@@ -1735,6 +1868,7 @@ exports.tailanAvlagiinNasjilt = asyncHandler(async (req, res, next) => {
     const sumBy = (f) => round2(list.reduce((s, r) => s + (Number(r[f]) || 0), 0));
     const totals = {
       undsenDun: sumBy("undsenDun"),
+      khungulult: sumBy("khungulult"),
       tulsunDun: sumBy("tulsunDun"),
       uldegdel: sumBy("uldegdel"),
       p0_30: sumBy("p0_30"),
@@ -2067,6 +2201,9 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
         const isEkhA = a.includes("Эхний үлдэгдэл") ? 0 : 1;
         const isEkhB = b.includes("Эхний үлдэгдэл") ? 0 : 1;
         if (isEkhA !== isEkhB) return isEkhA - isEkhB;
+        const isKhungA = a === "Хөнгөлөлт" ? 1 : 0;
+        const isKhungB = b === "Хөнгөлөлт" ? 1 : 0;
+        if (isKhungA !== isKhungB) return isKhungA - isKhungB;
         return a.localeCompare(b, "mn");
       });
 
@@ -2399,6 +2536,7 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
         "Төлөх огноо",
         "Төлсөн огноо",
         "Нийт төлбөр",
+        "Хөнгөлөлт",
         "Төлөв",
         "Дугааллын дугаар",
       ];
@@ -2419,6 +2557,7 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
           ? new Date(r.tulsunOgnoo).toLocaleDateString("mn-MN")
           : "",
         r.niitTulbur || 0,
+        r.khungulult || 0,
         r.tuluv || "",
         r.dugaalaltDugaar || "",
       ]);
@@ -2431,6 +2570,7 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
         "Давхар",
         "Тоот",
         "Төлөх",
+        "Хөнгөлөлт",
         "Төлсөн",
         "Нийт үлдэгдэл",
         "Авлагын хоног",
@@ -2449,6 +2589,7 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
           r.davkhar || "",
           r.toot || "",
           r.undsenDun || 0,
+          r.khungulult || 0,
           r.tulsunDun || 0,
           r.uldegdel || 0,
           r.avlagiinKhonog || 0,
@@ -2464,13 +2605,14 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
       const sums = new Array(headers.length).fill(0);
       list.forEach((r) => {
         sums[5] += r.undsenDun || 0;
-        sums[6] += r.tulsunDun || 0;
-        sums[7] += r.uldegdel || 0;
-        sums[9] += r.p0_30 || 0;
-        sums[10] += r.p31_60 || 0;
-        sums[11] += r.p61_90 || 0;
-        sums[12] += r.p91_120 || 0;
-        sums[13] += r.p120plus || 0;
+        sums[6] += r.khungulult || 0;
+        sums[7] += r.tulsunDun || 0;
+        sums[8] += r.uldegdel || 0;
+        sums[10] += r.p0_30 || 0;
+        sums[11] += r.p31_60 || 0;
+        sums[12] += r.p61_90 || 0;
+        sums[13] += r.p91_120 || 0;
+        sums[14] += r.p120plus || 0;
       });
 
       rows.push([
@@ -2482,12 +2624,13 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
         Math.round(sums[5] * 100) / 100,
         Math.round(sums[6] * 100) / 100,
         Math.round(sums[7] * 100) / 100,
+        Math.round(sums[8] * 100) / 100,
         "",
-        Math.round(sums[9] * 100) / 100,
         Math.round(sums[10] * 100) / 100,
         Math.round(sums[11] * 100) / 100,
         Math.round(sums[12] * 100) / 100,
         Math.round(sums[13] * 100) / 100,
+        Math.round(sums[14] * 100) / 100,
       ]);
 
       fileName = "avlagiin_nasjilt";
@@ -3243,18 +3386,33 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       receivableQuery.ognoo = { $gte: startDate, $lte: endDate };
     }
 
+    const discountQuery = {
+      baiguullagiinId: String(baiguullagiinId),
+      nekhemjlekhId: { $in: [null, ""] },
+      $or: [
+        { turul: { $in: ["khungulult", "Хөнгөлөлт", "discount"] } },
+        { zardliinTurul: { $in: ["khungulult", "Хөнгөлөлт", "discount"] } },
+        { source: "khungulult" },
+      ],
+    };
+    if (barilgiinId) discountQuery.barilgiinId = String(barilgiinId);
+    if (startDate && endDate) {
+      discountQuery.ognoo = { $gte: startDate, $lte: endDate };
+    }
+
     // Fetch ALL active contracts regardless of activity to accurately reflect the total building balance matching the Tulbur page
     const gereeQuery = { baiguullagiinId: String(baiguullagiinId) };
     if (barilgiinId) gereeQuery.barilgiinId = String(barilgiinId);
 
     const OrshinSuugch = require("../models/orshinSuugch");
 
-    const [invoices, allReceivables, standalonePayments, allOrshinSuugch, allContractsList] = await Promise.all([
+    const [invoices, allReceivables, standalonePayments, allOrshinSuugch, allContractsList, allDiscounts] = await Promise.all([
       NekhemjlekhiinTuukh(kholbolt).find(query).lean(),
       GuilgeeAvlaguud(kholbolt).find(receivableQuery).lean(),
       GuilgeeAvlaguud(kholbolt).find(standalonePaidMatch).lean(),
       OrshinSuugch(db.erunkhiiKholbolt).find(gereeQuery).lean(),
       Geree(kholbolt).find(gereeQuery).lean(),
+      GuilgeeAvlaguud(kholbolt).find(discountQuery).lean(),
     ]);
 
     const contracts = allContractsList.filter(c => {
@@ -3446,8 +3604,30 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
         group.hasInvoiceEkhniiUldegdel = true;
       }
 
-      const tulukhDun = Number(inv.niitTulburOriginal != null ? inv.niitTulburOriginal : inv.niitTulbur) || 0;
+        const tulukhDun = Number(inv.niitTulburOriginal != null ? inv.niitTulburOriginal : inv.niitTulbur) || 0;
       const uldegdel = Number(inv.uldegdel || 0);
+
+      // Check if invoice has discounts
+      let invKhungulultDun = Number(inv.khungulult || 0);
+      (inv.medeelel?.khungulultuud || []).forEach((k) => {
+        invKhungulultDun += Number(k.khungulultiinDun || k.tulukhDun || k.dun || 0);
+      });
+      (inv.paymentHistory || []).forEach((p) => {
+        const pTurul = String(p.turul || "").toLowerCase();
+        if (pTurul === "khungulult" || pTurul === "хөнгөлөлт" || pTurul === "discount") {
+          invKhungulultDun += Number(p.dun || p.tulsunDun || 0);
+        }
+      });
+      if (invKhungulultDun > 0) {
+        zardluud.push({
+          ner: "Хөнгөлөлт",
+          dun: invKhungulultDun,
+          tailbar: "Хөнгөлөлт",
+          turul: "Хөнгөлөлт",
+          toot: inv.toot || inv.medeelel?.toot || "",
+        });
+        group.niitKhungulult = (group.niitKhungulult || 0) + invKhungulultDun;
+      }
 
       const avlagaRow = {
         _id: inv._id,
@@ -3509,6 +3689,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
           },
           avlaga: [],
           niitTulukhDun: 0,
+          niitKhungulult: 0,
           niitTulsunDun: 0,
           niitUldegdel: 0,
           invoiceToo: 0,
@@ -3570,6 +3751,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
           },
           avlaga: [],
           niitTulukhDun: 0,
+          niitKhungulult: 0,
           niitTulsunDun: 0,
           niitUldegdel: 0,
           invoiceToo: 0,
@@ -3587,6 +3769,43 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       const paidDun = Number(p.tulsunDun || 0);
       group.niitTulsunDun += paidDun;
       group.paymentToo += 1;
+    }
+
+    // ── Process Standalone Discounts ──────────────────────────────────────────
+    for (const d of allDiscounts) {
+      const gid = String(d.gereeniiId);
+      if (!gid || gid === "undefined" || gid === "null") continue;
+      if (!groupMap.has(gid) && !contractMap[gid]) continue;
+
+      const group = groupMap.get(gid);
+      if (!group) continue;
+      const discDun = Math.abs(Number(d.dun || d.undsenDun || d.tulukhDun || 0));
+      if (discDun <= 0) continue;
+
+      const row = {
+        _id: d._id,
+        toot: d.toot || group._id.toot,
+        ognoo: d.ognoo || d.createdAt || null,
+        tailbar: "Хөнгөлөлт",
+        tulukhDun: discDun,
+        niitTulbur: discDun,
+        uldegdel: 0,
+        tuluv: "Хөнгөлөлт",
+        zardluud: [{
+          ner: "Хөнгөлөлт",
+          dun: discDun,
+          tailbar: d.tailbar || "Хөнгөлөлт",
+          turul: "Хөнгөлөлт",
+          toot: d.toot || group._id.toot || "",
+        }],
+        khungulultuud: [{
+          ner: "Хөнгөлөлт",
+          dun: discDun,
+          turul: "Хөнгөлөлт",
+        }],
+      };
+      group.avlaga.push(row);
+      group.niitKhungulult = (group.niitKhungulult || 0) + discDun;
     }
 
     // ── Convert map to array ──────────────────────────────────────────────────
@@ -3635,11 +3854,12 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
     const niitDun = groups.reduce(
       (dun, g) => {
         dun.niitTulukhDun += Number(g.niitTulukhDun || 0);
+        dun.niitKhungulult += Number(g.niitKhungulult || 0);
         dun.niitTulsunDun += Number(g.niitTulsunDun || 0);
         dun.niitUldegdel += Number(g.niitUldegdel || 0);
         return dun;
       },
-      { niitTulukhDun: 0, niitTulsunDun: 0, niitUldegdel: 0 },
+      { niitTulukhDun: 0, niitKhungulult: 0, niitTulsunDun: 0, niitUldegdel: 0 },
     );
 
     Object.keys(niitDun).forEach((t) => {
@@ -3742,6 +3962,7 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
           months: {},
           niitTulukh: 0,
           niitTulsun: 0,
+          niitKhungulult: 0,
           startingBalance: 0,
           earliestOgnoo: null,
         });
@@ -3776,19 +3997,22 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
       }
 
       if (!resData.months[monthKey]) {
-        resData.months[monthKey] = { billed: 0, paid: 0, status: "Төлөөгүй" };
+        resData.months[monthKey] = { billed: 0, paid: 0, khungulult: 0, status: "Төлөөгүй" };
       }
 
       const billed = Number(inv.niitTulburOriginal != null ? inv.niitTulburOriginal : inv.niitTulbur) || 0;
       // ONLY use ledger-based payments — inv.tulsunDun can be stale/double-counted
       const paid = invoicePaymentMap.get(String(inv._id)) || 0;
+      const disc = Number(inv.khungulult || 0);
 
       resData.months[monthKey].billed += billed;
       resData.months[monthKey].paid += paid;
+      resData.months[monthKey].khungulult = (resData.months[monthKey].khungulult || 0) + disc;
       if (inv.tuluv === "Төлсөн") resData.months[monthKey].status = "Төлсөн";
 
       resData.niitTulukh += billed;
       resData.niitTulsun += paid;
+      resData.niitKhungulult += disc;
     }
 
     // 2. Process Standalone Ledger Entries (including Initial Balance)
@@ -3803,7 +4027,7 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
       const resData = getOrCreateRes(gid, s);
 
       if (!resData.months[monthKey]) {
-        resData.months[monthKey] = { billed: 0, paid: 0, status: "Төлөөгүй" };
+        resData.months[monthKey] = { billed: 0, paid: 0, khungulult: 0, status: "Төлөөгүй" };
       }
 
       // If it's an initial balance ledger item, it contributes to startingBalance
@@ -3812,11 +4036,15 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
       } else {
         const rawDun = Number(s.dun ?? 0);
         const tulsunDun = Number(s.tulsunDun ?? 0);
+        const isDiscount = s.turul === "Хөнгөлөлт" || s.source === "khungulult";
         
         let billed = 0;
         let paid = 0;
+        let disc = 0;
 
-        if (rawDun > 0) {
+        if (isDiscount) {
+          disc = Math.abs(rawDun) || Number(s.tulukhDun || 0);
+        } else if (rawDun > 0) {
           billed = rawDun;
           paid = tulsunDun;
         } else if (rawDun < 0) {
@@ -3826,9 +4054,11 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
 
         resData.months[monthKey].billed += billed;
         resData.months[monthKey].paid += paid;
+        resData.months[monthKey].khungulult = (resData.months[monthKey].khungulult || 0) + disc;
         
         resData.niitTulukh += billed;
         resData.niitTulsun += paid;
+        resData.niitKhungulult += disc;
       }
     }
 
@@ -3849,7 +4079,7 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
       sortedPeriods.forEach(p => {
         const m = res.months[p];
         if (m) {
-          cumulativeBalance += (m.billed || 0) - (m.paid || 0);
+          cumulativeBalance += (m.billed || 0) - (m.paid || 0) - (m.khungulult || 0);
           // If balance for this month (and previous) is 0 or less, mark as Paid
           if (cumulativeBalance <= 0) {
             m.status = "Төлсөн";
@@ -3876,12 +4106,13 @@ exports.tailanOrshinSuugchSariinMatrix = asyncHandler(async (req, res, next) => 
 
     // Calculate summary across the entire list (not just paginated page)
     const summary = {};
-    sortedPeriods.forEach(p => { summary[p] = { billed: 0, paid: 0 }; });
+    sortedPeriods.forEach(p => { summary[p] = { billed: 0, paid: 0, khungulult: 0 }; });
     list.forEach(res => {
       Object.entries(res.months).forEach(([p, val]) => {
         if (summary[p]) {
           summary[p].billed += (val.billed || 0);
           summary[p].paid += (val.paid || 0);
+          summary[p].khungulult += (val.khungulult || 0);
         }
       });
     });
@@ -3930,12 +4161,44 @@ exports.tailanTulburDugnelt = asyncHandler(async (req, res, next) => {
       };
     }
 
-    // Grouping logic: split dun > 0 (billed) and dun < 0 (paid)
+    const isDisc = {
+      $or: [
+        { $eq: ["$turul", "Хөнгөлөлт"] },
+        { $eq: ["$source", "khungulult"] },
+      ],
+    };
+
+    // Grouping logic: split dun > 0 (billed), dun < 0 (paid), and discounts
     const groupStage = {
       $group: {
         _id: null,
-        paidSum: { $sum: { $cond: [{ $lt: ["$dun", 0] }, { $abs: "$dun" }, 0] } },
-        billedSum: { $sum: { $cond: [{ $gt: ["$dun", 0] }, "$dun", 0] } },
+        discountSum: {
+          $sum: {
+            $cond: [
+              isDisc,
+              { $cond: [{ $lt: ["$dun", 0] }, { $abs: "$dun" }, "$dun"] },
+              0,
+            ],
+          },
+        },
+        paidSum: {
+          $sum: {
+            $cond: [
+              { $and: [{ $not: isDisc }, { $lt: ["$dun", 0] }] },
+              { $abs: "$dun" },
+              0,
+            ],
+          },
+        },
+        billedSum: {
+          $sum: {
+            $cond: [
+              { $and: [{ $not: isDisc }, { $gt: ["$dun", 0] }] },
+              "$dun",
+              0,
+            ],
+          },
+        },
         count: { $sum: 1 },
       },
     };
@@ -3951,12 +4214,14 @@ exports.tailanTulburDugnelt = asyncHandler(async (req, res, next) => {
       allTime: {
         sum: allTimeResult[0]?.paidSum ?? 0, // Legacy support
         paidSum: allTimeResult[0]?.paidSum ?? 0,
+        discountSum: allTimeResult[0]?.discountSum ?? 0,
         billedSum: allTimeResult[0]?.billedSum ?? 0,
         count: allTimeResult[0]?.count ?? 0,
       },
       monthly: {
         sum: monthlyResult[0]?.paidSum ?? 0, // Legacy support
         paidSum: monthlyResult[0]?.paidSum ?? 0,
+        discountSum: monthlyResult[0]?.discountSum ?? 0,
         billedSum: monthlyResult[0]?.billedSum ?? 0,
         count: monthlyResult[0]?.count ?? 0,
       },

@@ -611,3 +611,119 @@ exports.undsenEzemshigchiinMedeelel = asyncHandler(async (req, res, next) => {
     next(err);
   }
 });
+
+/**
+ * АДМИН талаас гэр бүлийн гишүүнийг ШУУД нэмэх.
+ *
+ * `gishuunUrikh` нь оршин суугчийн апп-д зориулагдсан: үндсэн эзэмшигчийг
+ * НЭВТЭРСЭН ТОКЕНООС олж, урилга үүсгээд тухайн хүн өөрөө баталгаажуулдаг.
+ * Админ веб дээр токен нь ажилтных тул тэр зам ажиллахгүй.
+ *
+ * Энд үндсэн эзэмшигчийг `undsenId`-гээр ШУУД зааж, баталгаажуулалтгүйгээр
+ * гишүүнийг үүсгэнэ. Талбарууд нь `gishuunBatalgaajuulya`-гийнхтай ижил
+ * байхаар бичив — хоёр замаар үүссэн гишүүн ялгаагүй байх ёстой.
+ *
+ * POST /gerBuliinGishuunNemekh
+ *   { undsenId, utas, ner?, ovog?, kholboo?, erkh? }
+ */
+exports.gishuunNemekh = asyncHandler(async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+
+    // Ажилтан мөн эсэх — энэ зам зөвхөн админ талд зориулагдсан.
+    const ajiltniiId = req.nevtersenAjiltniiToken?.id;
+    if (!ajiltniiId) throw new aldaa("Нэвтрэх шаардлагатай!");
+
+    const undsenId = String(req.body.undsenId || "").trim();
+    if (!undsenId) throw new aldaa("Үндсэн эзэмшигчийн ID хоосон!");
+
+    const utas = utasTseverleye(req.body.utas);
+    if (!utas) throw new aldaa("Утасны дугаар буруу байна!");
+
+    const kholboo = req.body.kholboo || "Бусад";
+    const erkh = req.body.erkh === "Харах" ? "Харах" : "Харах + Төлөх";
+
+    const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
+
+    const undsen = await OrshinSuugchModel.findById(undsenId);
+    if (!undsen) throw new aldaa("Үндсэн эзэмшигч олдсонгүй!");
+    if (undsen.undsenId) {
+      throw new aldaa(
+        "Сонгосон хэрэглэгч нь өөрөө гэр бүлийн гишүүн байна. Үндсэн эзэмшигч дээр нэмнэ үү.",
+      );
+    }
+    if (!undsen.baiguullagiinId) {
+      throw new aldaa("Үндсэн эзэмшигч байгууллагад холбогдоогүй байна.");
+    }
+
+    // Тоон хязгаар — оршин суугчийн урсгалтай ижил дүрэм.
+    const idevkhteiToo = await OrshinSuugchModel.countDocuments({
+      undsenId: String(undsen._id),
+      gishuuniiTuluv: "Идэвхтэй",
+    });
+    if (idevkhteiToo >= MAX_GISHUUN) {
+      throw new aldaa(
+        `Гэр бүлийн гишүүний тоо хязгаарт (${MAX_GISHUUN}) хүрсэн байна.`,
+      );
+    }
+
+    let gishuun = await OrshinSuugchModel.findOne({ utas });
+
+    if (gishuun) {
+      // Аль хэдийн өөр хүний гишүүн, эсвэл өөрөө тоот эзэмшдэг бол хөндөхгүй.
+      if (
+        gishuun.undsenId &&
+        String(gishuun.undsenId) !== String(undsen._id)
+      ) {
+        throw new aldaa("Энэ дугаар өөр эзэмшигчийн гишүүнээр бүртгэлтэй байна.");
+      }
+      if (
+        !gishuun.undsenId &&
+        Array.isArray(gishuun.toots) &&
+        gishuun.toots.length > 0
+      ) {
+        throw new aldaa(
+          "Энэ дугаар тоот эзэмшдэг оршин суугчийнх байна. Гишүүн болгох боломжгүй.",
+        );
+      }
+    } else {
+      gishuun = new OrshinSuugchModel({
+        utas,
+        nevtrekhNer: utas,
+        erkh: "OrshinSuugch",
+      });
+    }
+
+    gishuun.undsenId = String(undsen._id);
+    gishuun.gishuuniiKholboo = kholboo;
+    gishuun.gishuuniiErkh = erkh;
+    gishuun.gishuuniiTuluv = "Идэвхтэй";
+    gishuun.gishuunBatalgaajsanOgnoo = new Date();
+    gishuun.erkh = "OrshinSuugch";
+    gishuun.nevtrekhNer = gishuun.nevtrekhNer || utas;
+    gishuun.ovog = req.body.ovog || gishuun.ovog || "";
+    gishuun.ner = req.body.ner || gishuun.ner || "";
+    gishuun.baiguullagiinId = undsen.baiguullagiinId;
+    gishuun.barilgiinId = undsen.barilgiinId;
+    // Гишүүн өөрийн тоот эзэмшихгүй — үндсэнийхээ мэдээллийг уншина.
+    gishuun.toots = [];
+
+    await gishuun.save();
+
+    res.send({
+      success: true,
+      message: "Гэр бүлийн гишүүн нэмэгдлээ",
+      gishuun: {
+        _id: String(gishuun._id),
+        ner: gishuun.ner,
+        ovog: gishuun.ovog,
+        utas: gishuun.utas,
+        gishuuniiErkh: gishuun.gishuuniiErkh,
+        gishuuniiKholboo: gishuun.gishuuniiKholboo,
+        gishuuniiTuluv: gishuun.gishuuniiTuluv,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
