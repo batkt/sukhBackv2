@@ -549,25 +549,44 @@ async function tukhainMuchiinNekhemjlekhiigShinechilye(
       ognoo
     );
 
+    // `createInvoiceForContract` мөчлөгийн хамгийн сүүлийн нэхэмжлэхийг
+    // `ognoo: -1`-ээр олдог тул бид ч мөн адил сонгоно. Ингэснээр тэр
+    // төлөгдсөн нэхэмжлэх барьж аваад, түүнийг дахин бичих эрсдэлгүй.
     const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
-    const tulugduugui = await NekhemjlekhiinTuukh(kholbolt)
+    const suuliinNekhemjlekh = await NekhemjlekhiinTuukh(kholbolt)
       .findOne({
         gereeniiId: String(geree._id),
-        tuluv: "Төлөөгүй",
         ognoo: { $gte: startOfCycle, $lte: endOfCycle },
       })
+      .sort({ ognoo: -1 })
       .lean();
 
-    if (tulugduugui) {
+    if (suuliinNekhemjlekh && suuliinNekhemjlekh.tuluv === "Төлөөгүй") {
       const invoiceService = require("../services/invoiceService");
       await invoiceService.createInvoiceForContract(
         kholbolt,
         String(geree._id),
         {
           billingDate: ognoo,
+          // ЧУХАЛ: `override` байхгүй бол тухайн мөчлөгт нэхэмжлэх аль хэдийн
+          // үүссэн тохиолдолд `createInvoiceForContract` нь
+          // "Тухайн сарын нэхэмжлэх аль хэдийн үүссэн байна" гээд юу ч
+          // хийлгүй буцдаг — цахилгааны шинэ дүн авлагад ОРОХГҮЙ.
+          override: true,
           ajiltanNer: req.nevtersenAjiltniiToken?.ner || "Систем",
           ajiltanId: req.nevtersenAjiltniiToken?.id || "",
         }
+      );
+    } else {
+      // Мөчлөгт төлөөгүй нэхэмжлэх байхгүй тул авлага дахин бодогдохгүй.
+      // Дүн нь гэрээн дээр хадгалагдсан бөгөөд дараагийн нэхэмжлэх үүсэхэд
+      // орно. "Импорт хийсэн ч юу ч нэмэгдсэнгүй" гэх асуултын хариу энд.
+      console.log(
+        `ℹ️ [tsakhilgaanExcelTatya] Geree ${geree._id}: мөчлөгт төлөөгүй нэхэмжлэх алга (${
+          suuliinNekhemjlekh
+            ? `сүүлийн нэхэмжлэхийн төлөв: ${suuliinNekhemjlekh.tuluv}`
+            : "нэхэмжлэх огт олдсонгүй"
+        }) — авлага дахин бодогдоогүй.`
       );
     }
   } catch (err) {

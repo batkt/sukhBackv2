@@ -1762,17 +1762,24 @@ exports.zaaltExcelTatya = asyncHandler(async (req, res, next) => {
           const { calculateBillingCycleBounds } = require("../utils/dateUtils");
           const { startOfCycle, endOfCycle } = calculateBillingCycleBounds(cronDay, new Date(ognoo));
 
+          // `createInvoiceForContract` мөчлөгийн хамгийн сүүлийн нэхэмжлэхийг
+          // `ognoo: -1`-ээр олдог тул бид ч мөн адил сонгоно. Ингэснээр тэр
+          // төлөгдсөн нэхэмжлэх барьж аваад, түүнийг дахин бичих эрсдэлгүй.
           const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
-          const existingUnpaidInvoice = await NekhemjlekhiinTuukh(tukhainBaaziinKholbolt).findOne({
+          const suuliinNekhemjlekh = await NekhemjlekhiinTuukh(tukhainBaaziinKholbolt).findOne({
             gereeniiId: geree._id.toString(),
-            tuluv: "Төлөөгүй",
             ognoo: { $gte: startOfCycle, $lte: endOfCycle }
-          }).lean();
+          }).sort({ ognoo: -1 }).lean();
 
-          if (existingUnpaidInvoice) {
+          if (suuliinNekhemjlekh && suuliinNekhemjlekh.tuluv === "Төлөөгүй") {
             const invoiceService = require("../services/invoiceService");
             await invoiceService.createInvoiceForContract(tukhainBaaziinKholbolt, geree._id.toString(), {
               billingDate: new Date(ognoo),
+              // ЧУХАЛ: `override` байхгүй бол тухайн мөчлөгт нэхэмжлэх аль
+              // хэдийн үүссэн үед `createInvoiceForContract` нь юу ч хийлгүй
+              // "аль хэдийн үүссэн байна" гээд буцдаг — заалтын шинэ дүн
+              // авлагад ОРОХГҮЙ.
+              override: true,
               ajiltanNer: req.nevtersenAjiltniiToken?.ner || "Систем",
               ajiltanId: req.nevtersenAjiltniiToken?.id || ""
             });
