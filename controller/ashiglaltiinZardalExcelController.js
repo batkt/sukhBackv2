@@ -19,6 +19,7 @@ const excel = require("exceljs");
 
 const Baiguullaga = require("../models/baiguullaga");
 const AshiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
+const { tolgoiMur } = require("../utils/excelZagvar");
 
 /** Хүснэгтийн баганын нэрс — загвар үүсгэх ба унших хоёрт нэг эх сурвалж. */
 const BAGANUUD = {
@@ -129,12 +130,7 @@ exports.ashiglaltiinZardalExcelTemplateAvya = asyncHandler(
         { header: BAGANUUD.tailbar, key: "tailbar", width: 34 },
       ];
 
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFE0E0E0" },
-      };
+      tolgoiMur(worksheet.getRow(1));
 
       const tailbaruud = {
         A1:

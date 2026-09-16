@@ -15,6 +15,7 @@ const xlsx = require("xlsx");
 // const moment = require("moment");
 const lodash = require("lodash");
 const excel = require("exceljs");
+const { tolgoiMur } = require("../utils/excelZagvar");
 // const mongoose = require("mongoose");
 // const {
 //   Parking,
@@ -1161,12 +1162,7 @@ exports.zaaltExcelTemplateAvya = asyncHandler(async (req, res, next) => {
     ];
 
     // Style header row (worksheet.columns already creates headers in row 1)
-    worksheet.getRow(1).font = { bold: true };
-    worksheet.getRow(1).fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFE0E0E0" },
-    };
+    tolgoiMur(worksheet.getRow(1));
 
     // "Нийт (одоо)" ба "Зөрүү" нь томьёогоор бодогддог — хэрэглэгч гараар
     // бөглөвөл томьёо нь дарагдаж, буруу тооцоо гарна. Тиймээс гарчгийг нь
@@ -1993,12 +1989,7 @@ exports.zaaltExcelDataAvya = asyncHandler(async (req, res, next) => {
     ];
 
     // Style header row
-    worksheet.getRow(1).font = { bold: true };
-    worksheet.getRow(1).fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFE0E0E0" },
-    };
+    tolgoiMur(worksheet.getRow(1));
 
     // Add data rows from zaaltUnshlalt model
     gereenuud.forEach((reading) => {

@@ -1,6 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const XLSX = require("xlsx");
 const excel = require("exceljs");
+const { tolgoiMur, tolgoiNud } = require("../utils/excelZagvar");
 const OrshinSuugch = require("../models/orshinSuugch");
 const Baiguullaga = require("../models/baiguullaga");
 const Geree = require("../models/geree");
@@ -1143,19 +1144,8 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
 
       // Style Header
       const headerRow = worksheet.getRow(1);
-      headerRow.font = { bold: true, color: { argb: "FFFFFF" } };
       headerRow.eachCell((cell) => {
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "2F5597" } // Dark Blue Professional Header
-        };
-        cell.border = {
-          top: { style: "thin" },
-          left: { style: "thin" },
-          bottom: { style: "thin" },
-          right: { style: "thin" }
-        };
+        tolgoiNud(cell);
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
       });
     });
@@ -1306,39 +1296,15 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
 
     // Style the header row (Row 1)
     const headerRow = worksheet.getRow(1);
-    headerRow.font = { bold: true, color: { argb: '000000' } };
 
     // Define required and optional columns
     // Required: Ner(2), Utas(3), Orts(5), Davkhar(6), Toot(7)
     const requiredCols = [2, 3, 5, 6, 7];
 
     headerRow.eachCell((cell, colNumber) => {
-      if (requiredCols.includes(colNumber)) {
-        // Green background for required
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'C6EFCE' } // Light Green
-        };
-        cell.border = {
-          top: { style: 'thin' },
-          left: { style: 'thin' },
-          bottom: { style: 'thin' },
-          right: { style: 'thin' }
-        };
-      } else {
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFEB9C' } // Light Yellow
-        };
-        cell.border = {
-          top: { style: 'thin' },
-          left: { style: 'thin' },
-          bottom: { style: 'thin' },
-          right: { style: 'thin' }
-        };
-      }
+      // Заавал бөглөх багана тод, заавал биш нь цайвар — ялгаа нь хэвээр
+      // боловч аль аль нь системийн өнгөний хүрээнд.
+      tolgoiNud(cell, { zoolon: !requiredCols.includes(colNumber) });
     });
     headerRow.commit();
 
@@ -2641,19 +2607,8 @@ exports.generateTootBurtgelExcelTemplate = asyncHandler(
 
         // Style the header (Row 1)
         const headerRow = worksheet.getRow(1);
-        headerRow.font = { bold: true, color: { argb: "000000" } };
         headerRow.eachCell((cell) => {
-          cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "C6EFCE" }, // Green for required
-          };
-          cell.border = {
-            top: { style: "thin" },
-            left: { style: "thin" },
-            bottom: { style: "thin" },
-            right: { style: "thin" },
-          };
+          tolgoiNud(cell);
         });
         headerRow.commit();
 
@@ -3013,25 +2968,26 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
 exports.generateInitialBalanceTemplate = asyncHandler(
   async (req, res, next) => {
     try {
+      const { db } = require("zevbackv2");
+      const { baiguullagiinId, barilgiinId } = req.body || {};
+
       const workbook = new excel.Workbook();
       const worksheet = workbook.addWorksheet("Эхний үлдэгдэл");
 
-      const headers = ["Утас", "Гэрээний дугаар", "Тоот", "Эхний үлдэгдэл"];
-      worksheet.columns = headers.map((h, i) => ({
-        header: h,
-        key: h,
-        width: [18, 22, 12, 18][i] || 15,
-      }));
+      worksheet.columns = [
+        { header: "Нэр", key: "ner", width: 24 },
+        { header: "Гэрээний дугаар", key: "gereeniiDugaar", width: 22 },
+        { header: "Утас", key: "utas", width: 16 },
+        { header: "Орц", key: "orts", width: 8 },
+        { header: "Давхар", key: "davkhar", width: 10 },
+        { header: "Тоот", key: "toot", width: 12 },
+        { header: "Эхний үлдэгдэл", key: "ekhniiUldegdel", width: 18 },
+      ];
 
       // Style header (Row 1)
       const headerRow = worksheet.getRow(1);
-      headerRow.font = { bold: true };
       headerRow.eachCell((cell) => {
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "C6EFCE" }, // All green for initial balance template
-        };
+        tolgoiNud(cell);
         cell.border = {
           top: { style: "thin" },
           left: { style: "thin" },
@@ -3041,9 +2997,99 @@ exports.generateInitialBalanceTemplate = asyncHandler(
       });
       headerRow.commit();
 
-      // Row 2: plain empty cells
-      const legendRow2 = worksheet.getRow(2);
-      legendRow2.commit();
+      // «Эхний үлдэгдэл» баганыг л бөглөнө гэдгийг тодруулна.
+      const uldegdelGarchig = worksheet.getCell("G1");
+      uldegdelGarchig.note = {
+        texts: [
+          {
+            font: { bold: true, size: 10, name: "Calibri" },
+            text: "ЗӨВХӨН ЭНЭ БАГАНЫГ БӨГЛӨНӨ\n",
+          },
+          {
+            font: { size: 10, name: "Calibri" },
+            text:
+              "Бусад багана нь системээс бэлдэгдсэн — өөрчлөх шаардлагагүй.\n" +
+              "Үлдэгдэлгүй тоотын мөрийг хоосон орхивол алгасана.",
+          },
+        ],
+        margins: { insetmode: "custom", inset: [0.13, 0.13, 0.25, 0.25] },
+      };
+
+      // Гэрээнүүдийг урьдчилан бөглөнө — хэрэглэгч зөвхөн дүнг бичнэ.
+      // ID ирээгүй бол (хуучин дуудлага) хоосон загвар буцаана.
+      if (baiguullagiinId) {
+        const Geree = require("../models/geree");
+        const OrshinSuugch = require("../models/orshinSuugch");
+
+        const kholbolt = db.kholboltuud.find(
+          (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+        );
+
+        if (kholbolt) {
+          const shuult = {
+            baiguullagiinId: String(baiguullagiinId),
+            tuluv: "Идэвхтэй",
+          };
+          if (barilgiinId) shuult.barilgiinId = String(barilgiinId);
+
+          const gereenuud = await Geree(kholbolt)
+            .find(shuult)
+            .select("gereeniiDugaar toot davkhar orts utas orshinSuugchId")
+            .lean();
+
+          const orshinSuugchiinIdnuud = [
+            ...new Set(
+              gereenuud.map((g) => g.orshinSuugchId).filter(Boolean),
+            ),
+          ];
+          const orshinSuugchid = orshinSuugchiinIdnuud.length
+            ? await OrshinSuugch(db.erunkhiiKholbolt)
+                .find({ _id: { $in: orshinSuugchiinIdnuud } })
+                .select("_id ner utas")
+                .lean()
+            : [];
+          const orshinSuugchMap = new Map(
+            orshinSuugchid.map((o) => [String(o._id), o]),
+          );
+
+          // Тоотоор эрэмбэлбэл цаасан дээр хайхад хялбар.
+          const tootoorEmbekh = (a, b) => {
+            const x = parseFloat(a.toot);
+            const y = parseFloat(b.toot);
+            if (!isNaN(x) && !isNaN(y)) return x - y;
+            return String(a.toot || "").localeCompare(String(b.toot || ""));
+          };
+
+          gereenuud.sort(tootoorEmbekh).forEach((geree) => {
+            const orshinSuugch = geree.orshinSuugchId
+              ? orshinSuugchMap.get(String(geree.orshinSuugchId))
+              : null;
+
+            const utas = Array.isArray(geree.utas)
+              ? geree.utas[0]
+              : geree.utas ||
+                (Array.isArray(orshinSuugch?.utas)
+                  ? orshinSuugch.utas[0]
+                  : orshinSuugch?.utas) ||
+                "";
+
+            worksheet.addRow({
+              ner: orshinSuugch?.ner || "",
+              gereeniiDugaar: geree.gereeniiDugaar || "",
+              utas: utas || "",
+              orts: geree.orts || "",
+              davkhar: geree.davkhar || "",
+              toot: geree.toot || "",
+              ekhniiUldegdel: "",
+            });
+          });
+
+          worksheet.getColumn("ekhniiUldegdel").numFmt = "#,##0.00";
+          worksheet.getColumn("ekhniiUldegdel").alignment = {
+            horizontal: "right",
+          };
+        }
+      }
 
       res.setHeader(
         "Content-Type",
@@ -3117,6 +3163,9 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
     const results = {
       success: [],
       failed: [],
+      // Загвар нь бүх гэрээгээр дүүргэгдэж ирдэг тул хэрэглэгч зөвхөн
+      // үлдэгдэлтэй хэдэн мөрийг нь бөглөнө. Бөглөөгүй мөрүүд нь алдаа биш.
+      skipped: 0,
       total: data.length,
     };
 
@@ -3136,15 +3185,29 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
         const utas = row["Утас"]?.toString().trim();
         const gereeniiDugaar = row["Гэрээний дугаар"]?.toString().trim();
         const toot = row["Тоот"]?.toString().trim();
-        const amount = parseExcelNumber(row["Эхний үлдэгдэл"]);
+        const uldegdelRaw = row["Эхний үлдэгдэл"];
+        const amount = parseExcelNumber(uldegdelRaw);
 
         // Handle date using the importOgnoo from request body
         let rowOgnoo = importOgnoo;
 
+        // Хоосон орхисон мөрийг чимээгүй алгасана — дүүргэсэн загвар дээр
+        // эдгээр нь дийлэнх байх тул "алдаа" гэж жагсаавал жинхэнэ алдаа нь
+        // дунд нь алга болно.
+        const uldegdelKhooson =
+          uldegdelRaw === undefined ||
+          uldegdelRaw === null ||
+          String(uldegdelRaw).trim() === "";
+
+        if (uldegdelKhooson) {
+          results.skipped += 1;
+          continue;
+        }
+
         if (isNaN(amount) || amount === 0) {
           results.failed.push({
             row: rowNumber,
-            reason: "Дүн хоосон эсвэл 0 байна",
+            reason: "Дүн буруу эсвэл 0 байна",
           });
           continue;
         }
@@ -3297,7 +3360,9 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
 
     res.json({
       success: true,
-      message: `${results.success.length} эхний үлдэгдэл амжилттай импортлогдлоо`,
+      message:
+        `${results.success.length} эхний үлдэгдэл амжилттай импортлогдлоо` +
+        (results.skipped ? ` (${results.skipped} хоосон мөр алгасав)` : ""),
       results,
     });
   } catch (error) {

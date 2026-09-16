@@ -2083,17 +2083,14 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
       periodRow.eachCell({ includeEmpty: true }, cell => {
         cell.font = { bold: true };
         cell.alignment = { horizontal: 'center' };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TOLGOI_ZOOLON } };
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
       });
 
       // Row 5: Detailed headers
       const headerRowObj = worksheet.addRow(headerRow2);
       headerRowObj.eachCell((cell) => {
-        cell.font = { bold: true };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
-        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        tolgoiNud(cell);
       });
 
       // Set column widths
@@ -2235,12 +2232,7 @@ exports.tailanExport = asyncHandler(async (req, res, next) => {
         "Төлсөн (₮)",
       ]);
       headerRow.eachCell((cell) => {
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "6FA8FF" },
-        };
-        cell.alignment = { horizontal: "center" };
+        tolgoiNud(cell);
         cell.border = {
           top: { style: "thin" },
           left: { style: "thin" },

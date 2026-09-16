@@ -27,6 +27,7 @@ const Baiguullaga = require("../models/baiguullaga");
 const Geree = require("../models/geree");
 const OrshinSuugch = require("../models/orshinSuugch");
 const ZaaltUnshlalt = require("../models/zaaltUnshlalt");
+const { tolgoiMur } = require("../utils/excelZagvar");
 
 const TSAKHILGAAN_DUN_BAGANA = "Цахилгааны дүн";
 
@@ -193,12 +194,7 @@ exports.tsakhilgaanExcelTemplateAvya = asyncHandler(async (req, res, next) => {
       { header: TSAKHILGAAN_DUN_BAGANA, key: "dun", width: 18 },
     ];
 
-    worksheet.getRow(1).font = { bold: true };
-    worksheet.getRow(1).fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFE0E0E0" },
-    };
+    tolgoiMur(worksheet.getRow(1));
 
     // Ганц бөглөх багана нь аль нь болохыг тодоор харуулна.
     const dunGarchig = worksheet.getCell("E1");
