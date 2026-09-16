@@ -567,7 +567,10 @@ async function tukhainMuchiinNekhemjlekhiigShinechilye(
         kholbolt,
         String(geree._id),
         {
-          billingDate: ognoo,
+          // Дахин бодогдсон мөрүүд нь импорт хийсэн өдрөөр бус, нэхэмжлэхийн
+          // өөрийнх нь огноогоор бичигдэнэ. Эс бөгөөс гүйлгээний түүхэнд
+          // зөвхөн цахилгааны мөр нь бусдаасаа өөр өдөр рүү үсэрнэ.
+          billingDate: new Date(suuliinNekhemjlekh.ognoo || ognoo),
           // ЧУХАЛ: `override` байхгүй бол тухайн мөчлөгт нэхэмжлэх аль хэдийн
           // үүссэн тохиолдолд `createInvoiceForContract` нь
           // "Тухайн сарын нэхэмжлэх аль хэдийн үүссэн байна" гээд юу ч

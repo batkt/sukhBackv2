@@ -1774,7 +1774,9 @@ exports.zaaltExcelTatya = asyncHandler(async (req, res, next) => {
           if (suuliinNekhemjlekh && suuliinNekhemjlekh.tuluv === "Төлөөгүй") {
             const invoiceService = require("../services/invoiceService");
             await invoiceService.createInvoiceForContract(tukhainBaaziinKholbolt, geree._id.toString(), {
-              billingDate: new Date(ognoo),
+              // Дахин бодогдсон мөрүүд нь импорт хийсэн өдрөөр бус,
+              // нэхэмжлэхийн өөрийнх нь огноогоор бичигдэнэ.
+              billingDate: new Date(suuliinNekhemjlekh.ognoo || ognoo),
               // ЧУХАЛ: `override` байхгүй бол тухайн мөчлөгт нэхэмжлэх аль
               // хэдийн үүссэн үед `createInvoiceForContract` нь юу ч хийлгүй
               // "аль хэдийн үүссэн байна" гээд буцдаг — заалтын шинэ дүн
