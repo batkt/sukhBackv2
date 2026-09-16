@@ -1388,14 +1388,15 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    // range: 1 tells sheet_to_json to use row 1 (0-indexed) as the header,
-    // which is actually the legend row (row 2 in Excel). Using defval keeps
-    // behaviour consistent. Instead, we read with header:1 to get all rows
-    // then manually skip the legend row (index 1 = Excel row 2).
     const allRows = XLSX.utils.sheet_to_json(worksheet, { raw: false, header: 1 });
-    // Row 0 = headers (Excel row 1), Row 1 = legend (Excel row 2), Row 2+ = data
+    // 0-р мөр = гарчиг (Excel-ийн 1-р мөр). Загвар нь 2-р мөрийг хоосон
+    // "legend" болгож үлдээдэг тул урьд нь түүнийг НӨХЦӨЛГҮЙ алгасдаг байв.
+    // Гэтэл хэрэглэгч тэр хоосон мөрөн дээр эхний бүртгэлээ бичихээр нь
+    // чимээгүй хаягддаг байлаа. Иймд зөвхөн ҮНЭХЭЭР хоосон байвал алгасна.
     const headerRow0 = allRows[0] || [];
-    const dataRows = allRows.slice(2); // skip header + legend
+    const khoosonMur = (r) =>
+      !r || !r.some((c) => c !== undefined && c !== null && c !== "");
+    const dataRows = allRows.slice(khoosonMur(allRows[1]) ? 2 : 1);
     const data = dataRows
       .filter((r) => r.some((cell) => cell !== undefined && cell !== null && cell !== ""))
       .map((r) => {
@@ -2738,9 +2739,14 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
         continue;
       }
 
-      // Skip row 2 (legend): row 0 = headers, row 1 = legend, row 2+ = data
+      // Загварын 2-р мөр нь хоосон "legend" мөр. Хэрэглэгч тэнд эхний
+      // бүртгэлээ бичсэн байвал алгасаж болохгүй тул хоосон эсэхийг шалгана.
       const headerKeys = rawRows[0] || [];
-      const dataRawRows = rawRows.slice(2).filter((r) => r.some((c) => c !== undefined && c !== null && c !== ""));
+      const murKhooson = (r) =>
+        !r || !r.some((c) => c !== undefined && c !== null && c !== "");
+      const dataRawRows = rawRows
+        .slice(murKhooson(rawRows[1]) ? 2 : 1)
+        .filter((r) => r.some((c) => c !== undefined && c !== null && c !== ""));
       const data = dataRawRows.map((r) => {
         const obj = {};
         headerKeys.forEach((key, idx) => { if (key) obj[key] = r[idx] !== undefined ? r[idx] : ""; });
