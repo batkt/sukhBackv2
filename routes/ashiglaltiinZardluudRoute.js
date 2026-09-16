@@ -7,6 +7,13 @@ const Baiguullaga = require("../models/baiguullaga");
 const OrshinSuugch = require("../models/orshinSuugch");
 const Geree = require("../models/geree");
 const ZaaltUnshlalt = require("../models/zaaltUnshlalt");
+const multer = require("multer");
+const {
+  ashiglaltiinZardalExcelTemplateAvya,
+  ashiglaltiinZardalExcelTatya,
+} = require("../controller/ashiglaltiinZardalExcelController");
+
+const uploadFile = multer({ storage: multer.memoryStorage() });
 
 // CRUD routes with pagination middleware as 5th argument
 crud(
@@ -721,5 +728,19 @@ router.post("/tsakhilgaanTootsool", tokenShalgakh, async (req, res, next) => {
     next(err);
   }
 });
+
+// Ашиглалтын зардлын Excel — загвар нь одоо байгаа зардлуудаар дүүргэгдэж
+// татагддаг тул бөөнөөр засах, шинээр нэмэх хоёуланд ашиглагдана.
+router.post(
+  "/ashiglaltiinZardalExcelTemplateAvya",
+  tokenShalgakh,
+  ashiglaltiinZardalExcelTemplateAvya
+);
+router.post(
+  "/ashiglaltiinZardalExcelTatya",
+  uploadFile.single("file"),
+  tokenShalgakh,
+  ashiglaltiinZardalExcelTatya
+);
 
 module.exports = router;
