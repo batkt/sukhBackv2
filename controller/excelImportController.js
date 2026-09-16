@@ -1222,6 +1222,41 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
             );
           }
 
+          // Орцыг зөвхөн `davkhariinToonuud`-ын "орц::давхар" түлхүүрээс
+          // уншдаг байсан. Тоотуудаа орцын угтваргүйгээр хадгалсан барилга
+          // дээр энэ Set хоосон үлдэж, доорх `ortsList` нь ["1"] дээрээ
+          // хэвээр үлддэг — 2 орцтой байсан ч Excel-д зөвхөн "1" гарч ирнэ.
+          // Тиймээс тоот бүртгэлийн загвар дээр аль хэдийн байдагтай ижлээр
+          // `tokhirgoo.orts`-оос нөхөж уншина (UI-ын Орц шүүлтүүр ч мөн
+          // үүнээс уншдаг).
+          if (ortsSet.size === 0 && targetBarilga.tokhirgoo?.orts) {
+            const ortsValue = targetBarilga.tokhirgoo.orts;
+
+            if (Array.isArray(ortsValue)) {
+              ortsValue.forEach((o) => {
+                const trimmed = String(o).trim();
+                if (trimmed) ortsSet.add(trimmed);
+              });
+            } else {
+              const ortsAsNumber =
+                typeof ortsValue === "number" ? ortsValue : parseInt(ortsValue);
+
+              if (!isNaN(ortsAsNumber) && ortsAsNumber > 0) {
+                // Тоо бол 1-ээс тухайн тоо хүртэлх орцууд
+                for (let i = 1; i <= ortsAsNumber; i++) {
+                  ortsSet.add(String(i));
+                }
+              } else if (typeof ortsValue === "string") {
+                // "1,2" / "1 2" / "1;2" гэх мэт тусгаарлагчтай бичлэг
+                ortsValue
+                  .split(/[\s,;|]+/)
+                  .map((o) => o.trim())
+                  .filter(Boolean)
+                  .forEach((o) => ortsSet.add(o));
+              }
+            }
+          }
+
           if (ortsSet.size > 0) {
             ortsList = Array.from(ortsSet).sort((a, b) => {
               const numA = parseInt(a);
@@ -1315,7 +1350,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
       davkharList.length > 0 ? `"${davkharList.join(",")}"` : null;
 
     if (ortsFormula && ortsFormula.length < 255) {
-      worksheet.dataValidations.add("E3:E2000", {
+      worksheet.dataValidations.add("E2:E2000", {
         type: "list",
         allowBlank: true,
         formulae: [ortsFormula],
@@ -1326,7 +1361,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     }
 
     if (davkharFormula && davkharFormula.length < 255) {
-      worksheet.dataValidations.add("F3:F2000", {
+      worksheet.dataValidations.add("F2:F2000", {
         type: "list",
         allowBlank: true,
         formulae: [davkharFormula],
@@ -1337,7 +1372,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     }
 
     // Data validation for Turul (Column H) - "Үндсэн", "Түр"
-    worksheet.dataValidations.add("H3:H2000", {
+    worksheet.dataValidations.add("H2:H2000", {
       type: "list",
       allowBlank: true,
       formulae: ['"Үндсэн,Түр"'],
@@ -1347,7 +1382,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     });
 
     // Data validation for KhonogoorBodokh (Column M) - "Тийм", "Үгүй"
-    worksheet.dataValidations.add("M3:M2000", {
+    worksheet.dataValidations.add("M2:M2000", {
       type: "list",
       allowBlank: true,
       formulae: ['"Тийм,Үгүй"'],
