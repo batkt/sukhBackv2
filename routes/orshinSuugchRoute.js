@@ -165,6 +165,17 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
 
     const filters = [];
 
+    // 0. Exclude family members (who have undsenId) - they belong to a primary resident
+    if (!body?.query?.undsenId) {
+      filters.push({
+        $or: [
+          { undsenId: { $exists: false } },
+          { undsenId: null },
+          { undsenId: "" },
+        ],
+      });
+    }
+
     // 1. BaiguullagiinId filter (Required)
     const baiguullagiinIdString = String(baiguullagiinId);
     filters.push({
