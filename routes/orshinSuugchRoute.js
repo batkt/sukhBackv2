@@ -111,6 +111,126 @@ router.delete("/orshinSuugch/:id", tokenShalgakh, orshinSuugchUstgakh);
 
 router.post("/orshinSuugch/remove-toot", tokenShalgakh, orshinSuugchTootUstgakh);
 
+/**
+ * Оршин суугчийн машин хадгалах / шинэчлэх
+ * POST /orshinSuugchiinMashinKhadgalya
+ */
+router.post("/orshinSuugchiinMashinKhadgalya", tokenShalgakh, async (req, res, next) => {
+  try {
+    const { orshinSuugchiinId, baiguullagiinId } = req.body;
+    if (!orshinSuugchiinId) {
+      return res.status(400).json({
+        success: false,
+        aldaa: "Оршин суугчийн ID шаардлагатай!",
+      });
+    }
+
+    let resident = await OrshinSuugch(db.erunkhiiKholbolt).findById(orshinSuugchiinId);
+
+    let tukhainBaaziinKholbolt = null;
+    if (baiguullagiinId && db.kholboltuud) {
+      tukhainBaaziinKholbolt = db.kholboltuud.find(
+        (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+      );
+    }
+    if (!resident && tukhainBaaziinKholbolt) {
+      resident = await OrshinSuugch(tukhainBaaziinKholbolt).findById(orshinSuugchiinId);
+    }
+
+    if (!resident) {
+      return res.status(404).json({
+        success: false,
+        aldaa: "Оршин суугч олдсонгүй!",
+      });
+    }
+
+    const OrshinSuugchMashin = require("../models/orshinSuugchMashin");
+    const incomingCars = Array.isArray(req.body.mashinuud) ? req.body.mashinuud : [];
+
+    const validCars = incomingCars
+      .map((c) => ({
+        mashiniiDugaar: String(c.mashiniiDugaar || "").trim().toUpperCase(),
+        ezenToot: String(c.ezenToot || resident.toot || "").trim(),
+      }))
+      .filter((c) => c.mashiniiDugaar);
+
+    const carDocs = validCars.map((c) => ({
+      orshinSuugchiinId: String(resident._id),
+      baiguullagiinId: String(baiguullagiinId || resident.baiguullagiinId || ""),
+      barilgiinId: String(resident.barilgiinId || ""),
+      mashiniiDugaar: c.mashiniiDugaar,
+      ezenToot: c.ezenToot,
+      utas: resident.utas || "",
+      zochinTurul: "Оршин суугч",
+      zochinUrikhEsekh: true,
+    }));
+
+    let savedCars = [];
+
+    // 1. Tenant DB
+    if (tukhainBaaziinKholbolt) {
+      try {
+        const TenantOSM = OrshinSuugchMashin(tukhainBaaziinKholbolt);
+        await TenantOSM.deleteMany({ orshinSuugchiinId: String(resident._id) });
+        if (carDocs.length > 0) {
+          savedCars = await TenantOSM.insertMany(carDocs);
+        }
+      } catch (err) {
+        console.error("Error saving cars to tenant DB:", err);
+      }
+    }
+
+    // 2. Central DB (fallback / sync)
+    try {
+      const CentralOSM = OrshinSuugchMashin(db.erunkhiiKholbolt);
+      await CentralOSM.deleteMany({ orshinSuugchiinId: String(resident._id) });
+      if (carDocs.length > 0) {
+        const centralSaved = await CentralOSM.insertMany(carDocs);
+        if (!savedCars.length) savedCars = centralSaved;
+      }
+    } catch (err) {
+      console.error("Error saving cars to central DB:", err);
+    }
+
+    // 3. Sync with Mashin model if exists
+    if (tukhainBaaziinKholbolt) {
+      try {
+        const MashinModel = require("../models/mashin")(tukhainBaaziinKholbolt);
+        await MashinModel.deleteMany({
+          ezemshigchiinId: String(resident._id),
+          turul: "Оршин суугч",
+        });
+        if (carDocs.length > 0) {
+          const mashinDocs = carDocs.map((c) => ({
+            baiguullagiinId: c.baiguullagiinId,
+            barilgiinId: c.barilgiinId,
+            ezemshigchiinId: c.orshinSuugchiinId,
+            ezemshigchiinNer: resident.ner || "",
+            ezemshigchiinUtas: resident.utas || "",
+            dugaar: c.mashiniiDugaar,
+            mashiniiDugaar: c.mashiniiDugaar,
+            ezenToot: c.ezenToot,
+            turul: "Оршин суугч",
+            tuluv: "Идэвхтэй",
+            zochinUrikhEsekh: true,
+          }));
+          await MashinModel.insertMany(mashinDocs);
+        }
+      } catch (err) {
+        console.error("Error syncing to Mashin model:", err);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Машины мэдээлэл амжилттай хадгалагдлаа",
+      mashinuud: savedCars,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
   try {
     const body = req.query;
@@ -554,28 +674,44 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
       khariu.gereenuud = buhGeree;
 
       try {
-        // Гэр бүлийн гишүүд — эдгээр нь оршин суугчийн бичлэг тул үндсэн
-        // (erunkhii) холболтод байна.
-        khariu.gerBuliinGishuud = await OrshinSuugch(kholbolt)
+        let gishuud = await OrshinSuugch(kholbolt)
           .find({ undsenId: String(result._id) })
           .select("ner ovog utas mail gishuuniiKholboo gishuuniiTuluv gishuuniiErkh gishuunUrisenOgnoo gishuunBatalgaajsanOgnoo")
           .lean();
+        if ((!gishuud || gishuud.length === 0) && kholbolt !== db.erunkhiiKholbolt) {
+          gishuud = await OrshinSuugch(db.erunkhiiKholbolt)
+            .find({ undsenId: String(result._id) })
+            .select("ner ovog utas mail gishuuniiKholboo gishuuniiTuluv gishuuniiErkh gishuunUrisenOgnoo gishuunBatalgaajsanOgnoo")
+            .lean();
+        }
+        khariu.gerBuliinGishuud = gishuud || [];
       } catch (e) {
         khariu.gerBuliinGishuud = [];
       }
 
-      if (tenantKholbolt) {
-        try {
-          const OrshinSuugchMashin = require("../models/orshinSuugchMashin")(
-            tenantKholbolt,
-          );
-          khariu.mashinuud = await OrshinSuugchMashin.find({
-            orshinSuugchiinId: String(result._id),
-          }).lean();
-        } catch (e) {
-          khariu.mashinuud = [];
+      try {
+        const OrshinSuugchMashin = require("../models/orshinSuugchMashin");
+        let foundCars = [];
+        if (tenantKholbolt) {
+          try {
+            foundCars = await OrshinSuugchMashin(tenantKholbolt)
+              .find({ orshinSuugchiinId: String(result._id) })
+              .lean();
+          } catch (e) { }
         }
+        if (!foundCars || foundCars.length === 0) {
+          try {
+            foundCars = await OrshinSuugchMashin(db.erunkhiiKholbolt)
+              .find({ orshinSuugchiinId: String(result._id) })
+              .lean();
+          } catch (e) { }
+        }
+        khariu.mashinuud = foundCars || [];
+      } catch (e) {
+        khariu.mashinuud = [];
+      }
 
+      if (tenantKholbolt) {
         try {
           const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud")(
             tenantKholbolt,

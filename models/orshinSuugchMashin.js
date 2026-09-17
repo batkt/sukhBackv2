@@ -5,7 +5,7 @@ const Schema = mongoose.Schema;
 mongoose.pluralize(null);
 
 const orshinSuugchMashinSchema = new Schema(
-    {
+  {
     orshinSuugchiinId: String,
     baiguullagiinId: String,
     barilgiinId: String,
@@ -21,15 +21,15 @@ const orshinSuugchMashinSchema = new Schema(
     zochinNiitUneguiMinut: Number,
     davtamjUtga: Number,
     utas: String
-    },
-    {timestamps: true}
+  },
+  { timestamps: true }
 )
 
 orshinSuugchMashinSchema.index({ baiguullagiinId: 1, barilgiinId: 1, orshinSuugchiinId: 1 });
 orshinSuugchMashinSchema.index({ mashiniiDugaar: 1 });
 
 module.exports = function a(conn) {
-if (!conn || !conn.kholbolt)
+  if (!conn || !conn.kholbolt)
     throw new Error("Холболтын мэдээлэл заавал бөглөх шаардлагатай!");
   conn = conn.kholbolt;
   return conn.model("orshinSuugchMashin", orshinSuugchMashinSchema);

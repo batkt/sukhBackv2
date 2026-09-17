@@ -319,7 +319,7 @@ exports.gishuunBatalgaajuulya = asyncHandler(async (req, res, next) => {
         utas,
         code,
         "gishuun_urikh",
-      ).catch(() => {});
+      ).catch(() => { });
       throw new aldaa(shalgalt.message || "Хүчингүй код байна!");
     }
 
@@ -631,7 +631,11 @@ exports.gishuunNemekh = asyncHandler(async (req, res, next) => {
     const { db } = require("zevbackv2");
 
     // Ажилтан мөн эсэх — энэ зам зөвхөн админ талд зориулагдсан.
-    const ajiltniiId = req.nevtersenAjiltniiToken?.id;
+    const token =
+      req.body?.nevtersenAjiltniiToken ||
+      req.nevtersenAjiltniiToken ||
+      req.user;
+    const ajiltniiId = token?.id || token?._id || token?.sub;
     if (!ajiltniiId) throw new aldaa("Нэвтрэх шаардлагатай!");
 
     const undsenId = String(req.body.undsenId || "").trim();
@@ -645,7 +649,18 @@ exports.gishuunNemekh = asyncHandler(async (req, res, next) => {
 
     const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
 
-    const undsen = await OrshinSuugchModel.findById(undsenId);
+    let undsen = await OrshinSuugchModel.findById(undsenId);
+    if (!undsen && Array.isArray(db.kholboltuud)) {
+      for (const k of db.kholboltuud) {
+        try {
+          const found = await OrshinSuugch(k).findById(undsenId);
+          if (found) {
+            undsen = found;
+            break;
+          }
+        } catch (e) { }
+      }
+    }
     if (!undsen) throw new aldaa("Үндсэн эзэмшигч олдсонгүй!");
     if (undsen.undsenId) {
       throw new aldaa(
