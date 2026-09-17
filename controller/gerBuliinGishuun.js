@@ -40,10 +40,33 @@ function utasTseverleye(utas) {
 /** Токеноос үндсэн эзэмшигчийг ачаална. Гишүүн бол алдаа шиднэ. */
 async function undsenEzemshigchAvya(req) {
   const { db } = require("zevbackv2");
-  const token = req.body.nevtersenAjiltniiToken;
+  const token =
+    req.body?.nevtersenAjiltniiToken ||
+    req.nevtersenAjiltniiToken ||
+    req.user;
   if (!token || !token.id || token.id === "zochin") {
     throw new aldaa("Энэ үйлдлийг хийх эрх байхгүй байна!");
   }
+
+  // Хэрэв админ/систем талаас үндсэн эзэмшигчийн ID дамжуулсан бол
+  const undsenId = req.body?.undsenId;
+  if (undsenId) {
+    const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
+    let undsen = await OrshinSuugchModel.findById(undsenId);
+    if (!undsen && Array.isArray(db.kholboltuud)) {
+      for (const k of db.kholboltuud) {
+        try {
+          const found = await OrshinSuugch(k).findById(undsenId);
+          if (found) {
+            undsen = found;
+            break;
+          }
+        } catch (e) {}
+      }
+    }
+    if (undsen) return undsen;
+  }
+
   if (token.undsenId) {
     throw new aldaa(
       "Гэр бүлийн гишүүн шинэ гишүүн урих боломжгүй. Үндсэн эзэмшигчид хандана уу.",
@@ -466,10 +489,14 @@ exports.gishuunErkhSoliyo = asyncHandler(async (req, res, next) => {
     const erkh = req.body.erkh === "Харах" ? "Харах" : "Харах + Төлөх";
     if (!gishuuniiId) throw new aldaa("Гишүүний ID заавал бөглөх шаардлагатай!");
 
-    const gishuun = await OrshinSuugch(db.erunkhiiKholbolt).findOne({
+    const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
+    let gishuun = await OrshinSuugchModel.findOne({
       _id: gishuuniiId,
       undsenId: String(undsen._id),
     });
+    if (!gishuun) {
+      gishuun = await OrshinSuugchModel.findById(gishuuniiId);
+    }
     if (!gishuun) throw new aldaa("Гишүүн олдсонгүй!");
 
     gishuun.gishuuniiErkh = erkh;
@@ -478,6 +505,17 @@ exports.gishuunErkhSoliyo = asyncHandler(async (req, res, next) => {
       Date.now() + Math.random().toString(36).substring(2, 7),
     );
     await gishuun.save();
+
+    // Tenant DB sync
+    const kholbolt = kholboltAvya(undsen.baiguullagiinId || gishuun.baiguullagiinId);
+    if (kholbolt) {
+      try {
+        await OrshinSuugch(kholbolt).updateOne(
+          { _id: gishuun._id },
+          { $set: { gishuuniiErkh: erkh } },
+        );
+      } catch (e) {}
+    }
 
     res.status(200).json({
       success: true,
@@ -501,7 +539,10 @@ exports.gishuunErkhSoliyo = asyncHandler(async (req, res, next) => {
 exports.gishuunUstgakh = asyncHandler(async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
-    const token = req.body.nevtersenAjiltniiToken;
+    const token =
+      req.body?.nevtersenAjiltniiToken ||
+      req.nevtersenAjiltniiToken ||
+      req.user;
     if (!token || !token.id || token.id === "zochin") {
       throw new aldaa("Энэ үйлдлийг хийх эрх байхгүй байна!");
     }
@@ -526,7 +567,7 @@ exports.gishuunUstgakh = asyncHandler(async (req, res, next) => {
       });
     }
 
-    // 2. Үндсэн эзэмшигч гишүүн/урилга хасаж байна
+    // 2. Үндсэн эзэмшигч эсвэл админ гишүүн/урилга хасаж байна
     const undsen = await undsenEzemshigchAvya(req);
     const gishuuniiId = req.body.gishuuniiId || req.body.id;
     const utas = utasTseverleye(req.body.utas);
@@ -539,7 +580,10 @@ exports.gishuunUstgakh = asyncHandler(async (req, res, next) => {
     if (gishuuniiId) shuult._id = gishuuniiId;
     else shuult.utas = utas;
 
-    const gishuun = await OrshinSuugchModel.findOne(shuult);
+    let gishuun = await OrshinSuugchModel.findOne(shuult);
+    if (!gishuun && gishuuniiId) {
+      gishuun = await OrshinSuugchModel.findById(gishuuniiId);
+    }
 
     if (gishuun) {
       await OrshinSuugchModel.deleteOne({ _id: gishuun._id });
@@ -547,6 +591,14 @@ exports.gishuunUstgakh = asyncHandler(async (req, res, next) => {
         utas: gishuun.utas,
         undsenId: String(undsen._id),
       });
+
+      const kholbolt = kholboltAvya(undsen.baiguullagiinId || gishuun.baiguullagiinId);
+      if (kholbolt) {
+        try {
+          await OrshinSuugch(kholbolt).deleteOne({ _id: gishuun._id });
+        } catch (e) {}
+      }
+
       return res.status(200).json({
         success: true,
         message: "Гэр бүлийн гишүүн хасагдлаа",
@@ -567,6 +619,64 @@ exports.gishuunUstgakh = asyncHandler(async (req, res, next) => {
     }
 
     throw new aldaa("Гишүүн эсвэл урилга олдсонгүй!");
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /gerBuliinGishuunZasakh
+ * Гишүүний мэдээлэл засах (овог, нэр, утас, холбоо, эрх)
+ */
+exports.gishuunZasakh = asyncHandler(async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const gishuuniiId = req.body.gishuuniiId || req.body.id;
+    if (!gishuuniiId) throw new aldaa("Гишүүний ID шаардлагатай!");
+
+    const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
+    let gishuun = await OrshinSuugchModel.findById(gishuuniiId);
+    if (!gishuun) throw new aldaa("Гишүүн олдсонгүй!");
+
+    if (req.body.ovog !== undefined) gishuun.ovog = String(req.body.ovog || "").trim();
+    if (req.body.ner !== undefined) gishuun.ner = String(req.body.ner || "").trim();
+    if (req.body.kholboo !== undefined) gishuun.gishuuniiKholboo = req.body.kholboo;
+    if (req.body.erkh !== undefined) {
+      gishuun.gishuuniiErkh = req.body.erkh === "Харах" ? "Харах" : "Харах + Төлөх";
+    }
+    if (req.body.utas) {
+      const tseverUtas = utasTseverleye(req.body.utas);
+      if (tseverUtas) {
+        gishuun.utas = tseverUtas;
+        gishuun.nevtrekhNer = tseverUtas;
+      }
+    }
+
+    await gishuun.save();
+
+    const kholbolt = kholboltAvya(gishuun.baiguullagiinId);
+    if (kholbolt) {
+      try {
+        await OrshinSuugch(kholbolt).updateOne(
+          { _id: gishuun._id },
+          {
+            $set: {
+              ovog: gishuun.ovog,
+              ner: gishuun.ner,
+              utas: gishuun.utas,
+              gishuuniiKholboo: gishuun.gishuuniiKholboo,
+              gishuuniiErkh: gishuun.gishuuniiErkh,
+            },
+          },
+        );
+      } catch (e) {}
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Гишүүний мэдээлэл шинэчлэгдлээ",
+      gishuun,
+    });
   } catch (err) {
     next(err);
   }

@@ -11,12 +11,14 @@ const {
   gishuunUstgakh,
   undsenEzemshigchiinMedeelel,
   gishuunNemekh,
+  gishuunZasakh,
 } = require("../controller/gerBuliinGishuun");
 
 // --- Үндсэн эзэмшигчийн үйлдлүүд ---
 router.post("/gerBuliinGishuunUrikh", tokenShalgakh, gishuunUrikh);
 // Админ талаас шууд нэмэх — `undsenId`-г биеэс нь авна (урилга үүсгэхгүй).
 router.post("/gerBuliinGishuunNemekh", tokenShalgakh, gishuunNemekh);
+router.post("/gerBuliinGishuunZasakh", tokenShalgakh, gishuunZasakh);
 router.post(
   "/gerBuliinGishuunDakhinIlgeeye",
   tokenShalgakh,
