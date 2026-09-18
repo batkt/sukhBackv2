@@ -260,10 +260,20 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     throw new Error("Contract not found");
   }
 
+  const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
+
   const priorInvoiceCount = await NekhemjlekhiinTuukhModel.countDocuments({
     gereeniiId: gereeId.toString(),
   });
-  const isFirstInvoice = priorInvoiceCount === 0;
+  // Гэрээнд авлагын мөр огт байхгүй бол нэхэмжлэх нь бүртгэгдсэн ч бодит
+  // тооцоо хийгдээгүй гэсэн үг (доорх «хоосон нэхэмжлэх»-ийг үз) — иймд үүнийг
+  // ЭХНИЙ нэхэмжлэх гэж үзнэ. Эс бөгөөс ийм гэрээний эхний үлдэгдэл хэзээ ч
+  // авлагад бичигдэхгүй өнгөрнө. Давхардахаас доорх `existingEkhnii` шалгалт
+  // хамгаална.
+  const guilgeeMurToo = await GuilgeeAvlaguudModel.countDocuments({
+    gereeniiId: gereeId.toString(),
+  });
+  const isFirstInvoice = priorInvoiceCount === 0 || guilgeeMurToo === 0;
 
   const { charges, total } = await calculateGereeCharges(kholbolt, geree, { ...options, isFirstInvoice });
 
@@ -302,7 +312,31 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
   }
 
   if (invoice && !options.override) {
-    return { success: false, message: "Тухайн сарын нэхэмжлэх аль хэдийн үүссэн байна." };
+    // ХООСОН НЭХЭМЖЛЭХ.
+    //
+    // `ensureActiveInvoice` нь гар авлага бүртгэхэд зориулж `forceEmpty` +
+    // `skipCharges`-аар нэхэмжлэхийн БАРИМТ л үүсгэдэг (routes/gereeRoute.js —
+    // POST /guilgeeAvlaguud). Ийм баримт нь авлагын ямар ч мөргүй атлаа "тухайн
+    // сарын нэхэмжлэх" мэт тоологдож, жинхэнэ нэхэмжлэхийг бүхэлд нь хаадаг
+    // байв — Хуулга хоосон атлаа нэхэмжлэх үүсгэх боломжгүй болно.
+    //
+    // Мөргүй нэхэмжлэхийг хаалт гэж үзэхгүй, харин НӨХӨЖ дүүргэнэ. Дүнтэй
+    // нэхэмжлэх (авлагын мөр эсвэл хуучин `medeelel.zardluud`-тай) бол өмнөх
+    // шигээ хамгаалалт хэвээр.
+    const kholbootoiMurToo = await GuilgeeAvlaguudModel.countDocuments({
+      nekhemjlekhId: invoice._id.toString(),
+    });
+    const zardliinToo = Array.isArray(invoice.medeelel?.zardluud)
+      ? invoice.medeelel.zardluud.length
+      : 0;
+
+    if (kholbootoiMurToo > 0 || zardliinToo > 0) {
+      return { success: false, message: "Тухайн сарын нэхэмжлэх аль хэдийн үүссэн байна." };
+    }
+
+    console.log(
+      `♻️ [createInvoiceForContract] Хоосон нэхэмжлэх ${invoice.nekhemjlekhiinDugaar || invoice._id} олдлоо — алдаа заахын оронд нөхөж дүүргэнэ.`,
+    );
   }
 
   if (!invoice) {
@@ -335,8 +369,6 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     });
     await invoice.save();
   }
-
-  const GuilgeeAvlaguudModel = require("../models/guilgeeAvlaguud")(kholbolt);
 
   await GuilgeeAvlaguudModel.updateMany(
     {
@@ -388,6 +420,17 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
       } catch (recErr) {
         console.error(`  [Charge Processing] ❌ ERROR recording charge for "${c.ner}":`, recErr.message, recErr.stack);
       }
+    }
+
+    // Байгаа нэхэмжлэхийг дахин дүүргэсэн үед толгойн дүн нь үүсгэх үеийнхээрээ
+    // хөлдүү үлддэг байв — авлагын мөрүүд шинээр бичигдсэн бол `niitTulbur`-ийг
+    // ч мөн адил шинэчилнэ. Ингэснээр хэвлэх нэхэмжлэх ба Хуулга хоёр зөрөхгүй.
+    if (invoice.niitTulbur !== total) {
+      console.log(
+        `🧾 [createInvoiceForContract] niitTulbur ${invoice.niitTulbur} → ${total}`,
+      );
+      invoice.niitTulbur = total;
+      await invoice.save();
     }
 
     // Reset pro-rating flags (one-time use)

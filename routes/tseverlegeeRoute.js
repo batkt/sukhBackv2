@@ -278,7 +278,18 @@ router.post("/tseverlegee", tokenShalgakh, async (req, res, next) => {
       baaziinNer,
     } = req.body || {};
 
-    const kholbolt = kholboltAvya(res, baiguullagiinId, baaziinNer);
+    // tokenShalgakh нь `req.body.baiguullagiinId`-г ТОКЕНЫ утгаар дарж бичдэг.
+    // bpay хэрэглэгчийн токенд байгууллага байдаггүй тул аппын явуулсан утга
+    // устаж, "baiguullagiinId шаардлагатай" гэсэн алдаа өгдөг байв. Query нь
+    // хөндөгддөггүй тул тэндээс нөхнө.
+    const ashiglakhBaiguullagiinId =
+      baiguullagiinId || req.query?.baiguullagiinId;
+
+    const kholbolt = kholboltAvya(
+      res,
+      ashiglakhBaiguullagiinId,
+      baaziinNer || req.query?.baaziinNer,
+    );
     if (!kholbolt) return;
 
     if (!utasniiDugaar || !String(utasniiDugaar).trim())
@@ -309,14 +320,14 @@ router.post("/tseverlegee", tokenShalgakh, async (req, res, next) => {
     // түүнийг хүчингүйд тооцно.
     const serveriinkh = await orshinSuugchiinMedeelel(kholbolt, {
       orshinSuugchiinId,
-      baiguullagiinId,
+      baiguullagiinId: ashiglakhBaiguullagiinId,
       barilgiinId,
     });
     const appToot = toot && String(toot) !== "OWN_ORG" ? String(toot) : null;
     const jinkheneToot = serveriinkh?.toot || appToot;
 
     const zakhialga = await Tseverlegee(kholbolt).create({
-      baiguullagiinId: String(baiguullagiinId),
+      baiguullagiinId: String(ashiglakhBaiguullagiinId),
       barilgiinId: barilgiinId ? String(barilgiinId) : undefined,
       toot: jinkheneToot || undefined,
       orshinSuugchiinId: orshinSuugchiinId
