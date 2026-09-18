@@ -343,8 +343,9 @@ router.get(
   tokenShalgakh,
   async (req, res, next) => {
     try {
-      const { baiguullagiinId, orshinSuugchiinId } = req.query || {};
-      const kholbolt = kholboltAvya(res, baiguullagiinId);
+      const { baiguullagiinId, orshinSuugchiinId, baaziinNer } =
+        req.query || {};
+      const kholbolt = kholboltAvya(res, baiguullagiinId, baaziinNer);
       if (!kholbolt) return;
 
       if (!orshinSuugchiinId)
@@ -374,8 +375,9 @@ router.put(
   tokenShalgakh,
   async (req, res, next) => {
     try {
-      const { baiguullagiinId, orshinSuugchiinId } = req.body || {};
-      const kholbolt = kholboltAvya(res, baiguullagiinId);
+      const { baiguullagiinId, orshinSuugchiinId, baaziinNer } =
+        req.body || {};
+      const kholbolt = kholboltAvya(res, baiguullagiinId, baaziinNer);
       if (!kholbolt) return;
 
       const zakhialga = await Tseverlegee(kholbolt).findById(req.params.id);
