@@ -172,6 +172,11 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
           dun: dun,
           turul: "Авлага",
           zardliinTurul: "Авлага",
+          // Энэ мөр авлагад АЛЬ ХЭДИЙН бичигдсэн — доор нэхэмжлэхэд нь
+          // холбогдоно (`updateMany`). Нийт дүнд орохын тулд л жагсаалтад
+          // байгаа болохоос ДАХИН бичих ёсгүй; эс бөгөөс тухайн айлын
+          // эхний үлдэгдэл/авлага хоёр дахин тоологдоно.
+          ledgerDeerBaigaa: true,
         });
       }
     }
@@ -323,12 +328,25 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     // Мөргүй нэхэмжлэхийг хаалт гэж үзэхгүй, харин НӨХӨЖ дүүргэнэ. Дүнтэй
     // нэхэмжлэх (авлагын мөр эсвэл хуучин `medeelel.zardluud`-тай) бол өмнөх
     // шигээ хамгаалалт хэвээр.
+    //
+    // ЭХНИЙ ҮЛДЭГДЭЛ нь тухайн сарын үйлчилгээний нэхэмжлэх БИШ. Excel-ээр
+    // эхний үлдэгдэл оруулахад (controller/excelImportController.js) ганц
+    // "Эхний үлдэгдэл" мөртэй нэхэмжлэх үүсдэг — үүнийг бодит нэхэмжлэх гэж
+    // үзвэл тухайн айл сарын төлбөрөө ХЭЗЭЭ Ч авахгүй өнгөрнө. Тиймээс
+    // тоолохдоо эхний үлдэгдлийг тооцохгүй.
+    const ekhniiUldegdliinZardalEsekh = (z) => {
+      const ner = String((z && (z.ner || z.zardliinNer)) || "").toLowerCase();
+      return (z && z.isEkhniiUldegdel === true) || ner.includes("эхний үлдэгдэл");
+    };
+
     const kholbootoiMurToo = await GuilgeeAvlaguudModel.countDocuments({
       nekhemjlekhId: invoice._id.toString(),
+      ekhniiUldegdelEsekh: { $ne: true },
     });
-    const zardliinToo = Array.isArray(invoice.medeelel?.zardluud)
-      ? invoice.medeelel.zardluud.length
-      : 0;
+    const zardluud = Array.isArray(invoice.medeelel?.zardluud)
+      ? invoice.medeelel.zardluud
+      : [];
+    const zardliinToo = zardluud.filter((z) => !ekhniiUldegdliinZardalEsekh(z)).length;
 
     console.log(
       `🔍 [createInvoiceForContract] Мөчлөгийн нэхэмжлэх ${invoice.nekhemjlekhiinDugaar || invoice._id} (${invoice.ognoo}) — авлагын мөр: ${kholbootoiMurToo}, зардал: ${zardliinToo}, tuluv: ${invoice.tuluv}`,
@@ -402,6 +420,13 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     console.log(`🚀 [createInvoiceForContract] Processing ${charges.length} charges for ledger saving...`);
     for (const c of charges) {
       console.log(`  [Charge Processing] ner: "${c.ner}", dun: ${c.dun}, zardliinTurul: "${c.zardliinTurul}", isEkhniiUldegdel: ${!!c.isEkhniiUldegdel}`);
+      if (c.ledgerDeerBaigaa) {
+        console.log(
+          `  [Charge Processing] Skipping "${c.ner}" — авлагад аль хэдийн бичигдсэн мөр.`,
+        );
+        continue;
+      }
+
       if (c.isEkhniiUldegdel && existingEkhnii) {
         console.log(`  [Charge Processing] Skipping opening balance "${c.ner}" because existingEkhnii exists.`);
         continue;
