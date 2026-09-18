@@ -69,8 +69,12 @@ function kholboltAvya(res, baiguullagiinId) {
  * Утгыг эх кодонд БИЧИХГҮЙ — git-д орвол түүхээс арилахгүй. Зөвхөн орчны
  * хувьсагчаар өгнө. Тохируулаагүй бол түлхүүр хэзээ ч таарахгүй тул ажилтны
  * талын endpoint ердийн токен рүү шилжинэ (хаалттай суурь).
+ *
+ * ДУУДАХ ҮЕД нь уншина, модуль ачаалах үед биш. Одоогоор `index.js` нь
+ * `dotenv.config()`-оо route require-ээс өмнө дууддаг тул асуудалгүй ч,
+ * дарааллыг нь сольсон өдөр түлхүүр чимээгүйхэн хоосон болохоос сэргийлэв.
  */
-const TSEVERLEGEE_SERVICE_TOKEN = process.env.TSEVERLEGEE_SERVICE_TOKEN || "";
+const servisTulkhuurAvya = () => process.env.TSEVERLEGEE_SERVICE_TOKEN || "";
 
 /**
  * Хоёр түлхүүрийг тэнцүү хугацаанд харьцуулна. Энгийн `===` нь эхний зөрүү
@@ -86,10 +90,7 @@ function tulkhuurTaaravUu(irsen, khadgalsan) {
 
 /** Энэ хүсэлт сервисийн түлхүүрээр ирсэн үү */
 const servisMuUu = (req) =>
-  tulkhuurTaaravUu(
-    req.headers["x-tseverlegee-token"],
-    TSEVERLEGEE_SERVICE_TOKEN,
-  );
+  tulkhuurTaaravUu(req.headers["x-tseverlegee-token"], servisTulkhuurAvya());
 
 /**
  * Ажилтны талын хандалт.
