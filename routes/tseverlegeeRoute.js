@@ -29,6 +29,7 @@ const Tseverlegee = require("../models/tseverlegee");
 const { TULUVUUD, UILCHILGEENII_TURLUUD } = require("../models/tseverlegee");
 const Baiguullaga = require("../models/baiguullaga");
 const Ajiltan = require("../models/ajiltan");
+const OrshinSuugch = require("../models/orshinSuugch");
 const { ZEVTABS_MASTER_NER } = require("../controller/ajiltan");
 const { getKholboltByBaiguullagiinId } = require("../utils/dbConnection");
 
@@ -166,6 +167,52 @@ async function baiguullagaTodorkhoiloyo(req, res) {
   return { kholbolt, baiguullagiinId: String(baiguullagiinId) };
 }
 
+/**
+ * Оршин суугчийн ЖИНХЭНЭ тоот, нэрийг сервер талаас нь олно.
+ *
+ * Аппаас ирсэн тоотод найдаж болохгүй: OWN_ORG хаягтай хэрэглэгчийн
+ * `wallet_door_no` дотор "OWN_ORG" гэсэн ОРЛУУЛАГЧ текст хадгалагддаг
+ * (burtguulekh_signup.dart). Жинхэнэ тоот нь оршин суугчийн бичлэгийн
+ * `toots` массивд, байгууллага/барилгаараа ялгарч байдаг.
+ *
+ * Олдоогүй бол null буцаана — дуудагч нь аппын утгыг нөөцөөр ашиглана.
+ */
+async function orshinSuugchiinMedeelel(
+  kholbolt,
+  { orshinSuugchiinId, baiguullagiinId, barilgiinId },
+) {
+  if (!orshinSuugchiinId) return null;
+
+  const orshinSuugch = await OrshinSuugch(kholbolt)
+    .findById(orshinSuugchiinId)
+    .lean()
+    .catch(() => null);
+  if (!orshinSuugch) return null;
+
+  const toots = Array.isArray(orshinSuugch.toots) ? orshinSuugch.toots : [];
+  const ijilBaiguullaga = (t) =>
+    String(t?.baiguullagiinId || "") === String(baiguullagiinId);
+
+  // Нэг хэрэглэгч олон тооттой байж болно (орон сууц, гараж, агуулах).
+  // Барилга нь таарсныг эхэлж, дараа нь байгууллага нь таарсныг сонгоно.
+  const tokhirokh =
+    (barilgiinId &&
+      toots.find(
+        (t) =>
+          ijilBaiguullaga(t) &&
+          String(t?.barilgiinId || "") === String(barilgiinId),
+      )) ||
+    toots.find((t) => ijilBaiguullaga(t) && t?.turul === "Орон сууц") ||
+    toots.find(ijilBaiguullaga) ||
+    null;
+
+  return {
+    // `toot` нь хуучин бичлэгүүд дээр үндсэн талбар дээрээ байдаг.
+    toot: tokhirokh?.toot || orshinSuugch.toot || null,
+    ner: tokhirokh?.ner || orshinSuugch.ner || null,
+  };
+}
+
 /** Огноог Date болгоно, буруу бол null */
 function ognooBolgoyo(utga) {
   if (!utga) return null;
@@ -215,14 +262,25 @@ router.post("/tseverlegee", tokenShalgakh, async (req, res, next) => {
       ? uilchilgeeniiTurul
       : "Өрхийн цэвэрлэгээ";
 
+    // Тоот, нэрийг серверээс нь баталгаажуулна. Аппын утга нь зөвхөн нөөц —
+    // OWN_ORG хэрэглэгчийн тоот нь "OWN_ORG" гэсэн орлуулагч байдаг тул
+    // түүнийг хүчингүйд тооцно.
+    const serveriinkh = await orshinSuugchiinMedeelel(kholbolt, {
+      orshinSuugchiinId,
+      baiguullagiinId,
+      barilgiinId,
+    });
+    const appToot = toot && String(toot) !== "OWN_ORG" ? String(toot) : null;
+    const jinkheneToot = serveriinkh?.toot || appToot;
+
     const zakhialga = await Tseverlegee(kholbolt).create({
       baiguullagiinId: String(baiguullagiinId),
       barilgiinId: barilgiinId ? String(barilgiinId) : undefined,
-      toot: toot ? String(toot) : undefined,
+      toot: jinkheneToot || undefined,
       orshinSuugchiinId: orshinSuugchiinId
         ? String(orshinSuugchiinId)
         : undefined,
-      orshinSuugchiinNer,
+      orshinSuugchiinNer: serveriinkh?.ner || orshinSuugchiinNer,
       uilchilgeeniiTurul: turul,
       utasniiDugaar: String(utasniiDugaar).trim(),
       nemelttMedeelel: nemelttMedeelel
