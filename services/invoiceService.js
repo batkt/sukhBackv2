@@ -330,8 +330,17 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
       ? invoice.medeelel.zardluud.length
       : 0;
 
+    console.log(
+      `🔍 [createInvoiceForContract] Мөчлөгийн нэхэмжлэх ${invoice.nekhemjlekhiinDugaar || invoice._id} (${invoice.ognoo}) — авлагын мөр: ${kholbootoiMurToo}, зардал: ${zardliinToo}, tuluv: ${invoice.tuluv}`,
+    );
+
     if (kholbootoiMurToo > 0 || zardliinToo > 0) {
-      return { success: false, message: "Тухайн сарын нэхэмжлэх аль хэдийн үүссэн байна." };
+      // Дүнг нь хэлж өгнө — ингэснээр "хуучин код ажиллаж байна уу, эсвэл
+      // үнэхээр бичигдсэн нэхэмжлэх үү" гэдэг нь UI дээрээс шууд ялгарна.
+      return {
+        success: false,
+        message: `Тухайн сарын нэхэмжлэх аль хэдийн үүссэн байна (${kholbootoiMurToo} авлагын мөр, ${zardliinToo} зардал).`,
+      };
     }
 
     console.log(
