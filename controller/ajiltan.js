@@ -21,6 +21,9 @@ const crypto = require("crypto");
 
 
 const ZEVTABS_MASTER_NER = "7221481";
+// Бусад route (жишээ: цэвэрлэгээ) энэ нэрийг давхардуулан бичихгүйн тулд
+// гаргав — хоёр газар бичвэл нэгийг нь сольход нөгөө нь хоцорно.
+exports.ZEVTABS_MASTER_NER = ZEVTABS_MASTER_NER;
 
 const ZEVTABS_CODE_KHUGATSAA_MS = 60 * 1000;
 

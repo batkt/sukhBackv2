@@ -21,12 +21,15 @@
  */
 
 const express = require("express");
+const crypto = require("crypto");
 const router = express.Router();
 const { tokenShalgakh, db } = require("zevbackv2");
 
 const Tseverlegee = require("../models/tseverlegee");
 const { TULUVUUD, UILCHILGEENII_TURLUUD } = require("../models/tseverlegee");
 const Baiguullaga = require("../models/baiguullaga");
+const Ajiltan = require("../models/ajiltan");
+const { ZEVTABS_MASTER_NER } = require("../controller/ajiltan");
 const { getKholboltByBaiguullagiinId } = require("../utils/dbConnection");
 
 /** Холболт олоод буцаана, олдоогүй бол хариуг нь өөрөө илгээнэ */
@@ -47,22 +50,106 @@ function kholboltAvya(res, baiguullagiinId) {
   return kholbolt;
 }
 
+/* ─── СЕРВИСИЙН ТОКЕН ──────────────────────────────────────────────────────
+ *
+ * ЗӨВХӨН цэвэрлэгээний ажилтны endpoint дээр ажиллах хугацаагүй түлхүүр.
+ * Үүгээр ирсэн хүсэлт нь `register`-ээр дурын байгууллагыг сонгож чадна —
+ * ганц түлхүүрээр бүх байгууллагын захиалгыг харах зам нь энэ.
+ *
+ * Яагаад ажилтны токен биш вэ:
+ *   - Ажилтны токен 12 цагт хүчингүй болдог тул дахин нэвтрэх шаардлагатай.
+ *   - Мастер ажилтны токен нь amarhome дээр БҮХ эрхтэй. Алдагдвал хохирол
+ *     хязгааргүй. Энэ түлхүүр нь харин цэвэрлэгээнээс өөр юунд ч хүчингүй.
+ *
+ * Найдвартай байлгах нөхцөл:
+ *   - Зөвхөн сервер хооронд (udirdlagaBack → энд), HTTPS-ээр явна.
+ *   - Хөтөч рүү ХЭЗЭЭ Ч гарахгүй.
+ *   - Алдагдсан гэж сэжиглэвэл орчны утгыг сольж, хоёр талдаа deploy хийнэ.
+ *
+ * Утгыг эх кодонд БИЧИХГҮЙ — git-д орвол түүхээс арилахгүй. Зөвхөн орчны
+ * хувьсагчаар өгнө. Тохируулаагүй бол түлхүүр хэзээ ч таарахгүй тул ажилтны
+ * талын endpoint ердийн токен рүү шилжинэ (хаалттай суурь).
+ */
+const TSEVERLEGEE_SERVICE_TOKEN = process.env.TSEVERLEGEE_SERVICE_TOKEN || "";
+
+/**
+ * Хоёр түлхүүрийг тэнцүү хугацаанд харьцуулна. Энгийн `===` нь эхний зөрүү
+ * дээрээ зогсдог тул хариу ирэх хугацаагаар түлхүүрийг таах зай үлдээдэг.
+ */
+function tulkhuurTaaravUu(irsen, khadgalsan) {
+  if (!irsen || !khadgalsan) return false;
+  const a = Buffer.from(String(irsen));
+  const b = Buffer.from(String(khadgalsan));
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+/** Энэ хүсэлт сервисийн түлхүүрээр ирсэн үү */
+const servisMuUu = (req) =>
+  tulkhuurTaaravUu(
+    req.headers["x-tseverlegee-token"],
+    TSEVERLEGEE_SERVICE_TOKEN,
+  );
+
+/**
+ * Ажилтны талын хандалт.
+ *
+ * Сервисийн түлхүүртэй бол `tokenShalgakh`-г бүрэн алгасана — тэр нь
+ * `baiguullagiinId`-г токеноос дарж бичдэг тул бусад байгууллагыг харах
+ * боломжгүй болгоно. Түлхүүргүй бол ердийн ажилтны токеноор дамжина.
+ */
+function tseverlegeeKhandalt(req, res, next) {
+  if (servisMuUu(req)) {
+    // tokenShalgakh хийдэг зүйлсээс зөвхөн хэрэгтэйг нь гараар тавина.
+    if (!req.body) req.body = {};
+    return next();
+  }
+  return tokenShalgakh(req, res, next);
+}
+
+/**
+ * Дуудсан ажилтан zevtabs-ийн мастер мөн эсэх.
+ *
+ * Мастер нь ерөнхий баазад нэг л удаа байдаг бөгөөд аль ч байгууллагын
+ * өгөгдөл рүү хандах эрхтэй — `zevtabsNevtrelt` ч яг үүнийг шалгадаг.
+ */
+async function masterMuUu(req) {
+  const nevtersen = req.body?.nevtersenAjiltniiToken;
+  if (!nevtersen?.id) return false;
+  const ajiltan = await Ajiltan(db.erunkhiiKholbolt)
+    .findById(nevtersen.id)
+    .lean();
+  return ajiltan?.nevtrekhNer === ZEVTABS_MASTER_NER;
+}
+
 /**
  * Ажилтны талын хүсэлтээс баазын холболтыг олно.
  *
- * `baiguullagiinId` шууд ирвэл түүнийг, эс бөгөөс `register`-ээр эрэлхийлнэ —
- * zevtabs админ нь sukh дээрх id-г мэддэггүй. Олдоогүй тохиолдолд хариуг нь
- * өөрөө илгээгээд `null` буцаана.
+ * ЧУХАЛ: `tokenShalgakh` нь `req.body.baiguullagiinId`-г ТОКЕНЫ утгаар
+ * дарж бичдэг. Тиймээс ердийн ажилтан үргэлж өөрийн байгууллагаа л хардаг —
+ * энэ нь зөв зан төлөв.
+ *
+ * Харин сервисийн түлхүүр (эсвэл zevtabs-ийн мастер) бол ганцаараа БҮХ
+ * байгууллагыг харах шаардлагатай. Тийм үед `register` ирэх бөгөөд токеноос
+ * давуу хүчинтэйгээр тухайн байгууллагыг сонгоно. Эрхгүй хүн register
+ * явуулбал татгалзана — эс бөгөөс хэн ч бусдын өгөгдлийг уншиж чадна.
  */
 async function baiguullagaTodorkhoiloyo(req, res) {
-  // DELETE нь заримдаа query-гээр, заримдаа body-гоор параметр авчирдаг тул
-  // хоёуланг нь нэгтгэж үзнэ (body нь давуу).
-  const utga = { ...(req.query || {}), ...(req.body || {}) };
-  let baiguullagiinId = utga.baiguullagiinId;
+  const register = req.query?.register || req.body?.register;
+  // tokenShalgakh-ийн тавьсан утга. Эрхгүй хүнд энэ нь цорын ганц эх сурвалж.
+  let baiguullagiinId = req.body?.baiguullagiinId;
 
-  if (!baiguullagiinId && utga.register) {
+  if (register) {
+    const zovshoortoi = servisMuUu(req) || (await masterMuUu(req));
+    if (!zovshoortoi) {
+      res.status(403).json({
+        success: false,
+        message: "Өөр байгууллагын өгөгдөлд хандах эрх байхгүй байна",
+      });
+      return null;
+    }
     const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt)
-      .findOne({ register: String(utga.register) })
+      .findOne({ register: String(register) })
       .lean();
     if (!baiguullaga) {
       res
@@ -223,7 +310,7 @@ router.put(
 // `/:id`-аас ӨМНӨ бичигдэх ёстой, эс бөгөөс "toollogo" нь id гэж уншигдана.
 router.get(
   "/tseverlegee/toollogo",
-  tokenShalgakh,
+  tseverlegeeKhandalt,
   async (req, res, next) => {
     try {
       const { barilgiinId } = req.query || {};
@@ -259,7 +346,7 @@ router.get(
   },
 );
 
-router.get("/tseverlegee", tokenShalgakh, async (req, res, next) => {
+router.get("/tseverlegee", tseverlegeeKhandalt, async (req, res, next) => {
   try {
     const {
       barilgiinId,
@@ -333,7 +420,7 @@ router.get("/tseverlegee", tokenShalgakh, async (req, res, next) => {
   }
 });
 
-router.get("/tseverlegee/:id", tokenShalgakh, async (req, res, next) => {
+router.get("/tseverlegee/:id", tseverlegeeKhandalt, async (req, res, next) => {
   try {
     const oldson = await baiguullagaTodorkhoiloyo(req, res);
     if (!oldson) return;
@@ -351,7 +438,7 @@ router.get("/tseverlegee/:id", tokenShalgakh, async (req, res, next) => {
   }
 });
 
-router.put("/tseverlegee/:id", tokenShalgakh, async (req, res, next) => {
+router.put("/tseverlegee/:id", tseverlegeeKhandalt, async (req, res, next) => {
   try {
     const {
       tuluv,
@@ -415,7 +502,7 @@ router.put("/tseverlegee/:id", tokenShalgakh, async (req, res, next) => {
 
 router.delete(
   "/tseverlegee/:id",
-  tokenShalgakh,
+  tseverlegeeKhandalt,
   async (req, res, next) => {
     try {
       const oldson = await baiguullagaTodorkhoiloyo(req, res);

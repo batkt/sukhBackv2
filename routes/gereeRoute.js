@@ -313,6 +313,50 @@ router.get("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
     khuudaslalt(GuilgeeAvlaguud(req.body.tukhainBaaziinKholbolt), body).then(res.send.bind(res)).catch(next);
   } catch (e) { next(e); }
 });
+// «Эхний үлдэгдэл» мөрийг Хуулга дээрээс устгахыг зөвшөөрнө. Устгалт нь доорх
+// ерөнхий `crud`-аар явна (UstsanBarimt-д бичигдэнэ) — энэ нь зөвхөн гэрээн дээрх
+// `ekhniiUldegdel` талбарыг хамт тэглэнэ. Эс тэгвэл `invoiceService`-ийн
+// `ensureEkhniiUldegdel` болон эхний нэхэмжлэх үүсгэх урсгал устгасан мөрийг
+// талбараас нь сэргээж, дахин бичдэг.
+router.delete("/guilgeeAvlaguud/:id", tokenShalgakh, async (req, res, next) => {
+  try {
+    const kholbolt = req.body.tukhainBaaziinKholbolt;
+    if (!kholbolt) return next();
+
+    const mur = await GuilgeeAvlaguud(kholbolt)
+      .findById(req.params.id)
+      .lean()
+      .catch(() => null);
+
+    if (!mur || mur.ekhniiUldegdelEsekh !== true || !mur.gereeniiId) return next();
+
+    // Гэрээн дээрх талбарыг зөвхөн устгалт амжилттай болсны дараа тэглэнэ.
+    const originalSend = res.send.bind(res);
+    res.send = function (data) {
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        Geree(kholbolt)
+          .updateOne({ _id: mur.gereeniiId }, { $set: { ekhniiUldegdel: 0 } })
+          .then(() =>
+            console.log(
+              `✅ [GEREE ROUTE] Эхний үлдэгдэл устгагдсан тул гэрээ ${mur.gereeniiId}-ийн ekhniiUldegdel тэглэгдлээ`,
+            ),
+          )
+          .catch((err) =>
+            console.error(
+              "❌ [GEREE ROUTE] ekhniiUldegdel тэглэхэд алдаа:",
+              err.message,
+            ),
+          );
+      }
+      return originalSend(data);
+    };
+
+    next();
+  } catch (e) {
+    next(e);
+  }
+});
+
 // Main GuilgeeAvlaguud CRUD
 crud(router, "guilgeeAvlaguud", GuilgeeAvlaguud, UstsanBarimt);
 
