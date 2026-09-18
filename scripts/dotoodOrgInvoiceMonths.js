@@ -58,7 +58,7 @@ function parseArgs(argv) {
       out.waitMs = parseInt(arg.slice("--waitMs=".length), 10) || 4000;
   }
 
-  if (!out.months.length) out.months = [2, 3, 4, 5];
+  if (!out.months.length) out.months = [3, 4, 5, 6, 7, 8];
   if (Number.isNaN(out.year)) out.year = new Date().getFullYear();
   return out;
 }
@@ -97,7 +97,7 @@ async function main() {
   db.kholboltUusgey(
     app,
     process.env.MONGODB_URI ||
-      "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSukh?authSource=admin",
+    "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSukh?authSource=admin",
   );
 
   console.log(`Waiting ${opts.waitMs}ms for DB connections...`);
@@ -139,7 +139,7 @@ async function main() {
     if (Array.isArray(h) && h.length) {
       hosts = h.map((x) => `${x.host}:${x.port}`).join(", ");
     }
-  } catch (_e) {}
+  } catch (_e) { }
 
   console.log("\n========== TENANT TARGET (invoices written here) ==========");
   console.log("  MongoDB databaseName:", tenantDbName);
@@ -208,7 +208,7 @@ async function main() {
   for (const month of opts.months) {
     const label = `${MONTH_NAMES[month]} ${opts.year}`;
     console.log(`\n---------- ${label} (month=${month}) ----------`);
-    
+
     const billingDate = new Date(opts.year, month - 1, 1, 12, 0, 0);
     const result = await manualSendMassInvoices(
       BAIGUULLAGIIN_ID,

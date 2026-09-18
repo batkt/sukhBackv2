@@ -12,6 +12,7 @@ const {
   undsenEzemshigchiinMedeelel,
   gishuunNemekh,
   gishuunZasakh,
+  urilgaShalgaya,
 } = require("../controller/gerBuliinGishuun");
 
 // --- Үндсэн эзэмшигчийн үйлдлүүд ---
@@ -35,7 +36,8 @@ router.get(
   undsenEzemshigchiinMedeelel,
 );
 
-// --- Нээлттэй: уригдсан хүн кодоо баталгаажуулж нууц үгээ тохируулна ---
+// --- Нээлттэй: уригдсан хүн кодоо шалгах ба баталгаажуулж нууц үгээ тохируулах ---
+router.post("/gerBuliinUrilgaShalgaya", urilgaShalgaya);
 router.post("/gerBuliinGishuunBatalgaajuulya", gishuunBatalgaajuulya);
 
 module.exports = router;

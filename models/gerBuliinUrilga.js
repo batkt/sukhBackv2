@@ -32,6 +32,10 @@ const gerBuliinUrilgaSchema = new mongoose.Schema(
     },
     baiguullagiinId: String,
     barilgiinId: String,
+    code: {
+      type: String,
+      index: true,
+    },
     tuluv: {
       type: String,
       enum: ["Хүлээгдэж буй", "Баталгаажсан", "Цуцалсан"],

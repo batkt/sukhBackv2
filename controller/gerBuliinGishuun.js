@@ -224,6 +224,8 @@ exports.gishuunUrikh = asyncHandler(async (req, res, next) => {
       Date.now() + URILGA_KHUCHINTEI_TSAG * 60 * 60 * 1000,
     );
 
+    const kodDoc = await kodIlgeeye(utas, undsen, kholbolt);
+
     const urilga = await UrilgaModel.findOneAndUpdate(
       { utas, undsenId: String(undsen._id) },
       {
@@ -238,13 +240,12 @@ exports.gishuunUrikh = asyncHandler(async (req, res, next) => {
           baiguullagiinId: String(undsen.baiguullagiinId),
           barilgiinId: undsen.barilgiinId ? String(undsen.barilgiinId) : "",
           tuluv: "Хүлээгдэж буй",
+          code: String(kodDoc.code),
           expiresAt,
         },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true },
     );
-
-    await kodIlgeeye(utas, undsen, kholbolt);
 
     res.status(200).json({
       success: true,
@@ -285,15 +286,86 @@ exports.gishuunDakhinIlgeeye = asyncHandler(async (req, res, next) => {
     });
     if (!urilga) throw new aldaa("Хүлээгдэж буй урилга олдсонгүй!");
 
-    const kholbolt = kholboltAvya(urilga.baiguullagiinId);
-    if (!kholbolt) throw new aldaa("Байгууллагын холболт олдсонгүй!");
-
-    await kodIlgeeye(utas, undsen, kholbolt);
+    const kodDoc = await kodIlgeeye(utas, undsen, kholbolt);
+    urilga.code = String(kodDoc.code);
+    await urilga.save();
 
     res.status(200).json({
       success: true,
       message: "Баталгаажуулах код дахин илгээгдлээ",
       expiresIn: KOD_KHUCHINTEI_MINUT,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /gerBuliinUrilgaShalgaya  (нээлттэй)
+ * 4 оронтой кодоор урилгыг шалгаж, хэн ямар хаягт урьсныг харуулна.
+ */
+exports.urilgaShalgaya = asyncHandler(async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const code = String(req.body.code || "").trim();
+
+    if (!code || code.length !== 4) {
+      throw new aldaa("4 оронтой баталгаажуулах кодоо оруулна уу!");
+    }
+
+    const UrilgaModel = GerBuliinUrilga(db.erunkhiiKholbolt);
+    let urilga = await UrilgaModel.findOne({
+      code,
+      tuluv: "Хүлээгдэж буй",
+      expiresAt: { $gt: new Date() },
+    }).sort({ createdAt: -1 });
+
+    if (!urilga) {
+      const buiUrilguud = await UrilgaModel.find({
+        tuluv: "Хүлээгдэж буй",
+        expiresAt: { $gt: new Date() },
+      }).sort({ createdAt: -1 });
+
+      for (const u of buiUrilguud) {
+        const k = kholboltAvya(u.baiguullagiinId);
+        if (k) {
+          const bCode = await BatalgaajuulahCode(k).findOne({
+            utas: u.utas,
+            code,
+            purpose: "gishuun_urikh",
+            khereglesenEsekh: false,
+            expiresAt: { $gt: new Date() },
+          });
+          if (bCode) {
+            urilga = u;
+            u.code = code;
+            await u.save().catch(() => {});
+            break;
+          }
+        }
+      }
+    }
+
+    if (!urilga) {
+      throw new aldaa("Хүчингүй код эсвэл урилгын хугацаа дууссан байна!");
+    }
+
+    const undsen = await OrshinSuugch(db.erunkhiiKholbolt).findById(urilga.undsenId);
+    if (!undsen) {
+      throw new aldaa("Үндсэн эзэмшигчийн бүртгэл олдсонгүй!");
+    }
+
+    const urisenNer = [undsen.ovog, undsen.ner].filter(Boolean).join(" ") || undsen.utas || "Гэр бүлийн гишүүн";
+    const khayag = [undsen.bairName, undsen.toot ? `${undsen.toot} тоот` : ""].filter(Boolean).join(", ");
+
+    res.status(200).json({
+      success: true,
+      urisenNer,
+      urisenUtas: undsen.utas,
+      gishuunNer: urilga.ner || "",
+      kholboo: urilga.kholboo || "Гэр бүлийн гишүүн",
+      khayag,
+      utas: urilga.utas,
     });
   } catch (err) {
     next(err);
@@ -307,26 +379,57 @@ exports.gishuunDakhinIlgeeye = asyncHandler(async (req, res, next) => {
 exports.gishuunBatalgaajuulya = asyncHandler(async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
-    const utas = utasTseverleye(req.body.utas);
+    let utas = req.body.utas ? utasTseverleye(req.body.utas) : null;
     const code = String(req.body.code || "").trim();
     const nuutsUg = String(req.body.nuutsUg || "").trim();
 
-    if (!utas) throw new aldaa("Утасны дугаар буруу байна!");
     if (!code) throw new aldaa("Баталгаажуулах код заавал бөглөх шаардлагатай!");
     if (nuutsUg.length < 4) {
       throw new aldaa("Нууц үг доод тал нь 4 тэмдэгт байх шаардлагатай!");
     }
 
     const UrilgaModel = GerBuliinUrilga(db.erunkhiiKholbolt);
-    const urilga = await UrilgaModel.findOne({
-      utas,
-      tuluv: "Хүлээгдэж буй",
-      expiresAt: { $gt: new Date() },
-    }).sort({ createdAt: -1 });
+    let urilga = null;
+
+    if (code) {
+      urilga = await UrilgaModel.findOne({
+        code,
+        tuluv: "Хүлээгдэж буй",
+        expiresAt: { $gt: new Date() },
+        ...(utas ? { utas } : {}),
+      }).sort({ createdAt: -1 });
+    }
 
     if (!urilga) {
-      throw new aldaa("Урилга олдсонгүй эсвэл хугацаа нь дууссан байна!");
+      const buiUrilguud = await UrilgaModel.find({
+        tuluv: "Хүлээгдэж буй",
+        expiresAt: { $gt: new Date() },
+        ...(utas ? { utas } : {}),
+      }).sort({ createdAt: -1 });
+
+      for (const u of buiUrilguud) {
+        const k = kholboltAvya(u.baiguullagiinId);
+        if (k) {
+          const bCode = await BatalgaajuulahCode(k).findOne({
+            utas: u.utas,
+            code,
+            purpose: "gishuun_urikh",
+            khereglesenEsekh: false,
+            expiresAt: { $gt: new Date() },
+          });
+          if (bCode) {
+            urilga = u;
+            break;
+          }
+        }
+      }
     }
+
+    if (!urilga) {
+      throw new aldaa("Хүчингүй код эсвэл урилгын хугацаа дууссан байна!");
+    }
+
+    utas = urilga.utas;
 
     const kholbolt = kholboltAvya(urilga.baiguullagiinId);
     if (!kholbolt) throw new aldaa("Байгууллагын холболт олдсонгүй!");
