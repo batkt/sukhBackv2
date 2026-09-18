@@ -5731,14 +5731,29 @@ exports.massUpdateOrshinSuugchKwt = asyncHandler(async (req, res, next) => {
 
       const residents = await OrshinSuugchModel.find(query);
       for (const resident of residents) {
-        resident.tsahilgaaniiZaalt = targetKwt;
+        let tootUpdated = false;
         if (Array.isArray(resident.toots)) {
           resident.toots.forEach((t) => {
-            if (!barilgiinId || String(t.barilgiinId) === String(barilgiinId)) {
+            const matchesToot = unit.toot
+              ? String(t.toot).trim() === String(unit.toot).trim()
+              : true;
+            const matchesBarilga =
+              !barilgiinId || String(t.barilgiinId) === String(barilgiinId);
+            if (matchesToot && matchesBarilga) {
               t.tsahilgaaniiZaalt = targetKwt;
+              tootUpdated = true;
             }
           });
         }
+
+        if (
+          !unit.toot ||
+          String(resident.toot).trim() === String(unit.toot).trim() ||
+          !tootUpdated
+        ) {
+          resident.tsahilgaaniiZaalt = targetKwt;
+        }
+
         await resident.save();
         updatedCount++;
 
@@ -5747,10 +5762,45 @@ exports.massUpdateOrshinSuugchKwt = asyncHandler(async (req, res, next) => {
         );
         if (tukhainBaaziinKholbolt) {
           const GereeM = GereeModel(tukhainBaaziinKholbolt);
-          await GereeM.updateMany(
+          if (unit.gereeniiId) {
+            await GereeM.updateOne(
+              {
+                _id: unit.gereeniiId,
+                baiguullagiinId: String(baiguullagiinId),
+              },
+              { $set: { suuliinZaalt: targetKwt, umnukhZaalt: targetKwt } }
+            );
+          } else if (unit.toot) {
+            await GereeM.updateMany(
+              {
+                orshinSuugchId: resident._id.toString(),
+                toot: String(unit.toot).trim(),
+                baiguullagiinId: String(baiguullagiinId),
+              },
+              { $set: { suuliinZaalt: targetKwt, umnukhZaalt: targetKwt } }
+            );
+          } else {
+            await GereeM.updateMany(
+              {
+                orshinSuugchId: resident._id.toString(),
+                baiguullagiinId: String(baiguullagiinId)
+              },
+              { $set: { suuliinZaalt: targetKwt, umnukhZaalt: targetKwt } }
+            );
+          }
+        }
+      }
+
+      if (unit.gereeniiId) {
+        const tukhainBaaziinKholbolt = db.kholboltuud.find(
+          (kholbolt) => String(kholbolt.baiguullagiinId) === String(baiguullagiinId)
+        );
+        if (tukhainBaaziinKholbolt) {
+          const GereeM = GereeModel(tukhainBaaziinKholbolt);
+          await GereeM.updateOne(
             {
-              orshinSuugchId: resident._id.toString(),
-              baiguullagiinId: String(baiguullagiinId)
+              _id: unit.gereeniiId,
+              baiguullagiinId: String(baiguullagiinId),
             },
             { $set: { suuliinZaalt: targetKwt, umnukhZaalt: targetKwt } }
           );

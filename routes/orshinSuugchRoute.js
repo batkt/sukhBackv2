@@ -465,6 +465,7 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
 
                 if (g.khonogoorBodokhEsekh !== undefined) t.khonogoorBodokhEsekh = g.khonogoorBodokhEsekh;
                 if (g.bodokhKhonog !== undefined) t.bodokhKhonog = g.bodokhKhonog;
+                if (g.suuliinZaalt !== undefined) t.suuliinZaalt = g.suuliinZaalt;
               }
             });
           }
