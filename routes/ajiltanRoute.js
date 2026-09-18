@@ -5,6 +5,36 @@ const NevtreltiinTuukh = require("../models/nevtreltiinTuukh");
 const BackTuukh = require("../models/backTuukh");
 const Baiguullaga = require("../models/baiguullaga");
 const request = require("request");
+// `zevbackv2`-ийн PUT нь `new Model(req.body)`-оор бүтэн баримт үүсгээд түүнийгээ
+// `updateOne` руу дамжуулдаг. Ийм үед schema-д байгаа бүх талбар бичигддэг тул
+// клиентээс ирээгүй массив талбарууд анхны утга буюу `[]`-ээр дарагдана —
+// нэг талбар засахад ажилтны барилга, эрх, тохиргоо бүгд арчигдана.
+// Тиймээс ирээгүй талбаруудыг хуучин утгаар нь эргүүлж нөхнө.
+const AJILTNII_KHADGALAKH_TALBARUUD = [
+  "barilguud",
+  "tsonkhniiErkhuud",
+  "zogsoolKhaalga",
+  "tuukh",
+];
+function ajiltniiIreeguiTalbaruudiigNukhye(body, khuuchin) {
+  if (!body || !khuuchin) return;
+  for (const talbar of AJILTNII_KHADGALAKH_TALBARUUD) {
+    if (body[talbar] === undefined && khuuchin[talbar] !== undefined)
+      body[talbar] = khuuchin[talbar];
+  }
+  if (khuuchin.tokhirgoo) {
+    const khuuchinTokhirgoo = khuuchin.tokhirgoo.toObject
+      ? khuuchin.tokhirgoo.toObject()
+      : khuuchin.tokhirgoo;
+    const irsenTokhirgoo = body.tokhirgoo || {};
+    const shineTokhirgoo = { ...khuuchinTokhirgoo };
+    for (const [tur, utga] of Object.entries(irsenTokhirgoo)) {
+      if (utga !== undefined) shineTokhirgoo[tur] = utga;
+    }
+    body.tokhirgoo = shineTokhirgoo;
+  }
+}
+
 const {
   crudWithFile,
   crud,
@@ -87,10 +117,13 @@ crudWithFile(
       if (req.method === "PUT" && req.params.id) {
         var ObjectId = require("mongodb").ObjectId;
         try {
-          var ajiltanDoc = await ajiltanModel.findOne({ _id: ObjectId(req.params.id) });
+          var ajiltanDoc = await ajiltanModel
+            .findOne({ _id: ObjectId(req.params.id) })
+            .lean();
           if (ajiltanDoc && (ajiltanDoc.erkh === "Admin" || ajiltanDoc.erkh === "SuperAdmin")) {
             throw new Error("Админ засах боломжгүй!");
           }
+          ajiltniiIreeguiTalbaruudiigNukhye(req.body, ajiltanDoc);
         } catch (e) {
           return next(e);
         }
@@ -321,6 +354,10 @@ router.post("/ajiltandErkhUgyu/:id", tokenShalgakh, async (req, res, next) => {
       var baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(
         req.body.baiguullagiinId,
       );
+      var khuuchinAjiltan = await Ajiltan(db.erunkhiiKholbolt)
+        .findById(req.params.id)
+        .lean();
+      ajiltniiIreeguiTalbaruudiigNukhye(req.body, khuuchinAjiltan);
       var ajiltan = new Ajiltan(db.erunkhiiKholbolt)({
         _id: req.params.id,
         ...req.body,
