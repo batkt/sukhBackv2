@@ -320,6 +320,38 @@ exports.urilgaShalgaya = asyncHandler(async (req, res, next) => {
       expiresAt: { $gt: new Date() },
     }).sort({ createdAt: -1 });
 
+    // 1. Бүх байгууллагын холболтуудаас (жишээ нь zevSukh) уг 4 оронтой кодыг хайна
+    if (!urilga) {
+      for (const k of (db.kholboltuud || [])) {
+        if (!k || !k.kholbolt) continue;
+        try {
+          const bCode = await BatalgaajuulahCode(k).findOne({
+            code,
+            purpose: "gishuun_urikh",
+            khereglesenEsekh: false,
+          }).sort({ createdAt: -1 });
+
+          if (bCode) {
+            urilga = await UrilgaModel.findOne({
+              utas: bCode.utas,
+              tuluv: "Хүлээгдэж буй",
+              expiresAt: { $gt: new Date() },
+            }).sort({ createdAt: -1 });
+
+            if (urilga) {
+              urilga.code = code;
+              if (k.baiguullagiinId && !urilga.baiguullagiinId) {
+                urilga.baiguullagiinId = String(k.baiguullagiinId);
+              }
+              await urilga.save().catch(() => {});
+              break;
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
+    // 2. Хүлээгдэж буй урилгуудаас холболтоор нь шалгах
     if (!urilga) {
       const buiUrilguud = await UrilgaModel.find({
         tuluv: "Хүлээгдэж буй",
@@ -329,19 +361,20 @@ exports.urilgaShalgaya = asyncHandler(async (req, res, next) => {
       for (const u of buiUrilguud) {
         const k = kholboltAvya(u.baiguullagiinId);
         if (k) {
-          const bCode = await BatalgaajuulahCode(k).findOne({
-            utas: u.utas,
-            code,
-            purpose: "gishuun_urikh",
-            khereglesenEsekh: false,
-            expiresAt: { $gt: new Date() },
-          });
-          if (bCode) {
-            urilga = u;
-            u.code = code;
-            await u.save().catch(() => {});
-            break;
-          }
+          try {
+            const bCode = await BatalgaajuulahCode(k).findOne({
+              utas: u.utas,
+              code,
+              purpose: "gishuun_urikh",
+              khereglesenEsekh: false,
+            });
+            if (bCode) {
+              urilga = u;
+              u.code = code;
+              await u.save().catch(() => {});
+              break;
+            }
+          } catch (e) {}
         }
       }
     }
@@ -358,14 +391,19 @@ exports.urilgaShalgaya = asyncHandler(async (req, res, next) => {
     const urisenNer = [undsen.ovog, undsen.ner].filter(Boolean).join(" ") || undsen.utas || "Гэр бүлийн гишүүн";
     const khayag = [undsen.bairName, undsen.toot ? `${undsen.toot} тоот` : ""].filter(Boolean).join(", ");
 
-    res.status(200).json({
-      success: true,
+    const urilgaData = {
       urisenNer,
       urisenUtas: undsen.utas,
       gishuunNer: urilga.ner || "",
       kholboo: urilga.kholboo || "Гэр бүлийн гишүүн",
       khayag,
       utas: urilga.utas,
+    };
+
+    res.status(200).json({
+      success: true,
+      urilga: urilgaData,
+      ...urilgaData,
     });
   } catch (err) {
     next(err);
@@ -401,6 +439,36 @@ exports.gishuunBatalgaajuulya = asyncHandler(async (req, res, next) => {
     }
 
     if (!urilga) {
+      for (const k of (db.kholboltuud || [])) {
+        if (!k || !k.kholbolt) continue;
+        try {
+          const bCode = await BatalgaajuulahCode(k).findOne({
+            code,
+            purpose: "gishuun_urikh",
+            khereglesenEsekh: false,
+            ...(utas ? { utas } : {}),
+          }).sort({ createdAt: -1 });
+
+          if (bCode) {
+            urilga = await UrilgaModel.findOne({
+              utas: bCode.utas,
+              tuluv: "Хүлээгдэж буй",
+              expiresAt: { $gt: new Date() },
+            }).sort({ createdAt: -1 });
+            if (urilga) {
+              urilga.code = code;
+              if (k.baiguullagiinId && !urilga.baiguullagiinId) {
+                urilga.baiguullagiinId = String(k.baiguullagiinId);
+              }
+              await urilga.save().catch(() => {});
+              break;
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (!urilga) {
       const buiUrilguud = await UrilgaModel.find({
         tuluv: "Хүлээгдэж буй",
         expiresAt: { $gt: new Date() },
@@ -415,7 +483,6 @@ exports.gishuunBatalgaajuulya = asyncHandler(async (req, res, next) => {
             code,
             purpose: "gishuun_urikh",
             khereglesenEsekh: false,
-            expiresAt: { $gt: new Date() },
           });
           if (bCode) {
             urilga = u;
@@ -431,7 +498,24 @@ exports.gishuunBatalgaajuulya = asyncHandler(async (req, res, next) => {
 
     utas = urilga.utas;
 
-    const kholbolt = kholboltAvya(urilga.baiguullagiinId);
+    let kholbolt = kholboltAvya(urilga.baiguullagiinId);
+    if (!kholbolt) {
+      for (const k of (db.kholboltuud || [])) {
+        if (!k || !k.kholbolt) continue;
+        try {
+          const exists = await BatalgaajuulahCode(k).findOne({
+            utas,
+            code,
+            purpose: "gishuun_urikh",
+            khereglesenEsekh: false,
+          });
+          if (exists) {
+            kholbolt = k;
+            break;
+          }
+        } catch (e) {}
+      }
+    }
     if (!kholbolt) throw new aldaa("Байгууллагын холболт олдсонгүй!");
 
     const BatalgaajuulahCodeModel = BatalgaajuulahCode(kholbolt);
