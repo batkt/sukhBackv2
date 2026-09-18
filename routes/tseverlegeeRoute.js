@@ -33,19 +33,43 @@ const OrshinSuugch = require("../models/orshinSuugch");
 const { ZEVTABS_MASTER_NER } = require("../controller/ajiltan");
 const { getKholboltByBaiguullagiinId } = require("../utils/dbConnection");
 
-/** Холболт олоод буцаана, олдоогүй бол хариуг нь өөрөө илгээнэ */
-function kholboltAvya(res, baiguullagiinId) {
+/**
+ * Баазын холболтыг НЭРЭЭР нь олно.
+ *
+ * bpay (хэтэвчний) хэрэглэгчид тусдаа байгууллагын бааз биш, нэгдсэн баазад
+ * (`bpaySukh` / `amarSukh`) хадгалагддаг. Тэдний `baiguullagiinId` нь нэгдсэн
+ * байгууллагынх байдаг тул түүгээр холболт олдохгүй байж болно — апп нь
+ * `tukhainBaaziinKholbolt` талбараар баазынхаа НЭРийг дамжуулдаг.
+ */
+function kholboltAvyaNereer(baaziinNer) {
+  if (!baaziinNer || typeof baaziinNer !== "string") return null;
+  return (
+    db.kholboltuud.find(
+      (k) => String(k.baaziinNer || "") === String(baaziinNer),
+    ) || null
+  );
+}
+
+/**
+ * Холболт олоод буцаана, олдоогүй бол хариуг нь өөрөө илгээнэ.
+ *
+ * Эхлээд байгууллагын id-гаар, олдохгүй бол баазын нэрээр хайна.
+ */
+function kholboltAvya(res, baiguullagiinId, baaziinNer) {
   if (!baiguullagiinId) {
     res
       .status(400)
       .json({ success: false, message: "baiguullagiinId шаардлагатай" });
     return null;
   }
-  const kholbolt = getKholboltByBaiguullagiinId(baiguullagiinId);
+  const kholbolt =
+    getKholboltByBaiguullagiinId(baiguullagiinId) ||
+    kholboltAvyaNereer(baaziinNer);
   if (!kholbolt) {
-    res
-      .status(404)
-      .json({ success: false, message: "Холболтын мэдээлэл олдсонгүй" });
+    res.status(404).json({
+      success: false,
+      message: "Холболтын мэдээлэл олдсонгүй",
+    });
     return null;
   }
   return kholbolt;
@@ -249,9 +273,12 @@ router.post("/tseverlegee", tokenShalgakh, async (req, res, next) => {
       utasniiDugaar,
       nemelttMedeelel,
       khusesenOgnoo,
+      // `tukhainBaaziinKholbolt`-ыг tokenShalgakh нь обьектоор дарж бичдэг тул
+      // аппаас ӨӨР нэрээр авна.
+      baaziinNer,
     } = req.body || {};
 
-    const kholbolt = kholboltAvya(res, baiguullagiinId);
+    const kholbolt = kholboltAvya(res, baiguullagiinId, baaziinNer);
     if (!kholbolt) return;
 
     if (!utasniiDugaar || !String(utasniiDugaar).trim())
