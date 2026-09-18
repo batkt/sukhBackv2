@@ -34,7 +34,7 @@ const { manualSendMassInvoices } = require("../services/invoiceSendService");
 function parseArgs(argv) {
   const out = {
     year: new Date().getFullYear(),
-    months: [2, 3, 4, 5],
+    months: [6, 7, 8],
     override: false,
     barilgiinId: null,
     waitMs: 4000,
