@@ -192,25 +192,40 @@ async function orshinSuugchiinMedeelel(
   const toots = Array.isArray(orshinSuugch.toots) ? orshinSuugch.toots : [];
   const ijilBaiguullaga = (t) =>
     String(t?.baiguullagiinId || "") === String(baiguullagiinId);
+  const ijilBarilga = (t) =>
+    !!barilgiinId && String(t?.barilgiinId || "") === String(barilgiinId);
 
   // Нэг хэрэглэгч олон тооттой байж болно (орон сууц, гараж, агуулах).
-  // Барилга нь таарсныг эхэлж, дараа нь байгууллага нь таарсныг сонгоно.
+  //
+  // Тааруулалт нь ЗӨӨЛӨН байх ёстой: `baiguullagiinId`/`barilgiinId` нь зөвхөн
+  // OWN_ORG хаяг дээр заавал байдаг бөгөөд WALLET_API хаяг дээр огт байхгүй
+  // байж болно. Түүнчлэн sukh нь байгууллага бүрийг ТУСДАА баазад хадгалдаг
+  // тул энэ бичлэг дэх бүх хаяг аль хэдийн энэ байгууллагынх — сүүлийн
+  // нөөцөөр ямар ч хаягийг авахад аюулгүй.
   const tokhirokh =
-    (barilgiinId &&
-      toots.find(
-        (t) =>
-          ijilBaiguullaga(t) &&
-          String(t?.barilgiinId || "") === String(barilgiinId),
-      )) ||
+    toots.find((t) => ijilBaiguullaga(t) && ijilBarilga(t)) ||
+    toots.find(ijilBarilga) ||
     toots.find((t) => ijilBaiguullaga(t) && t?.turul === "Орон сууц") ||
     toots.find(ijilBaiguullaga) ||
+    toots.find((t) => t?.turul === "Орон сууц") ||
+    toots[0] ||
     null;
 
-  return {
-    // `toot` нь хуучин бичлэгүүд дээр үндсэн талбар дээрээ байдаг.
-    toot: tokhirokh?.toot || orshinSuugch.toot || null,
-    ner: tokhirokh?.ner || orshinSuugch.ner || null,
-  };
+  // WALLET_API хаяг дээр дугаар нь `walletDoorNo` талбарт байдаг.
+  const toot =
+    tokhirokh?.toot || tokhirokh?.walletDoorNo || orshinSuugch.toot || null;
+
+  if (!toot) {
+    // Чимээгүй хоосон үлдвэл админ дээр яагаад тоотгүй болсныг олоход бэрх.
+    console.warn("[tseverlegee] тоот олдсонгүй:", {
+      orshinSuugchiinId: String(orshinSuugchiinId),
+      baiguullagiinId: String(baiguullagiinId),
+      barilgiinId: barilgiinId ? String(barilgiinId) : null,
+      tootniiToo: toots.length,
+    });
+  }
+
+  return { toot, ner: tokhirokh?.ner || orshinSuugch.ner || null };
 }
 
 /** Огноог Date болгоно, буруу бол null */

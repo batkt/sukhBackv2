@@ -7,6 +7,22 @@ const { tokenShalgakh, db } = require("zevbackv2");
 const Baiguullaga = require("../models/baiguullaga");
 const MsgTuukh = require("../models/msgTuukh");
 
+/**
+ * Төлбөрийн SMS-ийг ТҮР хаасан байгууллагууд (sukh-ийн baiguullagiinId).
+ *
+ * Энэ файлын `msgIlgeeye` нь зөвхөн `POST /msgIlgeeye` endpoint-оор дамждаг —
+ * өөрөөр хэлбэл нэхэмжлэх үүссэн / төлөгдсөн зэрэг бөөнөөр илгээх мессежүүд.
+ * Нэвтрэх код, нууц үг сэргээх, зогсоол, гэр бүлийн урилга зэрэг нь
+ * `controller/orshinSuugch.js`-ийн ӨӨР хуулбараар явдаг тул ЭНД хаасан ч
+ * тэдгээр нь хэвийн ажиллана (хэрэглэгч нэвтэрч чадахгүй болохгүй).
+ *
+ * Дахин нээхдээ доорх массиваас id-г нь хасна.
+ */
+const TULBURIIN_SMS_KHAASAN = ["6a97d3afaf2ad1911035e063"];
+
+const smsKhaasanUu = (baiguullagiinId) =>
+  TULBURIIN_SMS_KHAASAN.includes(String(baiguullagiinId || ""));
+
 function msgIlgeeye(
   jagsaalt,
   key,
@@ -26,6 +42,22 @@ function msgIlgeeye(
       console.log("⚠️ [msgIlgeeye] SMS service is temporarily disabled.");
       if (res && !res.headersSent) {
         res.send([{ Result: "DISABLED", message: "SMS service temporarily disabled" }]);
+      }
+      return;
+    }
+
+    // Тухайн байгууллагын төлбөрийн SMS-ийг түр хаасан эсэх.
+    if (smsKhaasanUu(baiguullagiinId)) {
+      console.log(
+        `⚠️ [msgIlgeeye] ${baiguullagiinId} байгууллагын төлбөрийн SMS түр хаалттай — ${jagsaalt?.length || 0} мессеж илгээгдсэнгүй.`
+      );
+      if (res && !res.headersSent) {
+        res.send([
+          {
+            Result: "DISABLED",
+            message: "Тус байгууллагын SMS түр хаалттай байна",
+          },
+        ]);
       }
       return;
     }
@@ -148,6 +180,23 @@ async function msgIlgeeyeUnitel(
       console.log("⚠️ [msgIlgeeyeUnitel] SMS service is temporarily disabled.");
       if (res && !res.headersSent) {
         res.send([{ status: "DISABLED", message: "SMS service temporarily disabled" }]);
+      }
+      return;
+    }
+
+    // Хаалт нь нийлүүлэгчээс хамаарахгүй байх ёстой — Unitel-ээр дамжуулсан ч
+    // ижил байгууллагын төлбөрийн SMS гарахгүй.
+    if (smsKhaasanUu(baiguullagiinId)) {
+      console.log(
+        `⚠️ [msgIlgeeyeUnitel] ${baiguullagiinId} байгууллагын төлбөрийн SMS түр хаалттай — ${jagsaalt?.length || 0} мессеж илгээгдсэнгүй.`
+      );
+      if (res && !res.headersSent) {
+        res.send([
+          {
+            status: "DISABLED",
+            message: "Тус байгууллагын SMS түр хаалттай байна",
+          },
+        ]);
       }
       return;
     }
