@@ -16,15 +16,15 @@
  */
 
 const express = require("express");
+const {
+  sonorduulgaKhuleelguiTaraaya,
+} = require("../utils/sonorduulga");
 const router = express.Router();
 const { tokenShalgakh, db } = require("zevbackv2");
 
 const SanalAsuulga = require("../models/sanalAsuulga");
 const SanalAsuulgiinKhariult = require("../models/sanalAsuulgiinKhariult");
 const OrshinSuugch = require("../models/orshinSuugch");
-const {
-  orshinSuugchidSonorduulgaIlgeeye,
-} = require("../controller/appNotification");
 const { getKholboltByBaiguullagiinId } = require("../utils/dbConnection");
 
 /** Холболт олоод буцаана, олдоогүй бол хариуг нь өөрөө илгээнэ */
@@ -554,44 +554,26 @@ router.post(
  * Хэзээ ч throw хийхгүй - мэдэгдэл амжилтгүй болсон ч асуулга үүссэн хэвээр.
  */
 function sonorduulyaTry(req, kholbolt, asuulga) {
-  (async () => {
-    try {
-      const shuult = { baiguullagiinId: String(asuulga.baiguullagiinId) };
-      if (Array.isArray(asuulga.barilguud) && asuulga.barilguud.length > 0)
-        shuult.barilgiinId = { $in: asuulga.barilguud.map(String) };
-
-      const suugchid = await OrshinSuugch(db.erunkhiiKholbolt)
-        .find(shuult)
-        .select("firebaseToken")
-        .lean();
-
-      const tokenuud = suugchid
-        .map((s) => s.firebaseToken)
-        .filter((t) => !!t);
-
-      for (const t of tokenuud) {
-        await orshinSuugchidSonorduulgaIlgeeye(t, {
-          title: "Санал асуулга",
-          body: asuulga.garchig,
-          type: "sanal_asuulga",
-          data: { id: String(asuulga._id) },
-        }).catch(() => {});
-      }
-
-      const io = req.app.get("socketio");
-      if (io)
-        io.emit("baiguullagiin" + asuulga.baiguullagiinId, {
-          type: "sanalAsuulgaShine",
-          data: { id: String(asuulga._id), garchig: asuulga.garchig },
-        });
-
-      console.log(
-        `✅ [SANAL ASUULGA] "${asuulga.garchig}" - ${tokenuud.length} оршин суугчид мэдэгдэв`,
-      );
-    } catch (err) {
-      console.error("⚠️ [SANAL ASUULGA] Сонордуулга алдаа:", err.message);
-    }
-  })();
+  // Фан-аутыг `utils/sonorduulga` руу шилжүүлэв — нийтлэл, аппын шинэчлэлт
+  // ч мөн түүнийг хэрэглэдэг тул логик нэг хувилбартай байна. Хажуугаар
+  // дараалан илгээдэг байсныг хэсэгчилсэн зэрэгцээ илгээлт болгосон нь
+  // олон оршин суугчтай байран дээр мэдэгдэхүйц хурдан болгоно.
+  //
+  // Зан төлөв хэвээр: асуулга нь оршин суугчид зориулагдсан тул
+  // харилцагчид илгээхгүй (`khariltsagchidCh: false`).
+  sonorduulgaKhuleelguiTaraaya({
+    erunkhiiKholbolt: db.erunkhiiKholbolt,
+    baiguullagiinId: asuulga.baiguullagiinId,
+    barilguud: asuulga.barilguud,
+    title: "Санал асуулга",
+    body: asuulga.garchig,
+    turul: "sanal_asuulga",
+    dataNemelt: { id: String(asuulga._id) },
+    khariltsagchidCh: false,
+    io: req.app.get("socketio"),
+    socketEvent: "sanalAsuulgaShine",
+    socketData: { id: String(asuulga._id), garchig: asuulga.garchig },
+  });
 }
 
 module.exports = router;

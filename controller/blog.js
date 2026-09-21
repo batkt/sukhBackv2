@@ -1,6 +1,9 @@
 const asyncHandler = require("express-async-handler");
 const { db } = require("zevbackv2");
 const Blog = require("../models/blog");
+const {
+  sonorduulgaKhuleelguiTaraaya,
+} = require("../utils/sonorduulga");
 
 exports.blogIlgeeye = asyncHandler(async (req, res, next) => {
   try {
@@ -58,6 +61,20 @@ exports.blogIlgeeye = asyncHandler(async (req, res, next) => {
     } catch (socketError) {
       console.error("Socket emit error:", socketError);
     }
+
+    // Аппад push мэдэгдэл. Өмнө нь зөвхөн socket эвент явуулдаг тул апп
+    // нээлттэй байхад л мэдэгддэг, хаалттай үед оршин суугч шинэ нийтлэл
+    // орсныг мэддэггүй байв.
+    //
+    // Хүлээхгүй: мянган push илгээх хугацаагаар админыг хүлээлгэхгүй.
+    sonorduulgaKhuleelguiTaraaya({
+      erunkhiiKholbolt: db.erunkhiiKholbolt,
+      baiguullagiinId,
+      title: "Шинэ нийтлэл",
+      body: newBlog.title || "Байрын удирдлагаас шинэ мэдээлэл орлоо",
+      turul: "niitlel",
+      dataNemelt: { id: String(newBlog._id) },
+    });
 
     res.json({ success: true, data: newBlog, message: "Блог амжилттай үүсгэгдлээ" });
   } catch (error) {
