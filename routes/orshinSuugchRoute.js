@@ -261,6 +261,92 @@ router.post("/orshinSuugchiinMashinKhadgalya", tokenShalgakh, async (req, res, n
   }
 });
 
+/**
+ * Оршин суугч / харилцагчийн НЭГ машины бүртгэлийг устгана.
+ * DELETE /orshinSuugchiinMashin/:id
+ *
+ * `:id` нь `mashin` бичлэгийн id. Зогсоолын жагсаалтын 🗑 товч үүнийг
+ * дуудна — өмнө нь `DELETE /orshinSuugch/:id`-г МАШИНЫ id-гаар дууддаг тул
+ * оршин суугч олдохгүй, устгал чимээгүй унадаг байв.
+ *
+ * Машин гурван цэгт бичигддэг (`utils/mashinBurtgel`) тул гурвуулангаас
+ * устгана — эс бөгөөс хаалга/камер хуучин дугаарыг танисаар байна.
+ */
+router.delete(
+  "/orshinSuugchiinMashin/:id",
+  tokenShalgakh,
+  async (req, res, next) => {
+    try {
+      const baiguullagiinId =
+        req.body?.baiguullagiinId || req.query?.baiguullagiinId;
+
+      if (!baiguullagiinId) {
+        return res.status(400).json({
+          success: false,
+          aldaa: "Байгууллагын ID шаардлагатай!",
+        });
+      }
+
+      const tukhainBaaziinKholbolt = (db.kholboltuud || []).find(
+        (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+      );
+
+      if (!tukhainBaaziinKholbolt) {
+        return res.status(404).json({
+          success: false,
+          aldaa: "Холболтын мэдээлэл олдсонгүй!",
+        });
+      }
+
+      const MashinModel = require("../models/mashin")(tukhainBaaziinKholbolt);
+      const mashin = await MashinModel.findById(req.params.id);
+
+      if (!mashin) {
+        return res.status(404).json({
+          success: false,
+          aldaa: "Машины бүртгэл олдсонгүй!",
+        });
+      }
+
+      const dugaar = String(mashin.dugaar || mashin.mashiniiDugaar || "").trim();
+
+      await MashinModel.deleteOne({ _id: mashin._id });
+
+      if (dugaar) {
+        const OrshinSuugchMashin = require("../models/orshinSuugchMashin");
+        for (const kholbolt of [
+          db.erunkhiiKholbolt,
+          tukhainBaaziinKholbolt,
+        ]) {
+          if (!kholbolt) continue;
+          try {
+            await OrshinSuugchMashin(kholbolt).deleteMany({
+              baiguullagiinId: String(baiguullagiinId),
+              mashiniiDugaar: dugaar,
+            });
+          } catch (aldaa) {
+            // Нэг цуглуулга дээр унасан ч нөгөөг цэвэрлэсээр байх
+            console.error(
+              "Машины зочны тохиргоо устгахад алдаа:",
+              aldaa.message,
+            );
+          }
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: dugaar
+          ? `"${dugaar}" машины бүртгэл устгагдлаа`
+          : "Машины бүртгэл устгагдлаа",
+        dugaar,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
   try {
     const body = req.query;

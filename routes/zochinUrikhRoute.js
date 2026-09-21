@@ -995,24 +995,149 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
           residentData._id = ezemshigchiinId;
         }
 
-        const isResidentType = orshinSuugchMedeelel.orshinSuugchTurul === "Оршин суугч" ||
+        const isResidentType =
+          orshinSuugchMedeelel.orshinSuugchTurul === "Оршин суугч" ||
           orshinSuugchMedeelel.zochinTurul === "Оршин суугч" ||
           req.body.turul === "Оршин суугч";
 
+        const isCustomerType =
+          orshinSuugchMedeelel.orshinSuugchTurul === "Харилцагч" ||
+          orshinSuugchMedeelel.zochinTurul === "Харилцагч" ||
+          orshinSuugchMedeelel.turul === "Харилцагч" ||
+          req.body.turul === "Харилцагч";
+
         if (residentData._id) {
-          orshinSuugchResult = await OrshinSuugch(db.erunkhiiKholbolt).findById(residentData._id);
+          orshinSuugchResult = await OrshinSuugch(db.erunkhiiKholbolt).findById(
+            residentData._id
+          );
         } else if (isResidentType) {
-          const query = { utas: phoneString, baiguullagiinId: String(baiguullagiinId) };
+          const query = { utas: phoneString };
+          if (baiguullagiinId) query.baiguullagiinId = String(baiguullagiinId);
           orshinSuugchResult = await OrshinSuugch(db.erunkhiiKholbolt).findOne(query);
 
           if (!orshinSuugchResult) {
-            return res.status(403).json({
-              success: false,
-              message: "Энэ дугаар дээр оршин суугч бүртгэгдээгүй байна. Та эхлээд оршин суугчийг бүртгэлийн хэсгээс бүртгэнэ үү."
+            orshinSuugchResult = await OrshinSuugch(db.erunkhiiKholbolt).findOne({
+              utas: phoneString,
             });
           }
+
+          // Бүртгэлгүй оршин суугч бол автоматаар үүсгэнэ
+          if (!orshinSuugchResult) {
+            try {
+              console.log(
+                `ℹ️ [ZOCHIN_HADGALYA] Unregistered resident detected for phone ${phoneString}. Auto-creating resident...`
+              );
+              orshinSuugchResult = await orshinSuugchKhadgalya(
+                orshinSuugchMedeelel,
+                phoneString,
+                tukhainBaaziinKholbolt,
+                baiguullagiinId,
+                barilgiinId
+              );
+              console.log(
+                `✅ [ZOCHIN_HADGALYA] Auto-registered resident ID:`,
+                orshinSuugchResult?._id
+              );
+            } catch (autoRegErr) {
+              console.warn(
+                "⚠️ [ZOCHIN_HADGALYA] orshinSuugchKhadgalya fallback:",
+                autoRegErr.message
+              );
+              const newRes = new (OrshinSuugch(db.erunkhiiKholbolt))({
+                ner:
+                  orshinSuugchMedeelel.ner ||
+                  req.body.ezemshigchiinNer ||
+                  "Оршин суугч",
+                ovog:
+                  orshinSuugchMedeelel.ovog ||
+                  orshinSuugchMedeelel.ner ||
+                  "",
+                utas: phoneString,
+                toot:
+                  orshinSuugchMedeelel.ezenToot ||
+                  req.body.ezemshigchiinTalbainDugaar ||
+                  "-",
+                baiguullagiinId: baiguullagiinId
+                  ? String(baiguullagiinId)
+                  : undefined,
+                barilgiinId: barilgiinId ? String(barilgiinId) : undefined,
+                mashiniiDugaar:
+                  orshinSuugchMedeelel.mashiniiDugaar ||
+                  req.body.mashiniiDugaar ||
+                  "",
+                dugaar:
+                  orshinSuugchMedeelel.mashiniiDugaar ||
+                  req.body.mashiniiDugaar ||
+                  "",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              });
+              orshinSuugchResult = await newRes.save();
+            }
+          }
+        } else if (isCustomerType) {
+          const Khariltsagch = require("../models/khariltsagch");
+          let khariltsagchResult = await Khariltsagch(
+            db.erunkhiiKholbolt
+          ).findOne({
+            utas: phoneString,
+            ...(baiguullagiinId
+              ? { baiguullagiinId: String(baiguullagiinId) }
+              : {}),
+          });
+
+          if (!khariltsagchResult) {
+            khariltsagchResult = await Khariltsagch(
+              db.erunkhiiKholbolt
+            ).findOne({ utas: phoneString });
+          }
+
+          if (!khariltsagchResult) {
+            // Мөн OrshinSuugch цуглуулгад байгаа эсэхийг шалгана
+            orshinSuugchResult = await OrshinSuugch(
+              db.erunkhiiKholbolt
+            ).findOne({ utas: phoneString });
+
+            if (!orshinSuugchResult) {
+              // Бүртгэлгүй харилцагч бол автоматаар бүртгэнэ
+              console.log(
+                `ℹ️ [ZOCHIN_HADGALYA] Unregistered customer detected for phone ${phoneString}. Auto-creating khariltsagch...`
+              );
+              const newKhariltsagch = new (Khariltsagch(db.erunkhiiKholbolt))({
+                ner:
+                  orshinSuugchMedeelel.ner ||
+                  req.body.ezemshigchiinNer ||
+                  "Харилцагч",
+                ovog: orshinSuugchMedeelel.ovog || "",
+                utas: phoneString,
+                toot:
+                  orshinSuugchMedeelel.ezenToot ||
+                  req.body.ezemshigchiinTalbainDugaar ||
+                  "-",
+                baiguullagiinId: baiguullagiinId
+                  ? String(baiguullagiinId)
+                  : undefined,
+                barilgiinId: barilgiinId ? String(barilgiinId) : undefined,
+                turul: "Харилцагч",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              });
+              khariltsagchResult = await newKhariltsagch.save();
+              console.log(
+                `✅ [ZOCHIN_HADGALYA] Auto-registered customer ID:`,
+                khariltsagchResult?._id
+              );
+            }
+          }
+
+          if (khariltsagchResult) {
+            orshinSuugchResult = khariltsagchResult;
+          }
         } else {
-          orshinSuugchResult = null;
+          // Бусад төрөл: Ажилтан, Дотоод, СӨХ гэх мэт
+          orshinSuugchResult = await OrshinSuugch(
+            db.erunkhiiKholbolt
+          ).findOne({ utas: phoneString });
         }
 
         console.log(`🔍 [ZOCHIN_HADGALYA] orshinSuugchResult:`, orshinSuugchResult ? { id: orshinSuugchResult._id, ner: orshinSuugchResult.ner, toot: orshinSuugchResult.toot } : "NULL (Skipped)");
@@ -1830,34 +1955,92 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
       ezemshigchiinId: { $in: residentIds }
     }).lean();
 
+    // ЧУХАЛ: эзэн тутамд МАССИВ.
+    //
+    // Өмнө нь `parkingMap[id] = p` гэж ДАРЖ бичдэг тул эзний зөвхөн нэг
+    // машин үлдэж, 2-3 машинтай оршин суугчийн бусад машин жагсаалтад
+    // БҮРМӨСӨН гарахгүй байв (доорх 5-р алхам нь "энэ эзэн аль хэдийн
+    // жагсаалтад байна" гэж үзээд тэднийг бас хаядаг).
     linkedParking.forEach(p => {
-      if (p.ezemshigchiinId) parkingMap[String(p.ezemshigchiinId)] = p;
+      if (!p.ezemshigchiinId) return;
+      const ezen = String(p.ezemshigchiinId);
+      if (!parkingMap[ezen]) parkingMap[ezen] = [];
+      parkingMap[ezen].push(p);
     });
 
-    // 4. Merge Data into a single full list
+    const turulShuult =
+      req.query.turul && req.query.turul !== "Бүгд" ? req.query.turul : null;
+
+    /** Машин нь төрлийн шүүлтүүрт хамаарах эсэх. */
+    const turuldKhamaarakhEsekh = (p) => {
+      if (!turulShuult) return true;
+      if (turulShuult === "Бусад") {
+        const medegdekh = ["Оршин суугч", "СӨХ", "Ажилтан", "Түрээслэгч", "Харилцагч"];
+        return (
+          !medegdekh.includes(p.turul) && !medegdekh.includes(p.zochinTurul)
+        );
+      }
+      return p.turul === turulShuult || p.zochinTurul === turulShuult;
+    };
+
+    // 4. Merge Data into a single full list — МАШИН ТУС БҮР нэг мөр болно.
     const fullMergedData = [];
 
+    /**
+     * Эзний нэг мөрийг бүтээнэ.
+     * @param {object} resObj оршин суугч
+     * @param {object|null} p машины бичлэг (машингүй бол null)
+     * @param {string[]} ezniiDugaaruud эзний БҮХ дугаар (мөрд хамт явна)
+     */
+    const ezniiMurBelgeye = (resObj, p, ezniiDugaaruud) => ({
+      _id: p?._id || resObj._id,
+      ezemshigchiinId: resObj._id,
+      createdAt: p?.createdAt || resObj.createdAt,
+      ner: resObj.ner || resObj.orshinSuugchNer || "БҮРТГЭЛГҮЙ",
+      ovog: resObj.ovog || "",
+      utas: resObj.utas || (Array.isArray(resObj.utas) ? resObj.utas[0] : ""),
+      mashiniiDugaar: p?.dugaar || "",
+      // Эзний бүх машин — UI дээр "1/3" гэх мэт тоолуур харуулахад
+      ezniiMashinuud: ezniiDugaaruud,
+      mashiniiToo: ezniiDugaaruud.length,
+      zochinTurul: (p?.zochinTurul === "Үйлчлүүлэгч" || p?.turul === "Үйлчлүүлэгч") ? "СӨХ" : (p?.zochinTurul || p?.turul || "Оршин суугч"),
+      zochinTailbar: p?.zochinTailbar || "",
+      ezenToot: p?.ezenToot || resObj.toot || (resObj.toots && resObj.toots[0]?.toot) || "",
+      orts: resObj.orts || (resObj.toots && resObj.toots[0]?.orts) || "",
+      davtamjiinTurul: p?.davtamjiinTurul || "saraar",
+      baiguullagiinId: resObj.baiguullagiinId || null,
+      barilgiinId: resObj.barilgiinId || null,
+      burtgesenAjiltaniiNer: p?.burtgesenAjiltaniiNer || resObj.burtgesenAjiltaniiNer || "-",
+      zochinErkhiinToo: p?.zochinErkhiinToo,
+      zochinTusBurUneguiMinut: p?.zochinTusBurUneguiMinut
+    });
+
     allResidents.forEach(resObj => {
-      const p = parkingMap[String(resObj._id)];
-      fullMergedData.push({
-        _id: p?._id || resObj._id,
-        ezemshigchiinId: resObj._id,
-        createdAt: p?.createdAt || resObj.createdAt,
-        ner: resObj.ner || resObj.orshinSuugchNer || "БҮРТГЭЛГҮЙ",
-        ovog: resObj.ovog || "",
-        utas: resObj.utas || (Array.isArray(resObj.utas) ? resObj.utas[0] : ""),
-        mashiniiDugaar: p?.dugaar || "",
-        zochinTurul: (p?.zochinTurul === "Үйлчлүүлэгч" || p?.turul === "Үйлчлүүлэгч") ? "СӨХ" : (p?.zochinTurul || p?.turul || "Оршин суугч"),
-        zochinTailbar: p?.zochinTailbar || "",
-        ezenToot: p?.ezenToot || resObj.toot || (resObj.toots && resObj.toots[0]?.toot) || "",
-        orts: resObj.orts || (resObj.toots && resObj.toots[0]?.orts) || "",
-        davtamjiinTurul: p?.davtamjiinTurul || "saraar",
-        baiguullagiinId: resObj.baiguullagiinId || null,
-        barilgiinId: resObj.barilgiinId || null,
-        burtgesenAjiltaniiNer: p?.burtgesenAjiltaniiNer || resObj.burtgesenAjiltaniiNer || "-",
-        zochinErkhiinToo: p?.zochinErkhiinToo,
-        zochinTusBurUneguiMinut: p?.zochinTusBurUneguiMinut
-      });
+      const mashinuud = (parkingMap[String(resObj._id)] || []).filter(
+        turuldKhamaarakhEsekh,
+      );
+
+      const dugaaruud = Array.from(
+        new Set(
+          mashinuud
+            .map(m => String(m.dugaar || m.mashiniiDugaar || "").trim().toUpperCase())
+            .filter(d => d && d !== "БҮРТГЭЛГҮЙ" && d !== "-"),
+        ),
+      );
+
+      if (mashinuud.length === 0) {
+        // Машингүй оршин суугч ч жагсаалтад байх ёстой (машин нэмэх гэж).
+        fullMergedData.push(ezniiMurBelgeye(resObj, null, dugaaruud));
+        return;
+      }
+
+      // Хамгийн эртний машин нь "үндсэн" — дээр гарна.
+      mashinuud
+        .slice()
+        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        .forEach(p => {
+          fullMergedData.push(ezniiMurBelgeye(resObj, p, dugaaruud));
+        });
     });
 
     // 5. Add standalone cars (like Sukh/Staff) or cars matching search term not covered by resident search
