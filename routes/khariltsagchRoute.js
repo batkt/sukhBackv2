@@ -26,11 +26,9 @@ const {
 const session = require("../models/session");
 const multer = require("multer");
 const {
-  generateExcelTemplate,
-  importUsersFromExcel,
-  downloadExcelList,
-  downloadkhariltsagchExcel,
-} = require("../controller/excelImportController");
+  generateKhariltsagchExcelTemplate,
+  importKhariltsagchFromExcel,
+} = require("../controller/khariltsagchExcelController");
 const {
   gereeNeesNekhemjlekhUusgekh,
 } = require("../controller/nekhemjlekhController");
@@ -85,6 +83,22 @@ const khariltsagchSessionShalgaya = async (req, res, next) => {
 router.use(khariltsagchSessionShalgaya);
 
 const cacheMiddleware = require("../middleware/cacheMiddleware");
+
+// Харилцагчийг Excel-ээр оруулах. Загвар дээр зогсоол/агуулахын дугаартай
+// хамт "Машины дугаар" багана байдаг — гэрээ, нэхэмжлэх, машины бүртгэл нь
+// нэг мөрөөс зэрэг үүснэ.
+router.get(
+  "/khariltsagchExcelTemplate",
+  tokenShalgakh,
+  generateKhariltsagchExcelTemplate,
+);
+
+router.post(
+  "/khariltsagchExcelImport",
+  tokenShalgakh,
+  upload.single("excelFile"),
+  importKhariltsagchFromExcel,
+);
 
 router.delete("/khariltsagch/:id", tokenShalgakh, khariltsagchUstgakh);
 

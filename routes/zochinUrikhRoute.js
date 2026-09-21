@@ -490,7 +490,7 @@ router.get("/zochinSettings", tokenShalgakh, async (req, res, next) => {
   try {
     const Mashin = require("../models/mashin");
     const residentId = ugugdliinEzniiId(req.body.nevtersenAjiltniiToken);
-    const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
+    let tukhainBaaziinKholbolt = req.body?.tukhainBaaziinKholbolt;
     const Baiguullaga = require("../models/baiguullaga");
 
     if (!residentId) return res.status(401).send("Нэвтрэх шаардлагатай");
@@ -500,22 +500,12 @@ router.get("/zochinSettings", tokenShalgakh, async (req, res, next) => {
     res.setHeader('Expires', '0');
     res.setHeader('Surrogate-Control', 'no-store');
 
-    let settings = await Mashin(tukhainBaaziinKholbolt).findOne({
-      $or: [
-        { ezemshigchiinId: residentId },
-        { orshinSuugchiinId: residentId },
-        { ezemshigchiinId: String(residentId) },
-        { orshinSuugchiinId: String(residentId) }
-      ],
-      zochinTurul: "Оршин суугч"
-    });
-
     // Fallback to building settings if resident specific record doesn't exist or is empty
-    let barilgiinId = req.query.barilgiinId || req.body.barilgiinId;
-    let baiguullagiinId = req.query.baiguullagiinId || req.body.baiguullagiinId;
+    let barilgiinId = req.query.barilgiinId || req.body?.barilgiinId;
+    let baiguullagiinId = req.query.baiguullagiinId || req.body?.baiguullagiinId;
 
     // Auto-discover IDs from ANY source if missing
-    if (!baiguullagiinId || !barilgiinId) {
+    if (!baiguullagiinId || !barilgiinId || !tukhainBaaziinKholbolt) {
       const OrshinSuugch = require("../models/orshinSuugch");
       // Use findById as it's most reliable for ObjectId tokens
       const resObj = await OrshinSuugch(db.erunkhiiKholbolt).findById(residentId) ||
@@ -527,12 +517,35 @@ router.get("/zochinSettings", tokenShalgakh, async (req, res, next) => {
         // IDs are stored inside the 'toots' array in this system
         if (resObj.toots && resObj.toots.length > 0) {
           const primaryToot = resObj.toots[0]; // Use first address as default
-          baiguullagiinId = primaryToot.baiguullagiinId;
-          barilgiinId = primaryToot.barilgiinId;
+          baiguullagiinId = baiguullagiinId || primaryToot.baiguullagiinId;
+          barilgiinId = barilgiinId || primaryToot.barilgiinId;
         } else {
-          baiguullagiinId = resObj.baiguullagiinId;
-          barilgiinId = resObj.barilgiinId;
+          baiguullagiinId = baiguullagiinId || resObj.baiguullagiinId;
+          barilgiinId = barilgiinId || resObj.barilgiinId;
         }
+      }
+    }
+
+    if (!tukhainBaaziinKholbolt && baiguullagiinId && db.kholboltuud) {
+      tukhainBaaziinKholbolt = db.kholboltuud.find(
+        (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
+      );
+    }
+
+    let settings = null;
+    if (tukhainBaaziinKholbolt) {
+      try {
+        settings = await Mashin(tukhainBaaziinKholbolt).findOne({
+          $or: [
+            { ezemshigchiinId: residentId },
+            { orshinSuugchiinId: residentId },
+            { ezemshigchiinId: String(residentId) },
+            { orshinSuugchiinId: String(residentId) }
+          ],
+          zochinTurul: "Оршин суугч"
+        });
+      } catch (findErr) {
+        console.error("⚠️ [zochinSettings] Error finding resident mashin:", findErr.message);
       }
     }
 
@@ -555,6 +568,15 @@ router.get("/zochinSettings", tokenShalgakh, async (req, res, next) => {
         mergedRes.zochinTusBurUneguiMinut = Math.max(settings.zochinTusBurUneguiMinut || 0, buildingSettings.zochinTusBurUneguiMinut || 0);
         mergedRes.zochinUrikhEsekh = settings.zochinUrikhEsekh || buildingSettings.zochinUrikhEsekh;
       }
+
+      // Ensure both 'dugaar' and 'mashiniiDugaar' are populated, plus nested wrappers for Flutter mobile app
+      const plate = mergedRes.dugaar || mergedRes.mashiniiDugaar;
+      if (plate) {
+        mergedRes.dugaar = plate;
+        mergedRes.mashiniiDugaar = plate;
+      }
+      mergedRes.mashin = { ...mergedRes };
+      mergedRes.orshinSuugchMashin = { ...mergedRes };
 
       return res.send(mergedRes);
     }
@@ -947,10 +969,12 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
             }
           }
 
+          const plateString = orshinSuugchMedeelel.mashiniiDugaar || mashiniiDugaar || "";
           const updateData = {
             baiguullagiinId: baiguullagiinId.toString(),
             barilgiinId: barilgiinId.toString(),
-            dugaar: orshinSuugchMedeelel.mashiniiDugaar || mashiniiDugaar,
+            dugaar: plateString,
+            mashiniiDugaar: plateString,
             ezemshigchiinId: orshinSuugchResult ? orshinSuugchResult._id.toString() : undefined,
             orshinSuugchiinId: orshinSuugchResult ? orshinSuugchResult._id.toString() : undefined,
             ezemshigchiinNer: orshinSuugchResult ? orshinSuugchResult.ner : (orshinSuugchMedeelel.ner || ""),
@@ -1125,6 +1149,75 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
               tulburiinTurul: req.body.tulburiinTurul,
               gereeniiId: req.body.gereeniiId,
             });
+          }
+
+          // 3. SYNC TO OrshinSuugch Collection (Central DB & Tenant DB)
+          if (orshinSuugchResult && orshinSuugchResult._id) {
+            try {
+              const OrshinSuugchModel = require("../models/orshinSuugch");
+              const resUpdateFields = {
+                mashiniiDugaar: plateString,
+                dugaar: plateString,
+                dugaarUurchilsunOgnoo: updateData.dugaarUurchilsunOgnoo || new Date()
+              };
+
+              // Central DB (where app /tokenoorOrshinSuugchAvya reads)
+              await OrshinSuugchModel(db.erunkhiiKholbolt).findByIdAndUpdate(
+                orshinSuugchResult._id,
+                { $set: resUpdateFields }
+              );
+
+              // Tenant DB (if resident document exists in tenant db)
+              if (tukhainBaaziinKholbolt) {
+                try {
+                  await OrshinSuugchModel(tukhainBaaziinKholbolt).findByIdAndUpdate(
+                    orshinSuugchResult._id,
+                    { $set: resUpdateFields }
+                  );
+                } catch (tErr) {}
+              }
+
+              // Update in-memory object so the HTTP response returned to caller includes it
+              orshinSuugchResult.mashiniiDugaar = plateString;
+              orshinSuugchResult.dugaar = plateString;
+              console.log(`✅ [ZOCHIN_HADGALYA] Synchronized plate '${plateString}' to OrshinSuugch collection:`, orshinSuugchResult._id);
+            } catch (syncErr) {
+              console.error("⚠️ [ZOCHIN_HADGALYA] Error syncing plate to OrshinSuugch:", syncErr.message);
+            }
+
+            // 4. SYNC TO OrshinSuugchMashin Collection
+            try {
+              const OrshinSuugchMashin = require("../models/orshinSuugchMashin");
+              const osmData = {
+                orshinSuugchiinId: String(orshinSuugchResult._id),
+                baiguullagiinId: String(baiguullagiinId || ""),
+                barilgiinId: String(barilgiinId || ""),
+                mashiniiDugaar: plateString,
+                dugaarUurchilsunOgnoo: updateData.dugaarUurchilsunOgnoo || new Date(),
+                ezenToot: updateData.ezenToot || orshinSuugchResult.toot || "",
+                utas: phoneString,
+                zochinTurul: "Оршин суугч",
+                zochinUrikhEsekh: true,
+              };
+
+              if (tukhainBaaziinKholbolt) {
+                await OrshinSuugchMashin(tukhainBaaziinKholbolt).findOneAndUpdate(
+                  { orshinSuugchiinId: String(orshinSuugchResult._id) },
+                  { $set: osmData },
+                  { upsert: true }
+                );
+              }
+              if (db.erunkhiiKholbolt) {
+                await OrshinSuugchMashin(db.erunkhiiKholbolt).findOneAndUpdate(
+                  { orshinSuugchiinId: String(orshinSuugchResult._id) },
+                  { $set: osmData },
+                  { upsert: true }
+                );
+              }
+              console.log(`✅ [ZOCHIN_HADGALYA] Synchronized plate '${plateString}' to OrshinSuugchMashin.`);
+            } catch (osmErr) {
+              console.error("⚠️ [ZOCHIN_HADGALYA] Error syncing to OrshinSuugchMashin:", osmErr.message);
+            }
           }
 
           console.log("✅ [ZOCHIN_URI] Success. OrshinSuugchMashin saved/updated.");

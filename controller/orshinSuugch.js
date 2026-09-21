@@ -4156,6 +4156,70 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
 
       urdunJson.duusakhOgnoo = tokenObject.duusakhOgnoo;
       urdunJson.salbaruud = tokenObject.salbaruud;
+
+      // Ensure resident vehicle plate is attached and synchronized
+      if (!urdunJson.mashiniiDugaar && !urdunJson.dugaar) {
+        try {
+          const orgId = urdunJson.baiguullagiinId || (urdunJson.toots && urdunJson.toots[0]?.baiguullagiinId);
+          let tukhainKholbolt = null;
+          if (orgId && db.kholboltuud) {
+            tukhainKholbolt = db.kholboltuud.find(
+              (k) => String(k.baiguullagiinId) === String(orgId)
+            );
+          }
+
+          let foundPlate = null;
+          const searchId = String(urDun._id);
+
+          // 1. Try Mashin model in tenant DB
+          if (tukhainKholbolt) {
+            try {
+              const MashinModel = require("../models/mashin")(tukhainKholbolt);
+              const car = await MashinModel.findOne({
+                $or: [
+                  { ezemshigchiinId: searchId },
+                  { orshinSuugchiinId: searchId },
+                  { ezemshigchiinUtas: urdunJson.utas }
+                ],
+                dugaar: { $exists: true, $ne: "", $ne: "БҮРТГЭЛГҮЙ" }
+              }).sort({ updatedAt: -1 });
+
+              if (car) foundPlate = car.dugaar || car.mashiniiDugaar;
+            } catch (mErr) {}
+          }
+
+          // 2. Try OrshinSuugchMashin in central or tenant DB
+          if (!foundPlate) {
+            try {
+              const OSM = require("../models/orshinSuugchMashin");
+              const osmDoc = await OSM(tukhainKholbolt || db.erunkhiiKholbolt).findOne({
+                orshinSuugchiinId: searchId,
+                mashiniiDugaar: { $exists: true, $ne: "", $ne: "БҮРТГЭЛГҮЙ" }
+              }).sort({ updatedAt: -1 });
+
+              if (osmDoc) foundPlate = osmDoc.mashiniiDugaar;
+            } catch (oErr) {}
+          }
+
+          if (foundPlate) {
+            urdunJson.mashiniiDugaar = foundPlate;
+            urdunJson.dugaar = foundPlate;
+
+            // Cache it back onto the OrshinSuugch document in central DB
+            await OrshinSuugch(db.erunkhiiKholbolt).findByIdAndUpdate(
+              urDun._id,
+              { $set: { mashiniiDugaar: foundPlate, dugaar: foundPlate } }
+            );
+          }
+        } catch (plateLookupErr) {
+          console.error("⚠️ [Profile] Error auto-populating resident plate:", plateLookupErr.message);
+        }
+      } else if (!urdunJson.mashiniiDugaar && urdunJson.dugaar) {
+        urdunJson.mashiniiDugaar = urdunJson.dugaar;
+      } else if (urdunJson.mashiniiDugaar && !urdunJson.dugaar) {
+        urdunJson.dugaar = urdunJson.mashiniiDugaar;
+      }
+
       res.send(urdunJson);
     } catch (dbErr) {
       console.error("❌ [Profile] Database error:", dbErr.message);

@@ -121,6 +121,12 @@ const orshinSuugchSchema = new Schema(
     },
     gishuunUrisenOgnoo: Date,
     gishuunBatalgaajsanOgnoo: Date,
+
+    // --- Тээврийн хэрэгсэл / Машины дугаар ---
+    mashiniiDugaar: String,
+    dugaar: String,
+    mashinuud: [String],
+    dugaarUurchilsunOgnoo: Date,
   },
   {
     timestamps: true,

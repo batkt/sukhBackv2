@@ -2,6 +2,7 @@ const asyncHandler = require("express-async-handler");
 const XLSX = require("xlsx");
 const excel = require("exceljs");
 const { tolgoiMur, tolgoiNud } = require("../utils/excelZagvar");
+const { mashinuudBurtgeye } = require("../utils/mashinBurtgel");
 const OrshinSuugch = require("../models/orshinSuugch");
 const Baiguullaga = require("../models/baiguullaga");
 const Geree = require("../models/geree");
@@ -1527,124 +1528,25 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
       throw new aldaa("Холболт олдсонгүй");
     }
 
-    // Helper to register cars for a resident
+    // Оршин суугчийн машины дугаарыг бүртгэнэ.
+    //
+    // Гурван цэгийн (төв OSM / баазын OSM / mashin) бичилтийг
+    // `utils/mashinBurtgel` дотор нэгтгэв — харилцагчийн Excel импорт ч
+    // яг үүнийг хэрэглэдэг тул логик хоёр хувилбартай байх шаардлагагүй.
     const registerCars = async (resDoc, carPlates, targetBarilgaId, tootVal, phoneVal) => {
       if (!Array.isArray(carPlates) || carPlates.length === 0) return;
       try {
-        const OrshinSuugchMashin = require("../models/orshinSuugchMashin");
-        const Mashin = require("../models/mashin");
-        const CentralOSM = OrshinSuugchMashin(db.erunkhiiKholbolt);
-
-        const rowBuilding = baiguullaga.barilguud?.find(
-          (b) => String(b._id) === String(targetBarilgaId),
-        );
-        const buildingSettings = rowBuilding?.tokhirgoo?.zochinTokhirgoo;
-        const orgSettings = baiguullaga.tokhirgoo?.zochinTokhirgoo;
-        const defaultSettings =
-          buildingSettings && buildingSettings.zochinUrikhEsekh !== undefined
-            ? buildingSettings
-            : orgSettings;
-
-        for (const carPlate of carPlates) {
-          if (!carPlate || carPlate === "БҮРТГЭЛГҮЙ" || carPlate === "-") continue;
-
-          // 1. Central OrshinSuugchMashin
-          let existingCentral = await CentralOSM.findOne({
-            baiguullagiinId: baiguullaga._id.toString(),
-            mashiniiDugaar: carPlate,
-          });
-
-          if (!existingCentral) {
-            await CentralOSM.create({
-              orshinSuugchiinId: resDoc._id.toString(),
-              baiguullagiinId: baiguullaga._id.toString(),
-              barilgiinId: targetBarilgaId,
-              mashiniiDugaar: carPlate,
-              ezenToot: tootVal || resDoc.toot || "",
-              zochinUrikhEsekh: defaultSettings?.zochinUrikhEsekh !== false,
-              zochinTurul: "Оршин суугч",
-              zochinErkhiinToo: defaultSettings?.zochinErkhiinToo || 0,
-              zochinTusBurUneguiMinut: defaultSettings?.zochinTusBurUneguiMinut || 0,
-              zochinNiitUneguiMinut: defaultSettings?.zochinNiitUneguiMinut || 0,
-              zochinTailbar: defaultSettings?.zochinTailbar || "",
-              davtamjiinTurul: defaultSettings?.davtamjiinTurul || "saraar",
-              davtamjUtga: defaultSettings?.davtamjUtga,
-              utas: phoneVal || resDoc.utas || "",
-            });
-          } else if (!existingCentral.orshinSuugchiinId || existingCentral.orshinSuugchiinId !== resDoc._id.toString()) {
-            existingCentral.orshinSuugchiinId = resDoc._id.toString();
-            existingCentral.ezenToot = tootVal || resDoc.toot || existingCentral.ezenToot;
-            existingCentral.barilgiinId = targetBarilgaId || existingCentral.barilgiinId;
-            await existingCentral.save();
-          }
-
-          // 2. Tenant DB OrshinSuugchMashin & Mashin
-          if (tukhainBaaziinKholbolt) {
-            try {
-              const TenantOSM = OrshinSuugchMashin(tukhainBaaziinKholbolt);
-              let existingTenant = await TenantOSM.findOne({
-                baiguullagiinId: baiguullaga._id.toString(),
-                mashiniiDugaar: carPlate,
-              });
-
-              if (!existingTenant) {
-                await TenantOSM.create({
-                  orshinSuugchiinId: resDoc._id.toString(),
-                  baiguullagiinId: baiguullaga._id.toString(),
-                  barilgiinId: targetBarilgaId,
-                  mashiniiDugaar: carPlate,
-                  ezenToot: tootVal || resDoc.toot || "",
-                  zochinUrikhEsekh: defaultSettings?.zochinUrikhEsekh !== false,
-                  zochinTurul: "Оршин суугч",
-                  zochinErkhiinToo: defaultSettings?.zochinErkhiinToo || 0,
-                  zochinTusBurUneguiMinut: defaultSettings?.zochinTusBurUneguiMinut || 0,
-                  zochinNiitUneguiMinut: defaultSettings?.zochinNiitUneguiMinut || 0,
-                  zochinTailbar: defaultSettings?.zochinTailbar || "",
-                  davtamjiinTurul: defaultSettings?.davtamjiinTurul || "saraar",
-                  davtamjUtga: defaultSettings?.davtamjUtga,
-                  utas: phoneVal || resDoc.utas || "",
-                });
-              } else if (!existingTenant.orshinSuugchiinId || existingTenant.orshinSuugchiinId !== resDoc._id.toString()) {
-                existingTenant.orshinSuugchiinId = resDoc._id.toString();
-                existingTenant.ezenToot = tootVal || resDoc.toot || existingTenant.ezenToot;
-                existingTenant.barilgiinId = targetBarilgaId || existingTenant.barilgiinId;
-                await existingTenant.save();
-              }
-            } catch (e) {}
-
-            try {
-              const MashinModel = Mashin(tukhainBaaziinKholbolt);
-              let existingMashin = await MashinModel.findOne({
-                baiguullagiinId: baiguullaga._id.toString(),
-                dugaar: carPlate,
-              });
-
-              if (!existingMashin) {
-                await MashinModel.create({
-                  baiguullagiinId: baiguullaga._id.toString(),
-                  barilgiinId: targetBarilgaId,
-                  dugaar: carPlate,
-                  mashiniiDugaar: carPlate,
-                  ezemshigchiinId: resDoc._id.toString(),
-                  orshinSuugchiinId: resDoc._id.toString(),
-                  ezemshigchiinNer: resDoc.ner || "",
-                  ezemshigchiinUtas: phoneVal || resDoc.utas || "",
-                  ezenToot: tootVal || resDoc.toot || "",
-                  turul: "Оршин суугч",
-                  tuluv: "Идэвхтэй",
-                  zochinUrikhEsekh: defaultSettings?.zochinUrikhEsekh !== false,
-                  zochinTurul: "Оршин суугч",
-                });
-              } else if (!existingMashin.ezemshigchiinId || existingMashin.ezemshigchiinId !== resDoc._id.toString()) {
-                existingMashin.ezemshigchiinId = resDoc._id.toString();
-                existingMashin.orshinSuugchiinId = resDoc._id.toString();
-                existingMashin.ezenToot = tootVal || resDoc.toot || existingMashin.ezenToot;
-                existingMashin.barilgiinId = targetBarilgaId || existingMashin.barilgiinId;
-                await existingMashin.save();
-              }
-            } catch (e) {}
-          }
-        }
+        await mashinuudBurtgeye({
+          erunkhiiKholbolt: db.erunkhiiKholbolt,
+          tukhainBaaziinKholbolt,
+          baiguullaga,
+          ezemshigch: resDoc,
+          dugaaruud: carPlates,
+          barilgiinId: targetBarilgaId,
+          toot: tootVal,
+          utas: phoneVal,
+          zochinTurul: "Оршин суугч",
+        });
       } catch (err) {
         console.error("Error in registerCars:", err);
       }
