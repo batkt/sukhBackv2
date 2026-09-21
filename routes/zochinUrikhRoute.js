@@ -2048,7 +2048,10 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
       ner: resObj.ner || resObj.orshinSuugchNer || "БҮРТГЭЛГҮЙ",
       ovog: resObj.ovog || "",
       utas: resObj.utas || (Array.isArray(resObj.utas) ? resObj.utas[0] : ""),
-      mashiniiDugaar: p?.dugaar || "",
+      // `dugaar` ба `mashiniiDugaar` хоёрыг урсгал бүр адилхан бөглөдөггүй тул
+      // хоёуланг нь шалгана — эс бөгөөс мөр "БҮРТГЭЛГҮЙ" болж, засах цонх
+      // хоосон нээгдэнэ.
+      mashiniiDugaar: p?.dugaar || p?.mashiniiDugaar || "",
       // Эзний бүх машин — UI дээр "1/3" гэх мэт тоолуур харуулахад
       ezniiMashinuud: ezniiDugaaruud,
       mashiniiToo: ezniiDugaaruud.length,
@@ -2122,7 +2125,7 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
           ner: p.ezemshigchiinNer || "БҮРТГЭЛГҮЙ",
           ovog: "",
           utas: p.ezemshigchiinUtas || p.utas || "",
-          mashiniiDugaar: p.dugaar || "",
+          mashiniiDugaar: p.dugaar || p.mashiniiDugaar || "",
           zochinTurul: p.zochinTurul || p.turul || "",
           zochinTailbar: p.zochinTailbar || "",
           ezenToot: p.ezenToot || "-",
