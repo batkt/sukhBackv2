@@ -1409,18 +1409,67 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
                 zochinUrikhEsekh: true,
               };
 
+              // ЧУХАЛ: шүүлтэд ДУГААР байх ёстой.
+              //
+              // Өмнө нь зөвхөн `orshinSuugchiinId`-гаар шүүдэг тул оршин
+              // суугч хэдэн машин нэмсэн ч `orshinSuugchMashin` дээр НЭГ
+              // бичлэг дарагдсаар байв. Улмаар `mashin`-д 3 бичлэг,
+              // `orshinSuugchMashin`-д 1 бичлэг болж, зөвхөн OSM-ээс уншдаг
+              // вебийн дэлгэц машиныг нэгийг л харуулдаг байлаа.
+              const osmShaardlaga = {
+                orshinSuugchiinId: String(orshinSuugchResult._id),
+                mashiniiDugaar: plateString,
+              };
+
               if (tukhainBaaziinKholbolt) {
                 await OrshinSuugchMashin(tukhainBaaziinKholbolt).findOneAndUpdate(
-                  { orshinSuugchiinId: String(orshinSuugchResult._id) },
+                  osmShaardlaga,
                   { $set: osmData },
                   { upsert: true }
                 );
               }
               if (db.erunkhiiKholbolt) {
                 await OrshinSuugchMashin(db.erunkhiiKholbolt).findOneAndUpdate(
-                  { orshinSuugchiinId: String(orshinSuugchResult._id) },
+                  osmShaardlaga,
                   { $set: osmData },
                   { upsert: true }
+                );
+              }
+
+              // OSM-ийг `mashin`-тай нийцүүлнэ: эзний одоогийн машинуудад
+              // байхгүй дугаарын OSM бичлэгийг цэвэрлэнэ. Дугаар сольсон
+              // (байгаа машиныг дарж нэрлэсэн) үед хуучин дугаар нь OSM дээр
+              // "фантом" болж үлдэхээс сэргийлнэ.
+              try {
+                const odoogiinMashinuud = await Mashin(tukhainBaaziinKholbolt)
+                  .find({
+                    ezemshigchiinId: String(orshinSuugchResult._id),
+                  })
+                  .select("dugaar mashiniiDugaar")
+                  .lean();
+
+                const khuchinteiDugaaruud = odoogiinMashinuud
+                  .map((m) =>
+                    String(m.dugaar || m.mashiniiDugaar || "").trim(),
+                  )
+                  .filter(Boolean);
+
+                if (khuchinteiDugaaruud.length > 0) {
+                  for (const kholbolt of [
+                    tukhainBaaziinKholbolt,
+                    db.erunkhiiKholbolt,
+                  ]) {
+                    if (!kholbolt) continue;
+                    await OrshinSuugchMashin(kholbolt).deleteMany({
+                      orshinSuugchiinId: String(orshinSuugchResult._id),
+                      mashiniiDugaar: { $nin: khuchinteiDugaaruud },
+                    });
+                  }
+                }
+              } catch (tsevereltiinAldaa) {
+                console.error(
+                  "\u26a0\ufe0f [ZOCHIN_HADGALYA] OSM цэвэрлэхэд алдаа:",
+                  tsevereltiinAldaa.message,
                 );
               }
               console.log(`✅ [ZOCHIN_HADGALYA] Synchronized plate '${plateString}' to OrshinSuugchMashin.`);

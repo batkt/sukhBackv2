@@ -2,7 +2,10 @@ const express = require("express");
 const router = express.Router();
 const OrshinSuugch = require("../models/orshinSuugch");
 const Baiguullaga = require("../models/baiguullaga");
-const { mashiniiKhyazgaarOlya } = require("../utils/mashinBurtgel");
+const {
+  mashiniiKhyazgaarOlya,
+  ezniiMashiniiBichleguudOlya,
+} = require("../utils/mashinBurtgel");
 const Geree = require("../models/geree");
 const NevtreltiinTuukh = require("../models/nevtreltiinTuukh");
 const BackTuukh = require("../models/backTuukh");
@@ -806,24 +809,21 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
         khariu.gerBuliinGishuud = [];
       }
 
+      // Машиныг ГУРВАН цуглуулгаас нэгтгэж уншина.
+      //
+      // Өмнө нь зөвхөн `orshinSuugchMashin`-аас уншдаг байв. Гэтэл аппын
+      // `/zochinHadgalya` нь `mashin` дээр машин тус бүрээр бичлэг үүсгэхдээ
+      // `orshinSuugchMashin` дээр НЭГ бичлэг дардаг байсан тул 3 машинтай
+      // оршин суугч энэ дэлгэц дээр НЭГ машинтай харагддаг байлаа.
+      // (Upsert-ийн шүүлтийг зассан ч аль хэдийн бүртгэгдсэн өгөгдөл
+      // ийм байдлаар үлдсэн — нэгтгэж уншсанаар migration шаардахгүй.)
       try {
-        const OrshinSuugchMashin = require("../models/orshinSuugchMashin");
-        let foundCars = [];
-        if (tenantKholbolt) {
-          try {
-            foundCars = await OrshinSuugchMashin(tenantKholbolt)
-              .find({ orshinSuugchiinId: String(result._id) })
-              .lean();
-          } catch (e) { }
-        }
-        if (!foundCars || foundCars.length === 0) {
-          try {
-            foundCars = await OrshinSuugchMashin(db.erunkhiiKholbolt)
-              .find({ orshinSuugchiinId: String(result._id) })
-              .lean();
-          } catch (e) { }
-        }
-        khariu.mashinuud = foundCars || [];
+        khariu.mashinuud = await ezniiMashiniiBichleguudOlya({
+          erunkhiiKholbolt: db.erunkhiiKholbolt,
+          tukhainBaaziinKholbolt: tenantKholbolt,
+          baiguullagiinId: req.query.baiguullagiinId || result.baiguullagiinId,
+          ezemshigchiinId: result._id,
+        });
       } catch (e) {
         khariu.mashinuud = [];
       }

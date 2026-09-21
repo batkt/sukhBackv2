@@ -296,7 +296,19 @@ function mashiniiKhyazgaarOlya(baiguullaga, barilgiinId) {
  *
  * @returns {Promise<string[]>} давхардалгүй дугаарууд
  */
-async function ezniiMashinuudOlya({
+/**
+ * Эзний машины БИЧЛЭГҮҮДийг гурван цуглуулгаас нэгтгэж буцаана.
+ *
+ * Яагаад нэгтгэх шаардлагатай вэ: бүртгэлийн урсгалууд гурван цэгт бичдэг
+ * ч бүгд төгс синк болдоггүй. Жишээ нь аппын `/zochinHadgalya` нь `mashin`
+ * дээр машин тус бүрээр бичлэг үүсгэдэг боловч `orshinSuugchMashin` дээр
+ * зөвхөн НЭГ бичлэг дардаг байсан. Тиймээс аль нэг цуглуулгаас уншсан
+ * дэлгэц машиныг дутуу харуулна. Энд гуравнаас нэгтгэж, давхардлыг
+ * дугаараар арилгана.
+ *
+ * @returns {Promise<object[]>} `{_id, mashiniiDugaar, ezenToot, ...}` хэлбэрээр
+ */
+async function ezniiMashiniiBichleguudOlya({
   erunkhiiKholbolt,
   tukhainBaaziinKholbolt,
   baiguullagiinId,
@@ -308,30 +320,44 @@ async function ezniiMashinuudOlya({
   const Mashin = require("../models/mashin");
 
   const ezenStr = String(ezemshigchiinId);
-  const ezniiShalgalt = {
-    $or: [{ orshinSuugchiinId: ezenStr }, { ezemshigchiinId: ezenStr }],
-  };
-  const dugaaruud = new Set();
+  const orgShaardlaga = baiguullagiinId
+    ? { baiguullagiinId: String(baiguullagiinId) }
+    : {};
 
-  const nemye = (jagsaalt) => {
+  /** Дугаараар давхардуулахгүй цуглуулна — эхэлж олдсоныг үлдээнэ. */
+  const bichleguud = new Map();
+
+  const nemye = (jagsaalt, bairshil) => {
     (jagsaalt || []).forEach((d) => {
-      const tsever = mashiniiDugaarTseverle(d?.mashiniiDugaar || d?.dugaar);
-      if (!KHOOSON_UTGANUUD.has(tsever)) dugaaruud.add(tsever);
+      const dugaar = mashiniiDugaarTseverle(d?.mashiniiDugaar || d?.dugaar);
+      if (KHOOSON_UTGANUUD.has(dugaar) || bichleguud.has(dugaar)) return;
+
+      bichleguud.set(dugaar, {
+        _id: d?._id,
+        mashiniiDugaar: dugaar,
+        dugaar,
+        ezenToot: d?.ezenToot || "",
+        utas: d?.utas || d?.ezemshigchiinUtas || "",
+        orshinSuugchiinId: d?.orshinSuugchiinId || d?.ezemshigchiinId || ezenStr,
+        baiguullagiinId: d?.baiguullagiinId || null,
+        barilgiinId: d?.barilgiinId || null,
+        zochinTurul: d?.zochinTurul || d?.turul || "Оршин суугч",
+        zochinUrikhEsekh: d?.zochinUrikhEsekh,
+        dugaarUurchilsunOgnoo: d?.dugaarUurchilsunOgnoo || null,
+        createdAt: d?.createdAt || null,
+        eh: bairshil,
+      });
     });
   };
 
-  for (const kholbolt of [erunkhiiKholbolt, tukhainBaaziinKholbolt]) {
+  for (const kholbolt of [tukhainBaaziinKholbolt, erunkhiiKholbolt]) {
     if (!kholbolt) continue;
     try {
       nemye(
         await OrshinSuugchMashin(kholbolt)
-          .find({
-            ...(baiguullagiinId
-              ? { baiguullagiinId: String(baiguullagiinId) }
-              : {}),
-            orshinSuugchiinId: ezenStr,
-          })
+          .find({ ...orgShaardlaga, orshinSuugchiinId: ezenStr })
           .lean(),
+        "orshinSuugchMashin",
       );
     } catch (aldaa) {
       // Холболт дээр цуглуулга байхгүй байж болно — нөгөөгөөр үргэлжилнэ.
@@ -343,19 +369,32 @@ async function ezniiMashinuudOlya({
       nemye(
         await Mashin(tukhainBaaziinKholbolt)
           .find({
-            ...(baiguullagiinId
-              ? { baiguullagiinId: String(baiguullagiinId) }
-              : {}),
-            ...ezniiShalgalt,
+            ...orgShaardlaga,
+            $or: [
+              { orshinSuugchiinId: ezenStr },
+              { ezemshigchiinId: ezenStr },
+            ],
           })
           .lean(),
+        "mashin",
       );
     } catch (aldaa) {
       // дээрхтэй ижил
     }
   }
 
-  return Array.from(dugaaruud);
+  return Array.from(bichleguud.values());
+}
+
+/**
+ * Эзний машины дугаарууд (давхардалгүй).
+ * `ezniiMashiniiBichleguudOlya`-аас гаралтай — хоёр нь зөрөхгүй.
+ *
+ * @returns {Promise<string[]>}
+ */
+async function ezniiMashinuudOlya(tokhirgoo) {
+  const bichleguud = await ezniiMashiniiBichleguudOlya(tokhirgoo);
+  return bichleguud.map((b) => b.mashiniiDugaar);
 }
 
 module.exports = {
@@ -365,5 +404,6 @@ module.exports = {
   tokhirgooniiUtga,
   mashiniiKhyazgaarOlya,
   ezniiMashinuudOlya,
+  ezniiMashiniiBichleguudOlya,
   mashinuudBurtgeye,
 };
