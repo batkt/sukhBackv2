@@ -236,9 +236,134 @@ async function mashinuudBurtgeye({
   return khariu;
 }
 
+/**
+ * Зочны тохиргооны нэг талбарыг барилга → байгууллагын дарааллаар, ТАЛБАР ТУС
+ * БҮРД нөхөж уншина.
+ *
+ * `zochinTokhirgooOlya` нь бүтэн обьектыг сонгодог: барилга дээр
+ * `zochinUrikhEsekh` тавигдсан бол байгууллагын тохиргоо БҮХЭЛДЭЭ хаягддаг.
+ * Ингэснээр барилга дээр тохируулаагүй талбар (жишээ нь машины хязгаар)
+ * байгууллагын хэмжээнд тохируулсан ч чимээгүй үл хэрэгсэгддэг байв.
+ *
+ * @param {object} baiguullaga
+ * @param {string} barilgiinId
+ * @param {string} talbar `zochinTokhirgoo`-ийн талбарын нэр
+ */
+function tokhirgooniiUtga(baiguullaga, barilgiinId, talbar) {
+  const barilga = baiguullaga?.barilguud?.find(
+    (b) => String(b._id) === String(barilgiinId),
+  );
+
+  // Хуучин бичлэгүүд дээр `zochinTokhirgoo` нь барилгын үндсэн дээр ч
+  // хадгалагдсан байдаг тул хоёуланг нь шалгана.
+  const bairshluud = [
+    barilga?.tokhirgoo?.zochinTokhirgoo,
+    barilga?.zochinTokhirgoo,
+    baiguullaga?.tokhirgoo?.zochinTokhirgoo,
+    baiguullaga?.zochinTokhirgoo,
+  ];
+
+  for (const bairshil of bairshluud) {
+    const utga = bairshil?.[talbar];
+    if (utga !== undefined && utga !== null && utga !== "") return utga;
+  }
+
+  return undefined;
+}
+
+/**
+ * Нэг оршин суугч/харилцагч дээр бүртгэж болох машины ДЭЭД тоо.
+ *
+ * Вебийн «Нэмэлт тохиргоо → Машины бүртгэлийн хязгаар»-аас тохируулна.
+ * Байгууллага/барилгын бүх оршин суугчид нэг ижил хамаарна.
+ *
+ * @returns {number} 0 бол тохируулаагүй — дуудагч тал өөрийн үндсэн утгыг
+ *                   шийднэ (хязгаарлахгүй эсвэл 1).
+ */
+function mashiniiKhyazgaarOlya(baiguullaga, barilgiinId) {
+  const utga = Number(
+    tokhirgooniiUtga(baiguullaga, barilgiinId, "orshinSuugchMashiniiLimit"),
+  );
+  return Number.isFinite(utga) && utga > 0 ? Math.floor(utga) : 0;
+}
+
+/**
+ * Эзэн дээр одоо бүртгэлтэй машины дугаарууд.
+ *
+ * Гурван цуглуулгад тархсан байдаг (төв OSM / баазын OSM / баазын mashin) тул
+ * гуравнаас нэгтгэж, давхардлыг нь арилгаж буцаана. Хязгаарыг шалгах, аппд
+ * бүх машиныг харуулах хоёуланд хэрэглэнэ.
+ *
+ * @returns {Promise<string[]>} давхардалгүй дугаарууд
+ */
+async function ezniiMashinuudOlya({
+  erunkhiiKholbolt,
+  tukhainBaaziinKholbolt,
+  baiguullagiinId,
+  ezemshigchiinId,
+}) {
+  if (!ezemshigchiinId) return [];
+
+  const OrshinSuugchMashin = require("../models/orshinSuugchMashin");
+  const Mashin = require("../models/mashin");
+
+  const ezenStr = String(ezemshigchiinId);
+  const ezniiShalgalt = {
+    $or: [{ orshinSuugchiinId: ezenStr }, { ezemshigchiinId: ezenStr }],
+  };
+  const dugaaruud = new Set();
+
+  const nemye = (jagsaalt) => {
+    (jagsaalt || []).forEach((d) => {
+      const tsever = mashiniiDugaarTseverle(d?.mashiniiDugaar || d?.dugaar);
+      if (!KHOOSON_UTGANUUD.has(tsever)) dugaaruud.add(tsever);
+    });
+  };
+
+  for (const kholbolt of [erunkhiiKholbolt, tukhainBaaziinKholbolt]) {
+    if (!kholbolt) continue;
+    try {
+      nemye(
+        await OrshinSuugchMashin(kholbolt)
+          .find({
+            ...(baiguullagiinId
+              ? { baiguullagiinId: String(baiguullagiinId) }
+              : {}),
+            orshinSuugchiinId: ezenStr,
+          })
+          .lean(),
+      );
+    } catch (aldaa) {
+      // Холболт дээр цуглуулга байхгүй байж болно — нөгөөгөөр үргэлжилнэ.
+    }
+  }
+
+  if (tukhainBaaziinKholbolt) {
+    try {
+      nemye(
+        await Mashin(tukhainBaaziinKholbolt)
+          .find({
+            ...(baiguullagiinId
+              ? { baiguullagiinId: String(baiguullagiinId) }
+              : {}),
+            ...ezniiShalgalt,
+          })
+          .lean(),
+      );
+    } catch (aldaa) {
+      // дээрхтэй ижил
+    }
+  }
+
+  return Array.from(dugaaruud);
+}
+
 module.exports = {
   mashiniiDugaarTseverle,
   dugaaruudSalgaya,
   zochinTokhirgooOlya,
+  tokhirgooniiUtga,
+  mashiniiKhyazgaarOlya,
+  ezniiMashinuudOlya,
   mashinuudBurtgeye,
 };

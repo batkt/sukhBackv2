@@ -2,6 +2,10 @@ const asyncHandler = require("express-async-handler");
 const OrshinSuugch = require("../models/orshinSuugch");
 const Khariltsagch = require("../models/khariltsagch");
 const Baiguullaga = require("../models/baiguullaga");
+const {
+  mashiniiKhyazgaarOlya,
+  ezniiMashinuudOlya,
+} = require("../utils/mashinBurtgel");
 const NevtreltiinTuukh = require("../models/nevtreltiinTuukh");
 const MsgTuukh = require("../models/msgTuukh");
 const IpTuukh = require("../models/ipTuukh");
@@ -4218,6 +4222,60 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
         urdunJson.mashiniiDugaar = urdunJson.dugaar;
       } else if (urdunJson.mashiniiDugaar && !urdunJson.dugaar) {
         urdunJson.dugaar = urdunJson.mashiniiDugaar;
+      }
+
+      // Аппад БҮРТГЭЛТЭЙ БҮХ машиныг харуулна.
+      //
+      // Дээрх блок нь `findOne`-оор зөвхөн НЭГ дугаар олдог тул оршин суугч
+      // 2-3 машин бүртгэсэн ч профайл дээр нэг нь харагддаг байв. Одоо
+      // машины хязгаар вебээс тохируулагддаг болсон тул жагсаалт хэрэгтэй.
+      // Хуучин аппын зөв ажиллагаа хөндөгдөхгүй — `mashiniiDugaar`/`dugaar`
+      // талбарууд хэвээр (жагсаалтын эхнийх) байна.
+      try {
+        const mashiniiOrgId =
+          urdunJson.baiguullagiinId ||
+          (urdunJson.toots && urdunJson.toots[0]?.baiguullagiinId);
+
+        const mashiniiKholbolt =
+          mashiniiOrgId && db.kholboltuud
+            ? db.kholboltuud.find(
+                (k) => String(k.baiguullagiinId) === String(mashiniiOrgId),
+              )
+            : null;
+
+        const bukhMashin = await ezniiMashinuudOlya({
+          erunkhiiKholbolt: db.erunkhiiKholbolt,
+          tukhainBaaziinKholbolt: mashiniiKholbolt,
+          baiguullagiinId: mashiniiOrgId,
+          ezemshigchiinId: urDun._id,
+        });
+
+        urdunJson.mashinuud = bukhMashin;
+        urdunJson.mashiniiToo = bukhMashin.length;
+
+        if (bukhMashin.length > 0) {
+          if (!urdunJson.mashiniiDugaar) {
+            urdunJson.mashiniiDugaar = bukhMashin[0];
+          }
+          if (!urdunJson.dugaar) urdunJson.dugaar = bukhMashin[0];
+        }
+
+        // Апп «Машин нэмэх» товчийг харуулах/хаахдаа хэрэглэнэ.
+        if (mashiniiOrgId) {
+          const mashiniiBaiguullaga = await Baiguullaga(
+            db.erunkhiiKholbolt,
+          ).findById(mashiniiOrgId);
+          urdunJson.mashiniiKhyazgaar =
+            mashiniiKhyazgaarOlya(mashiniiBaiguullaga, urdunJson.barilgiinId) ||
+            1;
+          urdunJson.mashinNemekhBolomjtoiEsekh =
+            bukhMashin.length < urdunJson.mashiniiKhyazgaar;
+        }
+      } catch (mashiniiAldaa) {
+        console.error(
+          "\u26a0\ufe0f [Profile] Машины жагсаалт уншихад алдаа:",
+          mashiniiAldaa.message,
+        );
       }
 
       res.send(urdunJson);

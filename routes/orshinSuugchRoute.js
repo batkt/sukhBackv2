@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const OrshinSuugch = require("../models/orshinSuugch");
 const Baiguullaga = require("../models/baiguullaga");
+const { mashiniiKhyazgaarOlya } = require("../utils/mashinBurtgel");
 const Geree = require("../models/geree");
 const NevtreltiinTuukh = require("../models/nevtreltiinTuukh");
 const BackTuukh = require("../models/backTuukh");
@@ -137,10 +138,20 @@ router.post("/orshinSuugchiinMashinKhadgalya", tokenShalgakh, async (req, res, n
       resident = await OrshinSuugch(tukhainBaaziinKholbolt).findById(orshinSuugchiinId);
     }
 
+    // Харилцагч (зогсоол/агуулахын эзэн) нь тусдаа цуглуулгад байдаг. Өмнө нь
+    // зөвхөн `orshinSuugch`-оос хайдаг тул харилцагчийн машин бүртгэх гэвэл
+    // "Оршин суугч олдсонгүй" гэж унадаг байв.
+    if (!resident) {
+      const Khariltsagch = require("../models/khariltsagch");
+      resident = await Khariltsagch(db.erunkhiiKholbolt).findById(
+        orshinSuugchiinId,
+      );
+    }
+
     if (!resident) {
       return res.status(404).json({
         success: false,
-        aldaa: "Оршин суугч олдсонгүй!",
+        aldaa: "Оршин суугч эсвэл харилцагч олдсонгүй!",
       });
     }
 
@@ -153,6 +164,25 @@ router.post("/orshinSuugchiinMashinKhadgalya", tokenShalgakh, async (req, res, n
         ezenToot: String(c.ezenToot || resident.toot || "").trim(),
       }))
       .filter((c) => c.mashiniiDugaar);
+
+    // Машины бүртгэлийн хязгаар — вебийн «Нэмэлт тохиргоо → Машины бүртгэлийн
+    // хязгаар»-аас байгууллага/барилгын хэмжээнд тохируулна. Тохируулаагүй (0)
+    // бол хязгаарлахгүй. Энэ endpoint нь БҮТЭН шинэ жагсаалтыг хүлээн авдаг
+    // тул ирсэн жагсаалтын урт нь шалгах ёстой тоо яг өөрөө.
+    const orgIdForLimit = baiguullagiinId || resident.baiguullagiinId;
+    if (orgIdForLimit) {
+      const khyazgaar = mashiniiKhyazgaarOlya(
+        await Baiguullaga(db.erunkhiiKholbolt).findById(orgIdForLimit),
+        resident.barilgiinId,
+      );
+
+      if (khyazgaar > 0 && validCars.length > khyazgaar) {
+        return res.status(403).json({
+          success: false,
+          aldaa: `Нэг оршин суугч/харилцагч дээр хамгийн олон ${khyazgaar} машин бүртгэх боломжтой (та ${validCars.length} оруулсан).`,
+        });
+      }
+    }
 
     const carDocs = validCars.map((c) => ({
       orshinSuugchiinId: String(resident._id),

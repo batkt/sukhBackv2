@@ -18,6 +18,10 @@ const {
   getKholboltByBaiguullagiinId,
 } = require("../utils/dbConnection");
 const { ugugdliinEzniiId } = require("../utils/gerBuliinGishuun");
+const {
+  mashiniiKhyazgaarOlya,
+  ezniiMashinuudOlya,
+} = require("../utils/mashinBurtgel");
 
 // Session validation for multiple device login prevention
 const orshinSuugchSessionShalgaya = async (req, res, next) => {
@@ -575,13 +579,48 @@ router.get("/zochinSettings", tokenShalgakh, async (req, res, next) => {
         mergedRes.dugaar = plate;
         mergedRes.mashiniiDugaar = plate;
       }
+
+      // Оршин суугч нэгээс олон машин бүртгэж болох болсон тул аппд БҮХ
+      // машиныг нь буцаана. `settings` нь `findOne` — зөвхөн нэгийг олдог тул
+      // аппад үргэлж нэг машин харагддаг байв. Хуучин аппын хувьд
+      // `mashiniiDugaar`/`dugaar` талбарууд хэвээр (эхний машин) байна.
+      mergedRes.mashinuud = await ezniiMashinuudOlya({
+        erunkhiiKholbolt: db.erunkhiiKholbolt,
+        tukhainBaaziinKholbolt,
+        baiguullagiinId,
+        ezemshigchiinId: residentId,
+      });
+      mergedRes.mashiniiToo = mergedRes.mashinuud.length;
+
+      // Аппад «дахин машин нэмэх боломжтой эсэх»-ийг шийдүүлэхийн тулд
+      // хязгаарыг нь хамт буцаана (0 = хязгааргүй).
+      if (baiguullagiinId) {
+        const baiguullagaKhyazgaart = await Baiguullaga(
+          db.erunkhiiKholbolt,
+        ).findById(baiguullagiinId);
+        mergedRes.mashiniiKhyazgaar =
+          mashiniiKhyazgaarOlya(baiguullagaKhyazgaart, barilgiinId) || 1;
+        mergedRes.orshinSuugchMashiniiLimit = mergedRes.mashiniiKhyazgaar;
+        mergedRes.mashinNemekhBolomjtoiEsekh =
+          mergedRes.mashinuud.length < mergedRes.mashiniiKhyazgaar;
+      }
+
       mergedRes.mashin = { ...mergedRes };
       mergedRes.orshinSuugchMashin = { ...mergedRes };
 
       return res.send(mergedRes);
     }
 
-    res.send({});
+    // Тохиргоо (эзний ч, барилгын ч) байхгүй ч машин нь бүртгэлтэй байж
+    // болно — апп хоосон биш, бүртгэлтэй машинуудыг нь харуулах ёстой.
+    res.send({
+      mashinuud: await ezniiMashinuudOlya({
+        erunkhiiKholbolt: db.erunkhiiKholbolt,
+        tukhainBaaziinKholbolt,
+        baiguullagiinId,
+        ezemshigchiinId: residentId,
+      }),
+    });
   } catch (error) {
     next(error);
   }
@@ -1089,7 +1128,14 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
               if (updateData.zochinTurul === "Оршин суугч" && orshinSuugchResult) {
                 filter.zochinTurul = "Оршин суугч";
 
-                const limit = defaults.orshinSuugchMashiniiLimit || 1;
+                // Хязгаарыг барилга → байгууллагын дарааллаар ТАЛБАР ТУС
+                // БҮРД нөхөж уншина. `defaults` нь бүтэн обьектоор
+                // сонгогддог тул барилга дээр зочны тохиргоо байгаа боловч
+                // машины хязгаарыг тохируулаагүй бол байгууллагын хэмжээнд
+                // тохируулсан хязгаар чимээгүй үл хэрэгсэгддэг байв.
+                // Тохируулаагүй үед хуучин зан төлөв хэвээр — 1 машин.
+                const limit =
+                  mashiniiKhyazgaarOlya(baiguullagaObj, barilgiinId) || 1;
                 const currentCount = await Mashin(tukhainBaaziinKholbolt).countDocuments({
                   ...(orshinSuugchResult ? { ezemshigchiinId: orshinSuugchResult._id.toString() } : { baiguullagiinId: baiguullagiinId.toString(), ezemshigchiinUtas: phoneString }),
                   zochinTurul: "Оршин суугч"
