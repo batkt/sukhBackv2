@@ -34,6 +34,15 @@ const baiguullagaSchema = new Schema(
             type: Boolean,
             default: false,
           },
+          /**
+           * Оршин суугч гэр бүлийн гишүүн урих боломжтой эсэх.
+           * Вебийн «Нэмэлт тохиргоо»-оос чекээр асааж/унтраана.
+           * Тохируулаагүй бол зөвшөөрнө (хуучин зан төлөв).
+           */
+          gerBuliinGishuunEsekh: {
+            type: Boolean,
+            default: true,
+          },
           /**Хоногт бодох алдангийн хувь дээд тал 0.5 байна */
           aldangiinKhuvi: Number,
           /**Алданги авалгүйгээр хүлээх хоног */
@@ -190,6 +199,15 @@ const baiguullagaSchema = new Schema(
       orshinSuugchKhaalgaNeehEsekh: {
         type: Boolean,
         default: false,
+      },
+      /**
+       * Оршин суугч гэр бүлийн гишүүн урих боломжтой эсэх.
+       * Вебийн «Нэмэлт тохиргоо»-оос чекээр асааж/унтраана.
+       * Тохируулаагүй бол зөвшөөрнө (хуучин зан төлөв).
+       */
+      gerBuliinGishuunEsekh: {
+        type: Boolean,
+        default: true,
       },
       /**Хоногт бодох алдангийн хувь дээд тал 0.5 байна */
       aldangiinKhuvi: Number,

@@ -15,6 +15,9 @@ const GerBuliinUrilga = require("../models/gerBuliinUrilga");
 const BatalgaajuulahCode = require("../models/batalgaajuulahCode");
 const Geree = require("../models/geree");
 const aldaa = require("../components/aldaa");
+const {
+  gerBuliinGishuunZovshoorokhEsekh,
+} = require("../utils/baiguullagiinTokhirgoo");
 const { msgIlgeeye } = require("./orshinSuugch");
 const {
   MAX_GISHUUN,
@@ -81,6 +84,40 @@ async function undsenEzemshigchAvya(req) {
     );
   }
   return undsen;
+}
+
+/**
+ * Байгууллага дээр гэр бүлийн гишүүн урихыг зөвшөөрсөн эсэхийг шалгана.
+ *
+ * Вебийн «Нэмэлт тохиргоо → Гэр бүлийн гишүүн урих» чекээр удирдана.
+ * Унтраалттай бол гишүүн урих/нэмэх/баталгаажуулах гурвуулан хаагдана —
+ * эс бөгөөс хүлээгдэж байсан урилга дараа нь бүртгэгдээд орчихно.
+ *
+ * @param {string} baiguullagiinId
+ * @param {string} [barilgiinId]
+ */
+async function gishuunZovshoorolShalgaya(baiguullagiinId, barilgiinId) {
+  if (!baiguullagiinId) return;
+
+  const { db } = require("zevbackv2");
+  const Baiguullaga = require("../models/baiguullaga");
+
+  let baiguullaga = null;
+  try {
+    baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(
+      baiguullagiinId,
+    );
+  } catch (e) {
+    // Байгууллагыг уншиж чадаагүй бол хориглохгүй — тохиргоо нь зөвшөөрөх
+    // талдаа байна гэж үзнэ (хуучин зан төлөв).
+    return;
+  }
+
+  if (!gerBuliinGishuunZovshoorokhEsekh(baiguullaga, barilgiinId)) {
+    throw new aldaa(
+      "Гэр бүлийн гишүүн урих боломжийг байрын удирдлага хаасан байна.",
+    );
+  }
 }
 
 /** Байгууллагын баазын холболтыг олно */
@@ -193,6 +230,11 @@ exports.gishuunUrikh = asyncHandler(async (req, res, next) => {
         "Таны бүртгэл байгууллагад холбогдоогүй байна. Эхлээд тоотоо бүртгүүлнэ үү.",
       );
     }
+
+    await gishuunZovshoorolShalgaya(
+      undsen.baiguullagiinId,
+      undsen.barilgiinId,
+    );
 
     const kholbolt = kholboltAvya(undsen.baiguullagiinId);
     if (!kholbolt) throw new aldaa("Байгууллагын холболт олдсонгүй!");
@@ -497,6 +539,11 @@ exports.gishuunBatalgaajuulya = asyncHandler(async (req, res, next) => {
     }
 
     utas = urilga.utas;
+
+    // Урилга үүссэний дараа байрын удирдлага боломжийг хааж мэднэ —
+    // баталгаажуулах үед дахин шалгана, эс бөгөөс хүлээгдэж байсан урилга
+    // тохиргоог тойрч бүртгэгдэнэ.
+    await gishuunZovshoorolShalgaya(urilga.baiguullagiinId, urilga.barilgiinId);
 
     let kholbolt = kholboltAvya(urilga.baiguullagiinId);
     if (!kholbolt) {
@@ -967,6 +1014,11 @@ exports.gishuunNemekh = asyncHandler(async (req, res, next) => {
     if (!undsen.baiguullagiinId) {
       throw new aldaa("Үндсэн эзэмшигч байгууллагад холбогдоогүй байна.");
     }
+
+    await gishuunZovshoorolShalgaya(
+      undsen.baiguullagiinId,
+      undsen.barilgiinId,
+    );
 
     // Тоон хязгаар — оршин суугчийн урсгалтай ижил дүрэм.
     const idevkhteiToo = await OrshinSuugchModel.countDocuments({

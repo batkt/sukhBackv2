@@ -6,6 +6,9 @@ const {
   mashiniiKhyazgaarOlya,
   ezniiMashinuudOlya,
 } = require("../utils/mashinBurtgel");
+const {
+  gerBuliinGishuunZovshoorokhEsekh,
+} = require("../utils/baiguullagiinTokhirgoo");
 const NevtreltiinTuukh = require("../models/nevtreltiinTuukh");
 const MsgTuukh = require("../models/msgTuukh");
 const IpTuukh = require("../models/ipTuukh");
@@ -4270,6 +4273,13 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
             1;
           urdunJson.mashinNemekhBolomjtoiEsekh =
             bukhMashin.length < urdunJson.mashiniiKhyazgaar;
+
+          // Апп «Гэр бүлийн гишүүн» хэсгийг харуулах/нуухад хэрэглэнэ.
+          // Вебийн «Нэмэлт тохиргоо → Гэр бүлийн гишүүн урих» чекээс.
+          urdunJson.gerBuliinGishuunEsekh = gerBuliinGishuunZovshoorokhEsekh(
+            mashiniiBaiguullaga,
+            urdunJson.barilgiinId,
+          );
         }
       } catch (mashiniiAldaa) {
         console.error(
