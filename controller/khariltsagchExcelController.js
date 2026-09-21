@@ -490,7 +490,6 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
             davkhar: davkhar || "",
             orts: "1",
             toot: undsenToot.toot,
-            turul: "Үндсэн",
             tailbar,
             ekhniiUldegdel,
             khonogoorBodokhEsekh,
@@ -534,13 +533,22 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
             // Байгаа тоотын эхний үлдэгдлийг Excel-ийн дүнгээр ДАРААГҮЙ бол
             // хоосон дүн нь хуучин үлдэгдлийг тэглэх байсан.
             const khuuchin = khariltsagch.toots[baigaaIndex];
-            khariltsagch.toots[baigaaIndex] = {
+            const shineToot = {
               ...(khuuchin.toObject ? khuuchin.toObject() : khuuchin),
               ...tootEntry,
               ekhniiUldegdel:
                 tootEntry.ekhniiUldegdel || khuuchin.ekhniiUldegdel || 0,
               createdAt: khuuchin.createdAt || tootEntry.createdAt,
             };
+
+            // `toots[i] = ...` гэж шууд онооход mongoose өөрчлөлтийг
+            // тэмдэглэдэггүй тул хадгалалт чимээгүй алга болдог.
+            if (typeof khariltsagch.toots.set === "function") {
+              khariltsagch.toots.set(baigaaIndex, shineToot);
+            } else {
+              khariltsagch.toots[baigaaIndex] = shineToot;
+              khariltsagch.markModified("toots");
+            }
           } else {
             khariltsagch.toots.push(tootEntry);
           }
