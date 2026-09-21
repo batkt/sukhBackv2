@@ -849,6 +849,11 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
     const inviterId = ugugdliinEzniiId(req.body.nevtersenAjiltniiToken);
     const requesterRole = req.body.nevtersenAjiltniiToken?.erkh;
 
+    /** Нэг эзэн дээр бүртгэж болох машины дээд тоо (тохируулаагүй бол 1). */
+    let mashiniiKhyazgaar = 1;
+    /** Эзэн дээр одоо бүртгэлтэй машины тоо. */
+    let ezniiMashiniiToo = 0;
+
     // Fetch inviter's master settings (Primary resident car info)
     let existingPrimary = null;
     if (inviterId) {
@@ -863,6 +868,30 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
       }
 
       existingPrimary = await Mashin(tukhainBaaziinKholbolt).findOne(settingsQuery);
+
+      // Эзний одоо бүртгэлтэй машины тоо + тохиргооны хязгаар.
+      //
+      // «Дугаар СОЛИХ» ба «шинэ машин НЭМЭХ» хоёрыг ялгахад хэрэгтэй. Хязгаар
+      // 1 байсан цагт шинэ дугаар нь заавал солих гэсэн үг байсан бол одоо
+      // (Нэмэлт тохиргооноос 2-3 болгосон үед) сул слот байвал НЭМЭХ үйлдэл.
+      try {
+        ezniiMashiniiToo = await Mashin(tukhainBaaziinKholbolt).countDocuments(
+          settingsQuery,
+        );
+
+        if (baiguullagiinId) {
+          const khyazgaariinBaiguullaga = await require("../models/baiguullaga")(
+            db.erunkhiiKholbolt,
+          ).findById(baiguullagiinId);
+          mashiniiKhyazgaar =
+            mashiniiKhyazgaarOlya(khyazgaariinBaiguullaga, barilgiinId) || 1;
+        }
+      } catch (khyazgaariinAldaa) {
+        console.error(
+          "\u26a0\ufe0f [ZOCHIN_HADGALYA] Машины хязгаар уншихад алдаа:",
+          khyazgaariinAldaa.message,
+        );
+      }
     }
 
     // Determine if this is the Resident's own car or a Guest invitation
@@ -873,7 +902,12 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
     if (inviterId && isResidentCar) {
       const oldPlate = existingPrimary ? (existingPrimary.dugaar || existingPrimary.mashiniiDugaar || "") : "";
       const newPlate = (orshinSuugchMedeelel && orshinSuugchMedeelel.mashiniiDugaar) || mashiniiDugaar || "";
-      if (existingPrimary && oldPlate !== newPlate) {
+      // Сул слот байгаа бол энэ нь дугаар солих биш, ШИНЭ машин нэмэх үйлдэл.
+      // Өмнө нь ялгаж үздэггүй тул оршин суугч хоёр дахь машинаа нэмэх гэхэд
+      // «30 хоногт 1 удаа солино» гэж хориглодог байв.
+      const shineMashinNemekhEsekh = ezniiMashiniiToo < mashiniiKhyazgaar;
+
+      if (existingPrimary && oldPlate !== newPlate && !shineMashinNemekhEsekh) {
         // App side restriction
         if (requesterRole === "OrshinSuugch") {
           const thirtyDaysAgo = moment().subtract(30, 'days');
@@ -1008,6 +1042,12 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
             }
           }
 
+          // Тохиргооны хязгаарыг барилга → байгууллагын дарааллаар уншина.
+          // Дээр нь (inviterId байхгүй админ хүсэлт дээр) тооцоогүй байж
+          // болзошгүй тул энд дахин бататгана.
+          mashiniiKhyazgaar =
+            mashiniiKhyazgaarOlya(baiguullagaObj, barilgiinId) || 1;
+
           const plateString = orshinSuugchMedeelel.mashiniiDugaar || mashiniiDugaar || "";
           const updateData = {
             baiguullagiinId: baiguullagiinId.toString(),
@@ -1087,8 +1127,13 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
                 // If exact match found, update that one
                 targetCarId = exactMatch._id;
               }
-              else if (residentCars.length === 1) {
-                // If no exact match but user has exactly one resident car, update it (rename)
+              else if (residentCars.length === 1 && mashiniiKhyazgaar <= 1) {
+                // Зөвхөн НЭГ машин зөвшөөрөгдсөн үед шинэ дугаар нь «сольсон»
+                // гэсэн үг тул байгаа машиныг дарж нэрлэнэ.
+                //
+                // Хязгаар 2+ болсон үед үүнийг хийвэл хоёр дахь машин
+                // НЭМЭГДЭХГҮЙ, эхнийх нь шинэ дугаараар дарагдана — «нэмэлт
+                // машины слот харагдахгүй» гэдгийн гол шалтгаан яг энэ байв.
                 console.log("ℹ️ [ZOCHIN_HADGALYA] Target by Single Car strategy:", residentCars[0]._id);
                 targetCarId = residentCars[0]._id;
               }
@@ -1128,14 +1173,7 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
               if (updateData.zochinTurul === "Оршин суугч" && orshinSuugchResult) {
                 filter.zochinTurul = "Оршин суугч";
 
-                // Хязгаарыг барилга → байгууллагын дарааллаар ТАЛБАР ТУС
-                // БҮРД нөхөж уншина. `defaults` нь бүтэн обьектоор
-                // сонгогддог тул барилга дээр зочны тохиргоо байгаа боловч
-                // машины хязгаарыг тохируулаагүй бол байгууллагын хэмжээнд
-                // тохируулсан хязгаар чимээгүй үл хэрэгсэгддэг байв.
-                // Тохируулаагүй үед хуучин зан төлөв хэвээр — 1 машин.
-                const limit =
-                  mashiniiKhyazgaarOlya(baiguullagaObj, barilgiinId) || 1;
+                const limit = mashiniiKhyazgaar;
                 const currentCount = await Mashin(tukhainBaaziinKholbolt).countDocuments({
                   ...(orshinSuugchResult ? { ezemshigchiinId: orshinSuugchResult._id.toString() } : { baiguullagiinId: baiguullagiinId.toString(), ezemshigchiinUtas: phoneString }),
                   zochinTurul: "Оршин суугч"
