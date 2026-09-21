@@ -445,15 +445,35 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
         let khariltsagch = await KhariltsagchModel.findOne({ utas });
 
         // ── Тоот давхардлын шалгалт ───────────────────────────────────────
+        // `turul`-ыг нь тулгах нь ЗААВАЛ: зогсоолын "5" ба агуулахын "5" нь
+        // өөр өөр обьект. Зөвхөн тоотоор тулгавал хууль ёсны импортыг
+        // "аль хэдийн бүртгэлтэй" гэж хааж мэднэ.
+        //
+        // Дээрх `toots`-гүй хуучин бичлэгийг (толгойн `toot` л байгаа)
+        // гээхгүйн тулд хоёр дахь салааг нэмэв — гэхдээ зөвхөн ТЭР
+        // тохиолдолд, ингэснээр turul-ын шалгалт тойрогдохгүй.
         for (const tootEntry of tootuud) {
-          const elemMatch = {
-            toot: tootEntry.toot,
-            barilgiinId: undsenBarilgiinId,
-          };
           const shalgalt = {
             $or: [
-              { barilgiinId: undsenBarilgiinId, toot: tootEntry.toot },
-              { toots: { $elemMatch: elemMatch } },
+              {
+                toots: {
+                  $elemMatch: {
+                    toot: tootEntry.toot,
+                    barilgiinId: undsenBarilgiinId,
+                    turul: tootEntry.turul,
+                  },
+                },
+              },
+              {
+                barilgiinId: undsenBarilgiinId,
+                toot: tootEntry.toot,
+                toots: { $size: 0 },
+              },
+              {
+                barilgiinId: undsenBarilgiinId,
+                toot: tootEntry.toot,
+                toots: { $exists: false },
+              },
             ],
           };
           if (khariltsagch) shalgalt._id = { $ne: khariltsagch._id };
