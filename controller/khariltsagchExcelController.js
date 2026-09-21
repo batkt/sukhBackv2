@@ -141,6 +141,97 @@ function davkhruudOlya(barilga) {
 }
 
 /**
+ * Excel-ийн буферээс өгөгдлийн мөрүүдийг уншина.
+ *
+ * 1-р мөр = гарчиг. Загварт 2-р мөр хоосон байж болох тул ҮНЭХЭЭР хоосон
+ * байвал л алгасна — хэрэглэгч тэнд эхний бүртгэлээ бичсэн байж мэднэ.
+ * Мөр бүрд `__mur` талбараар Excel-ийн бодит мөрийн дугаарыг хамт буцаана
+ * (алдааг хэрэглэгч файл дээрээ шууд олох боломжтой байх).
+ *
+ * @param {Buffer} buffer
+ * @returns {object[]}
+ */
+function murnuudUnshiya(buffer) {
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+  const buhMur = XLSX.utils.sheet_to_json(worksheet, {
+    raw: false,
+    header: 1,
+  });
+
+  const tolgoi = buhMur[0] || [];
+  const khoosonMur = (m) =>
+    !m || !m.some((n) => n !== undefined && n !== null && n !== "");
+  const ekhlel = khoosonMur(buhMur[1]) ? 2 : 1;
+
+  return buhMur
+    .slice(ekhlel)
+    .map((m, i) => ({ m, excelMur: ekhlel + 1 + i }))
+    .filter(({ m }) => !khoosonMur(m))
+    .map(({ m, excelMur }) => {
+      const obj = { __mur: excelMur };
+      tolgoi.forEach((ner, idx) => {
+        if (ner) obj[ner] = m[idx] !== undefined ? m[idx] : "";
+      });
+      return obj;
+    });
+}
+
+/**
+ * Нэг мөрийн талбаруудыг уншиж, шалгалтын алдааг нь хамт буцаана.
+ * Хуучин гарчигтай файл ч ажиллахын тулд багана бүрд хувилбар нэр тэвчинэ.
+ *
+ * @param {object} mur `murnuudUnshiya`-аас гарсан мөр
+ */
+function murniiUtgaUnshiya(mur) {
+  const { ovog, ner } = ovogNerSalgaya(
+    nudUnshiya(mur, "Овог"),
+    nudUnshiya(mur, "Нэр"),
+  );
+
+  const utas = nudUnshiya(mur, "Утас", "Утасны дугаар").replace(/\s/g, "");
+  const zogsoolnuud = tootuudSalgaya(
+    nudUnshiya(mur, "Зогсоолын дугаар", "Зогсоол", "Гаражийн дугаар", "Гараж"),
+  );
+  const aguulakhnuud = tootuudSalgaya(
+    nudUnshiya(mur, "Агуулахын дугаар", "Агуулах"),
+  );
+
+  const aldaanuud = [];
+  if (!ner) aldaanuud.push("Нэр");
+  if (!utas) aldaanuud.push("Утас");
+  else if (!/^\d+$/.test(utas)) aldaanuud.push("Утас буруу");
+  else if (utas.length !== 8) aldaanuud.push("Утас 8 орон");
+  if (zogsoolnuud.length === 0 && aguulakhnuud.length === 0) {
+    aldaanuud.push("Зогсоол эсвэл агуулахын дугаар");
+  }
+
+  return {
+    ovog,
+    ner,
+    utas,
+    mail: nudUnshiya(mur, "Имэйл", "Мэйл"),
+    davkhar: nudUnshiya(mur, "Давхар"),
+    tailbar: nudUnshiya(mur, "Тайлбар"),
+    zogsoolnuud,
+    aguulakhnuud,
+    mashinuud: dugaaruudSalgaya(
+      nudUnshiya(mur, "Машины дугаар", "Машин", "Улсын дугаар", "Автомашин"),
+    ),
+    ekhniiUldegdel:
+      parseFloat(nudUnshiya(mur, "Эхний үлдэгдэл").replace(/[,\s\u20ae]/g, "")) ||
+      0,
+    khonogoorBodokhEsekh: tiimEsekh(nudUnshiya(mur, "Хоногоор бодох")),
+    bodokhKhonog:
+      parseInt(
+        nudUnshiya(mur, "Ирээдүйд ашиглах хоног", "Ашиглах хоног"),
+        10,
+      ) || 0,
+    aldaanuud,
+  };
+}
+
+/**
  * GET /khariltsagchExcelTemplate
  * Харилцагч бүртгэх Excel загварыг үүсгэж буцаана.
  */
@@ -158,8 +249,8 @@ exports.generateKhariltsagchExcelTemplate = asyncHandler(
         );
         const barilga = barilgiinId
           ? baiguullaga?.barilguud?.find(
-              (b) => String(b._id) === String(barilgiinId),
-            )
+            (b) => String(b._id) === String(barilgiinId),
+          )
           : baiguullaga?.barilguud?.[0];
         if (barilga) davkharList = davkhruudOlya(barilga);
       }
@@ -257,29 +348,7 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
     if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
     if (!req.file) throw new aldaa("Excel файл оруулах");
 
-    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-    const buhMur = XLSX.utils.sheet_to_json(worksheet, {
-      raw: false,
-      header: 1,
-    });
-
-    // 1-р мөр = гарчиг. Загварт 2-р мөр хоосон байж болох тул ҮНЭХЭЭР хоосон
-    // байвал л алгасна — хэрэглэгч тэнд эхний бүртгэлээ бичсэн байж мэднэ.
-    const tolgoiMur = buhMur[0] || [];
-    const khoosonMur = (m) =>
-      !m || !m.some((n) => n !== undefined && n !== null && n !== "");
-    const murnuud = buhMur
-      .slice(khoosonMur(buhMur[1]) ? 2 : 1)
-      .map((m, i) => ({ m, excelMur: (khoosonMur(buhMur[1]) ? 3 : 2) + i }))
-      .filter(({ m }) => !khoosonMur(m))
-      .map(({ m, excelMur }) => {
-        const obj = { __mur: excelMur };
-        tolgoiMur.forEach((tolgoi, idx) => {
-          if (tolgoi) obj[tolgoi] = m[idx] !== undefined ? m[idx] : "";
-        });
-        return obj;
-      });
+    const murnuud = murnuudUnshiya(req.file.buffer);
 
     if (murnuud.length === 0) throw new aldaa("Excel хоосон");
 
@@ -322,46 +391,22 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
       const murniiDugaar = mur.__mur;
 
       try {
-        const { ovog, ner } = ovogNerSalgaya(
-          nudUnshiya(mur, "Овог"),
-          nudUnshiya(mur, "Нэр"),
-        );
+        const {
+          ovog,
+          ner,
+          utas,
+          mail,
+          davkhar,
+          tailbar,
+          zogsoolnuud,
+          aguulakhnuud,
+          mashinuud,
+          ekhniiUldegdel,
+          khonogoorBodokhEsekh,
+          bodokhKhonog,
+          aldaanuud,
+        } = murniiUtgaUnshiya(mur);
 
-        const utas = nudUnshiya(mur, "Утас", "Утасны дугаар").replace(/\s/g, "");
-        const mail = nudUnshiya(mur, "Имэйл", "Мэйл");
-        const davkhar = nudUnshiya(mur, "Давхар");
-        const tailbar = nudUnshiya(mur, "Тайлбар");
-
-        const zogsoolnuud = tootuudSalgaya(
-          nudUnshiya(mur, "Зогсоолын дугаар", "Зогсоол", "Гаражийн дугаар", "Гараж"),
-        );
-        const aguulakhnuud = tootuudSalgaya(
-          nudUnshiya(mur, "Агуулахын дугаар", "Агуулах"),
-        );
-        const mashinuud = dugaaruudSalgaya(
-          nudUnshiya(mur, "Машины дугаар", "Машин", "Улсын дугаар", "Автомашин"),
-        );
-
-        const ekhniiUldegdel =
-          parseFloat(
-            nudUnshiya(mur, "Эхний үлдэгдэл").replace(/[,\s₮]/g, ""),
-          ) || 0;
-        const khonogoorBodokhEsekh = tiimEsekh(nudUnshiya(mur, "Хоногоор бодох"));
-        const bodokhKhonog =
-          parseInt(
-            nudUnshiya(mur, "Ирээдүйд ашиглах хоног", "Ашиглах хоног"),
-            10,
-          ) || 0;
-
-        // ── Шалгалт ───────────────────────────────────────────────────────
-        const aldaanuud = [];
-        if (!ner) aldaanuud.push("Нэр");
-        if (!utas) aldaanuud.push("Утас");
-        else if (!/^\d+$/.test(utas)) aldaanuud.push("Утас буруу");
-        else if (utas.length !== 8) aldaanuud.push("Утас 8 орон");
-        if (zogsoolnuud.length === 0 && aguulakhnuud.length === 0) {
-          aldaanuud.push("Зогсоол эсвэл агуулахын дугаар");
-        }
         if (aldaanuud.length > 0) {
           throw new Error(aldaanuud.join(", ") + " хоосон эсвэл буруу");
         }
@@ -604,3 +649,7 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
     next(error);
   }
 });
+
+// Туршилт/дахин хэрэглээнд зориулсан дотоод хэрэгслүүд.
+exports.murnuudUnshiya = murnuudUnshiya;
+exports.murniiUtgaUnshiya = murniiUtgaUnshiya;
