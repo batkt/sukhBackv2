@@ -240,11 +240,12 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
       const unitGereeMap = {};
       /** harilsagchiinId → машины дугааруудын массив */
       const mashinMap = {};
+      /** Хуудасны харилцагчдын id — гэрээ ба машины блок ХОЁУЛАА хэрэглэнэ. */
+      const residentIds = jagsaalt.map((r) => r._id.toString());
 
       if (tukhainBaaziinKholbolt) {
         try {
           const GereeModel = Geree(tukhainBaaziinKholbolt);
-          const residentIds = jagsaalt.map((r) => r._id.toString());
           const activeGerees = await GereeModel.find({
             khariltsagchId: { $in: residentIds },
           })
