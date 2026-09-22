@@ -42,8 +42,13 @@ const TOLGOINUUD = [
 /** Excel-ийн баганын өргөн (TOLGOINUUD-ийн дараалалтай нийцнэ). */
 const BAGANANII_URGUN = [15, 18, 12, 24, 10, 18, 18, 22, 16, 14, 20, 24];
 
-/** Заавал бөглөх багануудын Excel дугаар (1-ээс). */
-const ZAAVAL_BAGANA = [2, 3, 6];
+/**
+ * Заавал бөглөх багануудын Excel дугаар (1-ээс).
+ *
+ * Зөвхөн «Нэр» (2). Өмнө нь «Утас» (3) ба «Зогсоолын дугаар» (6) ч
+ * орсон байсныг хассан — харилцагч дээр тэдгээр нь сул талбар.
+ */
+const ZAAVAL_BAGANA = [2];
 
 /** "B1", "b2" гэх мэт хонгилын давхар эсэхийг шалгана. */
 const doodDavkharEsekh = (d) => /^b\d+$/i.test(String(d || "").trim());
@@ -198,12 +203,15 @@ function murniiUtgaUnshiya(mur) {
   );
 
   const aldaanuud = [];
+  // Зөвхөн НЭР шаардлагатай. Харилцагч дээр утас, зогсоол/агуулахын дугаар
+  // байхгүй байх нь хэвийн (жишээ нь зөвхөн гэрээ бүртгэх, дараа нь тоот
+  // нэмэх) тул тэднийг албадахгүй.
   if (!ner) aldaanuud.push("Нэр");
-  if (!utas) aldaanuud.push("Утас");
-  else if (!/^\d+$/.test(utas)) aldaanuud.push("Утас буруу");
-  else if (utas.length !== 8) aldaanuud.push("Утас 8 орон");
-  if (zogsoolnuud.length === 0 && aguulakhnuud.length === 0) {
-    aldaanuud.push("Зогсоол эсвэл агуулахын дугаар");
+  // Утас ОРУУЛСАН бол хэлбэрийг шалгасаар байна — буруу дугаар нь хоосон
+  // байхаас ч дор.
+  if (utas) {
+    if (!/^\d+$/.test(utas)) aldaanuud.push("Утас буруу");
+    else if (utas.length !== 8) aldaanuud.push("Утас 8 орон");
   }
 
   return {
@@ -305,9 +313,9 @@ exports.generateKhariltsagchExcelTemplate = asyncHandler(
 
       [
         ["Нэр", "Заавал. Овог тусдаа баганад байхгүй бол \"Б.Батбаяр\" гэж бичиж болно."],
-        ["Утас", "Заавал. 8 оронтой тоо. Ижил утастай харилцагч аль хэдийн бүртгэлтэй бол шинээр үүсгэхгүй, тоот/машиныг нь нэмж бүртгэнэ."],
+        ["Утас", "Хоосон байж болно. Бөглөвөл 8 оронтой тоо. Ижил утастай харилцагч аль хэдийн бүртгэлтэй бол шинээр үүсгэхгүй, тоот/машиныг нь нэмж бүртгэнэ."],
         ["Давхар", "Зогсоол/агуулах байрлах давхар (B1, B2 ...). Хоосон байж болно."],
-        ["Зогсоолын дугаар", "Зогсоол эсвэл агуулахын аль нэг заавал. Нэг харилцагчид олон зогсоол байвал таслалаар: 12,13,14"],
+        ["Зогсоолын дугаар", "Хоосон байж болно. Нэг харилцагчид олон зогсоол байвал таслалаар: 12,13,14"],
         ["Агуулахын дугаар", "Таслалаар олныг бичиж болно: 5,6"],
         ["Машины дугаар", "Таслалаар олныг бичиж болно: 1234УБА, 5678УНА. Зогсоолын гэрээтэй хамт машин нь бүртгэгдэнэ."],
         ["Эхний үлдэгдэл", "Гэрээний эхний үлдэгдэл. Хоосон бол 0."],
@@ -442,7 +450,14 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
         // ── Ижил утастай харилцагч байвал нэмж бүртгэнэ ───────────────────
         // `utas` нь khariltsagch дээр unique тул шинээр үүсгэвэл 11000 алдаа
         // гарна. Тиймээс байгаа бичлэг дээрээ тоот/машиныг нэмнэ.
-        let khariltsagch = await KhariltsagchModel.findOne({ utas });
+        //
+        // ЧУХАЛ: утас хоосон үед хайлт хийж БОЛОХГҮЙ. `findOne({ utas: "" })`
+        // нь утасгүй ӨӨР харилцагчийг олж, тоот/машиныг тэр хүн дээр нэмнэ;
+        // `undefined` бол Mongoose талбарыг хаяж `findOne({})` болгож ДУРЫН
+        // харилцагч буцаана. Хоёулаа өгөгдлийг хольж эвдэнэ.
+        let khariltsagch = utas
+          ? await KhariltsagchModel.findOne({ utas })
+          : null;
 
         // ── Тоот давхардлын шалгалт ───────────────────────────────────────
         // `turul`-ыг нь тулгах нь ЗААВАЛ: зогсоолын "5" ба агуулахын "5" нь
@@ -491,16 +506,20 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
         }
 
         // ── Харилцагчийг үүсгэх / шинэчлэх ────────────────────────────────
-        const undsenToot = tootuud[0];
+        // Зогсоол/агуулах шаардлагагүй болсон тул `tootuud` хоосон байж
+        // болно — `tootuud[0].toot` нь тэр үед гацна.
+        const undsenToot = tootuud[0] || null;
 
         if (!khariltsagch) {
           khariltsagch = new KhariltsagchModel({
             ovog,
             ner,
-            utas,
+            // Хоосон мөр бичвэл sparse unique индекст ОРДОГ тул хоёр дахь
+            // утасгүй харилцагч E11000 өгнө. Иймд утас байхгүй бол талбарыг
+            // бүр тавихгүй — индекс тухайн бичлэгийг тооцохгүй.
+            ...(utas ? { utas, nevtrekhNer: utas } : {}),
             mail,
             nuutsUg: "1234",
-            nevtrekhNer: utas,
             baiguullagiinId: baiguullaga._id.toString(),
             baiguullagiinNer: baiguullaga.ner,
             barilgiinId: undsenBarilgiinId,
@@ -509,7 +528,7 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
             bairniiNer: targetBarilga.ner || "",
             davkhar: davkhar || "",
             orts: "1",
-            toot: undsenToot.toot,
+            toot: undsenToot ? undsenToot.toot : "",
             tailbar,
             ekhniiUldegdel,
             khonogoorBodokhEsekh,
@@ -528,7 +547,8 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
           if (!khariltsagch.barilgiinId) {
             khariltsagch.barilgiinId = undsenBarilgiinId;
           }
-          if (!khariltsagch.toot) khariltsagch.toot = undsenToot.toot;
+          if (!khariltsagch.toot && undsenToot)
+            khariltsagch.toot = undsenToot.toot;
           if (!khariltsagch.davkhar && davkhar) khariltsagch.davkhar = davkhar;
 
           // Нэр солигдвол тоот тус бүрийн хуулбарыг нь нийцүүлнэ.
@@ -615,7 +635,7 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
             ezemshigch: khariltsagch,
             dugaaruud: mashinuud,
             barilgiinId: undsenBarilgiinId,
-            toot: undsenToot.toot,
+            toot: undsenToot ? undsenToot.toot : "",
             utas,
             zochinTurul: "Оршин суугч",
           });

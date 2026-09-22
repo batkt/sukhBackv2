@@ -508,6 +508,27 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
       req.body.toots = req.body.units;
     }
 
+    // ── Утасыг хэвийн болгоно ─────────────────────────────────────────────
+    // Модал `utas`-ыг МАССИВААР илгээдэг (`utas: [value]`), модел нь String.
+    // Харилцагч дээр утас нь СУЛ талбар болсон тул хоосон тохиолдол гарна.
+    //
+    // Хоосон МӨР бичих нь болохгүй: `{ utas: 1 }` индекс нь unique + sparse
+    // бөгөөд sparse нь талбар БАЙХГҮЙ бичлэгийг л тооцохгүй — `""` нь
+    // индекст ОРНО. Иймд хоёр дахь утасгүй харилцагч E11000 өгнө. Талбарыг
+    // бүр хасаж, индексийг тойруулна.
+    {
+      const utasRaw = Array.isArray(req.body.utas)
+        ? req.body.utas[0]
+        : req.body.utas;
+      const utasTsever = utasRaw ? String(utasRaw).trim() : "";
+      if (utasTsever) req.body.utas = utasTsever;
+      else {
+        delete req.body.utas;
+        // `nevtrekhNer` нь утаснаас үүсдэг тул хамт хоосон болно
+        if (!req.body.nevtrekhNer) delete req.body.nevtrekhNer;
+      }
+    }
+
     const toot = req.body.toot ? String(req.body.toot).trim() : "";
     const davkhar = req.body.davkhar ? String(req.body.davkhar).trim() : "";
     const barilgiinId = req.body.barilgiinId
