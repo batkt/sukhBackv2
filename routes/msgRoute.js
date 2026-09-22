@@ -18,7 +18,7 @@ const MsgTuukh = require("../models/msgTuukh");
  *
  * Дахин нээхдээ доорх массиваас id-г нь хасна.
  */
-const TULBURIIN_SMS_KHAASAN = ["6a97d3afaf2ad1911035e063"];
+const TULBURIIN_SMS_KHAASAN = [""];
 
 const smsKhaasanUu = (baiguullagiinId) =>
   TULBURIIN_SMS_KHAASAN.includes(String(baiguullagiinId || ""));
