@@ -9,6 +9,7 @@ const {
   EzenUrisanMashin
 } = require("sukhParking-v1");
 const OrshinSuugch = require("../models/orshinSuugch");
+const Khariltsagch = require("../models/khariltsagch");
 const Geree = require("../models/geree");
 const router = express.Router();
 const { tokenShalgakh, crud, UstsanBarimt, db } = require("zevbackv2");
@@ -2041,7 +2042,12 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
      * @param {object|null} p машины бичлэг (машингүй бол null)
      * @param {string[]} ezniiDugaaruud эзний БҮХ дугаар (мөрд хамт явна)
      */
-    const ezniiMurBelgeye = (resObj, p, ezniiDugaaruud) => ({
+    const ezniiMurBelgeye = (
+      resObj,
+      p,
+      ezniiDugaaruud,
+      undsenTurul = "Оршин суугч",
+    ) => ({
       _id: p?._id || resObj._id,
       ezemshigchiinId: resObj._id,
       createdAt: p?.createdAt || resObj.createdAt,
@@ -2055,7 +2061,7 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
       // Эзний бүх машин — UI дээр "1/3" гэх мэт тоолуур харуулахад
       ezniiMashinuud: ezniiDugaaruud,
       mashiniiToo: ezniiDugaaruud.length,
-      zochinTurul: (p?.zochinTurul === "Үйлчлүүлэгч" || p?.turul === "Үйлчлүүлэгч") ? "СӨХ" : (p?.zochinTurul || p?.turul || "Оршин суугч"),
+      zochinTurul: (p?.zochinTurul === "Үйлчлүүлэгч" || p?.turul === "Үйлчлүүлэгч") ? "СӨХ" : (p?.zochinTurul || p?.turul || undsenTurul),
       zochinTailbar: p?.zochinTailbar || "",
       ezenToot: p?.ezenToot || resObj.toot || (resObj.toots && resObj.toots[0]?.toot) || "",
       orts: resObj.orts || (resObj.toots && resObj.toots[0]?.orts) || "",
@@ -2094,6 +2100,110 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
           fullMergedData.push(ezniiMurBelgeye(resObj, p, dugaaruud));
         });
     });
+
+    // ── Харилцагч ─────────────────────────────────────────────────────
+    // Энэ endpoint нь зөвхөн `orshinSuugch` коллекцийг уншдаг байсан тул
+    // «Харилцагч» шүүлтүүр ҮРГЭЛЖ хоосон байв — харилцагч нь тусдаа
+    // коллекцид (`khariltsagch`) хадгалагддаг.
+    //
+    // Гэрээ ШААРДАХГҮЙ: оршин суугчийг идэвхтэй гэрээгээр хязгаарладаг ч
+    // харилцагчийн «Гадна зогсоол» урсгал гэрээ үүсгэдэггүй тул гэрээ
+    // шаардвал яг тэднийг нуих байсан.
+    //
+    // Машингүй харилцагч ч мөр болж гарна — дугаар нь "БҮРТГЭЛГҮЙ" гэж
+    // харагдаж, машин нэмэх боломж үлдэнэ.
+    if (
+      (!turulShuult || turulShuult === "Харилцагч") &&
+      !req.query.orts // орц нь орон сууцны шинж — харилцагчид хамааралгүй
+    ) {
+      try {
+        const kharShalgalt = [{ baiguullagiinId: String(baiguullagiinId) }];
+        if (barilgiinId) {
+          kharShalgalt.push({
+            $or: [
+              { barilgiinId: String(barilgiinId) },
+              { "toots.barilgiinId": String(barilgiinId) },
+            ],
+          });
+        }
+        if (req.query.search) {
+          const regex = new RegExp(req.query.search, "i");
+          kharShalgalt.push({
+            $or: [
+              { ner: regex },
+              { ovog: regex },
+              { utas: regex },
+              { toot: regex },
+              { "toots.toot": regex },
+            ],
+          });
+        }
+        if (req.query.toot) {
+          const tootRegex = new RegExp(req.query.toot, "i");
+          kharShalgalt.push({
+            $or: [{ toot: tootRegex }, { "toots.toot": tootRegex }],
+          });
+        }
+
+        const khariltsagchid = await Khariltsagch(db.erunkhiiKholbolt)
+          .find({ $and: kharShalgalt })
+          .sort({ createdAt: -1 })
+          .lean();
+
+        if (khariltsagchid.length > 0) {
+          const kharIds = khariltsagchid.map((k) => String(k._id));
+          const kharMashin = await Mashin(tukhainBaaziinKholbolt)
+            .find({
+              $or: [
+                { ezemshigchiinId: { $in: kharIds } },
+                { orshinSuugchiinId: { $in: kharIds } },
+              ],
+            })
+            .lean();
+
+          const kharMap = {};
+          kharMashin.forEach((mp) => {
+            const ezen = String(mp.ezemshigchiinId || mp.orshinSuugchiinId || "");
+            if (!ezen) return;
+            if (!kharMap[ezen]) kharMap[ezen] = [];
+            kharMap[ezen].push(mp);
+          });
+
+          khariltsagchid.forEach((k) => {
+            const mashinuud = kharMap[String(k._id)] || [];
+            const dugaaruud = Array.from(
+              new Set(
+                mashinuud
+                  .map((m) =>
+                    String(m.dugaar || m.mashiniiDugaar || "")
+                      .trim()
+                      .toUpperCase(),
+                  )
+                  .filter((d) => d && d !== "БҮРТГЭЛГҮЙ" && d !== "-"),
+              ),
+            );
+
+            if (mashinuud.length === 0) {
+              fullMergedData.push(
+                ezniiMurBelgeye(k, null, dugaaruud, "Харилцагч"),
+              );
+              return;
+            }
+
+            mashinuud
+              .slice()
+              .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+              .forEach((mp) => {
+                fullMergedData.push(
+                  ezniiMurBelgeye(k, mp, dugaaruud, "Харилцагч"),
+                );
+              });
+          });
+        }
+      } catch (err) {
+        console.error("Харилцагчийг жагсаалтад нэмэхэд алдаа:", err);
+      }
+    }
 
     // 5. Add standalone cars (like Sukh/Staff) or cars matching search term not covered by resident search
     allParkingRecords.forEach(p => {
