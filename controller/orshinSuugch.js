@@ -3927,7 +3927,7 @@ exports.dugaarBatalgaajuulya = asyncHandler(async (req, res, next) => {
         10,
       );
 
-    var text = `AmarSukh: Tany batalgaajuulax code: ${batalgaajuulkhCodeDoc.code}.`;
+    var text = `Tany batalgaajuulax code: ${batalgaajuulkhCodeDoc.code}.`;
 
     var ilgeexList = [
       {
