@@ -309,24 +309,59 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
         }
 
         try {
+          // ── Машины дугаарыг ХОЁР коллекциос цуглуулна ─────────────────
+          // Дугаар нэг газар байхгүй:
+          //   • `orshinSuugchMashin` — Excel импорт ба `mashinuudBurtgeye`
+          //     эндээс бичдэг (хаалга, зочин урих, квот үүнийг уншдаг)
+          //   • `mashin`             — хаалга/камерын бичлэг
+          // Модалаар эрт орсон бичлэгүүд нь `mashin` дээр
+          // `dugaar: "БҮРТГЭЛГҮЙ"` гэсэн дүүргэгчтэй байдаг тул зөвхөн
+          // `mashin`-г уншвал дугаартай харилцагч ч хоосон харагдана.
+          //
+          // Эзэмшигчийн id нь хоёр талбарын аль нэгэнд байж болно
+          // (`orshinSuugchiinId` нь `ezemshigchiinId`-ийн alias).
+          const ezniiShalgalt = {
+            $or: [
+              { orshinSuugchiinId: { $in: residentIds } },
+              { ezemshigchiinId: { $in: residentIds } },
+            ],
+          };
+
+          const nemye = (ezen, dugaar) => {
+            const d = String(dugaar || "").trim();
+            // "БҮРТГЭЛГҮЙ" нь дугаар БАЙХГҮЙ гэсэн дүүргэгч
+            if (!d || d === "БҮРТГЭЛГҮЙ") return;
+            const e = String(ezen || "");
+            if (!e) return;
+            if (!mashinMap[e]) mashinMap[e] = [];
+            if (!mashinMap[e].includes(d)) mashinMap[e].push(d);
+          };
+
+          const OSMModel = require("../models/orshinSuugchMashin")(
+            tukhainBaaziinKholbolt,
+          );
           const MashinModel = require("../models/mashin")(
             tukhainBaaziinKholbolt,
           );
-          const mashinuud = await MashinModel.find({
-            ezemshigchiinId: { $in: residentIds },
-          })
-            .select("ezemshigchiinId dugaar")
-            .lean();
 
-          mashinuud.forEach((m) => {
-            const dugaar = String(m?.dugaar || "").trim();
-            // "БҮРТГЭЛГҮЙ" нь дугаар БАЙХГҮЙ гэсэн дүүргэгч — хоосон гэж үзнэ
-            if (!dugaar || dugaar === "БҮРТГЭЛГҮЙ") return;
-            const ezen = String(m.ezemshigchiinId || "");
-            if (!ezen) return;
-            if (!mashinMap[ezen]) mashinMap[ezen] = [];
-            if (!mashinMap[ezen].includes(dugaar)) mashinMap[ezen].push(dugaar);
-          });
+          const [osmuud, mashinuud] = await Promise.all([
+            OSMModel.find(ezniiShalgalt)
+              .select("orshinSuugchiinId mashiniiDugaar")
+              .lean(),
+            MashinModel.find(ezniiShalgalt)
+              .select("ezemshigchiinId orshinSuugchiinId dugaar mashiniiDugaar")
+              .lean(),
+          ]);
+
+          osmuud.forEach((m) =>
+            nemye(m.orshinSuugchiinId, m.mashiniiDugaar),
+          );
+          mashinuud.forEach((m) =>
+            nemye(
+              m.ezemshigchiinId || m.orshinSuugchiinId,
+              m.dugaar || m.mashiniiDugaar,
+            ),
+          );
         } catch (err) {
           console.error("Error fetching mashin data:", err);
         }
