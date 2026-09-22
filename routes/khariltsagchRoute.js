@@ -238,6 +238,8 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
       );
       const gereeMap = {};
       const unitGereeMap = {};
+      /** harilsagchiinId → машины дугааруудын массив */
+      const mashinMap = {};
 
       if (tukhainBaaziinKholbolt) {
         try {
@@ -305,11 +307,37 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
         } catch (err) {
           console.error("Error fetching authoritative geree data:", err);
         }
+
+        try {
+          const MashinModel = require("../models/mashin")(
+            tukhainBaaziinKholbolt,
+          );
+          const mashinuud = await MashinModel.find({
+            ezemshigchiinId: { $in: residentIds },
+          })
+            .select("ezemshigchiinId dugaar")
+            .lean();
+
+          mashinuud.forEach((m) => {
+            const dugaar = String(m?.dugaar || "").trim();
+            // "БҮРТГЭЛГҮЙ" нь дугаар БАЙХГҮЙ гэсэн дүүргэгч — хоосон гэж үзнэ
+            if (!dugaar || dugaar === "БҮРТГЭЛГҮЙ") return;
+            const ezen = String(m.ezemshigchiinId || "");
+            if (!ezen) return;
+            if (!mashinMap[ezen]) mashinMap[ezen] = [];
+            if (!mashinMap[ezen].includes(dugaar)) mashinMap[ezen].push(dugaar);
+          });
+        } catch (err) {
+          console.error("Error fetching mashin data:", err);
+        }
       }
 
       jagsaalt.forEach((mur) => {
         mur.key = mur._id;
         const authoritativeGeree = gereeMap[mur._id.toString()];
+        const mashinuud = mashinMap[mur._id.toString()] || [];
+        mur.mashinuud = mashinuud;
+        mur.mashiniiDugaar = mashinuud.join(", ");
 
         // If query has baiguullagiinId, ensure the returned object reflects that organization's data
         if (targetBaiguullagiinId && Array.isArray(mur.toots)) {
