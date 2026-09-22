@@ -667,6 +667,48 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
             });
           }
 
+          // --- МАШИНЫ ДУГААР: бүрэн бүртгэл ------------------------------
+          // Өмнө нь доорх AUTO-ZOCHIN блок нь зөвхөн байгууллагын баазын
+          // `mashin`-д бичдэг байсан тул төв баазын `orshinSuugchMashin`-д
+          // хүрдэггүй — апп, хаалга, зочин урих эрх машиныг ХАРДАГГҮЙ байв.
+          // Мөн `zochinTokhirgoo` тохируулаагүй бол дугаар чимээгүй хаягддаг.
+          //
+          // Excel импорт хэрэглэдэг яг тэр функцээр бүртгэнэ: гурван
+          // коллекц, машины хязгаар, таслалаар олон дугаар.
+          //
+          // ДАРААЛАЛ ЧУХАЛ: доорх AUTO-ZOCHIN нь `ezemshigchiinId`-аар
+          // байгаа эсэхийг шалгадаг тул үүнийг ӨМНӨ нь ажиллуулбал
+          // `"БҮРТГЭЛГҮЙ"` давхар бичлэг үүсэхгүй.
+          if (String(req.body.mashiniiDugaar || "").trim()) {
+            try {
+              const { mashinuudBurtgeye } = require("../utils/mashinBurtgel");
+              const { EZEMSHIGCH } = require("../models/khariltsagchMashin");
+              const mashiniiKhariu = await mashinuudBurtgeye({
+                erunkhiiKholbolt: db.erunkhiiKholbolt,
+                tukhainBaaziinKholbolt,
+                baiguullaga,
+                ezemshigch: result,
+                dugaaruud: req.body.mashiniiDugaar,
+                barilgiinId: String(barilgiinId),
+                toot: result.toot || req.body.toot || "",
+                utas: result.utas || "",
+                zochinTurul: "Оршин суугч",
+                ezemshigchiinTurul: EZEMSHIGCH.KHARILTSAGCH,
+              });
+              if (mashiniiKhariu.aldaa.length > 0) {
+                console.error(
+                  "[khariltsagch] машин бүртгэхэд алдаа:",
+                  mashiniiKhariu.aldaa.join(", "),
+                );
+              }
+            } catch (mashinAldaa) {
+              console.error(
+                "[khariltsagch] mashinuudBurtgeye:",
+                mashinAldaa.message,
+              );
+            }
+          }
+
           // --- AUTO CREATE GUEST SETTINGS (khariltsagchMashin) ---
           // Moved OUTSIDE if(!geree) to ensure all new residents get settings
           try {
@@ -712,10 +754,11 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
                   ezemshigchiinUtas: result.utas,
                   baiguullagiinId: baiguullagiinId.toString(),
                   barilgiinId: barilgiinId.toString(),
-                  dugaar:
-                    req.body.mashiniiDugaar ||
-                    req.body.dugaar ||
-                    "БҮРТГЭЛГҮЙ",
+                  // Жинхэнэ дугаарыг дээрх `mashinuudBurtgeye` бүртгэдэг
+                  // болсон. Энэ блок нь зөвхөн ДУГААРГҮЙ харилцагчид зочны
+                  // тохиргоо (квот, үнэгүй минут) үүсгэх нөөц болж үлдэнэ —
+                  // эндээс дугаар бичвэл давхар бичлэг үүснэ.
+                  dugaar: "БҮРТГЭЛГҮЙ",
                   ezenToot: result.toot || req.body.toot || "",
                   zochinUrikhEsekh:
                     defaultSettings.zochinUrikhEsekh !== false,
@@ -1128,6 +1171,48 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
               },
               { $set: mashinUpdateData }
             );
+          }
+
+          // ── Дугаар засагдвал БҮРЭН бүртгэлээ шинэчилнэ ──────────────────
+          // Дээрх `updateMany` нь зөвхөн байгууллагын баазын `mashin`-д
+          // хүрдэг. Төв баазын `orshinSuugchMashin` хоцорвол апп/хаалга
+          // ХУУЧИН дугаарыг л мэдсээр байна.
+          if (String(req.body.mashiniiDugaar || "").trim()) {
+            try {
+              const { mashinuudBurtgeye } = require("../utils/mashinBurtgel");
+              const { EZEMSHIGCH } = require("../models/khariltsagchMashin");
+              // `baiguullaga` нь дээр (гэрээ синк хийхэд) аль хэдийн
+              // татагдсан — давхар query илгээхгүй.
+              if (baiguullaga) {
+                const khariu = await mashinuudBurtgeye({
+                  erunkhiiKholbolt: db.erunkhiiKholbolt,
+                  tukhainBaaziinKholbolt,
+                  baiguullaga,
+                  ezemshigch: result,
+                  dugaaruud: req.body.mashiniiDugaar,
+                  barilgiinId: String(
+                    req.body.barilgiinId || result.barilgiinId || "",
+                  ),
+                  toot: req.body.toot || result.toot || "",
+                  utas: Array.isArray(req.body.utas)
+                    ? req.body.utas[0] || ""
+                    : req.body.utas || result.utas || "",
+                  zochinTurul: "Оршин суугч",
+                  ezemshigchiinTurul: EZEMSHIGCH.KHARILTSAGCH,
+                });
+                if (khariu.aldaa.length > 0) {
+                  console.error(
+                    "[khariltsagch PUT] машин:",
+                    khariu.aldaa.join(", "),
+                  );
+                }
+              }
+            } catch (mashinAldaa) {
+              console.error(
+                "[khariltsagch PUT] mashinuudBurtgeye:",
+                mashinAldaa.message,
+              );
+            }
           }
         }
       }

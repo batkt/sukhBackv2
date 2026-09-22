@@ -72,6 +72,9 @@ function zochinTokhirgooOlya(baiguullaga, barilgiinId) {
  * @param {string} [p.toot] Эзний тоот (зогсоолын дугаар ч байж болно)
  * @param {string} [p.utas]
  * @param {string} [p.zochinTurul]
+ * @param {"OrshinSuugch"|"Khariltsagch"} [p.ezemshigchiinTurul] Эзэмшигч хэн
+ *   бэ. Коллекц нь хоёуланг агуулдаг тул ялгаж бичнэ —
+ *   `models/khariltsagchMashin.js` харна уу.
  * @returns {Promise<{shine: string[], shinechilsen: string[], aldaa: string[]}>}
  */
 async function mashinuudBurtgeye({
@@ -84,6 +87,7 @@ async function mashinuudBurtgeye({
   toot,
   utas,
   zochinTurul = "Оршин суугч",
+  ezemshigchiinTurul = "OrshinSuugch",
 }) {
   const khariu = { shine: [], shinechilsen: [], aldaa: [] };
 
@@ -137,6 +141,7 @@ async function mashinuudBurtgeye({
       if (!baigaa) {
         await TuvOSM.create({
           orshinSuugchiinId: ezemshigchiinId,
+          ezemshigchiinTurul,
           baiguullagiinId,
           barilgiinId,
           mashiniiDugaar: dugaar,
@@ -150,6 +155,7 @@ async function mashinuudBurtgeye({
         baigaa.orshinSuugchiinId !== ezemshigchiinId
       ) {
         baigaa.orshinSuugchiinId = ezemshigchiinId;
+        baigaa.ezemshigchiinTurul = ezemshigchiinTurul;
         baigaa.ezenToot = ezenToot || baigaa.ezenToot;
         baigaa.barilgiinId = barilgiinId || baigaa.barilgiinId;
         await baigaa.save();
@@ -170,6 +176,7 @@ async function mashinuudBurtgeye({
         if (!baigaa) {
           await BaaziinOSM.create({
             orshinSuugchiinId: ezemshigchiinId,
+            ezemshigchiinTurul,
             baiguullagiinId,
             barilgiinId,
             mashiniiDugaar: dugaar,
@@ -182,6 +189,7 @@ async function mashinuudBurtgeye({
           baigaa.orshinSuugchiinId !== ezemshigchiinId
         ) {
           baigaa.orshinSuugchiinId = ezemshigchiinId;
+          baigaa.ezemshigchiinTurul = ezemshigchiinTurul;
           baigaa.ezenToot = ezenToot || baigaa.ezenToot;
           baigaa.barilgiinId = barilgiinId || baigaa.barilgiinId;
           await baigaa.save();

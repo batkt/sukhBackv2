@@ -638,6 +638,7 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
             toot: undsenToot ? undsenToot.toot : "",
             utas,
             zochinTurul: "Оршин суугч",
+            ezemshigchiinTurul: "Khariltsagch",
           });
         }
 

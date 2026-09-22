@@ -64,6 +64,20 @@ const khariltsagchSchema = new Schema(
     davkhar: String, // Keep for backward compatibility
     bairniiNer: String, // Keep for backward compatibility
     tailbar: String,
+    /**
+     * ГАДНА зогсоолын харилцагч эсэх.
+     *
+     * `true` бол гараж/агуулахын тоот БҮРТГЭХГҮЙГЭЭР хадгалагдана —
+     * машин нь гадна зогсоол хэрэглэдэг тул `toots` хоосон байна.
+     *
+     * Улмаар `syncResidentContracts` нь тоотоос гэрээ үүсгэдэг тул гэрээ,
+     * нэхэмжлэх ч үүсэхгүй: гадна зогсоолын төлбөр нь зогсоолын системээр
+     * (орсон/гарсан тутам) бодогддог, сарын гэрээгээр биш.
+     */
+    gadnaZogsoolEsekh: {
+      type: Boolean,
+      default: false,
+    },
     taniltsuulgaKharakhEsekh: {
       type: Boolean,
       default: true,
