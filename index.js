@@ -50,6 +50,7 @@ const biTailanRoute = require("./routes/biTailanRoute");
 const auditRoute = require("./routes/auditRoute");
 const transformationRoute = require("./routes/transformationRoute");
 const walletQpayRoute = require("./routes/walletQpayRoute");
+const walletTailanRoute = require("./routes/walletTailanRoute");
 const appVersionRoute = require("./routes/appVersionRoute");
 const blogRoute = require("./routes/blogRoute");
 const cameraRoute = require("./routes/cameraRoute");
@@ -305,6 +306,9 @@ app.use("/wallet", walletRoute);
 app.use(cameraRoute);
 app.use(neeyeRoute);
 app.use(walletQpayRoute);
+// Хэтэвчний тайлан (zevtabs «Amarhome» цэс). Доорх зурагны catch-all
+// (`/:baiguullagiinId/:ner`)-аас ӨМНӨ байх ёстой.
+app.use(walletTailanRoute);
 app.use(baiguullagaRoute);
 app.use(ajiltanRoute);
 app.use(licenseRoute);
