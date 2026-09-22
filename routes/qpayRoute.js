@@ -3536,8 +3536,19 @@ async function sanuulgaSmsIlgeeye(invoiceId) {
       return { success: false, message: "Нэхэмжлэх олдсонгүй." };
     }
 
-    if (!invoice.utas || !invoice.utas.length) {
-      return { success: false, message: "Оршин суугчийн утасны дугаар олдсонгүй." };
+    // `utas` дотор зай, null, хоосон мөр тохиолддог. Өмнө нь зөвхөн
+    // `!phone` гэж шалгадаг тул `" "` нь өнгөрч, CallPro
+    // `400 invalid phone number` буцаадаг байв — хэрэглэгч «Request
+    // failed with status code 400» гэсэн тайлбаргүй алдаа хардаг.
+    const dugaaruud = (Array.isArray(invoice.utas) ? invoice.utas : [invoice.utas])
+      .map((d) => String(d ?? "").replace(/\s+/g, ""))
+      .filter((d) => /^\d{8}$/.test(d));
+
+    if (dugaaruud.length === 0) {
+      return {
+        success: false,
+        message: "Оршин суугчийн утасны дугаар буруу эсвэл олдсонгүй.",
+      };
     }
 
     // 1. Calculate overall outstanding balance
@@ -3604,14 +3615,13 @@ async function sanuulgaSmsIlgeeye(invoiceId) {
     const activeUrl = "https://api-text.callpro.mn/v1/sms/send";
 
     const axios = require("axios");
-    const sendPromises = invoice.utas.map(async (phone) => {
-      if (!phone) return;
+    const sendPromises = dugaaruud.map(async (phone) => {
       try {
         const response = await axios.post(activeUrl, {
           key: key,
           from: dugaar,
-        brand: 234, // AmarHome — CallPro-ийн илгээгч нэр
-          to: phone.trim().toString(),
+          brand: 234, // AmarHome — CallPro-ийн илгээгч нэр
+          to: phone,
           text: msgText,
         }, {
           headers: {
@@ -3629,7 +3639,7 @@ async function sanuulgaSmsIlgeeye(invoiceId) {
           await MsgTuukhModel.create({
             baiguullagiinId: invoice.baiguullagiinId,
             barilgiinId: invoice.barilgiinId || "",
-            dugaar: [phone.trim()],
+            dugaar: [phone],
             gereeniiId: invoice.gereeniiId || "",
             msg: msgText,
             msgIlgeekhKey: key,
@@ -3641,12 +3651,26 @@ async function sanuulgaSmsIlgeeye(invoiceId) {
 
         return response.data;
       } catch (err) {
-        console.error(`❌ Failed to send SMS to ${phone}:`, err.message);
-        throw err;
+        const callproAldaa =
+          err?.response?.data?.error ||
+          err?.response?.data?.message ||
+          err.message;
+        console.error(`❌ Failed to send SMS to ${phone}:`, callproAldaa);
+        throw new Error(`${phone}: ${callproAldaa}`);
       }
     });
 
-    await Promise.all(sendPromises);
+    // Нэг дугаар унасан ч бусад нь илгээгдсэн бол ХЭСЭГЧЛЭН амжилт.
+    // `Promise.all` нь эхний уналт дээр бусдын үр дүнг хаядаг.
+    const durslel = await Promise.allSettled(sendPromises);
+    const unasan = durslel.filter((d) => d.status === "rejected");
+
+    if (unasan.length === durslel.length) {
+      return {
+        success: false,
+        message: unasan.map((d) => d.reason?.message).join("; "),
+      };
+    }
 
     return {
       success: true,
