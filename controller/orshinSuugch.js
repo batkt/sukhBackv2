@@ -1719,7 +1719,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
               // Send SMS
               var msgIlgeekhKey = "aa8e588459fdd9b7ac0b809fc29cfae3";
               var msgIlgeekhDugaar = "72002002";
-              var smsText = `AmarSukh: Tany nevtrekh batalgaajuulax code: ${verificationCodeDoc.code}.`;
+              var smsText = `Tany nevtrekh batalgaajuulax code: ${verificationCodeDoc.code}.`;
 
               var ilgeexList = [
                 {
@@ -4192,7 +4192,7 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
               }).sort({ updatedAt: -1 });
 
               if (car) foundPlate = car.dugaar || car.mashiniiDugaar;
-            } catch (mErr) {}
+            } catch (mErr) { }
           }
 
           // 2. Try OrshinSuugchMashin in central or tenant DB
@@ -4205,7 +4205,7 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
               }).sort({ updatedAt: -1 });
 
               if (osmDoc) foundPlate = osmDoc.mashiniiDugaar;
-            } catch (oErr) {}
+            } catch (oErr) { }
           }
 
           if (foundPlate) {
@@ -4242,8 +4242,8 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
         const mashiniiKholbolt =
           mashiniiOrgId && db.kholboltuud
             ? db.kholboltuud.find(
-                (k) => String(k.baiguullagiinId) === String(mashiniiOrgId),
-              )
+              (k) => String(k.baiguullagiinId) === String(mashiniiOrgId),
+            )
             : null;
 
         const bukhMashin = await ezniiMashinuudOlya({
@@ -4333,6 +4333,7 @@ function msgIlgeeye(
       body: {
         key: key,
         from: dugaar,
+        brand: 234, // AmarHome — CallPro-ийн илгээгч нэр
         to: jagsaalt[index].to.toString(),
         text: jagsaalt[index].text.toString()
       },

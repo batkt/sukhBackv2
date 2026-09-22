@@ -603,6 +603,7 @@ function msgIlgeeye(
       body: {
         key: key,
         from: dugaar,
+        brand: 234, // AmarHome — CallPro-ийн илгээгч нэр
         to: jagsaalt[index].to.toString(),
         text: jagsaalt[index].text.toString()
       },

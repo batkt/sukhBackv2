@@ -64,7 +64,7 @@ async function undsenEzemshigchAvya(req) {
             undsen = found;
             break;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
     if (undsen) return undsen;
@@ -194,7 +194,7 @@ async function kodIlgeeye(utas, undsen, kholbolt) {
     [undsen.ovog, undsen.ner].filter(Boolean).join(" ") || undsen.utas || "";
 
   const text =
-    `AmarSukh: ${urisenNer} tanig ger buliin gishuunee urij baina. ` +
+    `${urisenNer} tanig ger buliin gishuunee urij baina. ` +
     `Batalgaajuulax code: ${kodDoc.code}.`;
 
   msgIlgeeye(
@@ -385,11 +385,11 @@ exports.urilgaShalgaya = asyncHandler(async (req, res, next) => {
               if (k.baiguullagiinId && !urilga.baiguullagiinId) {
                 urilga.baiguullagiinId = String(k.baiguullagiinId);
               }
-              await urilga.save().catch(() => {});
+              await urilga.save().catch(() => { });
               break;
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -413,10 +413,10 @@ exports.urilgaShalgaya = asyncHandler(async (req, res, next) => {
             if (bCode) {
               urilga = u;
               u.code = code;
-              await u.save().catch(() => {});
+              await u.save().catch(() => { });
               break;
             }
-          } catch (e) {}
+          } catch (e) { }
         }
       }
     }
@@ -502,11 +502,11 @@ exports.gishuunBatalgaajuulya = asyncHandler(async (req, res, next) => {
               if (k.baiguullagiinId && !urilga.baiguullagiinId) {
                 urilga.baiguullagiinId = String(k.baiguullagiinId);
               }
-              await urilga.save().catch(() => {});
+              await urilga.save().catch(() => { });
               break;
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -560,7 +560,7 @@ exports.gishuunBatalgaajuulya = asyncHandler(async (req, res, next) => {
             kholbolt = k;
             break;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
     if (!kholbolt) throw new aldaa("Байгууллагын холболт олдсонгүй!");
@@ -748,7 +748,7 @@ exports.gishuunErkhSoliyo = asyncHandler(async (req, res, next) => {
           { _id: gishuun._id },
           { $set: { gishuuniiErkh: erkh } },
         );
-      } catch (e) {}
+      } catch (e) { }
     }
 
     res.status(200).json({
@@ -830,7 +830,7 @@ exports.gishuunUstgakh = asyncHandler(async (req, res, next) => {
       if (kholbolt) {
         try {
           await OrshinSuugch(kholbolt).deleteOne({ _id: gishuun._id });
-        } catch (e) {}
+        } catch (e) { }
       }
 
       return res.status(200).json({
@@ -903,7 +903,7 @@ exports.gishuunZasakh = asyncHandler(async (req, res, next) => {
             },
           },
         );
-      } catch (e) {}
+      } catch (e) { }
     }
 
     res.status(200).json({

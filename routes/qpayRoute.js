@@ -3601,6 +3601,7 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
         const response = await axios.post(activeUrl, {
           key: key,
           from: dugaar,
+        brand: 234, // AmarHome — CallPro-ийн илгээгч нэр
           to: phone.trim().toString(),
           text: msgText,
         }, {
