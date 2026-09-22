@@ -105,7 +105,15 @@ const baiguullagaSchema = new Schema(
             zochinTailbar: String,
             davtamjiinTurul: String,
             davtamjUtga: Number,
-            orshinSuugchMashiniiLimit: Number
+            orshinSuugchMashiniiLimit: Number,
+            /**
+             * Харилцагч дээр бүртгэж болох машины ДЭЭД тоо.
+             *
+             * Оршин суугчаас ТУСДАА: харилцагч нь зогсоол эзэмшдэг тул машин нь
+             * илүү байх нь хэвийн. Тохируулаагүй бол `orshinSuugchMashiniiLimit`
+             * рүү нөхнө (`utils/mashinBurtgel.js` → `mashiniiKhyazgaarOlya`).
+             */
+            khariltsagchMashiniiLimit: Number,
           },
           bodokhArgaEnabled: {
             type: Boolean,
@@ -289,6 +297,14 @@ const baiguullagaSchema = new Schema(
         davtamjiinTurul: String,
         davtamjUtga: Number,
         orshinSuugchMashiniiLimit: Number,
+        /**
+         * Харилцагч дээр бүртгэж болох машины ДЭЭД тоо.
+         *
+         * Оршин суугчаас ТУСДАА: харилцагч нь зогсоол эзэмшдэг тул машин нь
+         * илүү байх нь хэвийн. Тохируулаагүй бол `orshinSuugchMashiniiLimit`
+         * рүү нөхнө (`utils/mashinBurtgel.js` → `mashiniiKhyazgaarOlya`).
+         */
+        khariltsagchMashiniiLimit: Number,
       },
       bodokhArgaEnabled: {
         type: Boolean,

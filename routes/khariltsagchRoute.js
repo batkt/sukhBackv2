@@ -669,6 +669,9 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
     await result.save();
     if (result != null) result.key = result._id;
 
+    /** Машины хязгаараар хасагдсан бол хэрэглэгчид хэлэх мессеж. */
+    let mashiniiSanuulga = null;
+
     // --- AUTO CREATE CONTRACT & INVOICE (Like Excel Import) ---
     try {
       const { baiguullagiinId, barilgiinId } = req.body;
@@ -732,9 +735,10 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
                 ezemshigchiinTurul: EZEMSHIGCH.KHARILTSAGCH,
               });
               if (mashiniiKhariu.aldaa.length > 0) {
+                mashiniiSanuulga = mashiniiKhariu.aldaa.join("; ");
                 console.error(
                   "[khariltsagch] машин бүртгэхэд алдаа:",
-                  mashiniiKhariu.aldaa.join(", "),
+                  mashiniiSanuulga,
                 );
               }
             } catch (mashinAldaa) {
@@ -840,6 +844,13 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
       // Don't fail the main request if auto-contract fails
     }
 
+    if (mashiniiSanuulga) {
+      // `result` нь mongoose документ тул талбар нэмэхийн оронд
+      // хөрвүүлж, дээр нь сануулгыг залгана.
+      const khariu = result.toObject ? result.toObject() : { ...result };
+      khariu.mashiniiSanuulga = mashiniiSanuulga;
+      return res.send(khariu);
+    }
     res.send(result);
   } catch (error) {
     if (error.code === 11000) {
@@ -856,6 +867,8 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
 
 router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
   try {
+    /** Машины хязгаараар хасагдсан бол хэрэглэгчид хэлэх мессеж. */
+    let mashiniiSanuulgaPut = null;
     // Identify requester to protect sensitive fields on self-updates
     const requesterId = req.body.nevtersenAjiltniiToken?.id || req.body.nevtersenAjiltniiToken?.sub;
     const requesterRole = req.body.nevtersenAjiltniiToken?.erkh;
@@ -1237,9 +1250,10 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
                   ezemshigchiinTurul: EZEMSHIGCH.KHARILTSAGCH,
                 });
                 if (khariu.aldaa.length > 0) {
+                  mashiniiSanuulgaPut = khariu.aldaa.join("; ");
                   console.error(
                     "[khariltsagch PUT] машин:",
-                    khariu.aldaa.join(", "),
+                    mashiniiSanuulgaPut,
                   );
                 }
               }
@@ -1297,6 +1311,11 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
       }
     }
 
+    if (mashiniiSanuulgaPut) {
+      const khariuObj = result.toObject ? result.toObject() : { ...result };
+      khariuObj.mashiniiSanuulga = mashiniiSanuulgaPut;
+      return res.send(khariuObj);
+    }
     res.send(result);
 
     // Emit socket event so web clients refresh resident list in realtime

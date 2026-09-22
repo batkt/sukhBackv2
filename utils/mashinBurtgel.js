@@ -91,7 +91,7 @@ async function mashinuudBurtgeye({
 }) {
   const khariu = { shine: [], shinechilsen: [], aldaa: [] };
 
-  const jagsaalt = Array.isArray(dugaaruud)
+  let jagsaalt = Array.isArray(dugaaruud)
     ? Array.from(
         new Set(
           dugaaruud
@@ -114,6 +114,45 @@ async function mashinuudBurtgeye({
     ? ezemshigch.utas[0] || ""
     : ezemshigch.utas || "";
   const kholbogdokhUtas = utas || ezniiUtas;
+
+  // ── Машины ДЭЭД тоог шалгана ─────────────────────────────────────────
+  // Оршин суугч ба харилцагч тусдаа хязгаартай. 0 бол тохируулаагүй —
+  // тэр үед хязгаарлахгүй (хуучин зан төлөв).
+  const khyazgaar = mashiniiKhyazgaarOlya(
+    baiguullaga,
+    barilgiinId,
+    ezemshigchiinTurul,
+  );
+
+  if (khyazgaar > 0) {
+    const baigaaDugaaruud = await ezniiMashinuudOlya({
+      erunkhiiKholbolt,
+      tukhainBaaziinKholbolt,
+      baiguullagiinId,
+      ezemshigchiinId,
+    });
+    const baigaa = new Set(baigaaDugaaruud);
+
+    // Аль хэдийн бүртгэлтэй дугаарыг дахин оруулах нь ТООЛОГДОХГҮЙ —
+    // тэр нь шинэ машин биш, зөвхөн шинэчлэл.
+    const shineDugaaruud = jagsaalt.filter((d) => !baigaa.has(d));
+    const bolomjtoi = Math.max(0, khyazgaar - baigaa.size);
+
+    if (shineDugaaruud.length > bolomjtoi) {
+      const zovshoorson = new Set([
+        ...jagsaalt.filter((d) => baigaa.has(d)),
+        ...shineDugaaruud.slice(0, bolomjtoi),
+      ]);
+      const khassan = jagsaalt.filter((d) => !zovshoorson.has(d));
+      khariu.aldaa.push(
+        `Машины хязгаар ${khyazgaar} — ${khassan.join(", ")} бүртгэгдсэнгүй ` +
+          `(одоо ${baigaa.size} машинтай)`,
+      );
+      // Хязгаарт багтах хэсгийг л бүртгэнэ
+      jagsaalt = jagsaalt.filter((d) => zovshoorson.has(d));
+      if (jagsaalt.length === 0) return khariu;
+    }
+  }
 
   /** Зочны тохиргооны талбаруудыг нэг дор бэлдэнэ. */
   const zochinTalbaruud = () => ({
@@ -280,18 +319,38 @@ function tokhirgooniiUtga(baiguullaga, barilgiinId, talbar) {
 }
 
 /**
- * Нэг оршин суугч/харилцагч дээр бүртгэж болох машины ДЭЭД тоо.
+ * Нэг эзэн дээр бүртгэж болох машины ДЭЭД тоо.
  *
  * Вебийн «Нэмэлт тохиргоо → Машины бүртгэлийн хязгаар»-аас тохируулна.
- * Байгууллага/барилгын бүх оршин суугчид нэг ижил хамаарна.
+ * Оршин суугч ба харилцагч нь ТУСДАА хязгаартай: харилцагч нь зогсоол
+ * эзэмшдэг тул машин нь илүү байх нь хэвийн.
  *
+ * @param {object} baiguullaga
+ * @param {string} [barilgiinId]
+ * @param {"OrshinSuugch"|"Khariltsagch"} [ezemshigchiinTurul]
  * @returns {number} 0 бол тохируулаагүй — дуудагч тал өөрийн үндсэн утгыг
  *                   шийднэ (хязгаарлахгүй эсвэл 1).
  */
-function mashiniiKhyazgaarOlya(baiguullaga, barilgiinId) {
-  const utga = Number(
-    tokhirgooniiUtga(baiguullaga, barilgiinId, "orshinSuugchMashiniiLimit"),
-  );
+function mashiniiKhyazgaarOlya(
+  baiguullaga,
+  barilgiinId,
+  ezemshigchiinTurul = "OrshinSuugch",
+) {
+  const talbar =
+    ezemshigchiinTurul === "Khariltsagch"
+      ? "khariltsagchMashiniiLimit"
+      : "orshinSuugchMashiniiLimit";
+
+  let utga = Number(tokhirgooniiUtga(baiguullaga, barilgiinId, talbar));
+
+  // Харилцагчийн хязгаар тохируулаагүй бол оршин суугчийнх рүү нөхнө —
+  // эс тэгвээс шинэ тохиргоо гарах хүртэл харилцагч хязгааргүй болно.
+  if (!(Number.isFinite(utga) && utga > 0) && talbar !== "orshinSuugchMashiniiLimit") {
+    utga = Number(
+      tokhirgooniiUtga(baiguullaga, barilgiinId, "orshinSuugchMashiniiLimit"),
+    );
+  }
+
   return Number.isFinite(utga) && utga > 0 ? Math.floor(utga) : 0;
 }
 

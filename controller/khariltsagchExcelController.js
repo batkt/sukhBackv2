@@ -677,7 +677,15 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
           mashinuud: mashiniiKhariu
             ? [...mashiniiKhariu.shine, ...mashiniiKhariu.shinechilsen]
             : [],
-          message: "Амжилттай бүртгэгдлээ",
+          // Машины хязгаараар хасагдсан / бүртгэгдээгүй дугаарууд.
+          // Өмнө нь `aldaa` хаягддаг тул хязгаар чимээгүй ажиллаж,
+          // хэрэглэгч машин орсон гэж боддог байв.
+          mashiniiAldaa: mashiniiKhariu?.aldaa?.length
+            ? mashiniiKhariu.aldaa
+            : undefined,
+          message: mashiniiKhariu?.aldaa?.length
+            ? `Бүртгэгдлээ — ${mashiniiKhariu.aldaa.join("; ")}`
+            : "Амжилттай бүртгэгдлээ",
         });
       } catch (error) {
         durslel.failed.push({
