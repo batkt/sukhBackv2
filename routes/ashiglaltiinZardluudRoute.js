@@ -79,7 +79,98 @@ router.get("/ashiglaltiinZardluudAvya", async (req, res, next) => {
   }
 });
 
-// POST route to sync/cleanup stale zardal entries on existing contracts
+/**
+ * POST /zardalHuulakh — нэг барилгын ашиглалтын зардлыг бусад барилгуудад хуулна.
+ * Body: { baiguullagiinId, ekhUniinBarilgiinId, zoriultBarilguud: [id1, id2, ...] }
+ * Зориулт барилга тус бүрт: хуучин зардлуудыг устгаж, эх барилгынхыг шинээр оруулна.
+ * Model-ийн post hook нь гэрээнүүдийг автоматаар sync хийнэ.
+ */
+router.post("/zardalHuulakh", tokenShalgakh, async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const { baiguullagiinId, ekhUniinBarilgiinId, zoriultBarilguud } = req.body;
+
+    if (!baiguullagiinId) {
+      return res.status(400).send({ success: false, message: "baiguullagiinId is required" });
+    }
+    if (!ekhUniinBarilgiinId) {
+      return res.status(400).send({ success: false, message: "ekhUniinBarilgiinId (source building) is required" });
+    }
+    if (!Array.isArray(zoriultBarilguud) || zoriultBarilguud.length === 0) {
+      return res.status(400).send({ success: false, message: "zoriultBarilguud must be a non-empty array" });
+    }
+
+    const tukhainBaaziinKholbolt = db.kholboltuud.find(
+      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
+    );
+    if (!tukhainBaaziinKholbolt) {
+      return res.status(404).send({ success: false, message: "Organization connection not found" });
+    }
+
+    const ZardalModel = ashiglaltiinZardluud(tukhainBaaziinKholbolt);
+
+    // 1. Эх барилгын бүх зардлыг авна
+    const ekhZardluud = await ZardalModel.find({
+      baiguullagiinId: String(baiguullagiinId),
+      barilgiinId: String(ekhUniinBarilgiinId),
+    }).lean();
+
+    if (ekhZardluud.length === 0) {
+      return res.status(404).send({
+        success: false,
+        message: "Эх барилгад зардал байхгүй байна",
+      });
+    }
+
+    let copiedCount = 0;
+    const updatedBuildings = [];
+
+    // 2. Зориулт барилга тус бүрт хуулна
+    for (const targetBarilgiinId of zoriultBarilguud) {
+      const targetId = String(targetBarilgiinId);
+
+      // Эх барилгатай ижил бол алгасна
+      if (targetId === String(ekhUniinBarilgiinId)) continue;
+
+      // Хуучин зардлуудыг устгана
+      await ZardalModel.deleteMany({
+        baiguullagiinId: String(baiguullagiinId),
+        barilgiinId: targetId,
+      });
+
+      // Эх барилгын зардлуудыг зориулт барилга руу хуулна
+      const newZardluud = ekhZardluud.map((z) => {
+        const { _id, createdAt, updatedAt, __v, ...rest } = z;
+        return {
+          ...rest,
+          barilgiinId: targetId,
+          baiguullagiinId: String(baiguullagiinId),
+        };
+      });
+
+      // insertMany хийхэд model hook тус бүрт ажиллахгүй тул
+      // save() дуудаж hook-ийг гэрээ sync хийлгэнэ
+      for (const zardalData of newZardluud) {
+        const newDoc = new ZardalModel(zardalData);
+        await newDoc.save();
+        copiedCount++;
+      }
+
+      updatedBuildings.push(targetId);
+    }
+
+    res.send({
+      success: true,
+      message: `${updatedBuildings.length} барилгад нийт ${copiedCount} зардал амжилттай хуулагдлаа`,
+      copiedCount,
+      updatedBuildings,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
 router.post("/zardalTseverlekhiya", async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
