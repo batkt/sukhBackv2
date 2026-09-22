@@ -35,6 +35,10 @@ const ajiltanSchema = new Schema(
     zurgiinId: String,
     nevtrekhNer: String,
     albanTushaal: String,
+    // Ажилтны сүүлд сонгосон барилга (толгой дээрх барилга сэлгүүр).
+    // Schema дээр байхгүй үед Mongoose үүнийг чимээгүй хаядаг тул хадгалагдахгүй
+    // байсан — харин хадгалах гэсэн PUT нь ажилтны эрх, барилгыг арчиж байв.
+    defaultBarilga: String,
 
     tokhirgoo: {
       gereeKharakhErkh: [String], //barilgiin id-nuud

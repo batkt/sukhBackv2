@@ -321,6 +321,38 @@ router.post("/ajiltandTokenOnooyo", tokenShalgakh, (req, res, next) => {
   }
 });
 
+// Толгой дээрх барилга сэлгэхэд нэвтэрсэн ажилтны сонголтыг хадгална.
+//
+// Өмнө нь вэб талаас `PUT /ajiltan/:id` рүү `{ _id, defaultBarilga }` гэж
+// илгээдэг байсан нь ХОР ХӨНӨӨЛТЭЙ: `zevbackv2`-ийн PUT нь ирсэн биеэс
+// бүтэн баримт үүсгэдэг тул `barilguud`, `tsonkhniiErkhuud` зэрэг
+// массив талбарууд schema-ийн анхны утга буюу `[]`-ээр дарагдана. Өөрөөр хэлбэл
+// барилга сэлгэх бүрд тухайн ажилтан эрхгүй, барилгагүй болно.
+//
+// Энд ЗӨВХӨН нэг талбарыг, зөвхөн өөрийнх нь бичлэг дээр `$set` хийнэ.
+router.post(
+  "/ajiltniiDefaultBarilgaZasya",
+  tokenShalgakh,
+  async (req, res, next) => {
+    try {
+      const { db } = require("zevbackv2");
+      const ajiltniiId = req.body?.nevtersenAjiltniiToken?.id;
+      if (!ajiltniiId) throw new Error("Нэвтрэх шаардлагатай!");
+
+      const barilgiinId = req.body?.barilgiinId;
+      await Ajiltan(db.erunkhiiKholbolt).updateOne(
+        { _id: ajiltniiId },
+        barilgiinId
+          ? { $set: { defaultBarilga: String(barilgiinId) } }
+          : { $unset: { defaultBarilga: "" } },
+      );
+      res.send("Amjilttai");
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 router.post(
   "/ajiltniiTokhirgooZasya",
   tokenShalgakh,
