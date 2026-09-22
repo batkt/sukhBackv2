@@ -3491,11 +3491,20 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
   }
 });
 
-router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (req, res, next) => {
-  try {
+/**
+ * Нэг нэхэмжлэх дээр «төлбөр сануулах» SMS илгээнэ.
+ *
+ * Дан болон БӨӨН хоёр endpoint үүнийг хуваалцана — үгүй бол 150 мөр
+ * логик (нэхэмжлэх хайх, үлдэгдэл бодох, төлөх холбоос үүсгэх, CallPro)
+ * хоёр газар хуулбарлагдана.
+ *
+ * @param {string} invoiceId Нэхэмжлэхийн ЭСВЭЛ гэрээний id
+ * @returns {Promise<{success: boolean, message: string, disabled?: boolean}>}
+ */
+async function sanuulgaSmsIlgeeye(invoiceId) {
     const { db } = require("zevbackv2");
     const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
-    const { invoiceId } = req.params;
+    // `invoiceId` нь нэхэмжлэхийн эсвэл ГЭРЭЭНИЙ id байж болно
 
     let invoice = null;
     let foundKholbolt = null;
@@ -3524,11 +3533,11 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
     }
 
     if (!invoice) {
-      return res.status(404).json({ success: false, message: "Нэхэмжлэх олдсонгүй." });
+      return { success: false, message: "Нэхэмжлэх олдсонгүй." };
     }
 
     if (!invoice.utas || !invoice.utas.length) {
-      return res.status(400).json({ success: false, message: "Оршин суугчийн утасны дугаар олдсонгүй." });
+      return { success: false, message: "Оршин суугчийн утасны дугаар олдсонгүй." };
     }
 
     // 1. Calculate overall outstanding balance
@@ -3555,7 +3564,7 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
     }
 
     if (overallUldegdel <= 0) {
-      return res.status(400).json({ success: false, message: "Төлөх төлбөрийн үлдэгдэл байхгүй байна." });
+      return { success: false, message: "Төлөх төлбөрийн үлдэгдэл байхгүй байна." };
     }
 
     // 2. Format Cyrillic/Mongolian message with outstanding balance and pay link
@@ -3583,11 +3592,11 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
     const ENABLE_SMS = true; // Set to true to re-enable SMS service
     if (!ENABLE_SMS) {
       console.log(`⚠️ [qpayRoute] Reminder SMS sending is temporarily disabled.`);
-      return res.status(200).send({
-        status: true,
+      return {
+        success: true,
         message: "SMS сервис түр идэвхгүй байна (SMS disabled)",
-        disabled: true
-      });
+        disabled: true,
+      };
     }
 
     const key = "aa8e588459fdd9b7ac0b809fc29cfae3";
@@ -3639,13 +3648,76 @@ router.post("/nekhemjlekh/:invoiceId/send-reminder-sms", tokenShalgakh, async (r
 
     await Promise.all(sendPromises);
 
-    return res.status(200).json({
+    return {
       success: true,
       message: "Төлбөр сануулах SMS-ийг амжилттай илгээлээ.",
-    });
-  } catch (err) {
-    next(err);
-  }
-});
+    };
+}
+
+router.post(
+  "/nekhemjlekh/:invoiceId/send-reminder-sms",
+  tokenShalgakh,
+  async (req, res, next) => {
+    try {
+      const khariu = await sanuulgaSmsIlgeeye(req.params.invoiceId);
+      return res.status(khariu.success ? 200 : 400).json(khariu);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * БӨӨНӨӨР сануулах SMS — нэхэмжлэх бөөнөөр илгээхтэй ижил хэлбэр.
+ *
+ * Нэг хүсэлтээр бүх сонгосон гэрээ дээр илгээнэ. Хөтчөөс N хүсэлт
+ * илгээх нь сүлжээнд хамаагүй хүнд, мөр бүр тусад нь унах эрсдэлтэй.
+ */
+router.post(
+  "/nekhemjlekh/send-reminder-sms-bulk",
+  tokenShalgakh,
+  async (req, res, next) => {
+    try {
+      const iduud = Array.isArray(req.body?.iduud)
+        ? req.body.iduud.map(String).filter(Boolean)
+        : [];
+
+      if (iduud.length === 0) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Гэрээ сонгоно уу." });
+      }
+
+      const davkhardalgui = Array.from(new Set(iduud));
+      const durslel = { ilgeesen: [], aldaatai: [] };
+
+      // ЗЭРЭГЦЭЭ биш, дараалан: CallPro-д нэг дор олон хүсэлт цохих нь
+      // хязгаарлалтад унах эрсдэлтэй, мөр тус бүрийн үр дүн ч хэрэгтэй.
+      for (const id of davkhardalgui) {
+        try {
+          const khariu = await sanuulgaSmsIlgeeye(id);
+          if (khariu.success) durslel.ilgeesen.push(id);
+          else durslel.aldaatai.push({ id, message: khariu.message });
+        } catch (aldaa) {
+          durslel.aldaatai.push({ id, message: aldaa.message });
+        }
+      }
+
+      return res.status(200).json({
+        success: durslel.ilgeesen.length > 0,
+        niit: davkhardalgui.length,
+        ilgeesen: durslel.ilgeesen.length,
+        aldaatai: durslel.aldaatai,
+        message:
+          durslel.aldaatai.length === 0
+            ? `${durslel.ilgeesen.length} SMS илгээгдлээ.`
+            : `${durslel.ilgeesen.length}/${davkhardalgui.length} илгээгдлээ. ` +
+              `${durslel.aldaatai.length} мөрд алдаа гарлаа.`,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 module.exports = router;
