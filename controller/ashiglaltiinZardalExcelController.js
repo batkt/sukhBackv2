@@ -35,6 +35,9 @@ const BAGANUUD = {
 /** `turul` нь зөвхөн энэ хоёрын нэг байна — аль хүснэгтэд харагдахыг заана. */
 const TURLUUD = ["Тогтмол", "Дурын"];
 
+/** `zardliinTurul` — зардлын нарийвчилсан төрөл (Энгийн эсвэл Лифт). */
+const ZARDLIIN_TURLUUD = ["Энгийн", "Лифт"];
+
 /** Байгууллага, барилга, тухайн баазын холболтыг олж өгнө. */
 async function kheregteiZuilsiigOlyo(baiguullagiinId, barilgiinId) {
   const { db } = require("zevbackv2");
@@ -136,8 +139,8 @@ exports.ashiglaltiinZardalExcelTemplateAvya = asyncHandler(
         A1:
           "Зардлын нэр. Байгаа зардлын нэрийг ӨӨРЧЛӨХГҮЙ орхивол тухайн зардал шинэчлэгдэнэ.\n" +
           "Шинэ нэр бичвэл шинэ зардал үүснэ.",
-        B1: `Зөвхөн "${TURLUUD.join('" эсвэл "')}" гэж бичнэ.\n"Тогтмол" нь тогтмол зардлын, "Дурын" нь хувьсах зардлын хүснэгтэд орно.`,
-        C1: "Заавал биш. Жишээ нь: 1м3/талбай, нэгж/талбай, Тогтмол, Дурын.",
+        B1: `Зөвхөн "${TURLUUD.join('" эсвэл "')}" (эсвэл "Хувьсах") гэж бичнэ.\n"Тогтмол" нь тогтмол зардлын, "Дурын" нь хувьсах зардлын хүснэгтэд орно.`,
+        C1: `Зардлын төрөл: "${ZARDLIIN_TURLUUD.join('" эсвэл "')}". Хоосон орхивол "Энгийн" гэж тооцно.`,
         D1: "Сар бүр нэхэмжлэхэд бодогдох тариф (төгрөгөөр).",
         E1: "Заавал биш. Суурь хураамж (төгрөгөөр).",
         F1: 'Тийм / Үгүй гэж бичнэ. Хоосон бол "Үгүй" гэж үзнэ.',
@@ -155,7 +158,7 @@ exports.ashiglaltiinZardalExcelTemplateAvya = asyncHandler(
         worksheet.addRow({
           ner: z.ner || "",
           turul: z.turul || "",
-          zardliinTurul: z.zardliinTurul || "",
+          zardliinTurul: z.zardliinTurul || "Энгийн",
           tariff: z.tariff ?? "",
           suuriKhuraamj: z.suuriKhuraamj ?? "",
           nuat: z.nuatBodokhEsekh ? "Тийм" : "Үгүй",
@@ -168,13 +171,18 @@ exports.ashiglaltiinZardalExcelTemplateAvya = asyncHandler(
       worksheet.getColumn("suuriKhuraamj").numFmt = "#,##0.00";
       worksheet.getColumn("suuriKhuraamj").alignment = { horizontal: "right" };
 
-      // «Төрөл» ба «НӨАТ» баганад гараар алдаа гаргахгүйн тулд сонголт өгөв.
+      // «Төрөл», «Зардлын төрөл», «НӨАТ» баганад гараар алдаа гаргахгүйн тулд сонголт өгөв.
       const murniiToo = Math.max(zardluud.length, 0) + 200;
       for (let i = 2; i <= murniiToo; i++) {
         worksheet.getCell(`B${i}`).dataValidation = {
           type: "list",
           allowBlank: true,
           formulae: [`"${TURLUUD.join(",")}"`],
+        };
+        worksheet.getCell(`C${i}`).dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: [`"${ZARDLIIN_TURLUUD.join(",")}"`],
         };
         worksheet.getCell(`F${i}`).dataValidation = {
           type: "list",
@@ -274,9 +282,16 @@ exports.ashiglaltiinZardalExcelTatya = asyncHandler(async (req, res, next) => {
         const turulRaw = (baganaAvya(mur, BAGANUUD.turul, "turul") || "")
           .toString()
           .trim();
-        const turul = TURLUUD.find(
+        let turul = TURLUUD.find(
           (t) => t.toLowerCase() === turulRaw.toLowerCase()
         );
+        if (
+          !turul &&
+          (turulRaw.toLowerCase() === "хувьсах" ||
+            turulRaw.toLowerCase() === "variable")
+        ) {
+          turul = "Дурын";
+        }
 
         if (!turul) {
           results.failed.push({
@@ -284,7 +299,7 @@ exports.ashiglaltiinZardalExcelTatya = asyncHandler(async (req, res, next) => {
             ner,
             error: `«${BAGANUUD.turul}» багана "${
               TURLUUD.join('" эсвэл "')
-            }" байх ёстой (одоо: "${turulRaw}")`,
+            }" (эсвэл "Хувьсах") байх ёстой (одоо: "${turulRaw}")`,
           });
           continue;
         }
@@ -333,16 +348,21 @@ exports.ashiglaltiinZardalExcelTatya = asyncHandler(async (req, res, next) => {
         }
         eneFailDeerkh.add(tuluur);
 
+        const zardliinTurulRaw = (
+          baganaAvya(mur, BAGANUUD.zardliinTurul, "zardliinTurul") || ""
+        )
+          .toString()
+          .trim();
+        const zardliinTurul = zardliinTurulRaw.toLowerCase().includes("лифт")
+          ? "Лифт"
+          : (zardliinTurulRaw || "Энгийн");
+
         const utguud = {
           ner,
           turul,
           tariff,
           suuriKhuraamj,
-          zardliinTurul: (
-            baganaAvya(mur, BAGANUUD.zardliinTurul, "zardliinTurul") || ""
-          )
-            .toString()
-            .trim(),
+          zardliinTurul,
           tailbar:
             (baganaAvya(mur, BAGANUUD.tailbar, "tailbar") || "")
               .toString()
