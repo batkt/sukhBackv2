@@ -206,10 +206,9 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
       }
     }
 
-    // Residents MUST be in erunkhiiKholbolt
+    // Харилцагч нь ТӨВ баазад (erunkhiiKholbolt) хадгалагддаг
     const kholbolt = db.erunkhiiKholbolt;
 
-    // Fetch residents from erunkhiiKholbolt
     const [jagsaalt, niitMur] = await Promise.all([
       khariltsagch(kholbolt)
         .find(body.query)
@@ -240,14 +239,14 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
       const unitGereeMap = {};
       /** harilsagchiinId → машины дугааруудын массив */
       const mashinMap = {};
-      /** Хуудасны харилцагчдын id — гэрээ ба машины блок ХОЁУЛАА хэрэглэнэ. */
-      const residentIds = jagsaalt.map((r) => r._id.toString());
+      /** Хуудасны ХАРИЛЦАГЧДЫН id — гэрээ ба машины блок хоёулаа хэрэглэнэ. */
+      const khariltsagchIds = jagsaalt.map((r) => r._id.toString());
 
       if (tukhainBaaziinKholbolt) {
         try {
           const GereeModel = Geree(tukhainBaaziinKholbolt);
           const activeGerees = await GereeModel.find({
-            khariltsagchId: { $in: residentIds },
+            khariltsagchId: { $in: khariltsagchIds },
           })
             .select(
               "_id khariltsagchId baiguullagiinId ekhniiUldegdel umnukhZaalt suuliinZaalt toot davkhar tuluv",
@@ -294,7 +293,8 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
             // Set the dynamic balance from ledger
             g.dynamicUldegdel = balanceMap[gid] ?? g.ekhniiUldegdel ?? 0;
 
-            // If we already have an active contract for this resident, don't overwrite it with an inactive one
+            // Тухайн харилцагчид идэвхтэй гэрээ аль хэдийн байвал
+            // идэвхгүйгээр дарж бичихгүй
             const existing = gereeMap[resId];
             if (!existing || g.tuluv === "Идэвхтэй") {
               gereeMap[resId] = g;
@@ -323,8 +323,8 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
           // (`orshinSuugchiinId` нь `ezemshigchiinId`-ийн alias).
           const ezniiShalgalt = {
             $or: [
-              { orshinSuugchiinId: { $in: residentIds } },
-              { ezemshigchiinId: { $in: residentIds } },
+              { orshinSuugchiinId: { $in: khariltsagchIds } },
+              { ezemshigchiinId: { $in: khariltsagchIds } },
             ],
           };
 
@@ -728,7 +728,7 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
                 barilgiinId: String(barilgiinId),
                 toot: result.toot || req.body.toot || "",
                 utas: result.utas || "",
-                zochinTurul: "Оршин суугч",
+                zochinTurul: "Харилцагч",
                 ezemshigchiinTurul: EZEMSHIGCH.KHARILTSAGCH,
               });
               if (mashiniiKhariu.aldaa.length > 0) {
@@ -775,7 +775,7 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
                 tukhainBaaziinKholbolt,
               ).findOne({
                 ezemshigchiinId: result._id.toString(),
-                zochinTurul: "Оршин суугч",
+                zochinTurul: "Харилцагч",
               });
 
               if (!existingSettings) {
@@ -798,7 +798,7 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
                   ezenToot: result.toot || req.body.toot || "",
                   zochinUrikhEsekh:
                     defaultSettings.zochinUrikhEsekh !== false,
-                  zochinTurul: "Оршин суугч",
+                  zochinTurul: "Харилцагч",
                   zochinErkhiinToo: defaultSettings.zochinErkhiinToo || 0,
                   zochinTusBurUneguiMinut:
                     defaultSettings.zochinTusBurUneguiMinut || 0,
@@ -1233,7 +1233,7 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
                   utas: Array.isArray(req.body.utas)
                     ? req.body.utas[0] || ""
                     : req.body.utas || result.utas || "",
-                  zochinTurul: "Оршин суугч",
+                  zochinTurul: "Харилцагч",
                   ezemshigchiinTurul: EZEMSHIGCH.KHARILTSAGCH,
                 });
                 if (khariu.aldaa.length > 0) {

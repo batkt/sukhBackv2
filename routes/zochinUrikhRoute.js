@@ -10,6 +10,7 @@ const {
 } = require("sukhParking-v1");
 const OrshinSuugch = require("../models/orshinSuugch");
 const Khariltsagch = require("../models/khariltsagch");
+const OrshinSuugchMashin = require("../models/orshinSuugchMashin");
 const Geree = require("../models/geree");
 const router = express.Router();
 const { tokenShalgakh, crud, UstsanBarimt, db } = require("zevbackv2");
@@ -2046,7 +2047,12 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
       resObj,
       p,
       ezniiDugaaruud,
-      undsenTurul = "Оршин суугч",
+      /**
+       * ХҮЧЭЭР тавих төрөл. Харилцагч нь угаараа «Харилцагч» тул машины
+       * бичлэг дээр «Оршин суугч» гэж бичигдсэн байсан ч (хуучин бичлэг)
+       * түүнийг дардаг. Оршин суугч үүнийг дамжуулдаггүй.
+       */
+      turulKhucheer = null,
     ) => ({
       _id: p?._id || resObj._id,
       ezemshigchiinId: resObj._id,
@@ -2061,7 +2067,11 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
       // Эзний бүх машин — UI дээр "1/3" гэх мэт тоолуур харуулахад
       ezniiMashinuud: ezniiDugaaruud,
       mashiniiToo: ezniiDugaaruud.length,
-      zochinTurul: (p?.zochinTurul === "Үйлчлүүлэгч" || p?.turul === "Үйлчлүүлэгч") ? "СӨХ" : (p?.zochinTurul || p?.turul || undsenTurul),
+      zochinTurul:
+        turulKhucheer ||
+        ((p?.zochinTurul === "Үйлчлүүлэгч" || p?.turul === "Үйлчлүүлэгч")
+          ? "СӨХ"
+          : p?.zochinTurul || p?.turul || "Оршин суугч"),
       zochinTailbar: p?.zochinTailbar || "",
       ezenToot: p?.ezenToot || resObj.toot || (resObj.toots && resObj.toots[0]?.toot) || "",
       orts: resObj.orts || (resObj.toots && resObj.toots[0]?.orts) || "",
@@ -2152,46 +2162,61 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
 
         if (khariltsagchid.length > 0) {
           const kharIds = khariltsagchid.map((k) => String(k._id));
-          const kharMashin = await Mashin(tukhainBaaziinKholbolt)
-            .find({
-              $or: [
-                { ezemshigchiinId: { $in: kharIds } },
-                { orshinSuugchiinId: { $in: kharIds } },
-              ],
-            })
-            .lean();
+          const ezniiShalgalt = {
+            $or: [
+              { ezemshigchiinId: { $in: kharIds } },
+              { orshinSuugchiinId: { $in: kharIds } },
+            ],
+          };
 
+          // ── Машиныг ХОЁР коллекциос цуглуулна ──────────────────────
+          // `mashinuudBurtgeye` нь `orshinSuugchMashin` (төв + байгууллага)
+          // ба `mashin` гурванд бичдэг. Аль нэг цэг унасан бол (жишээ нь
+          // дугаар өөр эзэнд бүртгэлтэй байсан) дугаар нэг коллекцид л
+          // байна. Зөвхөн `mashin`-г уншвал тэр машин мөр болж гарахгүй.
+          const [kharOSM, kharMashin] = await Promise.all([
+            OrshinSuugchMashin(tukhainBaaziinKholbolt)
+              .find(ezniiShalgalt)
+              .lean(),
+            Mashin(tukhainBaaziinKholbolt).find(ezniiShalgalt).lean(),
+          ]);
+
+          /** эзэн → (дугаар → бичлэг). Дугаар тутамд НЭГ мөр гаргана. */
           const kharMap = {};
-          kharMashin.forEach((mp) => {
-            const ezen = String(mp.ezemshigchiinId || mp.orshinSuugchiinId || "");
-            if (!ezen) return;
-            if (!kharMap[ezen]) kharMap[ezen] = [];
-            kharMap[ezen].push(mp);
-          });
+          const bichlegNemye = (mp) => {
+            const ezen = String(
+              mp.ezemshigchiinId || mp.orshinSuugchiinId || "",
+            );
+            const dugaar = String(mp.dugaar || mp.mashiniiDugaar || "")
+              .trim()
+              .toUpperCase();
+            if (!ezen || !dugaar || dugaar === "БҮРТГЭЛГҮЙ" || dugaar === "-") {
+              return;
+            }
+            if (!kharMap[ezen]) kharMap[ezen] = new Map();
+            // `mashin` дээрх бичлэг нь хаалга/камерын id-тай тул түүнийг
+            // давуу үзнэ (мөрийн `_id` нь устгах/засахад хэрэглэгддэг).
+            const baigaa = kharMap[ezen].get(dugaar);
+            if (!baigaa || (!baigaa.dugaar && mp.dugaar)) {
+              kharMap[ezen].set(dugaar, mp);
+            }
+          };
+          kharOSM.forEach(bichlegNemye);
+          kharMashin.forEach(bichlegNemye);
 
           khariltsagchid.forEach((k) => {
-            const mashinuud = kharMap[String(k._id)] || [];
-            const dugaaruud = Array.from(
-              new Set(
-                mashinuud
-                  .map((m) =>
-                    String(m.dugaar || m.mashiniiDugaar || "")
-                      .trim()
-                      .toUpperCase(),
-                  )
-                  .filter((d) => d && d !== "БҮРТГЭЛГҮЙ" && d !== "-"),
-              ),
-            );
+            const bichleguud = kharMap[String(k._id)];
+            const dugaaruud = bichleguud ? [...bichleguud.keys()] : [];
 
-            if (mashinuud.length === 0) {
+            if (dugaaruud.length === 0) {
               fullMergedData.push(
                 ezniiMurBelgeye(k, null, dugaaruud, "Харилцагч"),
               );
               return;
             }
 
-            mashinuud
-              .slice()
+            // Хамгийн эртний нь дээр — оршин суугчийн урсгалтай ижил
+            [...bichleguud.values()]
               .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
               .forEach((mp) => {
                 fullMergedData.push(
