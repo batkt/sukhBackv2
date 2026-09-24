@@ -5419,6 +5419,12 @@ exports.syncResidentContracts = async function syncResidentContracts(
   const AshiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
   const invoiceService = require("../services/invoiceService");
 
+  // Гэр бүлийн гишүүн өөрийн гэрээгүй — үндсэн эзэмшигчийн тоотыг хардаг.
+  // Гишүүнд үндсэн эзэмшигчийн `toot` хуулагддаг тул (utils/gerBuliinGishuun
+  // → undsenEesKhayagAvya) энд алгасахгүй бол засах бүрд давхар гэрээ,
+  // нэхэмжлэх үүсч төлбөр бодогддог байв.
+  if (orshinSuugch?.undsenId) return;
+
   const baiguullagiinId = baiguullaga._id.toString();
 
   // Safeguard: Never sync or create residential contracts for the centralized wallet organization

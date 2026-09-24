@@ -3310,6 +3310,7 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       khuudasniiDugaar = 1,
       khuudasniiKhemjee = 500,
       search,
+      orts, // optional: орцоор шүүх
       gereeniiDugaar,
       tuluv, // optional: "Төлсөн" | "Төлөөгүй" | "Хугацаа хэтэрсэн"
     } = source || {};
@@ -3415,9 +3416,19 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
       GuilgeeAvlaguud(kholbolt).find(discountQuery).lean(),
     ]);
 
+    // Гэр бүлийн гишүүн (`undsenId`-тай) нь үндсэн эзэмшигчийн тоотыг
+    // хардаг — өөрийн төлбөргүй. Тэдэнд мөр гаргахгүй, андуураад үүссэн
+    // гэрээг нь ч тооцохгүй.
+    const gishuuniiIduud = new Set(
+      allOrshinSuugch.filter((r) => r.undsenId).map((r) => String(r._id))
+    );
+    const undsenOrshinSuugchid = allOrshinSuugch.filter((r) => !r.undsenId);
+
     const contracts = allContractsList.filter(c => {
       const st = String(c.tuluv || c.status || "").toLowerCase();
-      return st !== "цуцалсан" && st !== "tsutlsasan";
+      if (st === "цуцалсан" || st === "tsutlsasan") return false;
+      const ezen = String(c.orshinSuugchId || c.orshinSuugchiinId || c.residentId || "");
+      return !gishuuniiIduud.has(ezen);
     });
 
     const contractMap = {};
@@ -3448,10 +3459,20 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
     const groupMap = new Map();
 
     // Pre-populate groupMap using a robust composite key to avoid doubling
-    allOrshinSuugch.forEach((r) => {
+    undsenOrshinSuugchid.forEach((r) => {
        const ner = String(r.ner || "").trim();
        const toot = String(r.toot || r.medeelel?.toot || "").trim();
        const utas = Array.isArray(r.utas) ? String(r.utas[0] || "").trim() : String(r.utas || "").trim();
+       // Орц: үндсэн талбар, эс бөгөөс энэ барилгын `toots[]` бичлэгээс
+       const tootBichlegs = Array.isArray(r.toots) ? r.toots : [];
+       const tootBichleg =
+         tootBichlegs.find(
+           (t) =>
+             t &&
+             (!barilgiinId || String(t.barilgiinId || "") === String(barilgiinId)) &&
+             (!toot || String(t.toot || "").trim() === toot)
+         ) || tootBichlegs.find((t) => t && t.orts);
+       const residentOrts = String(r.orts || tootBichleg?.orts || "").trim();
        
        // Primary key is ID, but we'll also map it by composite for contract overlay
        const key = String(r._id);
@@ -3465,8 +3486,8 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
             ovog: r.ovog || "",
             ner: r.ner || "",
             utas: Array.isArray(r.utas) ? r.utas : r.utas ? [r.utas] : [],
-            davkhar: r.davkhar || "",
-            orts: r.orts || "",
+            davkhar: r.davkhar || tootBichleg?.davkhar || "",
+            orts: residentOrts,
             toot: toot,
           },
           avlaga: [],
@@ -3524,6 +3545,9 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
 
        group._id.gereeniiId = String(c._id);
        group._id.gereeniiDugaar = c.gereeniiDugaar || "";
+       // Оршин суугч дээр орц/давхар хоосон бол гэрээнээс нөхнө
+       if (!group._id.orts && c.orts) group._id.orts = String(c.orts).trim();
+       if (!group._id.davkhar && c.davkhar) group._id.davkhar = String(c.davkhar);
        group.globalUldegdel = Number(c.globalUldegdel ?? c.uldegdel ?? 0);
        
        // Also ensure the contract ID points to this group for invoice matching
@@ -3822,8 +3846,18 @@ exports.tailanNegtgelTailan = asyncHandler(async (req, res, next) => {
           re.test(g._id.ovog) ||
           re.test(g._id.register) ||
           re.test(g._id.gereeniiDugaar) ||
-          re.test(g._id.toot)
+          re.test(g._id.toot) ||
+          (Array.isArray(g._id.utas) ? g._id.utas : [g._id.utas]).some((u) =>
+            re.test(String(u || ""))
+          )
       );
+    }
+
+    // ── Орцоор шүүх ───────────────────────────────────────────────────────────
+    // Хөлийн нийт дүн (niitDun) доор шүүсэн `groups`-ээр бодогдоно.
+    if (orts != null && String(orts).trim()) {
+      const ortsStr = String(orts).trim();
+      groups = groups.filter((g) => String(g._id.orts || "").trim() === ortsStr);
     }
 
     // ── Sort by Toot (Unit Number) ───────────────────────────────────────────

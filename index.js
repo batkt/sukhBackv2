@@ -1,3 +1,6 @@
+// Аудит: БҮХ model-ийн засвар/устгалыг бүртгэх глобал plugin. Model
+// compile хийгдэхээс ӨМНӨ бүртгэгдэх ёстой тул хамгийн эхэнд.
+require("mongoose").plugin(require("./utils/auditPlugin").auditPlugin);
 const express = require("express");
 const app = express();
 const http = require("http");

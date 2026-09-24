@@ -6,6 +6,8 @@ const baiguullagaSchema = new Schema(
   {
     id: String,
     ner: String,
+    // И-баримт → «Татварт илгээх»-ийг хамгийн сүүлд амжилттай ажиллуулсан огноо
+    ebarimtSuuliinIlgeesenOgnoo: Date,
     dotoodNer: String,
     khayag: String,
     mail: [String],

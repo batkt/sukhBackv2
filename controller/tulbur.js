@@ -268,11 +268,17 @@ const guilgeeKholbyo = asyncHandler(async (req, res, next) => {
     });
 
     // Link transaction by updating BankniiGuilgee fields
+    const nevtersen = req.body.nevtersenAjiltniiToken;
     await BankniiGuilgeeModel.findByIdAndUpdate(bankniiGuilgeeId, {
       $addToSet: {
         kholbosonTalbainId: String(geree._id),
         kholbosonGereeniiId: String(geree._id)
-      }
+      },
+      // Хэн холбосныг хадгална
+      $set: {
+        kholbosonAjiltniiId: nevtersen?.id ? String(nevtersen.id) : "",
+        kholbosonAjiltniiNer: nevtersen?.ner || "",
+      },
     });
 
     // Emit event to update frontend clients
@@ -322,7 +328,8 @@ const guilgeeSalgaya = asyncHandler(async (req, res, next) => {
       $set: {
         kholbosonTalbainId: [],
         kholbosonGereeniiId: []
-      }
+      },
+      $unset: { kholbosonAjiltniiId: "", kholbosonAjiltniiNer: "" },
     });
 
     // Sync invoice status for each contract that was unlinked

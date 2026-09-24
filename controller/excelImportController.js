@@ -3520,3 +3520,184 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * Банкны гүйлгээний Excel загвар (Дансны хуулга → «Excel»).
+ *
+ * Банкны API холбогдоогүй / тест орчинд гүйлгээг гараар оруулахад
+ * зориулсан. Орлого ба Зарлага тусдаа багана — аль нэгийг нь бөглөнө.
+ */
+exports.bankniiGuilgeeZagvarAvya = asyncHandler(async (req, res, next) => {
+  try {
+    const workbook = new excel.Workbook();
+    const worksheet = workbook.addWorksheet("Банкны гүйлгээ");
+
+    worksheet.columns = [
+      { header: "Огноо", key: "ognoo", width: 20 },
+      { header: "Гүйлгээний утга", key: "utga", width: 40 },
+      { header: "Орлого", key: "orlogo", width: 16 },
+      { header: "Зарлага", key: "zarlaga", width: 16 },
+      { header: "Харьцсан данс", key: "dans", width: 20 },
+      { header: "Харьцсан дансны нэр", key: "dansniiNer", width: 24 },
+    ];
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.eachCell((cell) => {
+      tolgoiNud(cell);
+      cell.border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      };
+    });
+    headerRow.commit();
+
+    worksheet.getCell("A1").note =
+      "Хэлбэр: 2026-09-23 эсвэл 2026-09-23 14:30. Хоосон бол өнөөдөр.";
+    worksheet.getCell("C1").note =
+      "Орлого ЭСВЭЛ Зарлагын аль нэгийг бөглөнө (эерэг тоо).";
+
+    // Жишээ мөр
+    worksheet.addRow({
+      ognoo: "2026-09-23 10:00",
+      utga: "101 тоот СӨХ төлбөр",
+      orlogo: 50000,
+      zarlaga: "",
+      dans: "5000123456",
+      dansniiNer: "Бат Болд",
+    });
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="bank_guilgee_zagvar_${Date.now()}.xlsx"`,
+    );
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** "1,234.50" / 1234.5 / "" → тоо (хоосон бол 0) */
+function dunUnshya(v) {
+  if (v === undefined || v === null || v === "") return 0;
+  const n = Number(String(v).replace(/[\s,₮]/g, ""));
+  return Number.isFinite(n) ? n : NaN;
+}
+
+/**
+ * Банкны гүйлгээг Excel-ээс оруулна. Сонгосон данс (`dansniiDugaar`,
+ * `bank`) дээр бичигдэнэ — Дансны хуулга нь эдгээрээр шүүдэг.
+ *
+ * Холбох (`guilgeeKholbyo`) нь банк бүрд ӨӨР талбараас дүн уншдаг тул
+ * (khanbank/bogd → amount, golomt → tranAmount+drOrCr, tdb → Amt,
+ * trans → income) бүгдийг нь бөглөнө.
+ */
+exports.bankniiGuilgeeExcelOruulya = asyncHandler(async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const BankniiGuilgee = require("../models/bankniiGuilgee");
+    const { baiguullagiinId, barilgiinId, dansniiDugaar, bank } = req.body;
+
+    if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
+    if (!dansniiDugaar) throw new aldaa("Данс сонгоно уу");
+    if (!req.file) throw new aldaa("Excel файл оруулах");
+
+    const kholbolt =
+      req.body.tukhainBaaziinKholbolt ||
+      db.kholboltuud.find(
+        (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+      );
+    if (!kholbolt) throw new aldaa("Холболт олдсонгүй");
+
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const mornuud = XLSX.utils.sheet_to_json(worksheet, { raw: false, defval: "" });
+    if (!mornuud.length) throw new aldaa("Excel хоосон");
+
+    const nevtersen = req.body.nevtersenAjiltniiToken;
+    const suuri = Date.now();
+    const bichleguud = [];
+    const aldaanuud = [];
+
+    mornuud.forEach((m, i) => {
+      const murDugaar = i + 2; // толгой = 1-р мөр
+      const orlogo = dunUnshya(m["Орлого"]);
+      const zarlaga = dunUnshya(m["Зарлага"]);
+      if (Number.isNaN(orlogo) || Number.isNaN(zarlaga)) {
+        aldaanuud.push(`${murDugaar}-р мөр: дүн буруу`);
+        return;
+      }
+      if (!orlogo && !zarlaga) return; // хоосон мөр — алгасна
+      if (orlogo && zarlaga) {
+        aldaanuud.push(`${murDugaar}-р мөр: Орлого, Зарлагын аль нэгийг л бөглөнө`);
+        return;
+      }
+
+      let ognoo = new Date();
+      const ognooStr = String(m["Огноо"] || "").trim();
+      if (ognooStr) {
+        const d = new Date(ognooStr.replace(" ", "T"));
+        if (Number.isNaN(d.getTime())) {
+          aldaanuud.push(`${murDugaar}-р мөр: огноо буруу (${ognooStr})`);
+          return;
+        }
+        ognoo = d;
+      }
+
+      const dun = Math.abs(orlogo || zarlaga);
+      const orlogoEsekh = !!orlogo;
+      const temdeglegdsen = orlogoEsekh ? dun : -dun;
+      const id = `EXCEL-${suuri}-${i}`;
+
+      bichleguud.push({
+        tranDate: ognoo,
+        postDate: ognoo,
+        description: String(m["Гүйлгээний утга"] || "").trim() || "Excel гүйлгээ",
+        relatedAccount: String(m["Харьцсан данс"] || "").trim(),
+        accName: String(m["Харьцсан дансны нэр"] || "").trim(),
+        // Банк бүрийн дүнгийн талбар
+        amount: temdeglegdsen,
+        Amt: temdeglegdsen,
+        tranAmount: dun,
+        drOrCr: orlogoEsekh ? "Credit" : "Debit",
+        income: orlogoEsekh ? dun : 0,
+        outcome: orlogoEsekh ? 0 : dun,
+        record: id,
+        tranId: id,
+        dansniiDugaar: String(dansniiDugaar),
+        bank: bank || undefined,
+        baiguullagiinId: String(baiguullagiinId),
+        barilgiinId: barilgiinId ? String(barilgiinId) : undefined,
+        kholbosonGereeniiId: [],
+        kholbosonTalbainId: [],
+        excelEsekh: true,
+        oruulsanAjiltniiNer: nevtersen?.ner || "",
+      });
+    });
+
+    if (aldaanuud.length) {
+      // Хагас оруулахаас сэргийлж нэг ч мөр бичихгүй
+      return res.status(400).json({
+        success: false,
+        aldaa: aldaanuud.slice(0, 10).join("\n"),
+        aldaanuud,
+      });
+    }
+    if (!bichleguud.length) throw new aldaa("Оруулах гүйлгээ олдсонгүй");
+
+    await BankniiGuilgee(kholbolt, false).insertMany(bichleguud);
+
+    const io = req.app.get("socketio");
+    if (io) io.emit("baiguullagiin" + baiguullagiinId, { turul: "bankniiGuilgeeShine" });
+
+    res.json({ success: true, too: bichleguud.length });
+  } catch (error) {
+    next(error);
+  }
+});

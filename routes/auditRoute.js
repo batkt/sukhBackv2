@@ -6,6 +6,7 @@ const {
   getUstgakhTuukh,
   getDocumentHistory,
   getAjiltanHistory,
+  getAuditTurluud,
 } = require("../controller/auditController");
 
 /**
@@ -17,6 +18,11 @@ router.get("/zasakhTuukh", tokenShalgakh, getZasakhTuukh);
  * GET /api/audit/ustgakhTuukh - Get delete history
  */
 router.get("/ustgakhTuukh", tokenShalgakh, getUstgakhTuukh);
+
+/**
+ * GET /api/audit/turluud?turul=zassan|ustgasan - Ангилал бүрийн тоо
+ */
+router.get("/turluud", tokenShalgakh, getAuditTurluud);
 
 /**
  * GET /api/audit/document/:modelName/:documentId - Get all audit history for a specific document

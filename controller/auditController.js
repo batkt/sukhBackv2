@@ -21,13 +21,16 @@ exports.getZasakhTuukh = asyncHandler(async (req, res, next) => {
     modelName,
     documentId,
     ajiltniiId,
-    baiguullagiinId,
+    baiguullagiinId: baiguullagiinIdQuery,
     barilgiinId,
     ekhlekhOgnoo,
     duusakhOgnoo,
     khuudasniiDugaar = 1,
     khuudasniiKhemjee = 50,
   } = req.query;
+  // Өөр байгууллагын түүх харагдахгүй — ирээгүй бол нэвтэрсэн ажилтны байгууллага
+  const baiguullagiinId =
+    baiguullagiinIdQuery || req.body?.nevtersenAjiltniiToken?.baiguullagiinId;
 
   const matchLegacy = {};
   const matchNew = {};
@@ -126,7 +129,7 @@ exports.getUstgakhTuukh = asyncHandler(async (req, res, next) => {
     modelName,
     documentId,
     ajiltniiId,
-    baiguullagiinId,
+    baiguullagiinId: baiguullagiinIdQuery,
     barilgiinId,
     deletionType,
     ekhlekhOgnoo,
@@ -134,6 +137,8 @@ exports.getUstgakhTuukh = asyncHandler(async (req, res, next) => {
     khuudasniiDugaar = 1,
     khuudasniiKhemjee = 50,
   } = req.query;
+  const baiguullagiinId =
+    baiguullagiinIdQuery || req.body?.nevtersenAjiltniiToken?.baiguullagiinId;
 
   const match = {};
 
@@ -305,3 +310,60 @@ exports.getAjiltanHistory = asyncHandler(async (req, res, next) => {
   });
 });
 
+
+/**
+ * GET /api/audit/turluud?turul=zassan|ustgasan — ангилал (model) бүрийн тоо.
+ * «Зассан / Устгасан түүх»-ийн ангиллын жагсаалтыг бодит өгөгдлөөс гаргана —
+ * урьдчилан бичсэн 9 төрлөөр хязгаарлагдахгүй.
+ */
+exports.getAuditTurluud = asyncHandler(async (req, res) => {
+  const { db } = require("zevbackv2");
+  const { turul = "zassan", barilgiinId, ekhlekhOgnoo, duusakhOgnoo } = req.query;
+  const baiguullagiinId =
+    req.query.baiguullagiinId || req.body?.nevtersenAjiltniiToken?.baiguullagiinId;
+
+  const match = {};
+  if (baiguullagiinId) match.baiguullagiinId = String(baiguullagiinId);
+  if (barilgiinId) match.barilgiinId = String(barilgiinId);
+  const start = ekhlekhOgnoo ? new Date(ekhlekhOgnoo) : null;
+  const end = duusakhOgnoo ? new Date(duusakhOgnoo) : null;
+  const ognooMatch =
+    start || end
+      ? { $gte: start || new Date("1970-01-01"), $lte: end || new Date("2999-12-31") }
+      : null;
+
+  const toolyo = async (Model, talbar, ognooTalbar) => {
+    const m = { ...match };
+    if (ognooMatch) m[ognooTalbar] = ognooMatch;
+    return Model(db.erunkhiiKholbolt).aggregate([
+      { $match: m },
+      { $group: { _id: `$${talbar}`, too: { $sum: 1 } } },
+    ]);
+  };
+
+  const niilber = new Map();
+  const nemye = (rows) =>
+    rows.forEach((r) => {
+      if (!r._id) return;
+      const k = String(r._id);
+      niilber.set(k, (niilber.get(k) || 0) + r.too);
+    });
+
+  if (turul === "ustgasan") {
+    nemye(await toolyo(UstgakhTuukh, "modelName", "ognoo"));
+  } else {
+    const [shine, khuuchin] = await Promise.all([
+      toolyo(ZassanBarimt, "classType", "createdAt"),
+      toolyo(ZasakhTuukh, "modelName", "ognoo"),
+    ]);
+    nemye(shine);
+    nemye(khuuchin);
+  }
+
+  res.json({
+    success: true,
+    data: Array.from(niilber, ([modelName, too]) => ({ modelName, too })).sort(
+      (a, b) => b.too - a.too,
+    ),
+  });
+});

@@ -90,7 +90,7 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
     if (!ekhlekhSar) throw new aldaa("Хөнгөлөх сар сонгоно уу");
 
     const zuvshuurugdsun = await khungulultOruulakhErkhteiEsekh(
-      req.nevtersenAjiltniiToken?.id,
+      (req.body?.nevtersenAjiltniiToken || req.nevtersenAjiltniiToken)?.id,
     );
     if (!zuvshuurugdsun) {
       return res.status(403).json({
@@ -110,8 +110,8 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
     const GuilgeeModel = GuilgeeAvlaguud(kholbolt);
     const GereeModel = Geree(kholbolt);
 
-    const ajiltanNer = req.nevtersenAjiltniiToken?.ner || "Систем";
-    const ajiltanId = req.nevtersenAjiltniiToken?.id || "";
+    const ajiltanNer = (req.body?.nevtersenAjiltniiToken || req.nevtersenAjiltniiToken)?.ner || "Систем";
+    const ajiltanId = (req.body?.nevtersenAjiltniiToken || req.nevtersenAjiltniiToken)?.id || "";
 
     const results = {
       success: [],
@@ -266,7 +266,7 @@ exports.khungulultUstgaya = asyncHandler(async (req, res, next) => {
       throw new aldaa("Устгах шалтгаан заавал бөглөнө");
 
     const zuvshuurugdsun = await khungulultOruulakhErkhteiEsekh(
-      req.nevtersenAjiltniiToken?.id,
+      (req.body?.nevtersenAjiltniiToken || req.nevtersenAjiltniiToken)?.id,
     );
     if (!zuvshuurugdsun) {
       return res.status(403).json({
@@ -341,3 +341,69 @@ async function barimtUldeeye(kholbolt, geree, dun, shaltgaan, ajiltan) {
     console.error("Хөнгөлөлтийн аудит бичихэд алдаа:", err.message);
   }
 }
+
+/**
+ * POST /khungulultSuuriAvya — хувиар хөнгөлөхийн СУУРЬ дүн.
+ *
+ * Дэлгэц өмнө нь `turesiinOrlogo`-оос хувь бодож байсан ч энэ талбар sukh-д
+ * огт байхгүй (turees-ээс хуулагдсан) тул хувь үргэлж 0₮ гардаг байв. Энд
+ * тухайн сард БОДИТ нэхэмжилсэн төлбөрийг (`guilgeeAvlaguud`, dun > 0,
+ * хөнгөлөлт/эхний үлдэгдэл биш) гэрээ × сараар нэгтгэж буцаана.
+ *
+ * Body: baiguullagiinId, barilgiinId?, ekhlekhSar, duusakhSar?, zardliinId?
+ * Хариу: { suuri: { [gereeniiId]: { "YYYY-MM": дүн } } }
+ */
+exports.khungulultSuuriAvya = asyncHandler(async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const { baiguullagiinId, barilgiinId, ekhlekhSar, duusakhSar, zardliinId } =
+      req.body;
+    if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
+
+    const saruud = saruudiigZadlaya(ekhlekhSar, duusakhSar);
+    if (saruud.length === 0) return res.json({ suuri: {} });
+
+    const kholbolt = db.kholboltuud.find(
+      (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+    );
+    if (!kholbolt) throw new aldaa("Холболт олдсонгүй");
+
+    const ekhlel = sariinKhyazgaar(saruud[0]).ekhlel;
+    const tugsgul = sariinKhyazgaar(saruud[saruud.length - 1]).tugsgul;
+
+    const match = {
+      baiguullagiinId: String(baiguullagiinId),
+      dun: { $gt: 0 },
+      ognoo: { $gte: ekhlel, $lte: tugsgul },
+      ekhniiUldegdelEsekh: { $ne: true },
+      turul: { $nin: ["Хөнгөлөлт", "khungulult", "discount"] },
+    };
+    if (barilgiinId) match.barilgiinId = String(barilgiinId);
+    if (zardliinId) match.zardliinId = String(zardliinId);
+
+    const mur = await GuilgeeAvlaguud(kholbolt).aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: {
+            g: "$gereeniiId",
+            s: { $dateToString: { format: "%Y-%m", date: "$ognoo", timezone: "Asia/Ulaanbaatar" } },
+          },
+          dun: { $sum: "$dun" },
+        },
+      },
+    ]);
+
+    const suuri = {};
+    mur.forEach(({ _id, dun }) => {
+      if (!_id?.g) return;
+      const g = String(_id.g);
+      if (!suuri[g]) suuri[g] = {};
+      suuri[g][_id.s] = Math.round(dun * 100) / 100;
+    });
+
+    res.json({ suuri });
+  } catch (err) {
+    next(err);
+  }
+});

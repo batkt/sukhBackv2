@@ -911,7 +911,19 @@ router.post("/ebarimtIlgeeye", tokenShalgakh, async (req, res, next) => {
         });
       }
 
-      res.json({ success: true, message: "Amjilttai", tatvariinKhariu: body });
+      // Сүүлд илгээсэн огноог хадгална — И-баримтын цонх харуулна
+      const suuliinIlgeesenOgnoo = new Date();
+      Baiguullaga(db.erunkhiiKholbolt)
+        .updateOne({ _id: orgId }, { $set: { ebarimtSuuliinIlgeesenOgnoo: suuliinIlgeesenOgnoo } })
+        .catch((e) => console.error("[EBARIMT-ILGEEKH] огноо хадгалахад алдаа:", e.message))
+        .finally(() => {
+          res.json({
+            success: true,
+            message: "Amjilttai",
+            tatvariinKhariu: body,
+            suuliinIlgeesenOgnoo,
+          });
+        });
     });
   } catch (error) {
     next(error);

@@ -4,7 +4,13 @@ const BankniiGuilgee = require("../models/bankniiGuilgee");
 const { bankniiGuilgeeToololtAvya } = require("../controller/toololt");
 //const UstsanBarimt = require("../models/ustsanBarimt");
 const { tokenShalgakh, crud, UstsanBarimt, Dans } = require("zevbackv2");
-const { downloadBankniiGuilgeeExcel } = require("../controller/excelImportController");
+const {
+  downloadBankniiGuilgeeExcel,
+  bankniiGuilgeeZagvarAvya,
+  bankniiGuilgeeExcelOruulya,
+} = require("../controller/excelImportController");
+const multer = require("multer");
+const uploadFile = multer({ storage: multer.memoryStorage() });
 //const { crud } = require('../components/crud');
 //const { tokenShalgakh } = require("../middlewares/tokenShalgakh");
 
@@ -321,6 +327,15 @@ router.post("/bankniiKhuulgaTatajKhadgalya", tokenShalgakh, bankniiKhuulgaTatajK
 router.post("/tulultTaniya", tokenShalgakh, tulultTaniya);
 router.post("/guilgeeKholbyo", tokenShalgakh, guilgeeKholbyo);
 router.post("/guilgeeSalgaya", tokenShalgakh, guilgeeSalgaya);
+
+// Дансны хуулга: гүйлгээг Excel-ээр гараар оруулах (тест / API-гүй данс)
+router.post("/bankniiGuilgeeZagvarAvya", tokenShalgakh, bankniiGuilgeeZagvarAvya);
+router.post(
+  "/bankniiGuilgeeExcelOruulya",
+  uploadFile.single("file"),
+  tokenShalgakh,
+  bankniiGuilgeeExcelOruulya,
+);
 
 module.exports = router;
 

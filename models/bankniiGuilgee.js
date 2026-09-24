@@ -60,6 +60,13 @@ const bankniiGuilgeeSchema = new Schema(
     indexTalbar: String,
     kholbosonDun: Number,
     ebarimtAvsanEsekh: Boolean,
+    // Гүйлгээг гараар холбосон ажилтан (Дансны хуулга → «Ажилтан» багана).
+    // Автомат (QPay/таних) холболтод хоосон үлдэнэ.
+    kholbosonAjiltniiId: String,
+    kholbosonAjiltniiNer: String,
+    // Дансны хуулга → Excel-ээр гараар оруулсан (тест / API-гүй данс)
+    excelEsekh: Boolean,
+    oruulsanAjiltniiNer: String,
     magadlaltaiGereenuud: mongoose.Schema.Types.Mixed,
   },
   {

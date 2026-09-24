@@ -284,6 +284,26 @@ async function logDelete(
                               deletedDoc?.ognoo ||
                               null;
 
+    // Давхардал: глобал аудит plugin (utils/auditPlugin.js) болон гараар
+    // дуудсан logDelete хоёулаа нэг устгалыг бичиж болно. 10 секундэд ижил
+    // баримт бүртгэгдсэн бол шинээр бичихгүй — шалтгаан нь дутуу бол нөхнө.
+    try {
+      const umnukh = await UstgakhTuukh(db.erunkhiiKholbolt).findOne({
+        modelName: modelName,
+        documentId: documentId?.toString(),
+        ognoo: { $gte: new Date(Date.now() - 10000) },
+      });
+      if (umnukh) {
+        if (reason && !umnukh.reason) {
+          umnukh.reason = reason;
+          await umnukh.save();
+        }
+        return;
+      }
+    } catch (_) {
+      // Давхардал шалгаж чадаагүй бол бичсээр байна
+    }
+
     const ustgakhTuukh = new UstgakhTuukh(db.erunkhiiKholbolt)({
       modelName: modelName,
       documentId: documentId?.toString(),

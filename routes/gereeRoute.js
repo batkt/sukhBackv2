@@ -30,6 +30,7 @@ const {
 } = require("../controller/tsakhilgaanController");
 const {
   khungulultKhadgalya,
+  khungulultSuuriAvya,
   khungulultUstgaya,
 } = require("../controller/khungulultController");
 const gereeController = require("../controller/gereeController");
@@ -472,6 +473,7 @@ router.put(
 
 // Хөнгөлөлт — бөөнөөр бүртгэх, устгах
 router.route("/khungulultKhadgalya").post(tokenShalgakh, khungulultKhadgalya);
+router.route("/khungulultSuuriAvya").post(tokenShalgakh, khungulultSuuriAvya);
 router.route("/khungulultUstgaya").post(tokenShalgakh, khungulultUstgaya);
 
 module.exports = router;
