@@ -114,21 +114,64 @@ function getUserAgentFromRequest(req) {
   return {};
 }
 
+/** Хэзээд ч засвар гэж тооцохгүй техникийн талбарууд (том жижиг үсэг хамаарахгүй) */
+const UURCHLULT_BISH_TALBARUUD = new Set(["createdat", "updatedat", "__v", "_id"]);
+
+const ISO_OGNOO_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+
+/**
+ * Утгыг харьцуулахад зориулж хэвийн болгоно: Date болон ISO огноон тэмдэгт
+ * мөрийг нэг ISO хэлбэрт оруулна, null/undefined-ийг адил гэж үзнэ, дотоод
+ * объектын createdAt/updatedAt/__v/_id-г хасна.
+ */
+function kharitsuulakhUtga(value) {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) {
+    return isNaN(value.getTime()) ? null : value.toISOString();
+  }
+  if (typeof value === "string") {
+    if (ISO_OGNOO_REGEX.test(value)) {
+      const d = new Date(value);
+      if (!isNaN(d.getTime())) return d.toISOString();
+    }
+    return value;
+  }
+  if (Array.isArray(value)) return value.map(kharitsuulakhUtga);
+  if (typeof value === "object") {
+    // ObjectId, Decimal128 зэрэг — toJSON/toString-оор харьцуулна
+    if (value._bsontype) return String(value);
+    const ur = {};
+    for (const k of Object.keys(value).sort()) {
+      if (UURCHLULT_BISH_TALBARUUD.has(k.toLowerCase())) continue;
+      ur[k] = kharitsuulakhUtga(value[k]);
+    }
+    return ur;
+  }
+  return value;
+}
+
 /**
  * Compare two objects and return array of changes
  */
 function getChanges(oldDoc, newDoc, excludeFields = ["updatedAt", "__v", "_id", "globalUldegdel", "paymentHistory", "tulsunOgnoo", "tuluv"]) {
   const changes = [];
   const allKeys = new Set([...Object.keys(oldDoc || {}), ...Object.keys(newDoc || {})]);
+  const khasakh = new Set(
+    (excludeFields || []).map((f) => String(f).toLowerCase()),
+  );
 
   for (const key of allKeys) {
-    if (excludeFields.includes(key)) continue;
+    const keyJijig = key.toLowerCase();
+    if (khasakh.has(keyJijig) || UURCHLULT_BISH_TALBARUUD.has(keyJijig)) continue;
 
     const oldValue = oldDoc?.[key];
     const newValue = newDoc?.[key];
 
-    // Deep comparison for objects/arrays
-    if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
+    // Огноо/null зэргийг хэвийн болгосны дараа ижил бол засвар биш
+    if (
+      JSON.stringify(kharitsuulakhUtga(oldValue)) !==
+      JSON.stringify(kharitsuulakhUtga(newValue))
+    ) {
       // Structure for zassanBarimt.uurchlult
       changes.push({
         talbar: key,
@@ -141,6 +184,39 @@ function getChanges(oldDoc, newDoc, excludeFields = ["updatedAt", "__v", "_id", 
   }
 
   return changes;
+}
+
+/**
+ * Баримтын хүнд ойлгомжтой нэрийг гаргана (UI-д дугаарын оронд харуулна):
+ * овог + нэр, эсвэл ner/name/gereeniiDugaar/toot/mashiniiDugaar/dugaar.
+ */
+function classNerAvya(doc) {
+  if (!doc || typeof doc !== "object") return "";
+  const utga = (v) =>
+    v !== null && v !== undefined && typeof v !== "object" ? String(v).trim() : "";
+  const ovogNer = [utga(doc.ovog), utga(doc.ner)].filter(Boolean).join(" ");
+  if (ovogNer) return ovogNer;
+  for (const talbar of ["name", "gereeniiDugaar", "toot", "mashiniiDugaar", "dugaar"]) {
+    const v = utga(doc[talbar]);
+    if (v) return v;
+  }
+  return "";
+}
+
+/** Баримтын дугаар (logEdit-д) */
+function classDugaarAvya(doc) {
+  const v =
+    doc?.gereeniiDugaar ||
+    doc?.nekhemjlekhiinDugaar ||
+    doc?.dugaar ||
+    doc?.register ||
+    "";
+  return v?.toString() || "";
+}
+
+/** "gereeniiDugaar" → "Gereenii Dugaar" */
+function classNameAvya(modelName) {
+  return modelName.charAt(0).toUpperCase() + modelName.slice(1).replace(/([A-Z])/g, ' $1').trim();
 }
 
 /**
@@ -205,12 +281,9 @@ async function logEdit(req, db, modelName, documentId, oldDoc, newDoc, additiona
       }
     }
 
-    const classDugaar = newDoc?.gereeniiDugaar || 
-                      newDoc?.nekhemjlekhiinDugaar || 
-                      newDoc?.dugaar || 
-                      newDoc?.register || 
-                      "";
-    
+    const classDugaar = classDugaarAvya(newDoc);
+    const classNer = classNerAvya(newDoc) || classNerAvya(oldDoc);
+
     const classOgnoo = newDoc?.ognoo || 
                      newDoc?.createdAt || 
                      new Date();
@@ -219,9 +292,10 @@ async function logEdit(req, db, modelName, documentId, oldDoc, newDoc, additiona
       baiguullagiinId: ajiltan.baiguullagiinId,
       barilgiinId: additionalContext.barilgiinId || null,
       classType: modelName,
-      className: modelName.charAt(0).toUpperCase() + modelName.slice(1).replace(/([A-Z])/g, ' $1').trim(),
+      className: classNameAvya(modelName),
       classId: documentId?.toString(),
-      classDugaar: classDugaar?.toString() || "",
+      classDugaar: classDugaar,
+      classNer: classNer,
       classOgnoo: classOgnoo,
       ajiltniiId: ajiltan.id,
       ajiltniiNer: ajiltan.ner,
@@ -308,6 +382,7 @@ async function logDelete(
       modelName: modelName,
       documentId: documentId?.toString(),
       collectionName: modelName,
+      classNer: classNerAvya(deletedDoc),
       deletedData: deletedDoc,
       documentCreatedAt: documentCreatedAt,
       ajiltniiId: ajiltan.id,
@@ -335,4 +410,5 @@ module.exports = {
   logEdit,
   logDelete,
   getChanges,
+  classNerAvya,
 };

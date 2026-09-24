@@ -3598,11 +3598,31 @@ function dunUnshya(v) {
  * (khanbank/bogd → amount, golomt → tranAmount+drOrCr, tdb → Amt,
  * trans → income) бүгдийг нь бөглөнө.
  */
+/**
+ * Дансны хуулгад гүйлгээг Excel-ээр гараар (тестээр) оруулах эрхтэй
+ * ажилтнуудын нэвтрэх нэр. Жинхэнэ банкны гүйлгээтэй холилдохоос сэргийлж
+ * зөвхөн эдгээр хэрэглэгчид нээлттэй — frontend мөн адил нууна.
+ */
+const BANK_EXCEL_TEST_KHEREGLEGCHID = ["0707007"];
+
+async function bankExcelErkhShalgaya(req) {
+  const { db } = require("zevbackv2");
+  const Ajiltan = require("../models/ajiltan");
+  const tokenId = req.body?.nevtersenAjiltniiToken?.id;
+  const ajiltan = tokenId
+    ? await Ajiltan(db.erunkhiiKholbolt).findById(tokenId).select("nevtrekhNer").lean()
+    : null;
+  if (!ajiltan || !BANK_EXCEL_TEST_KHEREGLEGCHID.includes(String(ajiltan.nevtrekhNer || ""))) {
+    throw new aldaa("Энэ үйлдлийг хийх эрхгүй байна");
+  }
+}
+
 exports.bankniiGuilgeeExcelOruulya = asyncHandler(async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
     const BankniiGuilgee = require("../models/bankniiGuilgee");
     const { baiguullagiinId, barilgiinId, dansniiDugaar, bank } = req.body;
+    await bankExcelErkhShalgaya(req);
 
     if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
     if (!dansniiDugaar) throw new aldaa("Данс сонгоно уу");

@@ -8,6 +8,7 @@ const ustgakhTuukhSchema = new Schema(
     modelName: String, // e.g., "ajiltan", "geree", "baiguullaga"
     documentId: String, // The _id of the document that was deleted
     collectionName: String, // The collection name (for organization-specific databases)
+    classNer: String, // Устгасан баримтын хүнд ойлгомжтой нэр (ж: "Бат Дорж", тоот)
     
     // Document data before deletion (snapshot)
     deletedData: Schema.Types.Mixed, // Full document snapshot before deletion

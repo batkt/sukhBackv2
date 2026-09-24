@@ -11,6 +11,7 @@ const zassanBarimtSchema = new Schema(
     className: String, // Human-readable name
     classId: String, // Document _id
     classDugaar: String, // Identifier (e.g. Contract No)
+    classNer: String, // Хүнд ойлгомжтой нэр (ж: "Бат Дорж", тоот)
     classOgnoo: Date, // Primary date associated with record
     ajiltniiId: String,
     ajiltniiNer: String,
