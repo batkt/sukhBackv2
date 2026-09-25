@@ -5321,6 +5321,17 @@ router.post(
 );
 
 // ─── Manual e-barimt from camera page ────────────────────────────────────────
+/** Хөнгөлөлт/буцаалтыг тооцохгүй, БОДИТ төлсөн дүн — и-баримт үүнээр гарна */
+const KHUNGULULT_TURLUUD = new Set(["khungulult", "discount", "Хөнгөлөлт", "khariult"]);
+function zogsooliinTulsunDun(obj) {
+  const raw = obj?.tuukh?.[0]?.tulbur;
+  const tulbur = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return tulbur.reduce(
+    (s, t) => s + (Number(t?.dun) > 0 && !KHUNGULULT_TURLUUD.has(t?.turul) ? Number(t.dun) : 0),
+    0,
+  );
+}
+
 router.post("/ebarimtShivye", tokenShalgakh, async (req, res, next) => {
   try {
     const { id, type, register } = req.body;
@@ -5330,6 +5341,14 @@ router.post("/ebarimtShivye", tokenShalgakh, async (req, res, next) => {
 
     const tukhainObject = await Uilchluulegch(tukhainKholbolt).findById(id).lean();
     if (!tukhainObject) return res.status(404).json({ error: "Бүртгэл олдсонгүй" });
+
+    // Бүрэн хөнгөлсөн (төлсөн дүн 0) машинд и-баримт гаргахгүй. Өмнө нь
+    // `niitDun`-ээр (хөнгөлөлт хасаагүй) гаргадаг байв.
+    const tulsunDun = zogsooliinTulsunDun(tukhainObject);
+    if (tulsunDun <= 0) {
+      return res.status(400).json({ error: "Төлсөн дүн 0₮ — и-баримт үүсэхгүй" });
+    }
+    tukhainObject.niitDun = tulsunDun;
 
     const baiguullagiinId = tukhainObject.baiguullagiinId || req.body.baiguullagiinId;
     const barilgiinId = tukhainObject.barilgiinId || req.body.barilgiinId;
@@ -5391,7 +5410,7 @@ router.post("/ebarimtShivye", tokenShalgakh, async (req, res, next) => {
           const ebId = d.id || d.receiptId || d.lottery || "";
           await Uilchluulegch(tukhainKholbolt).findByIdAndUpdate(tukhainObject._id, {
             ebarimtAvsanEsekh: true,
-            ebarimtAvsanDun: d.totalAmount || tukhainObject.niitDun,
+            ebarimtAvsanDun: Number(d.totalAmount) || tulsunDun,
             ...(customerNo ? { ebarimtRegister: customerNo } : {}),
             ...(ebId ? { ebarimtId: ebId, ebarimtDugaar: ebId, lottery: d.lottery } : {}),
             ...(ebId ? { "tuukh.0.ebarimtId": ebId, "tuukh.0.ebarimtDugaar": ebId, "tuukh.0.lottery": d.lottery } : {}),
