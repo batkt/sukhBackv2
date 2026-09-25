@@ -1,21 +1,18 @@
 /**
- * Хөнгөлөлт — бөөнөөр бүртгэх ба устгах.
+ * Хөнгөлөлт — turees-ийн `khungulultKhadgalya`-тай ижил зарчим.
  *
- * Өмнө нь дэлгэц нь гэрээ бүрээр `POST /guilgeeAvlaguud` руу нэг нэгээр
- * хүсэлт явуулдаг байв. 200 тоотод хөнгөлөлт өгөхөд 200 хүсэлт, аль нь
- * амжилтгүй болсныг мэдэх ч арга байхгүй. Мөн зардал тус бүрээр болон
- * хоногоор хөнгөлөх ойлголт огт байсангүй.
- *
- * turees-ийн `khungulultKhadgalya`-тай ижил зарчим:
- *   - Хөнгөлөх ДҮНГ дэлгэц бодно (хувь эсвэл шууд дүн, сарын үржүүлэгчтэй).
- *     Сервер нь дүнг дахин бодохгүй — зөвхөн хаана суухыг шийднэ.
- *   - Сонгосон мөчлөгт тухайн гэрээнд ТӨЛБӨР байхгүй бол хөнгөлөлт суухгүй,
- *     тэр гэрээг `alggasanGereenuud`-д буцааж мэдэгдэнэ.
- *   - Бичлэг бүрд аудит (`zassanBarimt`) үлдээнэ.
- *
- * ЯЛГАА: turees нь хөнгөлөлтийг `geree.avlaga.guilgeenuud[]` дотор
- * шигтгэдэг. sukh-д авлага нь тусдаа `guilgeeAvlaguud` цуглуулга тул
- * хөнгөлөлт ч мөн тэнд сөрөг дүнтэй мөр болж бичигдэнэ.
+ *   - СУУРЬ нь гэрээний САРЫН ТӨЛБӨР (нэхэмжлэхийг бодох `calculateGereeCharges`
+ *     — тогтмол зардал, зогсоол, агуулах, сүүлийн заалт). Нэхэмжлэх гараагүй
+ *     сард ч хувиар хөнгөлж болно (turees: `sariinTurees`).
+ *   - Хувиар: сарын төлбөр × % ; дүнгээр: сар бүрт тогтмол дүн. Олон сар
+ *     сонгосон бол сар бүрт ижил дүн (× сарын тоо).
+ *   - Нэг удаагийн хөнгөлөлт бүр `khungulultiinTuukh` бүртгэлтэй. Сар бүрийн
+ *     хасалт нь `guilgeeAvlaguud`-д `khungulultiinTuukhId`-аар холбогдсон
+ *     сөрөг мөр болж бичигдэнэ — устгах, засахдаа бүгдийг хамт өөрчилнө.
+ *   - turees дүнг дэлгэцээс авч итгэдэг; энд сервер ӨӨРӨӨ бодно, дээд хувь
+ *     ба эрхийг ч сервер шалгана. Дүнг бүхэл төгрөг рүү бөөрөнхийлнө.
+ *   - Хуучин (бүртгэлгүй) хөнгөлөлтийн мөрүүдийг мөрөөр нь устгах боломж
+ *     хэвээр.
  */
 
 const asyncHandler = require("express-async-handler");
@@ -23,9 +20,12 @@ const aldaa = require("../components/aldaa");
 
 const Geree = require("../models/geree");
 const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+const KhungulultiinTuukh = require("../models/khungulultiinTuukh");
 const {
   khungulultOruulakhErkhteiEsekh,
 } = require("../utils/khungulultErkh");
+
+const TSUTSLASAN = new Set(["цуцалсан", "tsutlsasan", "идэвхгүй"]);
 
 /** `YYYY-MM` мөрийг тухайн сарын эхлэл/төгсгөл болгоно. */
 function sariinKhyazgaar(sarMur) {
@@ -54,33 +54,199 @@ function saruudiigZadlaya(ekhlekhSar, duusakhSar) {
   return saruud;
 }
 
+const tokenAjiltan = (req) =>
+  req.body?.nevtersenAjiltniiToken || req.nevtersenAjiltniiToken || {};
+
+function kholboltOlya(baiguullagiinId) {
+  const { db } = require("zevbackv2");
+  const kholbolt = db.kholboltuud.find(
+    (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+  );
+  if (!kholbolt) throw new aldaa("Холболт олдсонгүй");
+  return kholbolt;
+}
+
+/** Барилга → байгууллагын дээд хувь. Тохируулаагүй бол null (хязгааргүй). */
+async function deedKhuviOlya(baiguullagiinId, barilgiinId) {
+  const { db } = require("zevbackv2");
+  const Baiguullaga = require("../models/baiguullaga");
+  const b = await Baiguullaga(db.erunkhiiKholbolt).findById(baiguullagiinId).lean();
+  const barilga = b?.barilguud?.find((x) => String(x._id) === String(barilgiinId || ""));
+  const utga = Number(
+    barilga?.tokhirgoo?.deedKhungulultiinKhuvi ?? b?.tokhirgoo?.deedKhungulultiinKhuvi,
+  );
+  return Number.isFinite(utga) && utga > 0 ? utga : null;
+}
+
+/**
+ * Гэрээний НЭГ САРЫН төлбөр — нэхэмжлэхтэй ижил функцээр. Эхний үлдэгдэл,
+ * өмнө нь бичигдсэн (нэхэмжлээгүй) авлагыг оруулахгүй.
+ */
+async function sariinDunBodyo(kholbolt, geree) {
+  const { calculateGereeCharges } = require("../services/invoiceService");
+  try {
+    const { charges } = await calculateGereeCharges(kholbolt, geree, {
+      billingDate: new Date(),
+    });
+    const zadargaa = (charges || [])
+      .filter((c) => !c.isEkhniiUldegdel && !c.ledgerDeerBaigaa && Number(c.dun) > 0)
+      .map((c) => ({ ner: c.ner, dun: Math.round(Number(c.dun) * 100) / 100 }));
+    const sariinDun = zadargaa.reduce((s, c) => s + c.dun, 0);
+    return { sariinDun: Math.round(sariinDun * 100) / 100, zadargaa };
+  } catch (err) {
+    console.error("Хөнгөлөлтийн суурь бодоход алдаа:", geree?._id, err.message);
+    return { sariinDun: 0, zadargaa: [] };
+  }
+}
+
+/** Хязгаартай зэрэгцээ ажиллуулах */
+async function zeregtseeAjiluulya(jagsaalt, too, fn) {
+  const ur = new Array(jagsaalt.length);
+  let i = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(too, jagsaalt.length) }, async () => {
+      while (i < jagsaalt.length) {
+        const n = i++;
+        ur[n] = await fn(jagsaalt[n]);
+      }
+    }),
+  );
+  return ur;
+}
+
+/** Нэг сарын хөнгөлөх дүн */
+function sariinKhungulult(khungulukhTurul, utga, sariinDun) {
+  if (khungulukhTurul === "khuvi")
+    return Math.round(((Number(sariinDun) || 0) * utga) / 100);
+  return Math.round(utga);
+}
+
+/**
+ * Нэг гэрээнд сар бүрийн хөнгөлөлтийн мөрийг бичнэ. Тухайн сарын нэхэмжлэх
+ * байвал түүний огноонд, үгүй бол сарын 1-нд суулгана.
+ */
+async function murnuudBichye(
+  kholbolt,
+  { geree, saruud, sariinDun, tuukh, ajiltan, barilgiinId },
+) {
+  const GuilgeeModel = GuilgeeAvlaguud(kholbolt);
+  const NekhemjlekhModel = require("../models/nekhemjlekhiinTuukh")(kholbolt);
+  const dun = sariinKhungulult(tuukh.khungulukhTurul, tuukh.khungulukhUtga, sariinDun);
+  if (dun <= 0) return 0;
+
+  let niit = 0;
+  for (const sar of saruud) {
+    const kh = sariinKhyazgaar(sar);
+    if (!kh) continue;
+    const nekhemjlekh = await NekhemjlekhModel.findOne({
+      gereeniiId: String(geree._id),
+      ognoo: { $gte: kh.ekhlel, $lte: kh.tugsgul },
+    })
+      .sort({ ognoo: 1 })
+      .select({ ognoo: 1 })
+      .lean();
+
+    await new GuilgeeModel({
+      baiguullagiinId: String(tuukh.baiguullagiinId),
+      barilgiinId: barilgiinId ? String(barilgiinId) : geree.barilgiinId,
+      gereeniiId: String(geree._id),
+      gereeniiDugaar: geree.gereeniiDugaar || "",
+      toot: geree.toot || "",
+      turul: "Хөнгөлөлт",
+      zardliinTurul: "Хөнгөлөлт",
+      dun: -dun,
+      ognoo: nekhemjlekh?.ognoo || kh.ekhlel,
+      tailbar: String(tuukh.shaltgaan || "").trim(),
+      ...(tuukh.khungulukhTurul === "khuvi"
+        ? { khungulultKhuvi: Number(tuukh.khungulukhUtga) }
+        : {}),
+      khungulultiinTuukhId: String(tuukh._id),
+      source: "khungulult",
+      guilgeeKhiisenAjiltniiNer: ajiltan.ner || "Систем",
+      guilgeeKhiisenAjiltniiId: ajiltan.id || "",
+    }).save();
+    niit += dun;
+  }
+  return niit;
+}
+
+async function nekhemjlekhSyncKhiiye(kholbolt, gereeniiIdnuud) {
+  try {
+    const guilgeeService = require("../services/guilgeeService");
+    for (const id of new Set(gereeniiIdnuud.filter(Boolean))) {
+      await guilgeeService.syncInvoicesStatus(kholbolt, String(id));
+    }
+  } catch (err) {
+    console.error("Хөнгөлөлтийн дараа sync амжилтгүй:", err.message);
+  }
+}
+
+async function erkhShalgaya(req, res) {
+  const ok = await khungulultOruulakhErkhteiEsekh(tokenAjiltan(req).id);
+  if (!ok) {
+    res
+      .status(403)
+      .json({ success: false, message: "Танд хөнгөлөлтийн эрх байхгүй байна." });
+    return false;
+  }
+  return true;
+}
+
+/**
+ * POST /khungulultSuuriAvya — гэрээ бүрийн сарын төлбөр ба бодит үлдэгдэл.
+ * Body: baiguullagiinId, barilgiinId?, gereeniiIdnuud?
+ * Хариу: { suuri: { [gereeniiId]: { sariinDun, zadargaa } },
+ *          uldegdel: { [gereeniiId]: дүн } }
+ */
+exports.khungulultSuuriAvya = asyncHandler(async (req, res, next) => {
+  try {
+    const { baiguullagiinId, barilgiinId, gereeniiIdnuud } = req.body;
+    if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
+    const kholbolt = kholboltOlya(baiguullagiinId);
+
+    const query = { baiguullagiinId: String(baiguullagiinId) };
+    if (barilgiinId) query.barilgiinId = String(barilgiinId);
+    if (Array.isArray(gereeniiIdnuud) && gereeniiIdnuud.length)
+      query._id = { $in: gereeniiIdnuud };
+    const gereenuud = (await Geree(kholbolt).find(query).lean()).filter(
+      (g) => !TSUTSLASAN.has(String(g.tuluv || "").trim().toLowerCase()),
+    );
+
+    const ur = await zeregtseeAjiluulya(gereenuud, 8, (g) => sariinDunBodyo(kholbolt, g));
+    const suuri = {};
+    gereenuud.forEach((g, i) => {
+      suuri[String(g._id)] = ur[i];
+    });
+
+    const uldMatch = { baiguullagiinId: String(baiguullagiinId) };
+    if (barilgiinId) uldMatch.barilgiinId = String(barilgiinId);
+    const uldMur = await GuilgeeAvlaguud(kholbolt).aggregate([
+      { $match: uldMatch },
+      { $group: { _id: "$gereeniiId", dun: { $sum: "$dun" } } },
+    ]);
+    const uldegdel = {};
+    uldMur.forEach(({ _id, dun }) => {
+      if (_id) uldegdel[String(_id)] = Math.round(dun * 100) / 100;
+    });
+
+    res.json({ suuri, uldegdel });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /**
  * POST /khungulultKhadgalya
- *
- * Body:
- *   baiguullagiinId, barilgiinId,
- *   gereenuud: [{ gereeniiId, dun, toot? }]   // дүн нь дэлгэцээс бодогдсон
- *   ekhlekhSar, duusakhSar                    // "YYYY-MM"
- *   khonogTootsokhEsekh, khungulultKhonog, khungulultKhuvi
- *   zardliinId, zardliinNer                   // тодорхой зардлыг хөнгөлөх бол
- *   shaltgaan
+ * Body: baiguullagiinId, barilgiinId, ekhlekhSar, duusakhSar,
+ *       khungulukhTurul ("khuvi" | "dun"), khungulukhUtga, shaltgaan,
+ *       gereenuud: [{ gereeniiId }]
  */
 exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
   try {
-    const { db } = require("zevbackv2");
-    const {
-      baiguullagiinId,
-      barilgiinId,
-      gereenuud,
-      ekhlekhSar,
-      duusakhSar,
-      khonogTootsokhEsekh = false,
-      khungulultKhonog,
-      khungulultKhuvi,
-      zardliinId,
-      zardliinNer,
-      shaltgaan,
-    } = req.body;
+    const { baiguullagiinId, barilgiinId, gereenuud, ekhlekhSar, duusakhSar, shaltgaan } =
+      req.body;
+    const khungulukhTurul = req.body.khungulukhTurul === "dun" ? "dun" : "khuvi";
+    const khungulukhUtga = Number(req.body.khungulukhUtga);
 
     if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
     if (!Array.isArray(gereenuud) || gereenuud.length === 0)
@@ -88,169 +254,127 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
     if (!shaltgaan || !String(shaltgaan).trim())
       throw new aldaa("Шалтгаан заавал бөглөнө");
     if (!ekhlekhSar) throw new aldaa("Хөнгөлөх сар сонгоно уу");
+    if (!Number.isFinite(khungulukhUtga) || khungulukhUtga <= 0)
+      throw new aldaa("Хөнгөлөх хувь эсвэл дүнгээ оруулна уу");
+    if (!(await erkhShalgaya(req, res))) return;
 
-    const zuvshuurugdsun = await khungulultOruulakhErkhteiEsekh(
-      (req.body?.nevtersenAjiltniiToken || req.nevtersenAjiltniiToken)?.id,
-    );
-    if (!zuvshuurugdsun) {
-      return res.status(403).json({
-        success: false,
-        message: "Танд хөнгөлөлт оруулах эрх байхгүй байна.",
-      });
+    if (khungulukhTurul === "khuvi") {
+      const deed = (await deedKhuviOlya(baiguullagiinId, barilgiinId)) ?? 100;
+      if (khungulukhUtga > deed)
+        throw new aldaa(`Тохируулсан дээд хувь (${deed}%)-иас хэтэрсэн байна`);
     }
-
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
-    );
-    if (!kholbolt) throw new aldaa("Холболт олдсонгүй");
 
     const saruud = saruudiigZadlaya(ekhlekhSar, duusakhSar);
     if (saruud.length === 0) throw new aldaa("Хөнгөлөх сар буруу байна");
 
-    const GuilgeeModel = GuilgeeAvlaguud(kholbolt);
-    const GereeModel = Geree(kholbolt);
+    const kholbolt = kholboltOlya(baiguullagiinId);
+    const ajiltan = tokenAjiltan(req);
+    const Tuukh = KhungulultiinTuukh(kholbolt);
 
-    const ajiltanNer = (req.body?.nevtersenAjiltniiToken || req.nevtersenAjiltniiToken)?.ner || "Систем";
-    const ajiltanId = (req.body?.nevtersenAjiltniiToken || req.nevtersenAjiltniiToken)?.id || "";
+    const tuukh = await new Tuukh({
+      baiguullagiinId: String(baiguullagiinId),
+      barilgiinId: barilgiinId ? String(barilgiinId) : "",
+      ekhlekhSar: saruud[0],
+      duusakhSar: saruud[saruud.length - 1],
+      ognoonuud: saruud,
+      khungulukhTurul,
+      khungulukhUtga,
+      shaltgaan: String(shaltgaan).trim(),
+      tulukhDun: 0,
+      khungulsunDun: 0,
+      khamaataiGereenuud: [],
+      ajiltniiId: ajiltan.id || "",
+      ajiltniiNer: ajiltan.ner || "Систем",
+    }).save();
 
     const results = {
       success: [],
-      /** Сонгосон мөчлөгт төлбөргүй тул хөнгөлөлт суугаагүй гэрээнүүд. */
       alggasanGereenuud: [],
       failed: [],
       total: gereenuud.length,
     };
+    const khamaatai = [];
+    let niitTulukh = 0;
+    let niitKhungulsun = 0;
 
+    const GereeModel = Geree(kholbolt);
     for (const mur of gereenuud) {
       const gereeniiId = String(mur?.gereeniiId || "").trim();
-      const niitDun = Math.abs(Number(mur?.dun) || 0);
-
-      if (!gereeniiId || niitDun <= 0) {
-        results.failed.push({
-          gereeniiId,
-          error: "Гэрээний ID эсвэл дүн буруу",
-        });
-        continue;
-      }
-
       try {
-        const geree = await GereeModel.findById(gereeniiId).lean();
+        const geree = gereeniiId ? await GereeModel.findById(gereeniiId).lean() : null;
         if (!geree) {
           results.failed.push({ gereeniiId, error: "Гэрээ олдсонгүй" });
           continue;
         }
-
-        /**
-         * Хоногийн горимд бүх дүн нэг бичлэг болж, хугацаа нь мужийн
-         * эхлэлээр тэмдэглэгдэнэ — turees-тэй ижил. Эс бөгөөс сар тус бүрт
-         * хувааж, зөвхөн ТӨЛБӨРТЭЙ сард суулгана.
-         */
-        const bichleguud = [];
-
-        if (khonogTootsokhEsekh) {
-          const khyazgaar = sariinKhyazgaar(saruud[0]);
-          bichleguud.push({ ognoo: khyazgaar.ekhlel, dun: niitDun });
-        } else {
-          // Дэлгэц сар бүрийн дүнг (`saraar`) илгээвэл тэрийг, эс бөгөөс
-          // нийт дүнг тэнцүү хуваана. Хувиар хөнгөлөхөд сар бүрийн төлбөр
-          // өөр тул тэнцүү хуваах нь буруу дүн суулгадаг байв.
-          const saraar = mur?.saraar && typeof mur.saraar === "object" ? mur.saraar : null;
-          const NekhemjlekhModel = require("../models/nekhemjlekhiinTuukh")(kholbolt);
-
-          for (const sar of saruud) {
-            const khyazgaar = sariinKhyazgaar(sar);
-            if (!khyazgaar) continue;
-            const sariinDun = saraar ? Math.abs(Number(saraar[sar]) || 0) : niitDun / saruud.length;
-            if (sariinDun <= 0) continue;
-
-            // Тухайн сарын нэхэмжлэх — хөнгөлөлт нь тэр нэхэмжлэхийн огноонд сууна
-            const nekhemjlekh = await NekhemjlekhModel.findOne({
-              gereeniiId: String(geree._id),
-              ognoo: { $gte: khyazgaar.ekhlel, $lte: khyazgaar.tugsgul },
-            })
-              .sort({ ognoo: 1 })
-              .select({ ognoo: 1 })
-              .lean();
-            if (nekhemjlekh?.ognoo) {
-              bichleguud.push({ ognoo: nekhemjlekh.ognoo, dun: sariinDun });
-              continue;
-            }
-
-            // Тухайн сард уг гэрээнд НЭХЭМЖИЛСЭН төлбөр байгаа эсэх.
-            // Байхгүй бол хөнгөлөх зүйлгүй — turees ч мөн ингэж алгасдаг.
-            const tulburiinShuult = {
-              gereeniiId: String(geree._id),
-              dun: { $gt: 0 },
-              ognoo: { $gte: khyazgaar.ekhlel, $lte: khyazgaar.tugsgul },
-            };
-            if (zardliinId) tulburiinShuult.zardliinId = String(zardliinId);
-
-            const tulbur = await GuilgeeModel.findOne(tulburiinShuult)
-              .sort({ ognoo: 1 })
-              .lean();
-
-            if (!tulbur) continue;
-            bichleguud.push({ ognoo: tulbur.ognoo, dun: sariinDun });
-          }
-        }
-
-        if (bichleguud.length === 0) {
+        const { sariinDun } = await sariinDunBodyo(kholbolt, geree);
+        const alggasakh = (shaltgaanNer) =>
           results.alggasanGereenuud.push({
             gereeniiId,
             gereeniiDugaar: geree.gereeniiDugaar || "",
-            toot: geree.toot || mur?.toot || "",
-            dun: niitDun,
-            shaltgaan: zardliinNer
-              ? `Сонгосон мөчлөгт «${zardliinNer}» төлбөр алга`
-              : "Сонгосон мөчлөгт төлбөр алга",
+            toot: geree.toot || "",
+            shaltgaan: shaltgaanNer,
           });
+        if (khungulukhTurul === "khuvi" && sariinDun <= 0) {
+          alggasakh("Гэрээнд сарын төлбөр алга");
           continue;
         }
-
-        for (const bichleg of bichleguud) {
-          await new GuilgeeModel({
-            baiguullagiinId: String(baiguullagiinId),
-            barilgiinId: barilgiinId ? String(barilgiinId) : geree.barilgiinId,
-            gereeniiId: String(geree._id),
-            toot: geree.toot || mur?.toot || "",
-            turul: "Хөнгөлөлт",
-            zardliinTurul: "Хөнгөлөлт",
-            ...(zardliinId ? { zardliinId: String(zardliinId) } : {}),
-            ...(zardliinNer ? { zardliinNer: String(zardliinNer) } : {}),
-            dun: -Math.abs(Math.round(bichleg.dun)),
-            ognoo: bichleg.ognoo,
-            tailbar: String(shaltgaan).trim(),
-            khonogTootsokhEsekh: !!khonogTootsokhEsekh,
-            ...(khonogTootsokhEsekh && khungulultKhonog
-              ? { khungulultKhonog: Number(khungulultKhonog) }
-              : {}),
-            ...(khungulultKhuvi
-              ? { khungulultKhuvi: Number(khungulultKhuvi) }
-              : {}),
-            source: "khungulult",
-            guilgeeKhiisenAjiltniiNer: ajiltanNer,
-            guilgeeKhiisenAjiltniiId: ajiltanId,
-          }).save();
-        }
-
-        await barimtUldeeye(kholbolt, geree, niitDun, shaltgaan, {
-          ajiltanNer,
-          ajiltanId,
+        const dun = await murnuudBichye(kholbolt, {
+          geree,
+          saruud,
+          sariinDun,
+          tuukh,
+          ajiltan,
+          barilgiinId,
         });
-
+        if (dun <= 0) {
+          alggasakh("Хөнгөлөх дүн 0₮");
+          continue;
+        }
+        khamaatai.push({
+          gereeniiId,
+          gereeniiDugaar: geree.gereeniiDugaar || "",
+          ner: `${geree.ovog || ""} ${geree.ner || ""}`.trim(),
+          toot: geree.toot || "",
+          orts: geree.orts || "",
+          davkhar: geree.davkhar || "",
+          sariinDun,
+          khungulsunDun: dun,
+        });
+        niitTulukh += sariinDun * saruud.length;
+        niitKhungulsun += dun;
+        await barimtUldeeye(kholbolt, geree, dun, shaltgaan, {
+          ajiltanNer: ajiltan.ner,
+          ajiltanId: ajiltan.id,
+        });
         results.success.push({
           gereeniiId,
           gereeniiDugaar: geree.gereeniiDugaar || "",
           toot: geree.toot || "",
-          dun: niitDun,
-          bichlegiinToo: bichleguud.length,
+          dun,
+          bichlegiinToo: saruud.length,
         });
       } catch (error) {
-        results.failed.push({
-          gereeniiId,
-          error: error.message || "Алдаа гарлаа",
-        });
+        results.failed.push({ gereeniiId, error: error.message || "Алдаа гарлаа" });
       }
+    }
+
+    if (khamaatai.length === 0) {
+      await Tuukh.deleteOne({ _id: tuukh._id });
+    } else {
+      await Tuukh.updateOne(
+        { _id: tuukh._id },
+        {
+          $set: {
+            khamaataiGereenuud: khamaatai,
+            tulukhDun: niitTulukh,
+            khungulsunDun: niitKhungulsun,
+          },
+        },
+      );
+      await nekhemjlekhSyncKhiiye(
+        kholbolt,
+        khamaatai.map((k) => k.gereeniiId),
+      );
     }
 
     res.status(200).json({
@@ -261,6 +385,7 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
           ? `, ${results.alggasanGereenuud.length} гэрээ алгасагдав`
           : "") +
         (results.failed.length ? `, ${results.failed.length} алдаатай` : ""),
+      tuukhId: khamaatai.length ? String(tuukh._id) : null,
       results,
     });
   } catch (error) {
@@ -269,63 +394,178 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
 });
 
 /**
- * POST /khungulultUstgaya  { baiguullagiinId, id, tailbar }
- *
- * Хөнгөлөлтийг устгахдаа шалтгааныг заавал шаардана — авлагын дүн
- * өөрчлөгддөг үйлдэл тул мөрөө үлдээх ёстой.
+ * GET|POST /khungulultiinTuukhJagsaalt — хөнгөлөлтийн бүртгэлүүд.
+ * baiguullagiinId, barilgiinId?, ekhlekh?, duusakh? (YYYY-MM-DD, бүртгэсэн огноо)
  */
-exports.khungulultUstgaya = asyncHandler(async (req, res, next) => {
+exports.khungulultiinTuukhJagsaalt = asyncHandler(async (req, res, next) => {
   try {
-    const { db } = require("zevbackv2");
-    const { baiguullagiinId, id, tailbar } = req.body;
-
+    const src = { ...(req.query || {}), ...(req.body || {}) };
+    const { baiguullagiinId, barilgiinId, ekhlekh, duusakh } = src;
     if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
-    if (!id) throw new aldaa("Устгах хөнгөлөлтийн ID хоосон");
-    if (!tailbar || !String(tailbar).trim())
-      throw new aldaa("Устгах шалтгаан заавал бөглөнө");
+    const kholbolt = kholboltOlya(baiguullagiinId);
+    const query = { baiguullagiinId: String(baiguullagiinId) };
+    if (barilgiinId) query.barilgiinId = String(barilgiinId);
+    if (ekhlekh || duusakh) {
+      query.createdAt = {};
+      if (ekhlekh) query.createdAt.$gte = new Date(`${ekhlekh}T00:00:00`);
+      if (duusakh) query.createdAt.$lte = new Date(`${duusakh}T23:59:59.999`);
+    }
+    const jagsaalt = await KhungulultiinTuukh(kholbolt)
+      .find(query)
+      .sort({ createdAt: -1 })
+      .limit(1000)
+      .lean();
+    res.json({ jagsaalt });
+  } catch (err) {
+    next(err);
+  }
+});
 
-    const zuvshuurugdsun = await khungulultOruulakhErkhteiEsekh(
-      (req.body?.nevtersenAjiltniiToken || req.nevtersenAjiltniiToken)?.id,
-    );
-    if (!zuvshuurugdsun) {
-      return res.status(403).json({
-        success: false,
-        message: "Танд хөнгөлөлт устгах эрх байхгүй байна.",
+/**
+ * POST /khungulultZasvarlaya — хувь/дүнг өөрчилнө (turees
+ * `khungulultZasvarlaya`). Гэрээ бүрийн мөрийг шинэ дүнгээр дахин бичнэ.
+ * Body: baiguullagiinId, id, khungulukhUtga, tailbar (засах шалтгаан, заавал)
+ */
+exports.khungulultZasvarlaya = asyncHandler(async (req, res, next) => {
+  try {
+    const { baiguullagiinId, id, tailbar } = req.body;
+    const khungulukhUtga = Number(req.body.khungulukhUtga);
+    if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
+    if (!id) throw new aldaa("Засах хөнгөлөлтийн ID хоосон");
+    if (!tailbar || !String(tailbar).trim())
+      throw new aldaa("Засах шалтгаан заавал бөглөнө");
+    if (!Number.isFinite(khungulukhUtga) || khungulukhUtga <= 0)
+      throw new aldaa("Хөнгөлөх хувь эсвэл дүнгээ оруулна уу");
+    if (!(await erkhShalgaya(req, res))) return;
+
+    const kholbolt = kholboltOlya(baiguullagiinId);
+    const Tuukh = KhungulultiinTuukh(kholbolt);
+    const tuukh = await Tuukh.findById(id).lean();
+    if (!tuukh) throw new aldaa("Хөнгөлөлт олдсонгүй");
+
+    if (tuukh.khungulukhTurul === "khuvi") {
+      const deed = (await deedKhuviOlya(baiguullagiinId, tuukh.barilgiinId)) ?? 100;
+      if (khungulukhUtga > deed)
+        throw new aldaa(`Тохируулсан дээд хувь (${deed}%)-иас хэтэрсэн байна`);
+    }
+
+    const ajiltan = tokenAjiltan(req);
+    const shineTuukh = { ...tuukh, khungulukhUtga };
+    const saruud = tuukh.ognoonuud?.length
+      ? tuukh.ognoonuud
+      : saruudiigZadlaya(tuukh.ekhlekhSar, tuukh.duusakhSar);
+    const GereeModel = Geree(kholbolt);
+    const GuilgeeModel = GuilgeeAvlaguud(kholbolt);
+    const khamaatai = [];
+    let niitKhungulsun = 0;
+
+    for (const k of tuukh.khamaataiGereenuud || []) {
+      await GuilgeeModel.deleteMany({
+        khungulultiinTuukhId: String(tuukh._id),
+        gereeniiId: String(k.gereeniiId),
+      });
+      const geree = await GereeModel.findById(k.gereeniiId).lean();
+      if (!geree) continue;
+      const dun = await murnuudBichye(kholbolt, {
+        geree,
+        saruud,
+        sariinDun: k.sariinDun,
+        tuukh: shineTuukh,
+        ajiltan,
+        barilgiinId: tuukh.barilgiinId,
+      });
+      khamaatai.push({ ...k, khungulsunDun: dun });
+      niitKhungulsun += dun;
+      await barimtUldeeye(kholbolt, geree, dun, `Зассан: ${String(tailbar).trim()}`, {
+        ajiltanNer: ajiltan.ner,
+        ajiltanId: ajiltan.id,
       });
     }
 
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+    await Tuukh.updateOne(
+      { _id: tuukh._id },
+      {
+        $set: {
+          khungulukhUtga,
+          khamaataiGereenuud: khamaatai,
+          khungulsunDun: niitKhungulsun,
+          zassanAjiltniiNer: ajiltan.ner || "",
+          zassanOgnoo: new Date(),
+        },
+      },
     );
-    if (!kholbolt) throw new aldaa("Холболт олдсонгүй");
+    await nekhemjlekhSyncKhiiye(
+      kholbolt,
+      khamaatai.map((k) => k.gereeniiId),
+    );
 
+    res.json({ success: true, message: "Хөнгөлөлт засагдлаа", khungulsunDun: niitKhungulsun });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /khungulultUstgaya
+ *   { baiguullagiinId, tuukhId, gereeniiId?, tailbar } — бүртгэлтэй хөнгөлөлт:
+ *       gereeniiId өгвөл зөвхөн тэр гэрээнийх, үгүй бол бүхэлд нь устгана.
+ *   { baiguullagiinId, id, tailbar } — хуучин (бүртгэлгүй) нэг мөр.
+ */
+exports.khungulultUstgaya = asyncHandler(async (req, res, next) => {
+  try {
+    const { baiguullagiinId, id, tuukhId, gereeniiId, tailbar } = req.body;
+    if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
+    if (!id && !tuukhId) throw new aldaa("Устгах хөнгөлөлтийн ID хоосон");
+    if (!tailbar || !String(tailbar).trim())
+      throw new aldaa("Устгах шалтгаан заавал бөглөнө");
+    if (!(await erkhShalgaya(req, res))) return;
+
+    const kholbolt = kholboltOlya(baiguullagiinId);
     const GuilgeeModel = GuilgeeAvlaguud(kholbolt);
-    const khungulult = await GuilgeeModel.findById(id).lean();
-    if (!khungulult) throw new aldaa("Хөнгөлөлт олдсонгүй");
 
-    if (String(khungulult.turul) !== "Хөнгөлөлт") {
-      throw new aldaa("Энэ бичлэг хөнгөлөлт биш байна");
-    }
+    if (tuukhId) {
+      const Tuukh = KhungulultiinTuukh(kholbolt);
+      const tuukh = await Tuukh.findById(tuukhId).lean();
+      if (!tuukh) throw new aldaa("Хөнгөлөлт олдсонгүй");
+      const shuult = { khungulultiinTuukhId: String(tuukh._id) };
+      if (gereeniiId) shuult.gereeniiId = String(gereeniiId);
+      await GuilgeeModel.deleteMany(shuult);
 
-    await GuilgeeModel.deleteOne({ _id: id });
-
-    // Авлагын үлдэгдэл, нэхэмжлэхийн төлөв дахин бодогдоно.
-    try {
-      const guilgeeService = require("../services/guilgeeService");
-      if (khungulult.gereeniiId) {
-        await guilgeeService.syncInvoicesStatus(
-          kholbolt,
-          String(khungulult.gereeniiId),
+      const uldsen = gereeniiId
+        ? (tuukh.khamaataiGereenuud || []).filter(
+            (k) => String(k.gereeniiId) !== String(gereeniiId),
+          )
+        : [];
+      if (uldsen.length === 0) {
+        await Tuukh.deleteOne({ _id: tuukh._id });
+      } else {
+        const sarToo = tuukh.ognoonuud?.length || 1;
+        await Tuukh.updateOne(
+          { _id: tuukh._id },
+          {
+            $set: {
+              khamaataiGereenuud: uldsen,
+              khungulsunDun: uldsen.reduce((s, k) => s + (Number(k.khungulsunDun) || 0), 0),
+              tulukhDun: uldsen.reduce((s, k) => s + (Number(k.sariinDun) || 0) * sarToo, 0),
+            },
+          },
         );
       }
-    } catch (err) {
-      console.error("Хөнгөлөлт устгасны дараа sync амжилтгүй:", err.message);
+      const nuluulsun = gereeniiId
+        ? [String(gereeniiId)]
+        : (tuukh.khamaataiGereenuud || []).map((k) => String(k.gereeniiId));
+      await nekhemjlekhSyncKhiiye(kholbolt, nuluulsun);
+      return res.json({ success: true, message: "Хөнгөлөлт устгагдлаа" });
     }
 
-    res.status(200).json({
-      success: true,
-      message: "Хөнгөлөлт устгагдлаа",
-    });
+    // Хуучин (бүртгэлгүй) нэг мөр
+    const khungulult = await GuilgeeModel.findById(id).lean();
+    if (!khungulult) throw new aldaa("Хөнгөлөлт олдсонгүй");
+    if (String(khungulult.turul) !== "Хөнгөлөлт")
+      throw new aldaa("Энэ бичлэг хөнгөлөлт биш байна");
+    await GuilgeeModel.deleteOne({ _id: id });
+    await nekhemjlekhSyncKhiiye(kholbolt, [khungulult.gereeniiId]);
+    res.status(200).json({ success: true, message: "Хөнгөлөлт устгагдлаа" });
   } catch (error) {
     next(error);
   }
@@ -360,107 +600,3 @@ async function barimtUldeeye(kholbolt, geree, dun, shaltgaan, ajiltan) {
     console.error("Хөнгөлөлтийн аудит бичихэд алдаа:", err.message);
   }
 }
-
-/**
- * POST /khungulultSuuriAvya — хувиар хөнгөлөхийн СУУРЬ дүн.
- *
- * Дэлгэц өмнө нь `turesiinOrlogo`-оос хувь бодож байсан ч энэ талбар sukh-д
- * огт байхгүй (turees-ээс хуулагдсан) тул хувь үргэлж 0₮ гардаг байв. Энд
- * тухайн сард БОДИТ нэхэмжилсэн төлбөрийг (`guilgeeAvlaguud`, dun > 0,
- * хөнгөлөлт/эхний үлдэгдэл биш) гэрээ × сараар нэгтгэж буцаана.
- *
- * Body: baiguullagiinId, barilgiinId?, ekhlekhSar, duusakhSar?, zardliinId?
- * Хариу: { suuri: { [gereeniiId]: { "YYYY-MM": дүн } } }
- */
-exports.khungulultSuuriAvya = asyncHandler(async (req, res, next) => {
-  try {
-    const { db } = require("zevbackv2");
-    const { baiguullagiinId, barilgiinId, ekhlekhSar, duusakhSar, zardliinId } =
-      req.body;
-    if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
-
-    const saruud = saruudiigZadlaya(ekhlekhSar, duusakhSar);
-    if (saruud.length === 0) return res.json({ suuri: {} });
-
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
-    );
-    if (!kholbolt) throw new aldaa("Холболт олдсонгүй");
-
-    const ekhlel = sariinKhyazgaar(saruud[0]).ekhlel;
-    const tugsgul = sariinKhyazgaar(saruud[saruud.length - 1]).tugsgul;
-
-    /**
-     * Суурь = тухайн сарын НЭХЭМЖЛЭХЭД орсон төлбөр, НЭХЭМЖЛЭХИЙН огноогоор
-     * сар ангилна. Өмнө нь `dun > 0` бүх мөрийг (гар авлага, зогсоол, excel
-     * заалт...) мөрийн өөрийн огноогоор нэгтгэдэг тул хувь нь нэхэмжлэх дээр
-     * харагдах дүнтэй таардаггүй байв.
-     */
-    const match = {
-      baiguullagiinId: String(baiguullagiinId),
-      dun: { $gt: 0 },
-      ekhniiUldegdelEsekh: { $ne: true },
-      nekhemjlekhId: { $exists: true, $nin: [null, ""] },
-      turul: { $nin: ["Хөнгөлөлт", "khungulult", "discount", "төлөлт"] },
-    };
-    if (barilgiinId) match.barilgiinId = String(barilgiinId);
-    if (zardliinId) match.zardliinId = String(zardliinId);
-
-    const GuilgeeModel = GuilgeeAvlaguud(kholbolt);
-    const mur = await GuilgeeModel.aggregate([
-      { $match: match },
-      {
-        $addFields: {
-          nid: {
-            $convert: { input: "$nekhemjlekhId", to: "objectId", onError: null, onNull: null },
-          },
-        },
-      },
-      {
-        $lookup: {
-          from: "nekhemjlekhiinTuukh",
-          localField: "nid",
-          foreignField: "_id",
-          as: "n",
-        },
-      },
-      { $unwind: "$n" },
-      { $project: { gereeniiId: 1, dun: 1, "n.ognoo": 1 } },
-      { $match: { "n.ognoo": { $gte: ekhlel, $lte: tugsgul } } },
-      {
-        $group: {
-          _id: {
-            g: "$gereeniiId",
-            s: { $dateToString: { format: "%Y-%m", date: "$n.ognoo", timezone: "Asia/Ulaanbaatar" } },
-          },
-          dun: { $sum: "$dun" },
-        },
-      },
-    ]);
-
-    const suuri = {};
-    mur.forEach(({ _id, dun }) => {
-      if (!_id?.g) return;
-      const g = String(_id.g);
-      if (!suuri[g]) suuri[g] = {};
-      suuri[g][_id.s] = Math.round(dun * 100) / 100;
-    });
-
-    // Гэрээ бүрийн БОДИТ үлдэгдэл (авлага − төлөлт − хөнгөлөлт). Дэлгэц өмнө
-    // нь оршин суугчийн статик `ekhniiUldegdel`-ийг харуулдаг байв.
-    const uldMatch = { baiguullagiinId: String(baiguullagiinId) };
-    if (barilgiinId) uldMatch.barilgiinId = String(barilgiinId);
-    const uldMur = await GuilgeeModel.aggregate([
-      { $match: uldMatch },
-      { $group: { _id: "$gereeniiId", dun: { $sum: "$dun" } } },
-    ]);
-    const uldegdel = {};
-    uldMur.forEach(({ _id, dun }) => {
-      if (_id) uldegdel[String(_id)] = Math.round(dun * 100) / 100;
-    });
-
-    res.json({ suuri, uldegdel });
-  } catch (err) {
-    next(err);
-  }
-});

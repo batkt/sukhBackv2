@@ -32,6 +32,8 @@ const {
   khungulultKhadgalya,
   khungulultSuuriAvya,
   khungulultUstgaya,
+  khungulultZasvarlaya,
+  khungulultiinTuukhJagsaalt,
 } = require("../controller/khungulultController");
 const gereeController = require("../controller/gereeController");
 
@@ -475,5 +477,10 @@ router.put(
 router.route("/khungulultKhadgalya").post(tokenShalgakh, khungulultKhadgalya);
 router.route("/khungulultSuuriAvya").post(tokenShalgakh, khungulultSuuriAvya);
 router.route("/khungulultUstgaya").post(tokenShalgakh, khungulultUstgaya);
+router.route("/khungulultZasvarlaya").post(tokenShalgakh, khungulultZasvarlaya);
+router
+  .route("/khungulultiinTuukhJagsaalt")
+  .get(tokenShalgakh, khungulultiinTuukhJagsaalt)
+  .post(tokenShalgakh, khungulultiinTuukhJagsaalt);
 
 module.exports = router;
