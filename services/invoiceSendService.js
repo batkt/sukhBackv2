@@ -4,11 +4,21 @@ const { deleteInvoice } = require("./invoiceDeletionService");
 const { getKholboltByBaiguullagiinId } = require("../utils/dbConnection");
 const axios = require("axios");
 
+const TULBURIIN_SMS_KHAASAN = [
+  "69f3f56a2899d5fdc24251d1",
+  "6a4b3d1c124040b3dad66792",
+];
+
 async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, options = {}) {
   const ENABLE_SMS = true; // Set to true to re-enable SMS service
   if (!ENABLE_SMS) {
     console.log(`⚠️ [SMS Notification] SMS sending is temporarily disabled for invoiceId: ${invoiceId}`);
     return { success: true, message: "SMS service temporarily disabled" };
+  }
+
+  if (TULBURIIN_SMS_KHAASAN.includes(String(baiguullagiinId || ""))) {
+    console.log(`⚠️ [SMS Notification] SMS sending is disabled for baiguullagiinId: ${baiguullagiinId}`);
+    return { success: true, message: "SMS sending disabled for this organization" };
   }
 
   try {

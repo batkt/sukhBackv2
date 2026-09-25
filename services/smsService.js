@@ -9,6 +9,11 @@ const MsgTuukh = require("../models/msgTuukh");
  * @param {Object} kholbolt - Database connection object
  * @returns {Promise<Array>} Results array
  */
+const TULBURIIN_SMS_KHAASAN = [
+  "69f3f56a2899d5fdc24251d1",
+  "6a4b3d1c124040b3dad66792",
+];
+
 async function sendSms(messages, key, senderNumber, kholbolt) {
   const ENABLE_SMS = true; // Set to true to re-enable SMS service
   if (!ENABLE_SMS) {
@@ -23,6 +28,12 @@ async function sendSms(messages, key, senderNumber, kholbolt) {
 
   for (const message of messages) {
     try {
+      if (TULBURIIN_SMS_KHAASAN.includes(String(message.baiguullagiinId || ""))) {
+        console.log(`⚠️ [smsService] SMS sending disabled for baiguullagiinId: ${message.baiguullagiinId}`);
+        results.push({ status: "DISABLED", to: message.to, message: "SMS disabled for organization" });
+        continue;
+      }
+
       console.log(`[smsService] Sending SMS via CallPro to: ${message.to}`);
       
       const response = await axios.post(activeUrl, {
