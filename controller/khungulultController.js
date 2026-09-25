@@ -151,11 +151,30 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
           const khyazgaar = sariinKhyazgaar(saruud[0]);
           bichleguud.push({ ognoo: khyazgaar.ekhlel, dun: niitDun });
         } else {
-          const sariinDun = niitDun / saruud.length;
+          // Дэлгэц сар бүрийн дүнг (`saraar`) илгээвэл тэрийг, эс бөгөөс
+          // нийт дүнг тэнцүү хуваана. Хувиар хөнгөлөхөд сар бүрийн төлбөр
+          // өөр тул тэнцүү хуваах нь буруу дүн суулгадаг байв.
+          const saraar = mur?.saraar && typeof mur.saraar === "object" ? mur.saraar : null;
+          const NekhemjlekhModel = require("../models/nekhemjlekhiinTuukh")(kholbolt);
 
           for (const sar of saruud) {
             const khyazgaar = sariinKhyazgaar(sar);
             if (!khyazgaar) continue;
+            const sariinDun = saraar ? Math.abs(Number(saraar[sar]) || 0) : niitDun / saruud.length;
+            if (sariinDun <= 0) continue;
+
+            // Тухайн сарын нэхэмжлэх — хөнгөлөлт нь тэр нэхэмжлэхийн огноонд сууна
+            const nekhemjlekh = await NekhemjlekhModel.findOne({
+              gereeniiId: String(geree._id),
+              ognoo: { $gte: khyazgaar.ekhlel, $lte: khyazgaar.tugsgul },
+            })
+              .sort({ ognoo: 1 })
+              .select({ ognoo: 1 })
+              .lean();
+            if (nekhemjlekh?.ognoo) {
+              bichleguud.push({ ognoo: nekhemjlekh.ognoo, dun: sariinDun });
+              continue;
+            }
 
             // Тухайн сард уг гэрээнд НЭХЭМЖИЛСЭН төлбөр байгаа эсэх.
             // Байхгүй бол хөнгөлөх зүйлгүй — turees ч мөн ингэж алгасдаг.
@@ -371,23 +390,48 @@ exports.khungulultSuuriAvya = asyncHandler(async (req, res, next) => {
     const ekhlel = sariinKhyazgaar(saruud[0]).ekhlel;
     const tugsgul = sariinKhyazgaar(saruud[saruud.length - 1]).tugsgul;
 
+    /**
+     * Суурь = тухайн сарын НЭХЭМЖЛЭХЭД орсон төлбөр, НЭХЭМЖЛЭХИЙН огноогоор
+     * сар ангилна. Өмнө нь `dun > 0` бүх мөрийг (гар авлага, зогсоол, excel
+     * заалт...) мөрийн өөрийн огноогоор нэгтгэдэг тул хувь нь нэхэмжлэх дээр
+     * харагдах дүнтэй таардаггүй байв.
+     */
     const match = {
       baiguullagiinId: String(baiguullagiinId),
       dun: { $gt: 0 },
-      ognoo: { $gte: ekhlel, $lte: tugsgul },
       ekhniiUldegdelEsekh: { $ne: true },
-      turul: { $nin: ["Хөнгөлөлт", "khungulult", "discount"] },
+      nekhemjlekhId: { $exists: true, $nin: [null, ""] },
+      turul: { $nin: ["Хөнгөлөлт", "khungulult", "discount", "төлөлт"] },
     };
     if (barilgiinId) match.barilgiinId = String(barilgiinId);
     if (zardliinId) match.zardliinId = String(zardliinId);
 
-    const mur = await GuilgeeAvlaguud(kholbolt).aggregate([
+    const GuilgeeModel = GuilgeeAvlaguud(kholbolt);
+    const mur = await GuilgeeModel.aggregate([
       { $match: match },
+      {
+        $addFields: {
+          nid: {
+            $convert: { input: "$nekhemjlekhId", to: "objectId", onError: null, onNull: null },
+          },
+        },
+      },
+      {
+        $lookup: {
+          from: "nekhemjlekhiinTuukh",
+          localField: "nid",
+          foreignField: "_id",
+          as: "n",
+        },
+      },
+      { $unwind: "$n" },
+      { $project: { gereeniiId: 1, dun: 1, "n.ognoo": 1 } },
+      { $match: { "n.ognoo": { $gte: ekhlel, $lte: tugsgul } } },
       {
         $group: {
           _id: {
             g: "$gereeniiId",
-            s: { $dateToString: { format: "%Y-%m", date: "$ognoo", timezone: "Asia/Ulaanbaatar" } },
+            s: { $dateToString: { format: "%Y-%m", date: "$n.ognoo", timezone: "Asia/Ulaanbaatar" } },
           },
           dun: { $sum: "$dun" },
         },
@@ -402,7 +446,20 @@ exports.khungulultSuuriAvya = asyncHandler(async (req, res, next) => {
       suuri[g][_id.s] = Math.round(dun * 100) / 100;
     });
 
-    res.json({ suuri });
+    // Гэрээ бүрийн БОДИТ үлдэгдэл (авлага − төлөлт − хөнгөлөлт). Дэлгэц өмнө
+    // нь оршин суугчийн статик `ekhniiUldegdel`-ийг харуулдаг байв.
+    const uldMatch = { baiguullagiinId: String(baiguullagiinId) };
+    if (barilgiinId) uldMatch.barilgiinId = String(barilgiinId);
+    const uldMur = await GuilgeeModel.aggregate([
+      { $match: uldMatch },
+      { $group: { _id: "$gereeniiId", dun: { $sum: "$dun" } } },
+    ]);
+    const uldegdel = {};
+    uldMur.forEach(({ _id, dun }) => {
+      if (_id) uldegdel[String(_id)] = Math.round(dun * 100) / 100;
+    });
+
+    res.json({ suuri, uldegdel });
   } catch (err) {
     next(err);
   }

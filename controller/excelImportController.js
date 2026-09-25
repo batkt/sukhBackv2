@@ -2494,6 +2494,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
                   tootEntry.davkhar,
                   tootEntry.toot,
                   tukhainBaaziinKholbolt,
+                  tootEntry.orts || "1",
                 );
               }
 
@@ -2621,6 +2622,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
               userData.davkhar,
               userObject.toot,
               tukhainBaaziinKholbolt,
+              userData.orts || "1",
             );
           }
 

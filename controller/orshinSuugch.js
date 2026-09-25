@@ -5779,9 +5779,10 @@ exports.syncResidentContracts = async function syncResidentContracts(
     if (tootEntry.toot && tootEntry.davkhar) {
       await exports.updateDavkharWithToot(
         baiguullaga,
+        currentBarilgiinId,
         tootEntry.davkhar,
         tootEntry.toot,
-        currentBarilgiinId,
+        tukhainBaaziinKholbolt,
         tootEntry.orts || "1",
       );
     }
