@@ -186,7 +186,11 @@ async function erkhShalgaya(req, res) {
   if (!ok) {
     res
       .status(403)
-      .json({ success: false, message: "Танд хөнгөлөлтийн эрх байхгүй байна." });
+      .json({
+        success: false,
+        message:
+          "Танд хөнгөлөлт оруулах эрх байхгүй байна. Админаас «Хөнгөлөлт оруулах» эрх авна уу.",
+      });
     return false;
   }
   return true;
@@ -250,22 +254,29 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
 
     if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
     if (!Array.isArray(gereenuud) || gereenuud.length === 0)
-      throw new aldaa("Хөнгөлөлт өгөх гэрээ сонгоно уу");
+      throw new aldaa("Хөнгөлөлт өгөх оршин суугчаа хүснэгтээс сонгоно уу");
     if (!shaltgaan || !String(shaltgaan).trim())
-      throw new aldaa("Шалтгаан заавал бөглөнө");
-    if (!ekhlekhSar) throw new aldaa("Хөнгөлөх сар сонгоно уу");
+      throw new aldaa("Хөнгөлөлт олгох шалтгаанаа бичнэ үү — түүх дээр харагдана");
+    if (!ekhlekhSar) throw new aldaa("Хөнгөлөх сараа «Огноо» талбараас сонгоно уу");
     if (!Number.isFinite(khungulukhUtga) || khungulukhUtga <= 0)
-      throw new aldaa("Хөнгөлөх хувь эсвэл дүнгээ оруулна уу");
+      throw new aldaa(
+        khungulukhTurul === "khuvi"
+          ? "Хөнгөлөх хувиа 0-ээс их тоогоор оруулна уу (жишээ нь 10)"
+          : "Сар бүр хөнгөлөх дүнгээ 0-ээс их тоогоор оруулна уу",
+      );
     if (!(await erkhShalgaya(req, res))) return;
 
     if (khungulukhTurul === "khuvi") {
       const deed = (await deedKhuviOlya(baiguullagiinId, barilgiinId)) ?? 100;
       if (khungulukhUtga > deed)
-        throw new aldaa(`Тохируулсан дээд хувь (${deed}%)-иас хэтэрсэн байна`);
+        throw new aldaa(
+          `Хөнгөлөх хувь ${khungulukhUtga}% байна. Тохиргоогоор хамгийн ихдээ ${deed}% хөнгөлөх боломжтой.`,
+        );
     }
 
     const saruud = saruudiigZadlaya(ekhlekhSar, duusakhSar);
-    if (saruud.length === 0) throw new aldaa("Хөнгөлөх сар буруу байна");
+    if (saruud.length === 0)
+      throw new aldaa("Хөнгөлөх сарын хугацаа буруу байна. Эхлэх, дуусах сараа дахин сонгоно уу.");
 
     const kholbolt = kholboltOlya(baiguullagiinId);
     const ajiltan = tokenAjiltan(req);
@@ -303,7 +314,7 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
       try {
         const geree = gereeniiId ? await GereeModel.findById(gereeniiId).lean() : null;
         if (!geree) {
-          results.failed.push({ gereeniiId, error: "Гэрээ олдсонгүй" });
+          results.failed.push({ gereeniiId, error: "Оршин суугчийн гэрээ олдсонгүй (устсан эсвэл цуцлагдсан)" });
           continue;
         }
         const { sariinDun } = await sariinDunBodyo(kholbolt, geree);
@@ -315,7 +326,7 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
             shaltgaan: shaltgaanNer,
           });
         if (khungulukhTurul === "khuvi" && sariinDun <= 0) {
-          alggasakh("Гэрээнд сарын төлбөр алга");
+          alggasakh("Гэрээнд сарын төлбөр тохируулаагүй (хувиар хөнгөлөх суурь 0₮)");
           continue;
         }
         const dun = await murnuudBichye(kholbolt, {
@@ -327,7 +338,7 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
           barilgiinId,
         });
         if (dun <= 0) {
-          alggasakh("Хөнгөлөх дүн 0₮");
+          alggasakh("Бодогдсон хөнгөлөлт 0₮ — хувь хэт бага эсвэл сарын төлбөр бага");
           continue;
         }
         khamaatai.push({
@@ -431,22 +442,25 @@ exports.khungulultZasvarlaya = asyncHandler(async (req, res, next) => {
     const { baiguullagiinId, id, tailbar } = req.body;
     const khungulukhUtga = Number(req.body.khungulukhUtga);
     if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
-    if (!id) throw new aldaa("Засах хөнгөлөлтийн ID хоосон");
+    if (!id) throw new aldaa("Засах хөнгөлөлтөө жагсаалтаас сонгоно уу");
     if (!tailbar || !String(tailbar).trim())
-      throw new aldaa("Засах шалтгаан заавал бөглөнө");
+      throw new aldaa("Яагаад засаж байгаа шалтгаанаа бичнэ үү");
     if (!Number.isFinite(khungulukhUtga) || khungulukhUtga <= 0)
-      throw new aldaa("Хөнгөлөх хувь эсвэл дүнгээ оруулна уу");
+      throw new aldaa("Шинэ хувь эсвэл дүнг 0-ээс их тоогоор оруулна уу");
     if (!(await erkhShalgaya(req, res))) return;
 
     const kholbolt = kholboltOlya(baiguullagiinId);
     const Tuukh = KhungulultiinTuukh(kholbolt);
     const tuukh = await Tuukh.findById(id).lean();
-    if (!tuukh) throw new aldaa("Хөнгөлөлт олдсонгүй");
+    if (!tuukh)
+      throw new aldaa("Хөнгөлөлт олдсонгүй — устгагдсан байж магадгүй. Жагсаалтаа шинэчилнэ үү.");
 
     if (tuukh.khungulukhTurul === "khuvi") {
       const deed = (await deedKhuviOlya(baiguullagiinId, tuukh.barilgiinId)) ?? 100;
       if (khungulukhUtga > deed)
-        throw new aldaa(`Тохируулсан дээд хувь (${deed}%)-иас хэтэрсэн байна`);
+        throw new aldaa(
+          `Шинэ хувь ${khungulukhUtga}% байна. Тохиргоогоор хамгийн ихдээ ${deed}% хөнгөлөх боломжтой.`,
+        );
     }
 
     const ajiltan = tokenAjiltan(req);
@@ -515,21 +529,36 @@ exports.khungulultUstgaya = asyncHandler(async (req, res, next) => {
   try {
     const { baiguullagiinId, id, tuukhId, gereeniiId, tailbar } = req.body;
     if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
-    if (!id && !tuukhId) throw new aldaa("Устгах хөнгөлөлтийн ID хоосон");
+    if (!id && !tuukhId) throw new aldaa("Устгах хөнгөлөлтөө жагсаалтаас сонгоно уу");
     if (!tailbar || !String(tailbar).trim())
-      throw new aldaa("Устгах шалтгаан заавал бөглөнө");
+      throw new aldaa("Яагаад устгаж байгаа шалтгаанаа бичнэ үү");
     if (!(await erkhShalgaya(req, res))) return;
 
     const kholbolt = kholboltOlya(baiguullagiinId);
     const GuilgeeModel = GuilgeeAvlaguud(kholbolt);
 
-    if (tuukhId) {
+    // Бүртгэлтэй хөнгөлөлтийн нэг мөр ирвэл (хуучин жагсаалтаас) — тэр
+    // гэрээний БҮХ сарын мөрийг бүртгэлтэй нь хамт устгана. Эс бөгөөс нэг
+    // сар л устаж, бусад нь гүйлгээний түүхэд үлдэж «устсангүй» мэт болдог.
+    let tuukhiinId = tuukhId;
+    let gereeniiIdShuult = gereeniiId;
+    if (!tuukhiinId && id) {
+      const mur = await GuilgeeModel.findById(id).lean().catch(() => null);
+      if (mur?.khungulultiinTuukhId) {
+        tuukhiinId = mur.khungulultiinTuukhId;
+        gereeniiIdShuult = mur.gereeniiId;
+      }
+    }
+
+    if (tuukhiinId) {
       const Tuukh = KhungulultiinTuukh(kholbolt);
-      const tuukh = await Tuukh.findById(tuukhId).lean();
-      if (!tuukh) throw new aldaa("Хөнгөлөлт олдсонгүй");
+      const tuukh = await Tuukh.findById(tuukhiinId).lean();
+      if (!tuukh)
+        throw new aldaa("Хөнгөлөлтийн бүртгэл олдсонгүй. Жагсаалтаа шинэчлээд дахин оролдоно уу.");
       const shuult = { khungulultiinTuukhId: String(tuukh._id) };
-      if (gereeniiId) shuult.gereeniiId = String(gereeniiId);
-      await GuilgeeModel.deleteMany(shuult);
+      if (gereeniiIdShuult) shuult.gereeniiId = String(gereeniiIdShuult);
+      const ur = await GuilgeeModel.deleteMany(shuult);
+      const gereeniiId = gereeniiIdShuult;
 
       const uldsen = gereeniiId
         ? (tuukh.khamaataiGereenuud || []).filter(
@@ -555,15 +584,21 @@ exports.khungulultUstgaya = asyncHandler(async (req, res, next) => {
         ? [String(gereeniiId)]
         : (tuukh.khamaataiGereenuud || []).map((k) => String(k.gereeniiId));
       await nekhemjlekhSyncKhiiye(kholbolt, nuluulsun);
-      return res.json({ success: true, message: "Хөнгөлөлт устгагдлаа" });
+      return res.json({
+        success: true,
+        ustgasanToo: ur?.deletedCount ?? 0,
+        message: `Хөнгөлөлт устгагдлаа (${ur?.deletedCount ?? 0} сарын хасалт буцаагдлаа)`,
+      });
     }
 
     // Хуучин (бүртгэлгүй) нэг мөр
-    const khungulult = await GuilgeeModel.findById(id).lean();
-    if (!khungulult) throw new aldaa("Хөнгөлөлт олдсонгүй");
+    const khungulult = await GuilgeeModel.findById(id).lean().catch(() => null);
+    if (!khungulult)
+      throw new aldaa("Хөнгөлөлт олдсонгүй — аль хэдийн устгагдсан байж магадгүй. Жагсаалтаа шинэчилнэ үү.");
     if (String(khungulult.turul) !== "Хөнгөлөлт")
-      throw new aldaa("Энэ бичлэг хөнгөлөлт биш байна");
-    await GuilgeeModel.deleteOne({ _id: id });
+      throw new aldaa("Энэ бичлэг хөнгөлөлт биш тул устгах боломжгүй");
+    const ur = await GuilgeeModel.deleteOne({ _id: id });
+    if (!ur?.deletedCount) throw new aldaa("Хөнгөлөлт устгагдсангүй. Дахин оролдоно уу.");
     await nekhemjlekhSyncKhiiye(kholbolt, [khungulult.gereeniiId]);
     res.status(200).json({ success: true, message: "Хөнгөлөлт устгагдлаа" });
   } catch (error) {
