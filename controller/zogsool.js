@@ -366,10 +366,10 @@ module.exports.ebarimtDutuugShivye = async (body, next) => {
               for await (const tulbur of object.tuukh[0]?.tulbur) {
                 if (
                   !!tulbur.turul &&
-                  tulbur.turul != "khungulult" &&
-                  tulbur.turul != "khariult"
+                  !["khungulult", "discount", "Хөнгөлөлт", "khariult"].includes(tulbur.turul) &&
+                  Number(tulbur.dun) > 0
                 )
-                  niilberDun += tulbur.dun;
+                  niilberDun += Number(tulbur.dun);
               }
               if (niilberDun > 0) {
                 niitDun = niitDun + niilberDun;

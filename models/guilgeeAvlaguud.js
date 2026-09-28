@@ -88,6 +88,8 @@ const guilgeeAvlaguudSchema = new Schema(
     khungulultKhonog: Number,
     /** Хувиар тооцсон бол тухайн хувь. */
     khungulultKhuvi: Number,
+    /** Хөнгөлөлтийн бүртгэл (`khungulultiinTuukh`) — нэг хөнгөлөлтийн мөрүүд */
+    khungulultiinTuukhId: String,
     avlagaGuilgeeIndex: Number,
   },
   {

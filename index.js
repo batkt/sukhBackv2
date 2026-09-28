@@ -57,6 +57,7 @@ const walletTailanRoute = require("./routes/walletTailanRoute");
 const appVersionRoute = require("./routes/appVersionRoute");
 const blogRoute = require("./routes/blogRoute");
 const cameraRoute = require("./routes/cameraRoute");
+const udriinKhaaltRoute = require("./routes/udriinKhaaltRoute");
 const neeyeRoute = require("./routes/neeyeRoute");
 const gerBuliinGishuunRoute = require("./routes/gerBuliinGishuunRoute");
 const gishuuniiKhandalt = require("./middleware/gishuuniiKhandalt");
@@ -307,6 +308,7 @@ app.use(gerBuliinGishuunRoute);
 // Medegdel API (thread, reply, etc.) must be tried before image route so /medegdel/thread/:id is not matched as image
 app.use("/wallet", walletRoute);
 app.use(cameraRoute);
+app.use(udriinKhaaltRoute);
 app.use(neeyeRoute);
 app.use(walletQpayRoute);
 // Хэтэвчний тайлан (zevtabs «Amarhome» цэс). Доорх зурагны catch-all
