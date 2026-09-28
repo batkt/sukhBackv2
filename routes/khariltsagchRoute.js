@@ -977,7 +977,7 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
             (Array.isArray(existing.utas) ? existing.utas[0] : existing.utas) || "";
           return res.status(400).json({
             success: false,
-            aldaa: `"${toot}" тоот дээр${existingName ? ` "${existingName}"` : ""} харилцагч аль хэдийн бүртгэгдсэн байна.`,
+            aldaa: `"${updateToot}" тоот дээр${existingName ? ` "${existingName}"` : ""} харилцагч аль хэдийн бүртгэгдсэн байна.`,
           });
         }
       }
@@ -1068,7 +1068,10 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
           }
           if (req.body.mashiniiDugaar !== undefined) {
             syncData.mashiniiDugaar = req.body.mashiniiDugaar;
-            mashinUpdateData.dugaar = req.body.mashiniiDugaar || "БҮРТГЭЛГҮЙ";
+            // Машин бүрийн `dugaar`-ыг таслалаар нийлүүлсэн мөрөөр ДАРЖ
+            // бичихгүй (олон машинтай үед бүгд "1234УБА, 5678УБА" болдог
+            // байв). Дугаарууд доор `mashinuudBurtgeye`-ээр нэг бүрчлэн
+            // бүртгэгдэнэ.
           }
 
           // Add address location details if they match this org context
@@ -1213,10 +1216,9 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
           if (Object.keys(mashinUpdateData).length > 0) {
             await MashinModel.updateMany(
               {
-                $or: [
-                  { ezemshigchiinId: result._id.toString() },
-                  { khariltsagchiinId: result._id.toString() }
-                ]
+                // `khariltsagchiinId` нь mashin схемд байхгүй — strictQuery
+                // үед `{}` болж БҮХ машиныг өөрчилж болзошгүй тул хасав.
+                ezemshigchiinId: result._id.toString(),
               },
               { $set: mashinUpdateData }
             );

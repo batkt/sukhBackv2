@@ -2669,6 +2669,29 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
   }
 });
 
+// Тоот бүртгэлийн Excel-ийн "Төрөл" багана → барилгын тохиргооны аль
+// map-д хадгалахыг заана.
+const TOOT_TURLUUD = ["Орон сууц", "Зогсоол", "Агуулах"];
+const TOOT_TURLIIN_MAP = {
+  "Орон сууц": "davkhariinToonuud",
+  Зогсоол: "davkhariinZogsoolnuud",
+  Агуулах: "davkhariinAguulakhnuud",
+};
+function tootTurulTaniya(utga) {
+  const t = String(utga || "").trim().toLowerCase();
+  if (!t || t === "орон сууц" || t === "тоот" || t === "байр") return "Орон сууц";
+  if (t === "зогсоол" || t === "гараж") return "Зогсоол";
+  if (t === "агуулах") return "Агуулах";
+  return null;
+}
+function tootJagsaaltUnshiya(utga) {
+  if (!Array.isArray(utga) || utga.length === 0) return [];
+  return utga
+    .flatMap((v) => String(v).split(","))
+    .map((t) => t.trim())
+    .filter((t) => t);
+}
+
 // TootBurtgel Excel Template Download
 exports.generateTootBurtgelExcelTemplate = asyncHandler(
   async (req, res, next) => {
@@ -2749,13 +2772,15 @@ exports.generateTootBurtgelExcelTemplate = asyncHandler(
           : ["1"];
 
       const workbook = new excel.Workbook();
-      const headers = ["Давхар", "Тоот"];
 
+      // Орон сууц, зогсоол, агуулахын тоотыг нэг загвараар бүртгэнэ.
+      // "Төрөл" хоосон бол хуучин загвартай адил Орон сууц гэж үзнэ.
       ortsList.forEach((orts) => {
         const worksheet = workbook.addWorksheet(`Орц ${orts}`);
         worksheet.columns = [
           { header: "Давхар", key: "floor", width: 15 },
           { header: "Тоот", key: "apartment", width: 25 },
+          { header: "Төрөл", key: "turul", width: 18 },
         ];
 
         // Style the header (Row 1)
@@ -2768,6 +2793,35 @@ exports.generateTootBurtgelExcelTemplate = asyncHandler(
         // Row 2: plain empty cells
         const legendRow2 = worksheet.getRow(2);
         legendRow2.commit();
+
+        worksheet.dataValidations.add("C2:C9999", {
+          type: "list",
+          allowBlank: true,
+          formulae: [`"${TOOT_TURLUUD.join(",")}"`],
+          showErrorMessage: true,
+          errorStyle: "error",
+          error: "Орон сууц, Зогсоол, Агуулах-аас сонгоно уу!",
+        });
+      });
+
+      const zaavar = workbook.addWorksheet("Заавар");
+      zaavar.columns = [{ key: "a", width: 90 }];
+      [
+        "Тоот бүртгэлийн заавар",
+        "",
+        "• Орц бүр тусдаа хуудастай (Орц 1, Орц 2 ...).",
+        "• Давхар: барилгын тохиргоонд бүртгэлтэй давхар (жишээ: 1, 2, B1).",
+        "• Тоот: олон тоотыг таслалаар бичнэ (жишээ: 1,2,3).",
+        "• Төрөл: Орон сууц, Зогсоол эсвэл Агуулах. Хоосон бол Орон сууц.",
+        "",
+        "Жишээ:",
+        "   Давхар 1   | Тоот 1,2,3,4 | Төрөл Орон сууц",
+        "   Давхар B1  | Тоот 1,2,3   | Төрөл Зогсоол",
+        "   Давхар B1  | Тоот A1,A2   | Төрөл Агуулах",
+      ].forEach((mur, i) => {
+        const cell = zaavar.getCell(`A${i + 1}`);
+        cell.value = mur;
+        if (i === 0) cell.font = { bold: true, size: 14 };
       });
 
       res.setHeader(
@@ -2857,7 +2911,12 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
     }
 
     let davkharArray = targetBarilga.tokhirgoo.davkhar || [];
-    let davkhariinToonuud = targetBarilga.tokhirgoo.davkhariinToonuud || {};
+    // Төрөл бүрийн map (орон сууц / зогсоол / агуулах) — өөрчлөгдсөнийг л хадгална.
+    const turliinMapuud = {};
+    Object.values(TOOT_TURLIIN_MAP).forEach((propName) => {
+      turliinMapuud[propName] = { ...(targetBarilga.tokhirgoo[propName] || {}) };
+    });
+    const uurchlugdsunMapuud = new Set();
 
     const results = {
       success: [],
@@ -2867,6 +2926,7 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
 
     // Process each sheet (each sheet represents one orts/entrance)
     for (const sheetName of workbook.SheetNames) {
+      if (/^заавар$/i.test(String(sheetName).trim())) continue;
       // Extract orts from sheet name (e.g., "Орц 1" -> "1", "Орц 2" -> "2")
       let ortsFromSheet = "1"; // Default to 1
       const ortsMatch = sheetName.match(/Орц\s*(\d+)/i);
@@ -2929,8 +2989,15 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
           const davkhar = row["Давхар"]?.toString().trim() || "";
           // Prioritize 'Орц' column if conflicting, otherwise use sheet name
           const orts = row["Орц"]?.toString().trim() || ortsFromSheet;
+          const turul = tootTurulTaniya(row["Төрөл"]);
 
           const validationErrors = [];
+
+          if (!turul) {
+            validationErrors.push(
+              `Төрөл "${row["Төрөл"]}" буруу байна. ${TOOT_TURLUUD.join(", ")}-аас сонгоно уу`,
+            );
+          }
 
           if (!tootRaw) {
             validationErrors.push("Тоот хоосон");
@@ -2970,9 +3037,11 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
             throw new Error(validationErrors.join(" "));
           }
 
-          // Create a separate tootBurtgel record for each toot
+          // Тоолуурын (zaalt) бүртгэл зөвхөн орон сууцанд хэрэгтэй. Зогсоол,
+          // агуулахын дугаар орон сууцны тоот "1"-тэй давхцаж болох тул
+          // tootBurtgel үүсгэхгүй.
           const createdTootBurtgelIds = [];
-          for (const toot of tootList) {
+          for (const toot of turul === "Орон сууц" ? tootList : []) {
             // Check if tootBurtgel already exists to prevent duplicates
             const existingToot = await TootBurtgel(
               tukhainBaaziinKholbolt,
@@ -3011,8 +3080,19 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
             const davkharStr = String(davkhar).trim();
             const ortsStr = String(orts).trim();
 
+            const propName = TOOT_TURLIIN_MAP[turul];
+            const idevkhteiMap = turliinMapuud[propName];
+            // Зогсоол/агуулахын давхар (B1 г.м.) тохиргооны давхрын жагсаалтад
+            // байхгүй ч тухайн map-д аль хэдийн байвал зөвшөөрнө.
+            const mapDavkhart = Object.keys(idevkhteiMap).some(
+              (k) => String(k.includes("::") ? k.split("::")[1] : k).trim() === davkharStr,
+            );
+
             // Validate that davkhar already exists in barilga - do not allow creating new davkhar
-            if (!davkharArray.includes(davkharStr)) {
+            if (
+              !davkharArray.map((d) => String(d).trim()).includes(davkharStr) &&
+              !(turul !== "Орон сууц" && mapDavkhart)
+            ) {
               // Relaxing this constraint for import? Or keeping strict?
               // User wants valid import. If Excel has floor 5 but building has only 4, it should probably fail.
               // Keeping strict as per existing code.
@@ -3024,26 +3104,7 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
             // Create key format: "orts::davkhar" (e.g., "1::1", "1::2")
             const floorKey = `${ortsStr}::${davkharStr}`;
 
-            // Get or create toot array for this floor::entrance combination
-            if (!davkhariinToonuud[floorKey]) {
-              davkhariinToonuud[floorKey] = [];
-            }
-
-            const currentTootArray = davkhariinToonuud[floorKey];
-            let existingTootList = [];
-
-            if (Array.isArray(currentTootArray) && currentTootArray.length > 0) {
-              if (typeof currentTootArray[0] === "string" && currentTootArray[0].includes(",")) {
-                existingTootList = currentTootArray[0]
-                  .split(",")
-                  .map((t) => t.trim())
-                  .filter((t) => t);
-              } else {
-                existingTootList = currentTootArray
-                  .map((t) => String(t).trim())
-                  .filter((t) => t);
-              }
-            }
+            const existingTootList = tootJagsaaltUnshiya(idevkhteiMap[floorKey]);
 
             for (const toot of tootList) {
               if (!existingTootList.includes(toot)) {
@@ -3060,7 +3121,8 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
               return a.localeCompare(b);
             });
 
-            davkhariinToonuud[floorKey] = [existingTootList.join(",")];
+            idevkhteiMap[floorKey] = [existingTootList.join(",")];
+            uurchlugdsunMapuud.add(propName);
           }
 
           results.success.push({
@@ -3069,6 +3131,7 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
             toot: tootList.join(","),
             davkhar: davkhar || "",
             orts: orts || "",
+            turul,
             id: createdTootBurtgelIds.join(","),
           });
         } catch (error) {
@@ -3086,16 +3149,14 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
     // IMPORTANT: Check if we actually processed anything before saving
     if (results.total > 0 && barilgaIndex >= 0) {
       const davkharPath = `barilguud.${barilgaIndex}.tokhirgoo.davkhar`;
-      const toonuudPath = `barilguud.${barilgaIndex}.tokhirgoo.davkhariinToonuud`;
+      const $set = { [davkharPath]: davkharArray };
+      uurchlugdsunMapuud.forEach((propName) => {
+        $set[`barilguud.${barilgaIndex}.tokhirgoo.${propName}`] = turliinMapuud[propName];
+      });
 
       await Baiguullaga(db.erunkhiiKholbolt).findByIdAndUpdate(
         baiguullaga._id,
-        {
-          $set: {
-            [davkharPath]: davkharArray,
-            [toonuudPath]: davkhariinToonuud,
-          },
-        },
+        { $set },
       );
     }
 
