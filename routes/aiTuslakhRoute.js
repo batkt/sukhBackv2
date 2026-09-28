@@ -1,6 +1,7 @@
 /**
- * AI туслах — системийн хэрэглээний асуултад хариулна.
- *   POST /aiTuslakh   body: { messages: [{role:"user"|"assistant", content}], khuudas?, khuudasniiNer? }
+ * AI туслах — системийн хэрэглээ, ерөнхий асуулт, байгууллагын өгөгдлийн
+ * (эрхийн хүрээнд, зөвхөн унших) асуултад хариулна.
+ *   POST /aiTuslakh   body: { messages: [{role:"user"|"assistant", content}], khuudas?, khuudasniiNer?, barilgiinId? }
  * Хариуг text/plain хэлбэрээр stream хийж буцаана (фронт хэсэг хэсгээр нь зурна).
  * Орчны хувьсагч (аль нэг нь заавал):
  *   GEMINI_API_KEY     — Google Gemini (үнэгүй түвшинтэй). Байвал үүнийг ашиглана.
@@ -12,6 +13,12 @@ const crypto = require("crypto");
 const router = express.Router();
 const { tokenShalgakh } = require("zevbackv2");
 const { SISTEMIIN_MEDLEG } = require("../utils/aiTuslakhMedleg");
+const {
+  TODORKHOILOLT,
+  khamrakhKhureeBeldekh,
+  kheregselAjilluulakh,
+  khureeniiTailbar,
+} = require("../utils/aiTuslakhKheregsel");
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -19,6 +26,8 @@ const MAX_MESSEJ = 12; // сүүлийн хэдэн мессежийг л илг
 const MAX_URT = 2000; // нэг мессежийн дээд урт
 const KHYAZGAAR = 30; // хэрэглэгч бүрд...
 const KHYAZGAAR_MS = 10 * 60 * 1000; // ...10 минутад
+const MAX_EELJ = 5; // нэг асуултад хэрэгсэл дуудах дээд давталт
+const MAX_UR_DUN = 12000; // хэрэгслийн хариуны дээд урт (тэмдэгт)
 
 // Санах ойд хадгалах энгийн хязгаарлалт (токен бүрээр).
 const khereglee = new Map();
@@ -78,127 +87,232 @@ router.post("/aiTuslakh", tokenShalgakh, async (req, res) => {
     .slice(0, 120)
     .trim();
 
-  const khuudasniiZaavar = khuudas
-    ? `Хэрэглэгч одоо «${khuudas}» хуудсан дээр байна. Асуулт тодорхойгүй бол энэ хуудастай холбож хариул.`
-    : "";
+  // Өгөгдлийн хэрэгслийн хамрах хүрээ. Олдохгүй бол хэрэгсэлгүй ажиллана.
+  const kh = await khamrakhKhureeBeldekh(req).catch((err) => {
+    console.error("AI туслах хүрээ тодорхойлоход алдаа:", err.message);
+    return null;
+  });
+  const systemText = [
+    SISTEMIIN_MEDLEG,
+    khuudas
+      ? `Хэрэглэгч одоо «${khuudas}» хуудсан дээр байна. Асуулт тодорхойгүй бол энэ хуудастай холбож хариул.`
+      : "",
+    kh
+      ? khureeniiTailbar(kh)
+      : "Өгөгдлийн хэрэгсэл энэ удаа ашиглах боломжгүй — бодит тоо асуувал аль хуудаснаас харахыг заа.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   const tasalsan = new AbortController();
   // Хэрэглэгч цонхоо хаавал AI руу хийсэн хүсэлтийг ч зогсооно.
   res.on("close", () => tasalsan.abort());
 
-  // Үйлчилгээ бүрийн хүсэлт ба stream-ийн нэг мөрөөс текст салгах арга.
-  let khuselt;
-  let tekstSalgakh;
-  if (geminiKey) {
-    // "-latest" alias нь Google-ийн одоогийн Flash загвар руу заадаг тул
-    // хуучин загвар хаагдахад код өөрчлөх шаардлагагүй.
-    const model = process.env.AI_TUSLAKH_MODEL || "gemini-flash-latest";
-    khuselt = {
-      url: `${GEMINI_URL}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`,
-      headers: { "content-type": "application/json", "x-goog-api-key": geminiKey },
-      body: {
-        systemInstruction: {
-          parts: [{ text: [SISTEMIIN_MEDLEG, khuudasniiZaavar].filter(Boolean).join("\n\n") }],
-        },
-        // Gemini-д туслахын үүрэг "model" гэж нэрлэгдэнэ.
-        contents: messages.map((m) => ({
-          role: m.role === "assistant" ? "model" : "user",
-          parts: [{ text: m.content }],
-        })),
-        generationConfig: {
-          maxOutputTokens: 1024,
-          temperature: 0.4,
-          // 2.5 Flash-ийн "бодох" шатыг унтрааж хариуг хурдан болгоно.
-          // Gemini 3+ нь thinkingBudget-ийг хүлээж авахгүй байж болох тул зөвхөн 2.5-д.
-          ...(/2\.5-flash/i.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
-        },
-      },
-    };
-    tekstSalgakh = (event) =>
-      (event?.candidates?.[0]?.content?.parts || [])
-        .map((p) => (p.thought ? "" : p.text || ""))
-        .join("");
-  } else {
-    const system = [
-      { type: "text", text: SISTEMIIN_MEDLEG, cache_control: { type: "ephemeral" } },
-    ];
-    if (khuudasniiZaavar) system.push({ type: "text", text: khuudasniiZaavar });
-    khuselt = {
-      url: ANTHROPIC_URL,
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": anthropicKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: {
-        model: process.env.AI_TUSLAKH_MODEL || "claude-sonnet-5",
-        max_tokens: 1024,
-        stream: true,
-        system,
-        messages,
-      },
-    };
-    tekstSalgakh = (event) =>
-      event.type === "content_block_delta" && event.delta?.type === "text_delta"
-        ? event.delta.text
-        : "";
-  }
+  // Толгойг анхны текст бичих үед л илгээнэ — түүнээс өмнө алдаа гарвал JSON алдаа буцаана.
+  let ekhelsen = false;
+  const bichikh = (text) => {
+    if (!text) return;
+    if (!ekhelsen) {
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("X-Accel-Buffering", "no"); // nginx buffering-ийг унтраана
+      ekhelsen = true;
+    }
+    res.write(text);
+  };
 
-  let upstream;
+  const provider = geminiKey
+    ? geminiProvider(geminiKey, systemText, messages, kh ? TODORKHOILOLT : null)
+    : anthropicProvider(anthropicKey, systemText, messages, kh ? TODORKHOILOLT : null);
+
   try {
-    upstream = await fetch(khuselt.url, {
-      method: "POST",
-      signal: tasalsan.signal,
-      headers: khuselt.headers,
-      body: JSON.stringify(khuselt.body),
-    });
-  } catch (err) {
-    if (tasalsan.signal.aborted) return;
-    console.error("AI туслах холбогдсонгүй:", err.message);
-    return res.status(502).json({ message: "AI туслахтай холбогдож чадсангүй." });
-  }
-
-  if (!upstream.ok || !upstream.body) {
-    const aldaa = await upstream.text().catch(() => "");
-    console.error("AI туслах алдаа:", upstream.status, aldaa.slice(0, 300));
-    const message =
-      upstream.status === 429 || upstream.status === 529 || upstream.status === 503
-        ? "AI туслах түр ачаалалтай байна. Түр хүлээгээд дахин оролдоно уу."
-        : "AI туслах хариу өгч чадсангүй.";
-    return res.status(502).json({ message });
-  }
-
-  res.setHeader("Content-Type", "text/plain; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("X-Accel-Buffering", "no"); // nginx buffering-ийг унтраана
-
-  // SSE мөрүүдээс зөвхөн текстийн хэсгийг фронт руу дамжуулна.
-  const decoder = new TextDecoder();
-  let buffer = "";
-  try {
-    for await (const chunk of upstream.body) {
-      buffer += decoder.decode(chunk, { stream: true });
-      const murnuud = buffer.split("\n");
-      buffer = murnuud.pop();
-      for (const mur of murnuud) {
-        if (!mur.startsWith("data:")) continue;
-        let event;
-        try {
-          event = JSON.parse(mur.slice(5).trim());
-        } catch {
-          continue;
-        }
-        const tekst = tekstSalgakh(event);
-        if (tekst) res.write(tekst);
-        if (event.type === "error" || event.error) {
-          res.write("\n\n(Хариу тасалдлаа. Дахин оролдоно уу.)");
-        }
+    for (let eelj = 0; eelj < MAX_EELJ; eelj++) {
+      const { duudlaguud } = await provider.duudakh(tasalsan.signal, bichikh);
+      if (!duudlaguud.length || !kh) break;
+      const khariunuud = [];
+      for (const d of duudlaguud) {
+        const ur = await kheregselAjilluulakh(kh, d.name, d.args);
+        let json = JSON.stringify(ur);
+        if (json.length > MAX_UR_DUN) json = JSON.stringify({ aldaa: "Хариу хэт урт байна — асуултыг нарийсгана уу." });
+        khariunuud.push({ ...d, json });
       }
+      provider.urDunNemekh(khariunuud);
+      if (eelj === MAX_EELJ - 1) bichikh("\n\n(Асуулт хэт нарийн байна — илүү тодорхой асууна уу.)");
     }
   } catch (err) {
-    if (!tasalsan.signal.aborted) console.error("AI туслах stream алдаа:", err.message);
+    if (tasalsan.signal.aborted) return;
+    console.error("AI туслах алдаа:", err.status || "", String(err.message || "").slice(0, 300));
+    if (!ekhelsen) {
+      const message =
+        err.status === 429 || err.status === 529 || err.status === 503
+          ? "AI туслах түр ачаалалтай байна. Түр хүлээгээд дахин оролдоно уу."
+          : err.status
+            ? "AI туслах хариу өгч чадсангүй."
+            : "AI туслахтай холбогдож чадсангүй.";
+      return res.status(502).json({ message });
+    }
+    bichikh("\n\n(Хариу тасалдлаа. Дахин оролдоно уу.)");
   }
+  if (!ekhelsen) bichikh("Уучлаарай, хариу гаргаж чадсангүй. Асуултаа өөрөөр асууна уу.");
   res.end();
 });
+
+/** SSE хариуг мөр мөрөөр нь JSON болгон дамжуулна. */
+async function* sseUnshikh(body) {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for await (const chunk of body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    const murnuud = buffer.split("\n");
+    buffer = murnuud.pop();
+    for (const mur of murnuud) {
+      if (!mur.startsWith("data:")) continue;
+      try {
+        yield JSON.parse(mur.slice(5).trim());
+      } catch {
+        /* бүтэн бус мөр */
+      }
+    }
+  }
+}
+
+async function upstreamDuudakh(url, headers, body, signal) {
+  const resp = await fetch(url, { method: "POST", signal, headers, body: JSON.stringify(body) });
+  if (!resp.ok || !resp.body) {
+    const text = await resp.text().catch(() => "");
+    const err = new Error(text);
+    err.status = resp.status;
+    throw err;
+  }
+  return resp;
+}
+
+/** Google Gemini — function calling + stream. */
+function geminiProvider(key, systemText, messages, tools) {
+  // "-latest" alias нь Google-ийн одоогийн Flash загвар руу заадаг тул
+  // хуучин загвар хаагдахад код өөрчлөх шаардлагагүй.
+  const model = process.env.AI_TUSLAKH_MODEL || "gemini-flash-latest";
+  // Gemini-д туслахын үүрэг "model" гэж нэрлэгдэнэ.
+  const contents = messages.map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+  let suuliinParts = [];
+  return {
+    async duudakh(signal, bichikh) {
+      const resp = await upstreamDuudakh(
+        `${GEMINI_URL}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`,
+        { "content-type": "application/json", "x-goog-api-key": key },
+        {
+          systemInstruction: { parts: [{ text: systemText }] },
+          contents,
+          ...(tools
+            ? { tools: [{ functionDeclarations: tools }], toolConfig: { functionCallingConfig: { mode: "AUTO" } } }
+            : {}),
+          generationConfig: {
+            maxOutputTokens: 2048,
+            temperature: 0.3,
+            // 2.5 Flash-ийн "бодох" шатыг унтрааж хариуг хурдан болгоно.
+            // Gemini 3+ нь thinkingBudget-ийг хүлээж авахгүй байж болох тул зөвхөн 2.5-д.
+            ...(/2\.5-flash/i.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+          },
+        },
+        signal,
+      );
+      // Загварын бүх хэсгийг (thoughtSignature-тай нь) хадгалж дараагийн
+      // ээлжид яг хэвээр нь буцааж илгээнэ — Gemini 3 үүнийг шаарддаг.
+      const parts = [];
+      const duudlaguud = [];
+      for await (const event of sseUnshikh(resp.body)) {
+        if (event.error) throw Object.assign(new Error(JSON.stringify(event.error)), { status: 502 });
+        for (const p of event?.candidates?.[0]?.content?.parts || []) {
+          parts.push(p);
+          if (p.functionCall) duudlaguud.push({ id: p.functionCall.id, name: p.functionCall.name, args: p.functionCall.args || {} });
+          else if (p.text && !p.thought) bichikh(p.text);
+        }
+      }
+      suuliinParts = parts;
+      return { duudlaguud };
+    },
+    urDunNemekh(khariunuud) {
+      contents.push({ role: "model", parts: suuliinParts });
+      contents.push({
+        role: "user",
+        parts: khariunuud.map((k) => ({
+          functionResponse: {
+            ...(k.id ? { id: k.id } : {}),
+            name: k.name,
+            response: { result: JSON.parse(k.json) },
+          },
+        })),
+      });
+    },
+  };
+}
+
+/** Anthropic Claude — tool use + stream. */
+function anthropicProvider(key, systemText, messages, tools) {
+  const model = process.env.AI_TUSLAKH_MODEL || "claude-sonnet-5";
+  const msgs = messages.map((m) => ({ role: m.role, content: m.content }));
+  let suuliinBlokuud = [];
+  return {
+    async duudakh(signal, bichikh) {
+      const resp = await upstreamDuudakh(
+        ANTHROPIC_URL,
+        { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+        {
+          model,
+          max_tokens: 2048,
+          stream: true,
+          system: [{ type: "text", text: systemText, cache_control: { type: "ephemeral" } }],
+          ...(tools
+            ? { tools: tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.parameters })) }
+            : {}),
+          messages: msgs,
+        },
+        signal,
+      );
+      const blokuud = [];
+      for await (const event of sseUnshikh(resp.body)) {
+        if (event.type === "error") throw Object.assign(new Error(JSON.stringify(event.error)), { status: 502 });
+        if (event.type === "content_block_start") {
+          const b = event.content_block || {};
+          blokuud[event.index] =
+            b.type === "tool_use" ? { type: "tool_use", id: b.id, name: b.name, _json: "" } : { type: "text", text: "" };
+        } else if (event.type === "content_block_delta") {
+          const b = blokuud[event.index];
+          if (!b) continue;
+          if (event.delta?.type === "text_delta") {
+            b.text += event.delta.text;
+            bichikh(event.delta.text);
+          } else if (event.delta?.type === "input_json_delta") {
+            b._json += event.delta.partial_json || "";
+          }
+        }
+      }
+      suuliinBlokuud = blokuud.filter(Boolean).map((b) => {
+        if (b.type !== "tool_use") return b;
+        let input = {};
+        try {
+          input = b._json ? JSON.parse(b._json) : {};
+        } catch {
+          /* хоосон оролт */
+        }
+        return { type: "tool_use", id: b.id, name: b.name, input };
+      }).filter((b) => b.type !== "text" || b.text);
+      const duudlaguud = suuliinBlokuud
+        .filter((b) => b.type === "tool_use")
+        .map((b) => ({ id: b.id, name: b.name, args: b.input }));
+      return { duudlaguud };
+    },
+    urDunNemekh(khariunuud) {
+      msgs.push({ role: "assistant", content: suuliinBlokuud });
+      msgs.push({
+        role: "user",
+        content: khariunuud.map((k) => ({ type: "tool_result", tool_use_id: k.id, content: k.json })),
+      });
+    },
+  };
+}
 
 module.exports = router;
