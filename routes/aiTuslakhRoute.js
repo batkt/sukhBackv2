@@ -149,13 +149,31 @@ router.post("/aiTuslakh", tokenShalgakh, async (req, res) => {
           : err.status
             ? "AI туслах хариу өгч чадсангүй."
             : "AI туслахтай холбогдож чадсангүй.";
-      return res.status(502).json({ message });
+      return res.status(502).json({ message, aldaa: boditAldaa(err) });
     }
     bichikh("\n\n(Хариу тасалдлаа. Дахин оролдоно уу.)");
   }
   if (!ekhelsen) bichikh("Уучлаарай, хариу гаргаж чадсангүй. Асуултаа өөрөөр асууна уу.");
   res.end();
 });
+
+/**
+ * Үйлчилгээ үзүүлэгчийн (Google/Anthropic) жинхэнэ алдааг товчоор гаргана —
+ * жишээ "503 UNAVAILABLE: The model is overloaded...". Түлхүүр агуулахгүй.
+ */
+function boditAldaa(err) {
+  const raw = String(err?.message || "");
+  let tailbar = raw;
+  try {
+    const j = JSON.parse(raw);
+    const e = Array.isArray(j) ? j[0]?.error : j?.error || j;
+    tailbar = [e?.status || e?.type, e?.message].filter(Boolean).join(": ") || raw;
+  } catch {
+    /* JSON биш — байгаагаар нь */
+  }
+  tailbar = tailbar.replace(/key=[^&\s"]+/gi, "key=***").slice(0, 300);
+  return [err?.status, tailbar || err?.name || "Тодорхойгүй алдаа"].filter(Boolean).join(" ");
+}
 
 /** SSE хариуг мөр мөрөөр нь JSON болгон дамжуулна. */
 async function* sseUnshikh(body) {
