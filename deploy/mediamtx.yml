@@ -57,6 +57,20 @@ rtspTransports: [tcp]
 ###############################################################################
 webrtc: yes
 webrtcAddress: :8889
+
+# ── TLS-ийг MediaMTX ӨӨРӨӨ барина, nginx-ээр дамжуулахгүй ───────────────
+# WHEP нь хоёр шаттай: `POST` (offer → answer), дараа нь хөтөч өөрийн ICE
+# candidate-уудаа сервер буцаасан `Location` хаяг руу `PATCH`-аар илгээнэ.
+# nginx дээр `/whep/` угтвартай прокси хийвэл тэр хаяг эвдэрч, сервер
+# хөтчийн candidate-ыг ХЭЗЭЭ Ч авахгүй — дохио зүгээр солилцогдсон мөртлөө
+# медиа явахгүй, логд `deadline exceeded while waiting connection`,
+# API-д `outboundBytes: 0` гэж харагдана.
+#
+# Домэйн ижил тул nginx-ийн сертификат яг таарна: хаяг нь
+# https://amarhome.mn:8889/<зам>/whep болно.
+webrtcEncryption: yes
+webrtcServerCert: /etc/nginx/fullchain.crt
+webrtcServerKey: /etc/nginx/amarhome.key
 # TLS-ийг nginx хийнэ (доорх README-г үз) — MediaMTX дотооддоо цэвэр HTTP,
 # шифрлэлт анхдагчаараа унтраалттай тул тусад нь заах шаардлагагүй.
 webrtcAllowOrigin: '*'
