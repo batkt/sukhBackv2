@@ -41,15 +41,14 @@ rtsp: yes
 rtspAddress: :8554
 # UDP дээр пакет алдагдвал зураг задардаг; барилга ↔ VPS хооронд TCP найдвартай.
 rtspTransports: [tcp]
-rtspEncryption: "no"
 
 ###############################################################################
 # WebRTC / WHEP — үзэгчид энэ рүү холбогдоно
 ###############################################################################
 webrtc: yes
 webrtcAddress: :8889
-# TLS-ийг nginx хийнэ (доорх README-г үз) — MediaMTX дотооддоо цэвэр HTTP.
-webrtcEncryption: "no"
+# TLS-ийг nginx хийнэ (доорх README-г үз) — MediaMTX дотооддоо цэвэр HTTP,
+# шифрлэлт анхдагчаараа унтраалттай тул тусад нь заах шаардлагагүй.
 webrtcAllowOrigin: '*'
 webrtcTrustedProxies: [127.0.0.1]
 
