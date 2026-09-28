@@ -11,9 +11,36 @@ exports.khariltsagchUstgakh = asyncHandler(async (req, res, next) => {
     const khariltsagchModel = khariltsagch(db.erunkhiiKholbolt);
     const deleted = await khariltsagchModel.findByIdAndDelete(id);
     if (!deleted) {
-      return res.status(404).json({ success: false, message: "Олдсонгүй" });
+      return res.status(404).json({ success: false, message: "Харилцагч олдсонгүй" });
     }
-    res.json({ success: true, message: "Амжилттай устгагдлаа" });
+
+    // Харилцагчийн бүх гэрээг «Цуцалсан» болгоно — эс бөгөөс гэрээний
+    // цонхонд идэвхтэй хэвээр үлдэж, нэхэмжлэх үргэлжлэн бодогддог байв.
+    // Гэрээ, түүх нь устахгүй (тайлан, үлдэгдэл хадгалагдана).
+    const baiguullaguud = new Set(
+      [deleted.baiguullagiinId, ...(deleted.toots || []).map((t) => t?.baiguullagiinId)]
+        .filter(Boolean)
+        .map(String),
+    );
+    let tsutsalsanToo = 0;
+    for (const orgId of baiguullaguud) {
+      const conn = db.kholboltuud.find((k) => String(k.baiguullagiinId) === orgId);
+      if (!conn) continue;
+      const ur = await Geree(conn).updateMany(
+        // Харилцагчийн гэрээ `orshinSuugchId`-аар холбогддог (toot хасахтай ижил)
+        { orshinSuugchId: String(id), tuluv: { $ne: "Цуцалсан" } },
+        { $set: { tuluv: "Цуцалсан", tsutsalsanOgnoo: new Date() } },
+      );
+      tsutsalsanToo += ur?.modifiedCount || 0;
+    }
+
+    res.json({
+      success: true,
+      tsutsalsanGereeToo: tsutsalsanToo,
+      message: tsutsalsanToo
+        ? `Харилцагч устгагдлаа, ${tsutsalsanToo} гэрээ цуцлагдлаа`
+        : "Харилцагч устгагдлаа",
+    });
   } catch (error) {
     next(error);
   }
