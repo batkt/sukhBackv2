@@ -62,6 +62,7 @@ const cameraRoute = require("./routes/cameraRoute");
 const udriinKhaaltRoute = require("./routes/udriinKhaaltRoute");
 const aiTuslakhRoute = require("./routes/aiTuslakhRoute");
 const neeyeRoute = require("./routes/neeyeRoute");
+const urgatsRoute = require("./routes/urgatsRoute");
 const gerBuliinGishuunRoute = require("./routes/gerBuliinGishuunRoute");
 const gishuuniiKhandalt = require("./middleware/gishuuniiKhandalt");
 
@@ -314,6 +315,7 @@ app.use(cameraRoute);
 app.use(udriinKhaaltRoute);
 app.use(aiTuslakhRoute);
 app.use(neeyeRoute);
+app.use(urgatsRoute);
 app.use(walletQpayRoute);
 // Хэтэвчний тайлан (zevtabs «Amarhome» цэс). Доорх зурагны catch-all
 // (`/:baiguullagiinId/:ner`)-аас ӨМНӨ байх ёстой.
