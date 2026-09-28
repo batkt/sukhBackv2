@@ -28,11 +28,22 @@ if [ -z "$ZAM" ]; then
     exit 1
 fi
 
+# Оношилгооны лог. Алдааг чимээгүй залгивал «яагаад нийтлэгч гарч ирэхгүй
+# байна» гэдгийг олох арга байхгүй болно.
+LOG=/var/log/mediamtx-urgats.log
+
 khel() {
-    curl -s -m 8 -X POST \
+    tuluv="$1"
+    kod=$(curl -s -m 8 -o "/tmp/urgats.$$" -w '%{http_code}' -X POST \
         -H 'Content-Type: application/json' \
         -d "{\"path\":\"$ZAM\"}" \
-        "$API/$1" >/dev/null 2>&1 || true
+        "$API/$tuluv" 2>/dev/null) || kod="000"
+    if [ "$kod" != "200" ]; then
+        echo "$(date '+%F %T') $tuluv $ZAM -> HTTP $kod $(cat "/tmp/urgats.$$" 2>/dev/null)" \
+            >> "$LOG" 2>/dev/null
+    fi
+    rm -f "/tmp/urgats.$$" 2>/dev/null
+    return 0
 }
 
 zogsooyo() {
