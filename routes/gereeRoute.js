@@ -202,8 +202,11 @@ router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
     req.body?.zardliinTurul === "Хөнгөлөлт";
 
   if (khungulultEsekh) {
+    // tokenShalgakh токеныг req.body-д тавьдаг — өмнө нь зөвхөн
+    // req.nevtersenAjiltniiToken-оос уншдаг тул id үргэлж хоосон болж, админ ч
+    // гэсэн «эрх байхгүй» (403) авч гараас хөнгөлөлт оруулж чаддаггүй байв.
     const zuvshuurugdsun = await khungulultOruulakhErkhteiEsekh(
-      req.nevtersenAjiltniiToken?.id
+      req.body?.nevtersenAjiltniiToken?.id || req.nevtersenAjiltniiToken?.id
     );
     if (!zuvshuurugdsun) {
       return res.status(403).json({
@@ -363,6 +366,19 @@ router.delete("/guilgeeAvlaguud/:id", tokenShalgakh, async (req, res, next) => {
       .findById(req.params.id)
       .lean()
       .catch(() => null);
+
+    // Хөнгөлөлтийн мөр устгавал хөнгөлөлтийн бүртгэлийг (түүх) ч шинэчилнэ —
+    // өмнө нь гүйлгээний түүхээс устгасан хөнгөлөлт «Хөнгөлөлтийн түүх»-д үлддэг байв.
+    if (mur?.khungulultiinTuukhId) {
+      const umnukhSend = res.send.bind(res);
+      res.send = function (data) {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          GuilgeeAvlaguud.khungulultiinTuukhDakhinTootsoolokh(kholbolt, mur.khungulultiinTuukhId).catch(() => {});
+        }
+        return umnukhSend(data);
+      };
+      return next();
+    }
 
     if (!mur || mur.ekhniiUldegdelEsekh !== true || !mur.gereeniiId) return next();
 

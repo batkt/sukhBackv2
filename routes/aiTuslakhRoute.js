@@ -143,19 +143,74 @@ router.post("/aiTuslakh", tokenShalgakh, async (req, res) => {
     if (tasalsan.signal.aborted) return;
     console.error("AI туслах алдаа:", err.status || "", String(err.message || "").slice(0, 300));
     if (!ekhelsen) {
-      const message =
-        err.status === 429 || err.status === 529 || err.status === 503
-          ? "AI туслах түр ачаалалтай байна. Түр хүлээгээд дахин оролдоно уу."
-          : err.status
-            ? "AI туслах хариу өгч чадсангүй."
-            : "AI туслахтай холбогдож чадсангүй.";
-      return res.status(502).json({ message });
+      return res.status(502).json({ message: aldaaniiMedegdel(err), aldaa: boditAldaa(err) });
     }
     bichikh("\n\n(Хариу тасалдлаа. Дахин оролдоно уу.)");
   }
   if (!ekhelsen) bichikh("Уучлаарай, хариу гаргаж чадсангүй. Асуултаа өөрөөр асууна уу.");
   res.end();
 });
+
+/** Google/Anthropic-ийн алдааны JSON-оос error объектыг гаргана. */
+function aldaaObjekt(err) {
+  try {
+    const j = JSON.parse(String(err?.message || ""));
+    return (Array.isArray(j) ? j[0]?.error : j?.error) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Хэрэглэгчид ойлгомжтой мэдэгдэл. Хязгаар (квот) дууссан бол "ачаалалтай"
+ * биш — яг хязгаар дууссаныг, хэзээ сэргэхийг хэлнэ.
+ */
+function aldaaniiMedegdel(err) {
+  const e = aldaaObjekt(err);
+  const msg = String(e?.message || "").toLowerCase();
+  const tuluv = String(e?.status || "");
+  const details = Array.isArray(e?.details) ? e.details : [];
+  const khyazgaarDuussan =
+    err?.status === 429 ||
+    tuluv === "RESOURCE_EXHAUSTED" ||
+    msg.includes("quota") ||
+    msg.includes("rate limit") ||
+    msg.includes("credit balance");
+  if (khyazgaarDuussan) {
+    const zurchil = details.flatMap((d) => d?.violations || []);
+    const udruur = zurchil.some((v) => /perday/i.test(`${v?.quotaId || ""}${v?.quotaMetric || ""}`)) || msg.includes("per day");
+    const retry = details.find((d) => String(d?.["@type"] || "").includes("RetryInfo"))?.retryDelay;
+    if (msg.includes("credit balance")) return "AI туслахын төлбөрийн үлдэгдэл (credit) дууссан байна. Админ дансаа цэнэглэнэ үү.";
+    if (udruur) return "AI туслахын өнөөдрийн үнэгүй хязгаар (квот) дууссан байна. Маргааш сэргэнэ, эсвэл Google-д төлбөрийн тохиргоо хийнэ үү.";
+    return `AI туслахын минутын хязгаар (квот) хэтэрлээ.${retry ? ` ${String(retry).replace("s", "")} секундын дараа` : " Түр хүлээгээд"} дахин оролдоно уу.`;
+  }
+  if (err?.status === 401 || err?.status === 403 || tuluv === "PERMISSION_DENIED" || tuluv === "UNAUTHENTICATED")
+    return "AI туслахын API түлхүүр (token) буруу эсвэл хүчингүй болсон байна. Админ түлхүүрээ шалгана уу.";
+  if (err?.status === 400 && msg.includes("api key"))
+    return "AI туслахын API түлхүүр (token) буруу байна. Админ түлхүүрээ шалгана уу.";
+  if (err?.status === 404) return "AI загвар олдсонгүй (хуучирсан). Админ AI_TUSLAKH_MODEL тохиргоог шалгана уу.";
+  if (err?.status === 503 || err?.status === 529 || err?.status === 500)
+    return "AI туслахын сервер (Google) түр ачаалалтай байна. Хэдэн минутын дараа дахин оролдоно уу.";
+  return err?.status ? "AI туслах хариу өгч чадсангүй." : "AI туслахтай холбогдож чадсангүй.";
+}
+
+/**
+ * Үйлчилгээ үзүүлэгчийн (Google/Anthropic) жинхэнэ алдааг товчоор гаргана —
+ * жишээ "503 UNAVAILABLE: The model is overloaded...". Түлхүүр агуулахгүй.
+ */
+function boditAldaa(err) {
+  const raw = String(err?.message || "");
+  let tailbar = raw;
+  try {
+    const j = JSON.parse(raw);
+    const e = Array.isArray(j) ? j[0]?.error : j?.error || j;
+    tailbar = [e?.status || e?.type, e?.message].filter(Boolean).join(": ") || raw;
+  } catch {
+    /* JSON биш — байгаагаар нь */
+  }
+  tailbar = tailbar.replace(/key=[^&\s"]+/gi, "key=***").slice(0, 300);
+  return [err?.status, tailbar || err?.name || "Тодорхойгүй алдаа"].filter(Boolean).join(" ");
+}
 
 /** SSE хариуг мөр мөрөөр нь JSON болгон дамжуулна. */
 async function* sseUnshikh(body) {
@@ -192,6 +247,10 @@ function geminiProvider(key, systemText, messages, tools) {
   // "-latest" alias нь Google-ийн одоогийн Flash загвар руу заадаг тул
   // хуучин загвар хаагдахад код өөрчлөх шаардлагагүй.
   const model = process.env.AI_TUSLAKH_MODEL || "gemini-flash-latest";
+  // Google ачаалалтай (503) эсвэл хязгаар хэтэрсэн (429) үед дахин оролдоод,
+  // дараа нь илүү хөнгөн загвар руу шилжинэ.
+  const nuutsZagvar = process.env.AI_TUSLAKH_FALLBACK_MODEL || "gemini-flash-lite-latest";
+  const nuuts = nuutsZagvar && nuutsZagvar !== model ? nuutsZagvar : null;
   // Gemini-д туслахын үүрэг "model" гэж нэрлэгдэнэ.
   const contents = messages.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
@@ -200,8 +259,8 @@ function geminiProvider(key, systemText, messages, tools) {
   let suuliinParts = [];
   return {
     async duudakh(signal, bichikh) {
-      const resp = await upstreamDuudakh(
-        `${GEMINI_URL}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`,
+      const khuselt = (zagvar) => upstreamDuudakh(
+        `${GEMINI_URL}/${encodeURIComponent(zagvar)}:streamGenerateContent?alt=sse`,
         { "content-type": "application/json", "x-goog-api-key": key },
         {
           systemInstruction: { parts: [{ text: systemText }] },
@@ -214,11 +273,33 @@ function geminiProvider(key, systemText, messages, tools) {
             temperature: 0.3,
             // 2.5 Flash-ийн "бодох" шатыг унтрааж хариуг хурдан болгоно.
             // Gemini 3+ нь thinkingBudget-ийг хүлээж авахгүй байж болох тул зөвхөн 2.5-д.
-            ...(/2\.5-flash/i.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+            ...(/2\.5-flash/i.test(zagvar) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
           },
         },
         signal,
       );
+      // 503/500 (ачаалал) — ижил загварыг нэг удаа дахин; 429 (квот) — дахин
+      // оролдох нь квотыг л шатаана, шууд хөнгөн загвар руу (тусдаа квоттой).
+      let resp;
+      let suuliinAldaa = null;
+      const oroldlogo = [model];
+      for (let i = 0; i < oroldlogo.length; i++) {
+        try {
+          resp = await khuselt(oroldlogo[i]);
+          break;
+        } catch (err) {
+          suuliinAldaa = err;
+          if (signal.aborted) throw err;
+          const achaalal = err.status === 503 || err.status === 500;
+          const kvot = err.status === 429;
+          if (achaalal && i === 0) oroldlogo.push(model);
+          if ((achaalal || kvot) && nuuts && !oroldlogo.includes(nuuts)) oroldlogo.push(nuuts);
+          if (i === oroldlogo.length - 1) throw err;
+          console.warn(`AI туслах: ${oroldlogo[i]} ${err.status} — дараагийн оролдлого`);
+          if (achaalal) await new Promise((r) => setTimeout(r, 800));
+        }
+      }
+      if (!resp) throw suuliinAldaa || new Error("AI хариу алга");
       // Загварын бүх хэсгийг (thoughtSignature-тай нь) хадгалж дараагийн
       // ээлжид яг хэвээр нь буцааж илгээнэ — Gemini 3 үүнийг шаарддаг.
       const parts = [];

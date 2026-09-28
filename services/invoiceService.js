@@ -312,9 +312,9 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     ognoo: { $gte: startOfCycle, $lte: endOfCycle }
   }).sort({ ognoo: -1 });
 
-  if (invoice && invoice.tuluv === "Төлсөн" && !options.override) {
-    invoice = null;
-  }
+  // Төлөгдсөн нэхэмжлэхийг «байхгүй» гэж үзэж шинээр үүсгэдэг байсан тул
+  // тухайн сарын бүх зардал ДАХИН бичигдэж, сар давхар нэхэмжлэгддэг байв.
+  // Төлсөн ч тухайн мөчлөгийн нэхэмжлэх хэвээр «байгаа» гэж тооцно (override-оор л дахин үүснэ).
 
   if (invoice && !options.override) {
     // ХООСОН НЭХЭМЖЛЭХ.

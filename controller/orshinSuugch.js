@@ -878,9 +878,19 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
           const unitToot = String(unit.toot).trim();
           const unitDavkhar = unit.davkhar ? String(unit.davkhar).trim() : "";
           const unitOrts = unit.orts ? String(unit.orts).trim() : "1";
+          // Гараж/агуулахыг орон сууцнаас ялгах төрөл. Өмнө нь хадгалагдахгүй
+          // байсан тул гараж, агуулах бүгд "Орон сууц" болж бүртгэгддэг байв.
+          const turulRaw = String(unit.turul || "").trim().toLowerCase();
+          const unitTurul =
+            turulRaw === "гараж" || turulRaw === "гараш" || turulRaw === "зогсоол"
+              ? "Гараж"
+              : turulRaw === "агуулах"
+                ? "Агуулах"
+                : "Орон сууц";
 
           const tootEntry = {
             toot: unitToot,
+            turul: unitTurul,
             source: "OWN_ORG",
             baiguullagiinId: baiguullaga._id.toString(),
             barilgiinId: barilgiinId,
@@ -898,10 +908,12 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
             createdAt: new Date(),
           };
 
+          // Гараж "10" ба орон сууц "10" нь өөр өмч тул төрлөөр нь ч ялгана.
           const existingTootIndex = orshinSuugch.toots.findIndex(
             (t) =>
               t.toot === tootEntry.toot &&
               t.barilgiinId === tootEntry.barilgiinId &&
+              (t.turul || "Орон сууц") === tootEntry.turul &&
               (!t.orts || t.orts === tootEntry.orts),
           );
 

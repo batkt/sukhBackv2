@@ -22,6 +22,8 @@ const khungulultiinTuukhSchema = new Schema(
     /** Хувь (khuvi) эсвэл сарын дүн (dun) */
     khungulukhUtga: Number,
     shaltgaan: String,
+    /** Өмчийн ангилал: "Орон сууц" | "Агуулах" | "Зогсоол" (гараж). Хоосон — бүх төлбөр. */
+    angilal: String,
     /** Хөнгөлөлтгүй нийт дүн (сарын төлбөр × сар) */
     tulukhDun: Number,
     /** Нийт хөнгөлсөн дүн */
