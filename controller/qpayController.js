@@ -424,7 +424,11 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
       bankGuilgee.balance = 0;
       bankGuilgee.requestId = nekhemjlekh.qpayInvoiceId || "";
 
-      bankGuilgee.kholbosonGereeniiId = [nekhemjlekh.gereeniiId];
+      // Гэрээгүй нэхэмжлэх дээр `[null]` хадгалагдвал вэб тал нь "null" мөр
+      // болгон `_id: {$in: [...]}`-д явуулж CastError өгдөг.
+      bankGuilgee.kholbosonGereeniiId = nekhemjlekh.gereeniiId
+        ? [nekhemjlekh.gereeniiId]
+        : [];
       bankGuilgee.kholbosonTalbainId = geree?.talbainDugaar ? [geree.talbainDugaar] : [];
       bankGuilgee.dansniiDugaar = nekhemjlekh.nekhemjlekhiinDans || "";
       bankGuilgee.bank = "qpay";

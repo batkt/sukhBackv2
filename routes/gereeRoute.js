@@ -279,6 +279,39 @@ router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
 
 const MAX_KHUUDASNII_KHEMJEE = 2000;
 
+/**
+ * `_id` шүүлтээс ObjectId БОЛОХГҮЙ утгыг хасна.
+ *
+ * Вэб тал нь холбоотой гэрээнүүдийг `_id: {$in: [...]}`-ээр багцлан татдаг
+ * бөгөөд жагсаалтаа `bankniiGuilgee.kholbosonGereeniiId`-аас бүрдүүлдэг.
+ * Гэрээгүй гүйлгээ дээр тэр массив нь `[null]` болж хадгалагдсан байсан тул
+ * `String(null)` → "null" гэсэн МӨР орж ирээд, mongoose бүх хүсэлтийг
+ * CastError-оор унагадаг байв (нэг муу id бусад 10 гэрээг ч алга болгоно).
+ *
+ * Шинэ бичлэг дээр эх үүсвэрийг нь зассан (qpay/walletQpay), гэхдээ өмнө нь
+ * үүссэн мөрүүд баазад хэвээр тул энд ч хамгаалж байна. Хасагдсаны дараа
+ * хоосон үлдвэл `$in: []` болж, "олдсонгүй" гэсэн ЗӨВ хариу буцна.
+ */
+function idShuultTseverleye(query) {
+  if (!query || typeof query !== "object") return;
+  const mongoose = require("mongoose");
+  const zuvUu = (id) => mongoose.Types.ObjectId.isValid(id);
+
+  const utga = query._id;
+  if (utga === undefined || utga === null) return;
+
+  if (typeof utga === "object" && !Array.isArray(utga)) {
+    ["$in", "$nin"].forEach((tulkhuur) => {
+      if (Array.isArray(utga[tulkhuur]))
+        utga[tulkhuur] = utga[tulkhuur].filter(zuvUu);
+    });
+    return;
+  }
+
+  // Шууд утга буруу бол юу ч таарахгүй — 500 биш, хоосон хариу.
+  if (!zuvUu(utga)) query._id = { $in: [] };
+}
+
 router.get("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
   try {
     const body = req.query;
@@ -391,6 +424,8 @@ router.get("/geree", tokenShalgakh, async (req, res, next) => {
       );
       if (body.query.$or.length === 0) delete body.query.$or;
     }
+
+    idShuultTseverleye(body.query);
 
     if (Number(body.khuudasniiKhemjee) > MAX_KHUUDASNII_KHEMJEE) {
       body.khuudasniiKhemjee = MAX_KHUUDASNII_KHEMJEE;

@@ -1425,7 +1425,13 @@ async function settleWalletPayment(
         bankGuilgee.balance = 0;
         bankGuilgee.requestId = walletPaymentId;
 
-        bankGuilgee.kholbosonGereeniiId = [qpayObject.gereeniiId];
+        // Хэтэвчний төлбөр нь гэрээгүй байж болно (жишээ: зогсоол, зочин).
+        // Хоосон утгыг массивт хийвэл `[null]` болж хадгалагдаад, дараа нь
+        // вэб тал нь "null" мөр болгон буцааж `_id: {$in: [...]}`-д явуулж
+        // CastError өгдөг. Хажуугийн `kholbosonTalbainId`-тай ижил хамгаална.
+        bankGuilgee.kholbosonGereeniiId = qpayObject.gereeniiId
+          ? [qpayObject.gereeniiId]
+          : [];
         bankGuilgee.kholbosonTalbainId = qpayObject.talbainDugaar
           ? [qpayObject.talbainDugaar]
           : [];
