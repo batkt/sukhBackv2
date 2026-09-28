@@ -2680,7 +2680,7 @@ const TOOT_TURLIIN_MAP = {
 function tootTurulTaniya(utga) {
   const t = String(utga || "").trim().toLowerCase();
   if (!t || t === "орон сууц" || t === "тоот" || t === "байр") return "Орон сууц";
-  if (t === "зогсоол" || t === "гараж") return "Зогсоол";
+  if (t === "зогсоол" || t === "гараж" || t === "гараш") return "Зогсоол";
   if (t === "агуулах") return "Агуулах";
   return null;
 }

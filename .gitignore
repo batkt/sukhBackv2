@@ -12,3 +12,6 @@ db/*
 
 # Firebase service account private key - never commit
 **/serviceAccountKey.json
+
+# Серверийн нууц түлхүүрүүд (git-д орохгүй)
+tokhirgoo/local.env

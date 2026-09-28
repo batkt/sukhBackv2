@@ -18,6 +18,8 @@ const { pubClient, subClient, connectRedis } = require("./utils/redisClient");
 const dotenv = require("dotenv");
 const cron = require("node-cron");
 
+// Нууц түлхүүрүүд (GEMINI_API_KEY г.м.) серверт л байх local.env-д — git-д орохгүй.
+dotenv.config({ path: "./tokhirgoo/local.env" });
 dotenv.config({ path: "./tokhirgoo/tokhirgoo.env" });
 
 const baiguullagaRoute = require("./routes/baiguullagaRoute");
@@ -58,6 +60,7 @@ const appVersionRoute = require("./routes/appVersionRoute");
 const blogRoute = require("./routes/blogRoute");
 const cameraRoute = require("./routes/cameraRoute");
 const udriinKhaaltRoute = require("./routes/udriinKhaaltRoute");
+const aiTuslakhRoute = require("./routes/aiTuslakhRoute");
 const neeyeRoute = require("./routes/neeyeRoute");
 const gerBuliinGishuunRoute = require("./routes/gerBuliinGishuunRoute");
 const gishuuniiKhandalt = require("./middleware/gishuuniiKhandalt");
@@ -309,6 +312,7 @@ app.use(gerBuliinGishuunRoute);
 app.use("/wallet", walletRoute);
 app.use(cameraRoute);
 app.use(udriinKhaaltRoute);
+app.use(aiTuslakhRoute);
 app.use(neeyeRoute);
 app.use(walletQpayRoute);
 // Хэтэвчний тайлан (zevtabs «Amarhome» цэс). Доорх зурагны catch-all
