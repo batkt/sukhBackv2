@@ -171,7 +171,68 @@ router.post("/zardalHuulakh", tokenShalgakh, async (req, res, next) => {
 });
 
 
-router.post("/zardalTseverlekhiya", async (req, res, next) => {
+/**
+ * POST /ashiglaltiinZardalUstgaya  body: { id }
+ * Нэг зардлыг устгаад тухайн барилгын бүх гэрээнээс (geree.zardluud) шууд хасна.
+ * Нэхэмжлэх geree.zardluud-аас үүсдэг тул дараа сарын нэхэмжлэхэд орохгүй болно.
+ * (Ерөнхий crud-ын DELETE дээр model-ийн hook ажиллах эсэх баталгаагүй байсан.)
+ */
+router.post("/ashiglaltiinZardalUstgaya", tokenShalgakh, async (req, res, next) => {
+  try {
+    const kholbolt = req.body.tukhainBaaziinKholbolt;
+    const baiguullagiinId = String(kholbolt?.baiguullagiinId || "");
+    const { id } = req.body;
+    if (!baiguullagiinId || !id || !mongoose.isValidObjectId(id)) {
+      return res.status(400).send({ success: false, message: "Устгах зардал тодорхойгүй байна." });
+    }
+
+    const Zardal = ashiglaltiinZardluud(kholbolt);
+    const zardal = await Zardal.findOne({ _id: id, baiguullagiinId }).lean();
+    if (!zardal) {
+      return res.status(404).send({ success: false, message: "Зардал олдсонгүй (өмнө нь устгагдсан байж магадгүй)." });
+    }
+    await Zardal.findOneAndDelete({ _id: id, baiguullagiinId });
+
+    const ner = String(zardal.ner || "").trim().toLowerCase();
+    const turul = String(zardal.turul || "").trim().toLowerCase();
+    const adilZardal = (z) => {
+      if (String(z?.ner || "").trim().toLowerCase() !== ner) return false;
+      const zt = String(z?.turul || "").trim().toLowerCase();
+      return !turul || !zt || zt === turul;
+    };
+
+    const gereeShuult = { baiguullagiinId, "zardluud.0": { $exists: true } };
+    if (zardal.barilgiinId) {
+      gereeShuult.$or = [
+        { barilgiinId: String(zardal.barilgiinId) },
+        { barilgiinId: { $exists: false } },
+        { barilgiinId: null },
+        { barilgiinId: "" },
+      ];
+    }
+    // Бичих холболтоор (read=false) уншиж хадгална.
+    const gereenuud = await Geree(kholbolt).find(gereeShuult);
+    let zassanToo = 0;
+    for (const geree of gereenuud) {
+      const umnukh = geree.zardluud.length;
+      geree.zardluud = geree.zardluud.filter((z) => !adilZardal(z));
+      if (geree.zardluud.length === umnukh) continue;
+      geree.niitTulbur = geree.zardluud.reduce((sum, z) => sum + (z.tariff || 0), 0);
+      await geree.save();
+      zassanToo++;
+    }
+
+    res.send({
+      success: true,
+      message: `"${zardal.ner}" зардал устгагдаж ${zassanToo} гэрээнээс хасагдлаа.`,
+      zassanGereeToo: zassanToo,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/zardalTseverlekhiya", tokenShalgakh, async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
     const { baiguullagiinId, barilgiinId } = req.body;
@@ -194,10 +255,19 @@ router.post("/zardalTseverlekhiya", async (req, res, next) => {
       });
     }
 
-    // 1. Fetch all active valid zardluud for this org
-    const activeZardluud = await ashiglaltiinZardluud(tukhainBaaziinKholbolt).find({
-      baiguullagiinId: String(baiguullagiinId),
-    });
+    // 1. Тухайн барилгын (эсвэл барилгагүй, байгууллагын нийтийн) зардлууд.
+    // Өмнө нь байгууллагын БҮХ барилгын зардлыг авч гэрээнд бичдэг байсан тул
+    // өөр барилгын зардал нэхэмжлэхэд орж болзошгүй байв.
+    const zardliinShuult = { baiguullagiinId: String(baiguullagiinId) };
+    if (barilgiinId) {
+      zardliinShuult.$or = [
+        { barilgiinId: String(barilgiinId) },
+        { barilgiinId: { $exists: false } },
+        { barilgiinId: null },
+        { barilgiinId: "" },
+      ];
+    }
+    const activeZardluud = await ashiglaltiinZardluud(tukhainBaaziinKholbolt).find(zardliinShuult);
 
     // Construct master zardluud array from activeZardluud
     const masterZardluud = activeZardluud.map((doc) => ({
@@ -239,7 +309,7 @@ router.post("/zardalTseverlekhiya", async (req, res, next) => {
       ];
     }
 
-    const gereenuud = await Geree(tukhainBaaziinKholbolt, true).find(gereeQuery);
+    const gereenuud = await Geree(tukhainBaaziinKholbolt).find(gereeQuery);
     let updatedCount = 0;
 
     for (const geree of gereenuud) {

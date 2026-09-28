@@ -1114,7 +1114,8 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             ? oldDoc.toots.find(
               (ot) =>
                 String(ot.toot) === String(t.toot) &&
-                String(ot.barilgiinId) === String(t.barilgiinId)
+                String(ot.barilgiinId) === String(t.barilgiinId) &&
+                (ot.turul || "Орон сууц") === (t.turul || "Орон сууц")
             )
             : null;
           if (oldToot && oldToot.ekhniiUldegdel !== undefined) {

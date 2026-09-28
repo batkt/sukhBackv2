@@ -2671,16 +2671,16 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
 
 // Тоот бүртгэлийн Excel-ийн "Төрөл" багана → барилгын тохиргооны аль
 // map-д хадгалахыг заана.
-const TOOT_TURLUUD = ["Орон сууц", "Зогсоол", "Агуулах"];
+const TOOT_TURLUUD = ["Орон сууц", "Гараш", "Агуулах"];
 const TOOT_TURLIIN_MAP = {
   "Орон сууц": "davkhariinToonuud",
-  Зогсоол: "davkhariinZogsoolnuud",
+  Гараш: "davkhariinZogsoolnuud",
   Агуулах: "davkhariinAguulakhnuud",
 };
 function tootTurulTaniya(utga) {
   const t = String(utga || "").trim().toLowerCase();
   if (!t || t === "орон сууц" || t === "тоот" || t === "байр") return "Орон сууц";
-  if (t === "зогсоол" || t === "гараж" || t === "гараш") return "Зогсоол";
+  if (t === "зогсоол" || t === "гараж" || t === "гараш") return "Гараш";
   if (t === "агуулах") return "Агуулах";
   return null;
 }
@@ -2800,7 +2800,7 @@ exports.generateTootBurtgelExcelTemplate = asyncHandler(
           formulae: [`"${TOOT_TURLUUD.join(",")}"`],
           showErrorMessage: true,
           errorStyle: "error",
-          error: "Орон сууц, Зогсоол, Агуулах-аас сонгоно уу!",
+          error: "Орон сууц, Гараш, Агуулах-аас сонгоно уу!",
         });
       });
 
@@ -2812,11 +2812,11 @@ exports.generateTootBurtgelExcelTemplate = asyncHandler(
         "• Орц бүр тусдаа хуудастай (Орц 1, Орц 2 ...).",
         "• Давхар: барилгын тохиргоонд бүртгэлтэй давхар (жишээ: 1, 2, B1).",
         "• Тоот: олон тоотыг таслалаар бичнэ (жишээ: 1,2,3).",
-        "• Төрөл: Орон сууц, Зогсоол эсвэл Агуулах. Хоосон бол Орон сууц.",
+        "• Төрөл: Орон сууц, Гараш эсвэл Агуулах. Хоосон бол Орон сууц.",
         "",
         "Жишээ:",
         "   Давхар 1   | Тоот 1,2,3,4 | Төрөл Орон сууц",
-        "   Давхар B1  | Тоот 1,2,3   | Төрөл Зогсоол",
+        "   Давхар B1  | Тоот 1,2,3   | Төрөл Гараш",
         "   Давхар B1  | Тоот A1,A2   | Төрөл Агуулах",
       ].forEach((mur, i) => {
         const cell = zaavar.getCell(`A${i + 1}`);

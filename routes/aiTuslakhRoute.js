@@ -192,6 +192,10 @@ function geminiProvider(key, systemText, messages, tools) {
   // "-latest" alias нь Google-ийн одоогийн Flash загвар руу заадаг тул
   // хуучин загвар хаагдахад код өөрчлөх шаардлагагүй.
   const model = process.env.AI_TUSLAKH_MODEL || "gemini-flash-latest";
+  // Google ачаалалтай (503) эсвэл хязгаар хэтэрсэн (429) үед дахин оролдоод,
+  // дараа нь илүү хөнгөн загвар руу шилжинэ.
+  const nuutsZagvar = process.env.AI_TUSLAKH_FALLBACK_MODEL || "gemini-flash-lite-latest";
+  const zagvaruud = [model, model, ...(nuutsZagvar && nuutsZagvar !== model ? [nuutsZagvar] : [])];
   // Gemini-д туслахын үүрэг "model" гэж нэрлэгдэнэ.
   const contents = messages.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
@@ -200,8 +204,8 @@ function geminiProvider(key, systemText, messages, tools) {
   let suuliinParts = [];
   return {
     async duudakh(signal, bichikh) {
-      const resp = await upstreamDuudakh(
-        `${GEMINI_URL}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`,
+      const khuselt = (zagvar) => upstreamDuudakh(
+        `${GEMINI_URL}/${encodeURIComponent(zagvar)}:streamGenerateContent?alt=sse`,
         { "content-type": "application/json", "x-goog-api-key": key },
         {
           systemInstruction: { parts: [{ text: systemText }] },
@@ -214,11 +218,23 @@ function geminiProvider(key, systemText, messages, tools) {
             temperature: 0.3,
             // 2.5 Flash-ийн "бодох" шатыг унтрааж хариуг хурдан болгоно.
             // Gemini 3+ нь thinkingBudget-ийг хүлээж авахгүй байж болох тул зөвхөн 2.5-д.
-            ...(/2\.5-flash/i.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+            ...(/2\.5-flash/i.test(zagvar) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
           },
         },
         signal,
       );
+      let resp;
+      for (let i = 0; i < zagvaruud.length; i++) {
+        try {
+          resp = await khuselt(zagvaruud[i]);
+          break;
+        } catch (err) {
+          const dakhin = err.status === 503 || err.status === 429 || err.status === 500;
+          if (!dakhin || i === zagvaruud.length - 1 || signal.aborted) throw err;
+          console.warn(`AI туслах: ${zagvaruud[i]} ${err.status} — дахин оролдож байна`);
+          await new Promise((r) => setTimeout(r, 700 * (i + 1)));
+        }
+      }
       // Загварын бүх хэсгийг (thoughtSignature-тай нь) хадгалж дараагийн
       // ээлжид яг хэвээр нь буцааж илгээнэ — Gemini 3 үүнийг шаарддаг.
       const parts = [];
