@@ -300,6 +300,17 @@ orshinSuugchSchema.pre("save", async function (next) {
   next();
 });
 
+// PUT /orshinSuugch/:id нь findByIdAndUpdate ашигладаг — өмнө нь зөвхөн
+// updateOne дээр hash хийдэг тул нууц үг ил хадгалагдаж, нэвтрэх боломжгүй болдог байв.
+orshinSuugchSchema.pre("findOneAndUpdate", async function () {
+  const u = this._update || {};
+  const target = u.$set && u.$set.nuutsUg !== undefined ? u.$set : u;
+  if (typeof target.nuutsUg === "string" && target.nuutsUg && !target.nuutsUg.startsWith("$2b$")) {
+    const salt = await bcrypt.genSalt(12);
+    target.nuutsUg = await bcrypt.hash(target.nuutsUg, salt);
+  }
+});
+
 orshinSuugchSchema.pre("updateOne", async function () {
   this.indexTalbar = this._update.nevtrekhNer;
 

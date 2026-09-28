@@ -151,13 +151,39 @@ async function murnuudBichye(
 ) {
   const GuilgeeModel = GuilgeeAvlaguud(kholbolt);
   const NekhemjlekhModel = require("../models/nekhemjlekhiinTuukh")(kholbolt);
-  const dun = sariinKhungulult(tuukh.khungulukhTurul, tuukh.khungulukhUtga, sariinDun);
+  // Сарын төлбөрөөс хэтрүүлж хөнгөлөхгүй — дүнгээр хөнгөлөхөд ч суурь нь дээд хязгаар.
+  const suuri = Math.max(0, Math.round(Number(sariinDun) || 0));
+  const dun = Math.min(
+    sariinKhungulult(tuukh.khungulukhTurul, tuukh.khungulukhUtga, sariinDun),
+    suuri,
+  );
   if (dun <= 0) return 0;
+  const angilliinNerTag = tuukh.angilal ? `Хөнгөлөлт (${angilliinNer(tuukh.angilal)})` : null;
 
   let niit = 0;
   for (const sar of saruud) {
     const kh = sariinKhyazgaar(sar);
     if (!kh) continue;
+    // Давхар хөнгөлөлтөөс сэргийлнэ: тухайн сард (ангилалд) өмнө нь өгсөн
+    // хөнгөлөлтийг хасаад үлдсэн хэсгийг л хөнгөлнө. Нийт нь сарын төлбөрөөс
+    // хэтрэхгүй (60% + 60% → 100%).
+    const umnukh = await GuilgeeModel.aggregate([
+      {
+        $match: {
+          gereeniiId: String(geree._id),
+          // Хөнгөлөлтийн хэрэгслээр болон гүйлгээний цонхоор гараас оруулсан аль аль нь
+          $or: [{ source: "khungulult" }, { turul: "Хөнгөлөлт" }, { zardliinTurul: "Хөнгөлөлт" }],
+          dun: { $lt: 0 },
+          ognoo: { $gte: kh.ekhlel, $lte: kh.tugsgul },
+          khungulultiinTuukhId: { $ne: String(tuukh._id) },
+          ...(angilliinNerTag ? { zardliinNer: angilliinNerTag } : {}),
+        },
+      },
+      { $group: { _id: null, dun: { $sum: "$dun" } } },
+    ]);
+    const umnukhDun = Math.abs(Number(umnukh?.[0]?.dun) || 0);
+    const sariinDunEnd = Math.min(dun, Math.max(0, suuri - umnukhDun));
+    if (sariinDunEnd <= 0) continue;
     const nekhemjlekh = await NekhemjlekhModel.findOne({
       gereeniiId: String(geree._id),
       ognoo: { $gte: kh.ekhlel, $lte: kh.tugsgul },
@@ -176,7 +202,7 @@ async function murnuudBichye(
       zardliinTurul: "Хөнгөлөлт",
       // Ангилалтай хөнгөлөлтийг нэрээр нь ялгана (ангиллын үлдэгдэлд тооцогдоно).
       ...(tuukh.angilal ? { zardliinNer: `Хөнгөлөлт (${angilliinNer(tuukh.angilal)})` } : {}),
-      dun: -dun,
+      dun: -sariinDunEnd,
       ognoo: nekhemjlekh?.ognoo || kh.ekhlel,
       tailbar: String(tuukh.shaltgaan || "").trim(),
       ...(tuukh.khungulukhTurul === "khuvi"
@@ -187,7 +213,7 @@ async function murnuudBichye(
       guilgeeKhiisenAjiltniiNer: ajiltan.ner || "Систем",
       guilgeeKhiisenAjiltniiId: ajiltan.id || "",
     }).save();
-    niit += dun;
+    niit += sariinDunEnd;
   }
   return niit;
 }
@@ -368,8 +394,12 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
     let niitKhungulsun = 0;
 
     const GereeModel = Geree(kholbolt);
-    for (const mur of gereenuud) {
-      const gereeniiId = String(mur?.gereeniiId || "").trim();
+    // Нэг гэрээ хоёр удаа ирвэл хөнгөлөлт давхар бичигдэх байсан — давхардлыг арилгана.
+    const davkhardalgui = Array.from(
+      new Set(gereenuud.map((g) => String(g?.gereeniiId || "").trim()).filter(Boolean)),
+    );
+    results.total = davkhardalgui.length;
+    for (const gereeniiId of davkhardalgui) {
       try {
         const geree = gereeniiId ? await GereeModel.findById(gereeniiId).lean() : null;
         if (!geree) {
@@ -385,7 +415,7 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
             toot: geree.toot || "",
             shaltgaan: shaltgaanNer,
           });
-        if (khungulukhTurul === "khuvi" && sariinDun <= 0) {
+        if (sariinDun <= 0) {
           alggasakh(
             angilal
               ? `${angilliinNer(angilal)}-ын сарын төлбөр алга (хувиар хөнгөлөх суурь 0₮)`
@@ -402,7 +432,9 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
           barilgiinId,
         });
         if (dun <= 0) {
-          alggasakh("Бодогдсон хөнгөлөлт 0₮ — хувь хэт бага эсвэл сарын төлбөр бага");
+          alggasakh(
+            "Бодогдсон хөнгөлөлт 0₮ — энэ сард аль хэдийн бүрэн хөнгөлөгдсөн, эсвэл хувь хэт бага",
+          );
           continue;
         }
         khamaatai.push({

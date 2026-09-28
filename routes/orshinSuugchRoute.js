@@ -1125,6 +1125,29 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
           }
           return t;
         });
+
+        // Засах цонх зөвхөн ОДООГИЙН барилгын тоотуудыг харуулж, илгээдэг.
+        // Бүх жагсаалтыг шууд орлуулбал өөр барилга/байгууллагын тоотууд
+        // устаж, тэдгээрийн гэрээ цуцлагдах эсвэл эзэнгүй үлддэг байв —
+        // хүрээнээс гадуурх хуучин тоотуудыг хадгалж нэгтгэнэ.
+        if (Array.isArray(oldDoc.toots) && oldDoc.toots.length > 0) {
+          const khureeniiOrg = String(
+            req.body.baiguullagiinId || req.body.nevtersenAjiltniiToken?.baiguullagiinId || "",
+          );
+          const khureeniiBarilguud = new Set(
+            [req.body.barilgiinId, ...req.body.toots.map((t) => t?.barilgiinId)]
+              .filter(Boolean)
+              .map(String),
+          );
+          if (khureeniiOrg && khureeniiBarilguud.size > 0) {
+            const khadgalakh = oldDoc.toots.filter(
+              (ot) =>
+                String(ot.baiguullagiinId || "") !== khureeniiOrg ||
+                !khureeniiBarilguud.has(String(ot.barilgiinId || "")),
+            );
+            req.body.toots = [...khadgalakh, ...req.body.toots];
+          }
+        }
       }
       if (req.body.units && Array.isArray(req.body.units)) {
         req.body.units = req.body.toots;

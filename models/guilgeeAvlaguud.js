@@ -162,6 +162,68 @@ guilgeeAvlaguudSchema.index({ baiguullagiinId: 1, dun: 1, ognoo: -1 });
 // efficiently for that shape, so this covers it directly.
 guilgeeAvlaguudSchema.index({ gereeniiId: 1 });
 
+/**
+ * Хөнгөлөлтийн нэг мөрийг (гүйлгээний түүх, нэхэмжлэхээс) устгахад
+ * хөнгөлөлтийн бүртгэлийг (khungulultiinTuukh) үлдсэн мөрүүдээр нь дахин
+ * тооцно. Өмнө нь бүртгэл хэвээр үлдэж «Хөнгөлөлтийн түүх»-д харагдсаар байв.
+ * deleteMany-д холбохгүй: хөнгөлөлтийн контроллер өөрөө бүртгэлээ шинэчилдэг.
+ */
+async function khungulultiinTuukhDakhinTootsoolokh(connection, tuukhId) {
+  if (!tuukhId || !connection) return;
+  try {
+    const kholbolt = { kholbolt: connection };
+    const Tuukh = require("./khungulultiinTuukh")(kholbolt);
+    const Model = connection.model("guilgeeAvlaguud");
+    const tuukh = await Tuukh.findById(tuukhId).lean();
+    if (!tuukh) return;
+    const uldsen = await Model.aggregate([
+      { $match: { khungulultiinTuukhId: String(tuukhId) } },
+      { $group: { _id: "$gereeniiId", dun: { $sum: "$dun" } } },
+    ]);
+    const dunByGeree = new Map(uldsen.map((r) => [String(r._id), Math.abs(Number(r.dun) || 0)]));
+    const khamaatai = (tuukh.khamaataiGereenuud || [])
+      .filter((k) => dunByGeree.has(String(k.gereeniiId)))
+      .map((k) => ({ ...k, khungulsunDun: dunByGeree.get(String(k.gereeniiId)) }));
+    if (khamaatai.length === 0) {
+      await Tuukh.deleteOne({ _id: tuukh._id });
+      return;
+    }
+    const sarToo = tuukh.ognoonuud?.length || 1;
+    await Tuukh.updateOne(
+      { _id: tuukh._id },
+      {
+        $set: {
+          khamaataiGereenuud: khamaatai,
+          khungulsunDun: khamaatai.reduce((s, k) => s + (Number(k.khungulsunDun) || 0), 0),
+          tulukhDun: khamaatai.reduce((s, k) => s + (Number(k.sariinDun) || 0) * sarToo, 0),
+        },
+      },
+    );
+  } catch (err) {
+    console.error("Хөнгөлөлтийн бүртгэл шинэчлэхэд алдаа:", err.message);
+  }
+}
+
+guilgeeAvlaguudSchema.pre(["findOneAndDelete", "deleteOne"], { query: true, document: false }, async function () {
+  try {
+    const mur = await this.model.findOne(this.getQuery()).select("khungulultiinTuukhId").lean();
+    this._khungulultiinTuukhId = mur?.khungulultiinTuukhId || null;
+  } catch (_) {
+    this._khungulultiinTuukhId = null;
+  }
+});
+guilgeeAvlaguudSchema.post(["findOneAndDelete", "deleteOne"], { query: true, document: false }, async function () {
+  if (this._khungulultiinTuukhId) {
+    await khungulultiinTuukhDakhinTootsoolokh(this.model.db, this._khungulultiinTuukhId);
+  }
+});
+guilgeeAvlaguudSchema.post("deleteOne", { document: true, query: false }, async function (doc) {
+  const d = doc || this;
+  if (d?.khungulultiinTuukhId) {
+    await khungulultiinTuukhDakhinTootsoolokh(d.constructor?.db || d.$__?.db, d.khungulultiinTuukhId);
+  }
+});
+
 module.exports = function a(conn) {
 
   if (!conn || !conn.kholbolt)
@@ -169,3 +231,7 @@ module.exports = function a(conn) {
   conn = conn.kholbolt;
   return conn.model("guilgeeAvlaguud", guilgeeAvlaguudSchema);
 };
+
+/** Хөнгөлөлтийн бүртгэлийг үлдсэн мөрүүдээр нь дахин тооцох (маршрутаас дуудна). */
+module.exports.khungulultiinTuukhDakhinTootsoolokh = (kholbolt, tuukhId) =>
+  khungulultiinTuukhDakhinTootsoolokh(kholbolt?.kholbolt, tuukhId);
