@@ -90,7 +90,9 @@ router.post("/aiTuslakh", tokenShalgakh, async (req, res) => {
   let khuselt;
   let tekstSalgakh;
   if (geminiKey) {
-    const model = process.env.AI_TUSLAKH_MODEL || "gemini-2.5-flash";
+    // "-latest" alias нь Google-ийн одоогийн Flash загвар руу заадаг тул
+    // хуучин загвар хаагдахад код өөрчлөх шаардлагагүй.
+    const model = process.env.AI_TUSLAKH_MODEL || "gemini-flash-latest";
     khuselt = {
       url: `${GEMINI_URL}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`,
       headers: { "content-type": "application/json", "x-goog-api-key": geminiKey },
@@ -106,8 +108,9 @@ router.post("/aiTuslakh", tokenShalgakh, async (req, res) => {
         generationConfig: {
           maxOutputTokens: 1024,
           temperature: 0.4,
-          // Flash загварын "бодох" шатыг унтрааж хариуг хурдан болгоно.
-          ...(/flash/i.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+          // 2.5 Flash-ийн "бодох" шатыг унтрааж хариуг хурдан болгоно.
+          // Gemini 3+ нь thinkingBudget-ийг хүлээж авахгүй байж болох тул зөвхөн 2.5-д.
+          ...(/2\.5-flash/i.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
         },
       },
     };
