@@ -18,6 +18,8 @@ const { pubClient, subClient, connectRedis } = require("./utils/redisClient");
 const dotenv = require("dotenv");
 const cron = require("node-cron");
 
+// Нууц түлхүүрүүд (GEMINI_API_KEY г.м.) серверт л байх local.env-д — git-д орохгүй.
+dotenv.config({ path: "./tokhirgoo/local.env" });
 dotenv.config({ path: "./tokhirgoo/tokhirgoo.env" });
 
 const baiguullagaRoute = require("./routes/baiguullagaRoute");
