@@ -1,8 +1,26 @@
     const express = require("express");
 const router = express.Router();
 const uneguiMashin = require("../models/uneguiMashin");
+const { tokenShalgakh } = require("zevbackv2");
+const Ajiltan = require("../models/ajiltan");
 
-router.post("/uneguiMashinBurtgekh", async (req, res, next) => {
+// АЮУЛГҮЙ БАЙДАЛ: үнэгүй машины жагсаалт өмнө нь нэвтрэлтгүй байсан — хэн ч
+// дурын дугаарыг үнэгүй болгох/устгах боломжтой байв. Одоо зөвхөн ажилтан.
+async function ajiltanShaardlagatai(req, res, next) {
+  try {
+    const { db } = require("zevbackv2");
+    const id = req.body?.nevtersenAjiltniiToken?.id;
+    const ajiltan = id && id !== "zochin"
+      ? await Ajiltan(db.erunkhiiKholbolt).findById(id).select("_id").lean()
+      : null;
+    if (!ajiltan) return res.status(403).send("Зөвхөн ажилтан үнэгүй машин бүртгэх эрхтэй.");
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+router.post("/uneguiMashinBurtgekh", tokenShalgakh, ajiltanShaardlagatai, async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
 
@@ -22,7 +40,7 @@ router.post("/uneguiMashinBurtgekh", async (req, res, next) => {
   }
 });
 
-router.put("/uneguiMashin/:mashiniiDugaar", async (req, res, next) => {
+router.put("/uneguiMashin/:mashiniiDugaar", tokenShalgakh, ajiltanShaardlagatai, async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
 
@@ -50,7 +68,7 @@ router.put("/uneguiMashin/:mashiniiDugaar", async (req, res, next) => {
   }
 });
 
-router.delete("/uneguiMashin/:mashiniiDugaar", async (req, res, next) => {
+router.delete("/uneguiMashin/:mashiniiDugaar", tokenShalgakh, ajiltanShaardlagatai, async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
 

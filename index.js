@@ -306,6 +306,40 @@ const serveMedegdelImage = (req, res, next) => {
 
 // Гэр бүлийн гишүүн бол хүсэлт дэх өөрийн orshinSuugchId-г үндсэн эзэмшигчийнх
 // рүү хөрвүүлнэ. Бүх route-оос ӨМНӨ байх ёстой.
+// ── АЮУЛГҮЙ БАЙДАЛ: зочны (zochin) токеныг зөвхөн QR төлбөрийн замд ──────
+// /zochiniiTokenAvya нь дурын байгууллагад нэвтрэлтгүйгээр зочны токен олгодог.
+// Өмнө нь тэр токеноор tokenShalgakh-тай бараг бүх замыг дуудах боломжтой байв.
+// Одоо зочны токен зөвхөн зогсоолын QR хуудасны ашигладаг замд л зөвшөөрөгдөнө.
+// Нэмэлт зам хэрэгтэй бол ZOCHIN_NEMELT_ZAM="/zam1,/zam2" (угтвараар таарна).
+{
+  const jwtDecode = require("jsonwebtoken");
+  const ZOCHIN_ZAMUUD = [
+    "/qpayGargaya",
+    "/qpayObjectAvya",
+    "/qpayShalgay",
+    "/zogsool/qr/",
+    "/v1/search_car/",
+    ...String(process.env.ZOCHIN_NEMELT_ZAM || "")
+      .split(",")
+      .map((z) => z.trim())
+      .filter(Boolean),
+  ];
+  app.use((req, res, next) => {
+    const bearer = String(req.headers.authorization || "").split(" ")[1];
+    if (!bearer) return next();
+    let payload = null;
+    try {
+      payload = jwtDecode.decode(bearer);
+    } catch (_) {
+      payload = null;
+    }
+    if (payload?.id !== "zochin") return next();
+    const zam = req.path || "";
+    if (ZOCHIN_ZAMUUD.some((z) => zam === z || zam.startsWith(z))) return next();
+    console.warn(`⛔ [ZOCHIN] зочны токеноор хориотой зам: ${req.method} ${zam}`);
+    return res.status(403).json({ success: false, message: "Зочны эрхээр энэ үйлдлийг хийх боломжгүй." });
+  });
+}
 app.use(gishuuniiKhandalt);
 app.use(gerBuliinGishuunRoute);
 

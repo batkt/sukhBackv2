@@ -160,6 +160,25 @@ router.get(
         );
         return res.status(404).send("Organization not found");
       }
+      // АЮУЛГҮЙ БАЙДАЛ: QPay «PAID» гэж баталсны дараа л төлсөн гэж тэмдэглэнэ
+      // (өмнө нь URL нээхэд л төлсөн болж, «төлөгдлөө» мэдэгдэл явдаг байв).
+      {
+        const bichleg = await QuickQpayObject(kholbolt)
+          .findOne({ zakhialgiinDugaar: zd })
+          .select("invoice_id qpay.invoice_id tulsunEsekh")
+          .lean();
+        if (bichleg && !bichleg.tulsunEsekh) {
+          const batalgaa = await qpayTulburBatalgaajuulakh(
+            bichleg.invoice_id || bichleg.qpay?.invoice_id,
+            b,
+            kholbolt,
+          );
+          if (!batalgaa.tulugdsun) {
+            console.warn("⛔ [QPAY CALLBACK] QPay төлбөрийг баталгаажуулсангүй — тэмдэглэхгүй", zd);
+            return res.sendStatus(200);
+          }
+        }
+      }
       const unpaid = await QuickQpayObject(kholbolt).findOneAndUpdate(
         {
           zakhialgiinDugaar: zd,
@@ -264,6 +283,25 @@ const qpaycallbackGadaaStickerHandler = async (req, res, next) => {
         { baiguullagiinId: b },
       );
       return res.status(404).send("Organization not found");
+    }
+    // АЮУЛГҮЙ БАЙДАЛ: энэ callback төлбөр бүртгэж, ХААЛГА нээдэг — QPay «PAID»
+    // гэж баталсны дараа л үргэлжлүүлнэ.
+    {
+      const bichleg = await QuickQpayObject(kholbolt)
+        .findOne({ zakhialgiinDugaar: zd })
+        .select("invoice_id qpay.invoice_id tulsunEsekh")
+        .lean();
+      if (bichleg && !bichleg.tulsunEsekh) {
+        const batalgaa = await qpayTulburBatalgaajuulakh(
+          bichleg.invoice_id || bichleg.qpay?.invoice_id,
+          b,
+          kholbolt,
+        );
+        if (!batalgaa.tulugdsun) {
+          console.warn("⛔ [QPAY CALLBACK GADAA] QPay төлбөрийг баталгаажуулсангүй — бүртгэхгүй", zd);
+          return res.sendStatus(200);
+        }
+      }
     }
     const unpaidSticker = await QuickQpayObject(kholbolt).findOneAndUpdate(
       {
@@ -2136,6 +2174,37 @@ router.post(
 );
 
 // Callback route for multiple invoice payments
+/**
+ * QPay-ээс нэхэмжлэх ҮНЭХЭЭР төлөгдсөн эсэхийг шалгана. Callback URL нууц
+ * түлхүүргүй, нийтэд нээлттэй тул зөвхөн QPay-ийн хариунд итгэнэ —
+ * хүсэлтийн `amount`, параметрт огт итгэхгүй.
+ * Буцаах: { tulugdsun, dun (QPay-ийн төлсөн нийт), transactionId }
+ */
+async function qpayTulburBatalgaajuulakh(qpayInvoiceId, baiguullagiinId, kholbolt) {
+  if (!qpayInvoiceId) return { tulugdsun: false, dun: 0, transactionId: null };
+  try {
+    const khariu = await qpayShalgay(
+      { invoice_id: qpayInvoiceId, baiguullagiinId: String(baiguullagiinId) },
+      kholbolt,
+    );
+    const tulburuud = (Array.isArray(khariu?.payments) ? khariu.payments : []).filter(
+      (p) => p?.payment_status === "PAID" || p?.status === "PAID",
+    );
+    const tuluv = String(khariu?.invoice_status || "").toUpperCase();
+    const tulugdsun = tulburuud.length > 0 || tuluv === "PAID" || tuluv === "CLOSED";
+    const dun =
+      tulburuud.reduce((s, p) => s + (Number(p?.payment_amount ?? p?.amount) || 0), 0) ||
+      Number(khariu?.paid_amount) ||
+      0;
+    const transactionId =
+      tulburuud[0]?.transactions?.[0]?.id || khariu?.payments?.[0]?.transactions?.[0]?.id || null;
+    return { tulugdsun, dun, transactionId };
+  } catch (err) {
+    console.error("❌ [QPAY] төлбөр баталгаажуулахад алдаа:", err.message);
+    return { tulugdsun: false, dun: 0, transactionId: null };
+  }
+}
+
 const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
@@ -2286,6 +2355,29 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
         "⚠️ [QPAY MULTI CALLBACK] QuickQpayObject search failed:",
         qpErr.message,
       );
+    }
+
+    // ── АЮУЛГҮЙ БАЙДАЛ: QPay-ээс баталгаажуулна ─────────────────────────
+    // Өмнө нь QPay-ийн төлвийг шалгалгүй төлбөр бүртгэдэг, «synthetic-balance»
+    // зам нь дүнг URL-ын ?amount-аас авдаг байсан — хэн ч URL нээгээд дурын
+    // дүнг төлсөн болгох боломжтой байв. Одоо QPay «PAID» гэж хариулсан үед л
+    // үргэлжлүүлж, дүнг нь QPay-ийн хариунаас авна.
+    {
+      const shalgakhId =
+        qpayInvoiceIdForApi || invoices.find((inv) => inv?.qpayInvoiceId)?.qpayInvoiceId || null;
+      const batalgaa = await qpayTulburBatalgaajuulakh(shalgakhId, baiguullagiinId, kholbolt);
+      if (!batalgaa.tulugdsun) {
+        console.warn("⛔ [QPAY MULTI CALLBACK] QPay төлбөрийг баталгаажуулсангүй — бүртгэхгүй", {
+          baiguullagiinId,
+          invoiceIds,
+          shalgakhId,
+        });
+        return res.sendStatus(200);
+      }
+      invoices.forEach((inv) => {
+        if (inv?.isSyntheticBalance) inv.niitTulbur = batalgaa.dun;
+      });
+      if (!qpayInvoiceIdForApi) qpayInvoiceIdForApi = shalgakhId;
     }
 
     // Idempotency guard: if already paid, return immediately

@@ -16,6 +16,8 @@ const { tulukhErkhShalgaya } = require("../middleware/gishuuniiKhandalt");
  * Returns: QPay QR data (same shape as /qpayGargaya)
  *        + walletPaymentId, walletInvoiceId
  */
+// Шалгах / debug / resync замууд өмнө нь нэвтрэлтгүй байсан — одоо токен шаардана
+// (апп аль хэдийн оршин суугчийн токенийг илгээдэг).
 router.post(
   "/walletQpay/create",
   tokenShalgakh,
@@ -45,6 +47,7 @@ router.post(
  */
 router.get(
   "/walletQpay/check/:baiguullagiinId/:walletPaymentId",
+  tokenShalgakh,
   walletQpayController.walletQpayCheck
 );
 
@@ -77,6 +80,7 @@ router.get(
  */
 router.get(
   "/walletQpay/qpay-check/:baiguullagiinId/:invoiceId",
+  tokenShalgakh,
   walletQpayController.debugQpayCheck
 );
 
@@ -87,6 +91,7 @@ router.get(
  */
 router.get(
   "/walletQpay/wallet-check/:baiguullagiinId/:walletPaymentId",
+  tokenShalgakh,
   walletQpayController.debugWalletCheck
 );
 
@@ -97,6 +102,7 @@ router.get(
  */
 router.get(
   "/walletQpay/bill-check/:baiguullagiinId/:billId",
+  tokenShalgakh,
   walletQpayController.debugBillCheck
 );
 
@@ -107,6 +113,7 @@ router.get(
  */
 router.get(
   "/walletQpay/easy-check/:baiguullagiinId/:walletPaymentId",
+  tokenShalgakh,
   walletQpayController.debugEasyCheck
 );
 
@@ -118,6 +125,7 @@ router.get(
  */
 router.post(
   "/walletQpay/resync/:baiguullagiinId/:walletPaymentId",
+  tokenShalgakh,
   walletQpayController.resyncWalletPayment
 );
 

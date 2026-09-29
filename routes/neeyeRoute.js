@@ -168,6 +168,29 @@ router.get("/neeye/:ip", async (req, res) => {
       return res.status(400).json({ aldaa: "barilgiinId missing" });
     }
 
+    // АЮУЛГҮЙ БАЙДАЛ: хаалгыг хүчинтэй нэвтрэлтгүйгээр нээхгүй. Өмнө нь
+    // токенгүй хүсэлт ч хаалга нээдэг байсан (нэг URL-аар дурын барилгын хаалга).
+    // Токенгүй систем (камер/төхөөрөмж) бол NEEYE_SYSTEM_KEY-ээр x-neeye-key илгээнэ.
+    {
+      const systemKey = process.env.NEEYE_SYSTEM_KEY;
+      const systemZuvshuursun =
+        !!systemKey && String(req.headers["x-neeye-key"] || "") === String(systemKey);
+      let tokenKhuchintei = false;
+      const bearer = String(req.headers.authorization || "").split(" ")[1];
+      if (bearer) {
+        try {
+          const d = jwt.verify(bearer, process.env.APP_SECRET);
+          tokenKhuchintei = !!(d && d.id && d.id !== "zochin");
+        } catch (_) {
+          tokenKhuchintei = false;
+        }
+      }
+      if (!systemZuvshuursun && !tokenKhuchintei) {
+        console.warn(`[Gate] ⛔ neeye rejected (no valid auth) ip=${ip} barilga=${barilgiinId}`);
+        return res.status(401).json({ aldaa: "Нэвтрэх шаардлагатай" });
+      }
+    }
+
     const io = req.app.get("socketio");
     if (!io) {
       return res.status(500).json({ aldaa: "Socket.io not initialized" });

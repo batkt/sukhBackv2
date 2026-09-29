@@ -97,6 +97,30 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     return res.sendStatus(200);
   }
 
+  // АЮУЛГҮЙ БАЙДАЛ: нийтэд нээлттэй callback — QPay «PAID» гэж баталсан үед л бүртгэнэ.
+  {
+    const { qpayShalgay } = require("quickqpaypackvSukh");
+    const qpayInvoiceId = qpayBarimt.invoice_id || qpayBarimt.qpay?.invoice_id;
+    let batalgaajsan = false;
+    if (qpayInvoiceId) {
+      try {
+        const khariu = await qpayShalgay({ invoice_id: qpayInvoiceId, baiguullagiinId: String(baiguullagiinId) }, kholbolt);
+        const tuluv = String(khariu?.invoice_status || "").toUpperCase();
+        batalgaajsan =
+          tuluv === "PAID" ||
+          tuluv === "CLOSED" ||
+          (Array.isArray(khariu?.payments) &&
+            khariu.payments.some((p) => p?.payment_status === "PAID" || p?.status === "PAID"));
+      } catch (err) {
+        console.error("⚠️ [QPAY CALLBACK] QPay шалгахад алдаа:", err.message);
+      }
+    }
+    if (!batalgaajsan) {
+      console.warn(`⛔ [QPAY CALLBACK] QPay төлбөрийг баталгаажуулсангүй — бүртгэхгүй: dugaar=${dugaar}`);
+      return res.sendStatus(200);
+    }
+  }
+
   // Atomically lock/update the record to prevent concurrent double callback executions.
   const targetModel = isQuickQpay ? QuickQpayModel : QpayModel;
   const lockedBarimt = await targetModel.findOneAndUpdate(
@@ -274,104 +298,72 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
     return res.sendStatus(200);
   }
 
-  // Allow re-processing to ensure ledger sync (recordPayment handles idempotency)
-  let paymentTransactionId = req.query.qpay_payment_id || nekhemjlekh.qpayPaymentId;
+  // ── АЮУЛГҮЙ БАЙДАЛ: QPay-ээс баталгаажуулна ─────────────────────────────
+  // Callback нийтэд нээлттэй. Өмнө нь QPay «төлөгдөөгүй» гэж хариулсан ч
+  // QuickQpay бичлэгийн дүн эсвэл ГЭРЭЭНИЙ ҮЛДЭГДЛЭЭР төлбөр бүртгэж,
+  // И-баримт гаргадаг байв — URL нээхэд л өр төлөгдсөн болдог. Одоо QPay
+  // «PAID» гэсэн үед л, QPay-ийн төлсөн дүнгээр бүртгэнэ.
+  const { QuickQpayObject, qpayShalgay } = require("quickqpaypackvSukh");
+  const QuickQpayModel = QuickQpayObject(kholbolt);
+  const qpayBichleg = await QuickQpayModel.findOne({
+    $or: [
+      ...(nekhemjlekh.qpayInvoiceId ? [{ invoice_id: nekhemjlekh.qpayInvoiceId }] : []),
+      { "sukhNekhemjlekh.nekhemjlekhiinId": nekhemjlekhiinId },
+      { "qpay.callback_url": { $regex: String(nekhemjlekhiinId).replace(/[^a-fA-F0-9]/g, "") } },
+    ],
+  })
+    .sort({ ognoo: -1 })
+    .lean();
+  const qpayInvoiceId =
+    nekhemjlekh.qpayInvoiceId || qpayBichleg?.invoice_id || qpayBichleg?.qpay?.invoice_id || null;
 
-  // Try to lock/update the QuickQpayObject atomically to prevent double execution
-  if (nekhemjlekh.qpayInvoiceId || nekhemjlekhiinId) {
-    const { QuickQpayObject } = require("quickqpaypackvSukh");
-    const QuickQpayModel = QuickQpayObject(kholbolt);
-
-    const lockedQpayRecord = await QuickQpayModel.findOneAndUpdate(
-      {
-        $or: [
-          ...(nekhemjlekh.qpayInvoiceId ? [{ invoice_id: nekhemjlekh.qpayInvoiceId }] : []),
-          { "sukhNekhemjlekh.nekhemjlekhiinId": nekhemjlekhiinId },
-          { "qpay.callback_url": { $regex: nekhemjlekhiinId } },
-        ],
-        tulsunEsekh: { $ne: true }
-      },
-      {
-        $set: { tulsunEsekh: true, status: "paid", payment_id: paymentTransactionId || "manual_sync" }
-      },
-      { new: true }
-    ).sort({ ognoo: -1 });
-
-    if (!lockedQpayRecord) {
-      console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Already processing or paid (skipped): ${nekhemjlekhiinId}`);
-      return res.sendStatus(200);
-    }
-  }
-
-  console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Found invoice: ${nekhemjlekhiinId}, gereeniiId=${nekhemjlekh.gereeniiId}, niitTulbur=${nekhemjlekh.niitTulbur}`);
-
-  // Try to fetch latest info from QPay if possible
-  const { qpayShalgay } = require("quickqpaypackvSukh");
   let paidAmount = 0;
-
-  if (nekhemjlekh.qpayInvoiceId) {
+  let paymentTransactionId = null;
+  if (qpayInvoiceId) {
     try {
-      console.log(`📡 [QPAY_SYNC] Verifying status for QPay invoice: ${nekhemjlekh.qpayInvoiceId}`);
-      const khariu = await qpayShalgay({ invoice_id: nekhemjlekh.qpayInvoiceId }, kholbolt);
-      console.log(`📡 [QPAY_SYNC] QPay Response: ${JSON.stringify(khariu)}`);
-      
-      if (khariu?.payments?.[0]?.transactions?.[0]?.id) {
-        paymentTransactionId = khariu.payments[0].transactions[0].id;
-        if (khariu.payments[0].amount) {
-          paidAmount = parseFloat(khariu.payments[0].amount);
-          console.log(`📡 [QPAY_SYNC] Verified amount: ${paidAmount}, transactionId: ${paymentTransactionId}`);
-        }
-      } else {
-        console.warn(`📡 [QPAY_SYNC] No payment transactions found in QPay response for: ${nekhemjlekh.qpayInvoiceId}`);
+      const khariu = await qpayShalgay({ invoice_id: qpayInvoiceId, baiguullagiinId: String(baiguullagiinId) }, kholbolt);
+      const tulburuud = (Array.isArray(khariu?.payments) ? khariu.payments : []).filter(
+        (p) => p?.payment_status === "PAID" || p?.status === "PAID",
+      );
+      const tuluv = String(khariu?.invoice_status || "").toUpperCase();
+      if (tulburuud.length > 0 || tuluv === "PAID" || tuluv === "CLOSED") {
+        paidAmount =
+          tulburuud.reduce((sum, p) => sum + (Number(p?.payment_amount ?? p?.amount) || 0), 0) ||
+          Number(khariu?.paid_amount) ||
+          0;
+        paymentTransactionId =
+          tulburuud[0]?.transactions?.[0]?.id || khariu?.payments?.[0]?.transactions?.[0]?.id || null;
       }
     } catch (err) {
-      console.error("⚠️ [QPAY_SYNC] Failed to fetch QPay status:", err.message);
-    }
-  } else {
-    console.log(`ℹ️ [QPAY_SYNC] No qpayInvoiceId found on invoice record; using niitTulbur for ledger record.`);
-  }
-
-  // FALLBACK HIERARCHY for paidAmount:
-  // If paidAmount is still 0 (due to QPay status check failure or niitTulbur=0),
-  // we try to resolve it from the local QPay record or ledger balance.
-  if (paidAmount <= 0) {
-    console.warn(`⚠️ [QPAY-INVOICE CALLBACK] paidAmount is 0. Attempting fallback for invoice: ${nekhemjlekhiinId}`);
-    try {
-      // 1. Try to get the amount from our local QPay record (QuickQpayObject)
-      const { QuickQpayObject } = require("quickqpaypackvSukh");
-      const QuickQpayModel = QuickQpayObject(kholbolt);
-      const qpayRecord = await QuickQpayModel.findOne({ 
-        $or: [
-          { invoice_id: nekhemjlekh.qpayInvoiceId },
-          { "sukhNekhemjlekh.nekhemjlekhiinId": nekhemjlekhiinId }
-        ]
-      }).sort({ ognoo: -1 });
-
-      if (qpayRecord) {
-        const recordAmount = parseFloat(qpayRecord.sukhNekhemjlekh?.pay_amount || qpayRecord.amount || qpayRecord.qpay?.amount || 0);
-        if (recordAmount > 0) {
-          paidAmount = recordAmount;
-          console.log(`✅ [QPAY-INVOICE CALLBACK] Resolved amount from QPay record: ${paidAmount}`);
-        }
-      }
-
-      // 2. If still 0, try current contract balance (more authoritative than invoice-only balance)
-      if (paidAmount <= 0) {
-        const currentBalance = await guilgeeService.getBalance(kholbolt, { gereeniiId: nekhemjlekh.gereeniiId });
-        if (currentBalance > 0) {
-          paidAmount = currentBalance;
-          console.log(`✅ [QPAY-INVOICE CALLBACK] Resolved amount from Contract balance: ${paidAmount}`);
-        }
-      }
-    } catch (fallbackErr) {
-      console.error(`❌ [QPAY-INVOICE CALLBACK] Fallback logic failed:`, fallbackErr.message);
+      console.error("⚠️ [QPAY-INVOICE CALLBACK] QPay шалгахад алдаа:", err.message);
     }
   }
 
-  if (paidAmount <= 0) {
-    console.error(`❌ [QPAY-INVOICE CALLBACK] All amount resolution strategies failed for invoice: ${nekhemjlekhiinId}`);
-    return res.status(400).send("Could not determine payment amount");
+  if (!(paidAmount > 0)) {
+    console.warn(
+      `⛔ [QPAY-INVOICE CALLBACK] QPay төлбөрийг баталгаажуулсангүй — бүртгэхгүй: ${nekhemjlekhiinId} (qpay=${qpayInvoiceId || "-"})`,
+    );
+    return res.sendStatus(200);
   }
+
+  // Давхар ажиллахаас сэргийлж QPay бичлэгийг атомаар түгжинэ.
+  const lockedQpayRecord = await QuickQpayModel.findOneAndUpdate(
+    {
+      $or: [
+        { invoice_id: qpayInvoiceId },
+        { "sukhNekhemjlekh.nekhemjlekhiinId": nekhemjlekhiinId },
+      ],
+      tulsunEsekh: { $ne: true },
+    },
+    { $set: { tulsunEsekh: true, status: "paid", payment_id: paymentTransactionId || "qpay_verified" } },
+    { new: true },
+  ).sort({ ognoo: -1 });
+  if (!lockedQpayRecord && qpayBichleg) {
+    console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Already processing or paid (skipped): ${nekhemjlekhiinId}`);
+    return res.sendStatus(200);
+  }
+
+  console.log(`ℹ️ [QPAY-INVOICE CALLBACK] QPay баталгаажсан: ${nekhemjlekhiinId}, дүн=${paidAmount}, гүйлгээ=${paymentTransactionId}`);
 
   // Record in Ledger (GuilgeeAvlaguud)
   console.log(`ℹ️ [QPAY-INVOICE CALLBACK] Sending to Ledger: amount=${paidAmount}, transactionId=${paymentTransactionId}`);

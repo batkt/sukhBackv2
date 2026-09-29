@@ -4926,6 +4926,52 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
       throw new aldaa("Хэрэглэгч олдсонгүй!");
     }
 
+    // ── Шалгуур: үлдэгдэлтэй оршин суугчийг устгахгүй ─────────────────────
+    // Устгахад гэрээ нь цуцлагдаж авлага нь эзэнгүй үлддэг. Тооцоо хаагдаагүй
+    // бол зогсооно; админ зориуд устгах бол ?albadakh=1 (UI баталгаажуулалттай).
+    try {
+      const kholbolt = req.body?.tukhainBaaziinKholbolt;
+      if (kholbolt) {
+        const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+        const gereenuud = await Geree(kholbolt)
+          .find({ orshinSuugchId: userIdString, tuluv: { $ne: "Цуцалсан" } })
+          .select("_id gereeniiDugaar toot")
+          .lean();
+        if (gereenuud.length > 0) {
+          const [niit] = await GuilgeeAvlaguud(kholbolt).aggregate([
+            { $match: { gereeniiId: { $in: gereenuud.map((g) => String(g._id)) } } },
+            { $group: { _id: null, dun: { $sum: "$dun" } } },
+          ]);
+          const uldegdel = Math.round((Number(niit?.dun) || 0) * 100) / 100;
+          const albadakh = String(req.query?.albadakh || "") === "1";
+          if (uldegdel > 0.5 && !albadakh) {
+            return res.status(409).json({
+              success: false,
+              code: "ULDEGDELTEI",
+              uldegdel,
+              gereeniiToo: gereenuud.length,
+              message: `Энэ оршин суугч ${uldegdel.toLocaleString("en-US", { minimumFractionDigits: 2 })}₮ үлдэгдэлтэй (${gereenuud.length} идэвхтэй гэрээ). Тооцоогоо хааж байж устгана уу.`,
+            });
+          }
+          if (albadakh) {
+            const Ajiltan = require("../models/ajiltan");
+            const aj = await Ajiltan(db.erunkhiiKholbolt)
+              .findById(req.body?.nevtersenAjiltniiToken?.id)
+              .select("erkh")
+              .lean();
+            if (String(aj?.erkh || "").toLowerCase() !== "admin") {
+              return res.status(403).json({
+                success: false,
+                message: "Үлдэгдэлтэй оршин суугчийг зөвхөн админ устгах эрхтэй.",
+              });
+            }
+          }
+        }
+      }
+    } catch (shalgakhAldaa) {
+      console.error("Оршин суугч устгах шалгуурт алдаа:", shalgakhAldaa.message);
+    }
+
     // Энэ хэрэглэгчид харьяалагдах гэр бүлийн гишүүд болон урилгуудыг цэвэрлэнэ.
     // (Гишүүнийг устгаж байвал энэ хоёулаа хоосон буцна.)
     try {
