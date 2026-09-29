@@ -221,6 +221,62 @@ router.post("/gereeNemeltTootKhasya", tokenShalgakh, async (req, res, next) => {
   }
 });
 
+/**
+ * POST /gereeTsutslakh — Өмч бүртгэлээс гараж/агуулахын дугаар устгахад
+ * эзэмшигчээс нь салгагдсан ч идэвхтэй үлдсэн гэрээг цуцална (идэвхгүй).
+ * Үлдэгдэлтэй гэрээ ч цуцлагдана — авлага нь устахгүй, Гүйлгээний түүхийн
+ * «Цуцалсан гэрээний авлага» хэсэгт шилжиж, тэндээс төлөгдөнө.
+ * Body: { baiguullagiinId, gereeniiIdnuud: [], shaltgaan? }
+ */
+router.post("/gereeTsutslakh", tokenShalgakh, async (req, res, next) => {
+  try {
+    const token = req.body.nevtersenAjiltniiToken || {};
+    if (!token.id || token.id === "zochin") {
+      return res.status(403).json({ success: false, message: "Эрх хүрэхгүй байна" });
+    }
+    const kholbolt = req.body.tukhainBaaziinKholbolt;
+    const { baiguullagiinId } = req.body;
+    const idnuud = (Array.isArray(req.body.gereeniiIdnuud) ? req.body.gereeniiIdnuud : [])
+      .map((x) => String(x || "").trim())
+      .filter(Boolean);
+    if (!kholbolt || !baiguullagiinId || idnuud.length === 0) {
+      return res.status(400).json({ success: false, message: "Мэдээлэл дутуу байна" });
+    }
+    const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
+    const uldegdluud = await GuilgeeAvlaguud(kholbolt).aggregate([
+      { $match: { gereeniiId: { $in: idnuud } } },
+      { $group: { _id: "$gereeniiId", dun: { $sum: "$dun" } } },
+    ]);
+    const uldegdelMap = new Map(uldegdluud.map((u) => [String(u._id), Math.round((Number(u.dun) || 0) * 100) / 100]));
+
+    const tsutslagdsan = [];
+    // Үлдэгдэлтэй цуцлагдсан гэрээнүүд — «Цуцалсан гэрээний авлага»-д харагдана
+    const uldegdeltei = [];
+    for (const id of idnuud) {
+      const uldegdel = uldegdelMap.get(id) || 0;
+      const r = await Geree(kholbolt).updateOne(
+        { _id: id, baiguullagiinId: String(baiguullagiinId), tuluv: { $nin: ["Цуцалсан", "tsutlsasan"] } },
+        {
+          $set: {
+            tuluv: "Цуцалсан",
+            tsutsalsanOgnoo: new Date(),
+            temdeglel: `Өмч бүртгэлээс дугаар устгахад цуцлагдсан${token.ner ? ` (${token.ner})` : ""}${
+              req.body.shaltgaan ? `: ${String(req.body.shaltgaan).slice(0, 200)}` : ""
+            }`,
+          },
+        },
+      );
+      if (r.modifiedCount) {
+        tsutslagdsan.push(id);
+        if (uldegdel > 0.5) uldegdeltei.push({ gereeniiId: id, uldegdel });
+      }
+    }
+    res.json({ success: true, tsutslagdsan, uldegdeltei });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Intercept manual receivable creation to ensure they get a nekhemjlekhId
 // and to prevent duplicate garage/storage avlaga within the same billing cycle.
 const {
