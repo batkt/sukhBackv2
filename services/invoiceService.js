@@ -120,9 +120,14 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
       } else {
         const finalSuuliin = options.suuliinZaalt !== undefined ? options.suuliinZaalt : (geree.suuliinZaalt || 0);
         const finalUmnukh = options.umnukhZaalt !== undefined ? options.umnukhZaalt : (geree.umnukhZaalt || 0);
-        const zoruu = finalSuuliin - finalUmnukh;
-        const baseFee = Number(z.suuriKhuraamj || z.tariff || 0);
-        zaaltDun = (zoruu * (kwhTariff || z.tariff || 0)) + baseFee;
+        const zoruu = Math.max(0, Number(finalSuuliin || 0) - Number(finalUmnukh || 0));
+        // Суурь хураамж нь «тоолуурын заалтаар бодогдсон дүн дээр нэмэгдэнэ»
+        // (тохиргооны тайлбартай ижил) — заалт/хэрэглээгүй бол нэхэмжлэх дээр
+        // автоматаар бодогдохгүй. Мөн кВт-ын үнийг (tariff) суурь болгохгүй.
+        if (zoruu > 0) {
+          const baseFee = Number(z.suuriKhuraamj || 0);
+          zaaltDun = (zoruu * (kwhTariff || z.tariff || 0)) + baseFee;
+        }
       }
 
       if (zaaltDun > 0) {
