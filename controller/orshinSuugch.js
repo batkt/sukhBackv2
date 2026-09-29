@@ -40,6 +40,18 @@ const {
 } = require("../utils/gerBuliinGishuun");
 
 /**
+ * Top-level orshinSuugch.horoo field is String.
+ * toots[].horoo is Mixed (stores { ner, kod } object).
+ * Use this helper whenever assigning to the top-level String field.
+ */
+const horooToString = (horoo) => {
+  if (!horoo) return "";
+  if (typeof horoo === "string") return horoo;
+  if (typeof horoo === "object") return horoo.ner || horoo.kod || "";
+  return String(horoo);
+};
+
+/**
  * Helper to get the correct due date based on billing cycle
  */
 const getDueOgnooHelper = async (kholbolt, baiguullagiinId, barilgiinId) => {
@@ -801,7 +813,7 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
         mail: walletUserInfo?.email || req.body.mail || email, // Use email from Wallet API if available
         erkh: "OrshinSuugch",
         duureg: req.body.duureg,
-        horoo: req.body.horoo,
+        horoo: horooToString(req.body.horoo),
         soh: req.body.soh,
         nevtrekhNer: req.body.nevtrekhNer, // Auto-set from utas earlier if not provided
         utas: phoneNumber, // Ensure phone number is properly set
@@ -1996,7 +2008,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
     }
 
     if (req.body.duureg) userData.duureg = req.body.duureg;
-    if (req.body.horoo) userData.horoo = req.body.horoo;
+    if (req.body.horoo) userData.horoo = horooToString(req.body.horoo);
     if (req.body.soh) userData.soh = req.body.soh;
     if (req.body.toot) userData.toot = req.body.toot;
     if (req.body.davkhar) userData.davkhar = req.body.davkhar;
@@ -2060,7 +2072,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
         orshinSuugch.davkhar = userData.newTootEntry.davkhar;
         orshinSuugch.orts = userData.newTootEntry.orts;
         orshinSuugch.duureg = userData.newTootEntry.duureg;
-        orshinSuugch.horoo = userData.newTootEntry.horoo;
+        orshinSuugch.horoo = horooToString(userData.newTootEntry.horoo);
         orshinSuugch.soh = userData.newTootEntry.soh;
       }
     } else if (
@@ -2830,7 +2842,7 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
     }
 
     if (req.body.duureg) userData.duureg = req.body.duureg;
-    if (req.body.horoo) userData.horoo = req.body.horoo;
+    if (req.body.horoo) userData.horoo = horooToString(req.body.horoo);
     if (req.body.soh) userData.soh = req.body.soh;
     if (req.body.toot) userData.toot = req.body.toot;
     if (req.body.davkhar) userData.davkhar = req.body.davkhar;
@@ -3034,7 +3046,7 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
         orshinSuugch.davkhar = userData.newTootEntry.davkhar; // Auto-determined from toot
         orshinSuugch.orts = userData.newTootEntry.orts; // Auto-determined from toot
         orshinSuugch.duureg = userData.newTootEntry.duureg;
-        orshinSuugch.horoo = userData.newTootEntry.horoo;
+        orshinSuugch.horoo = horooToString(userData.newTootEntry.horoo);
         orshinSuugch.soh = userData.newTootEntry.soh;
       }
     } else if (
