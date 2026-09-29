@@ -187,6 +187,40 @@ router.use((req, res, next) => {
   next();
 });
 
+ 
+router.post("/gereeNemeltTootKhasya", tokenShalgakh, async (req, res, next) => {
+  try {
+    const { baiguullagiinId, barilgiinId, turul, davkhar } = req.body;
+    const tootuud = (Array.isArray(req.body.tootuud) ? req.body.tootuud : [])
+      .map((t) => String(t || "").trim())
+      .filter(Boolean);
+    const kholbolt = req.body.tukhainBaaziinKholbolt;
+    if (!kholbolt || !baiguullagiinId || !barilgiinId || tootuud.length === 0) {
+      return res.status(400).json({ success: false, message: "Мэдээлэл дутуу байна" });
+    }
+    const turuluud =
+      turul === "Агуулах" ? ["Агуулах"] : ["Гараж", "Зогсоол"];
+    const pullNukhtsul = {
+      toot: { $in: tootuud },
+      turul: { $in: turuluud },
+      // Хуучин бичлэгт давхар хоосон байж болно
+      ...(davkhar ? { davkhar: { $in: [String(davkhar), "", null] } } : {}),
+    };
+    const result = await Geree(kholbolt).updateMany(
+      {
+        baiguullagiinId: String(baiguullagiinId),
+        barilgiinId: String(barilgiinId),
+        tuluv: { $nin: ["Цуцалсан", "tsutlsasan"] },
+        nemeltTootnuud: { $elemMatch: pullNukhtsul },
+      },
+      { $pull: { nemeltTootnuud: pullNukhtsul } },
+    );
+    res.json({ success: true, zasagdsanGeree: result.modifiedCount || 0 });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Intercept manual receivable creation to ensure they get a nekhemjlekhId
 // and to prevent duplicate garage/storage avlaga within the same billing cycle.
 const {
