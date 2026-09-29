@@ -500,8 +500,15 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
               [davkhardsan.ovog, davkhardsan.ner].filter(Boolean).join(" ") ||
               davkhardsan.utas ||
               "";
+            const davkhardsanToot = (davkhardsan.toots || []).find(
+              (t) => t && t.toot === tootEntry.toot && t.turul === tootEntry.turul,
+            );
+            const bairlal = [
+              davkhardsanToot?.davkhar || tootEntry.davkhar ? `${davkhardsanToot?.davkhar || tootEntry.davkhar} давхар` : "",
+              davkhardsanToot?.orts || tootEntry.orts ? `${davkhardsanToot?.orts || tootEntry.orts}-р орц` : "",
+            ].filter(Boolean).join(", ");
             throw new Error(
-              `"${tootEntry.toot}" ${tootEntry.turul === "Агуулах" ? "агуулах" : "зогсоол"} дээр${ezniiNer ? ` "${ezniiNer}"` : ""} харилцагч аль хэдийн бүртгэгдсэн байна.`,
+              `${tootEntry.turul === "Агуулах" ? "Агуулах" : "Гараж"} ${tootEntry.toot} дугаар${bairlal ? ` (${bairlal})` : ""}${ezniiNer ? ` «${ezniiNer}»-д` : " өөр харилцагчид"} идэвхтэй бүртгэлтэй байна. Сул дугаар сонгох эсвэл өмнөх эзэмшигчээс салгаад дахин оруулна уу.`,
             );
           }
         }

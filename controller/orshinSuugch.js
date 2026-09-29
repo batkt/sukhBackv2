@@ -29,6 +29,12 @@ const {
 const NekhemjlekhCron = require("../models/cronSchedule");
 const { calculateNextDueDate } = require("../utils/dateUtils");
 const {
+  tootNer,
+  ezemshigchNer,
+  olsonToot,
+  munguFormat,
+} = require("../utils/tootTailbar");
+const {
   undsenEesKhayagAvya,
   gishuuniiKhariuBelgeye,
 } = require("../utils/gerBuliinGishuun");
@@ -748,7 +754,7 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
           // If toot is not found in davkhariinToonuud:
           // Strictly block registration if toot is not in the system
           throw new aldaa(
-            `"${req.body.toot}" тоот бүртгэлгүй байна. Та барилгын тохиргооноос тоотыг шалгана уу.`,
+            `${tootNer({ toot: tootToFind, orts: req.body.orts, davkhar: req.body.davkhar, bairniiNer: targetBarilga.ner })} энэ барилгын тоотын жагсаалтад бүртгэлгүй байна. Тоотын дугаарыг шалгах эсвэл "Тоот бүртгэл" цэснээс энэ тоотыг нэмээд дахин оролдоно уу.`,
           );
         }
       }
@@ -1242,10 +1248,14 @@ exports.davhardsanOrshinSuugchShalgayy = asyncHandler(
       const found = existingUser || existingKhariltsagch;
 
       if (found) {
+        const foundNer = [found.ovog, found.ner].filter(Boolean).join(" ");
+        const ezen = foundNer
+          ? ` «${foundNer}»${found.toot ? ` (${found.toot} тоот)` : ""} нэр дээр`
+          : "";
         return res.json({
           success: false,
           exists: true,
-          message: "Энэ утасны дугаар аль хэдийн бүртгэгдсэн байна.",
+          message: `${phoneNumber} дугаар${ezen} ${existingUser ? "оршин суугчаар" : "харилцагчаар"} аль хэдийн бүртгэгдсэн байна. Өөр дугаар оруулах эсвэл тухайн бүртгэлд шинэ тоот нэмнэ үү.`,
           data: {
             ner: found.ner,
             ovog: found.ovog,
@@ -1383,7 +1393,7 @@ exports.validateOwnOrgToot = asyncHandler(async (req, res, next) => {
     if (!tootFound) {
       return res.status(400).json({
         success: false,
-        message: "Бүртгэлгүй тоот байна",
+        message: `${tootNer({ toot: tootToValidate, orts: orts ? ortsToValidate : "", davkhar: davkharToValidate, bairniiNer: targetBarilga.ner })} энэ барилгын тоотын жагсаалтад бүртгэлгүй байна. Жагсаалтаас зөв тоот сонгох эсвэл "Тоот бүртгэл" цэснээс энэ тоотыг нэмнэ үү.`,
         valid: false,
         availableToonuud:
           availableToonuud.length > 0
@@ -1413,12 +1423,19 @@ exports.validateOwnOrgToot = asyncHandler(async (req, res, next) => {
     });
 
     if (existingUserWithToot) {
-      const existingName = [existingUserWithToot.ovog, existingUserWithToot.ner].filter(Boolean).join(" ") ||
-        (Array.isArray(existingUserWithToot.utas) ? existingUserWithToot.utas[0] : existingUserWithToot.utas) || "";
+      const existingName = ezemshigchNer(existingUserWithToot, { orsonSuutsToot: false });
+      const tootMedeelel = olsonToot(existingUserWithToot, {
+        toot: tootToValidate,
+        barilgiinId,
+        orts: foundOrts || ortsToValidate,
+        davkhar: foundDavkhar,
+      });
+      tootMedeelel.bairniiNer = tootMedeelel.bairniiNer || targetBarilga.ner;
+      const davkhardsanMsg = `${tootNer(tootMedeelel)} дээр${existingName ? ` ${existingName}` : ""} оршин суугч аль хэдийн бүртгэгдсэн байна. Өөр тоот сонгох, эсвэл эхлээд тухайн оршин суугчийн гэрээг цуцлаад дахин оролдоно уу.`;
       return res.status(400).json({
         success: false,
-        message: `"${tootToValidate}" тоот дээр${existingName ? ` "${existingName}"` : ""} оршин суугч аль хэдийн бүртгэгдсэн байна.`,
-        aldaa: `"${tootToValidate}" тоот дээр${existingName ? ` "${existingName}"` : ""} оршин суугч аль хэдийн бүртгэгдсэн байна.`,
+        message: davkhardsanMsg,
+        aldaa: davkhardsanMsg,
         valid: false,
         existingUser: {
           id: existingUserWithToot._id,
@@ -1471,7 +1488,7 @@ exports.tootShalgaya = asyncHandler(async (req, res, next) => {
     if (!orshinSuugch) {
       return res.status(404).json({
         success: false,
-        message: "Бүртгэлгүй тоот байна",
+        message: `${utas} утасны дугаартай оршин суугч бүртгэлгүй байна. Утасны дугаараа шалгах эсвэл СӨХ-ийн ажилтанд хандаж бүртгүүлнэ үү.`,
       });
     }
 
@@ -1502,9 +1519,15 @@ exports.tootShalgaya = asyncHandler(async (req, res, next) => {
         },
       });
     } else {
+      const burtgeltei = [
+        ...(Array.isArray(orshinSuugch.toots) ? orshinSuugch.toots : []),
+        ...(orshinSuugch.toot ? [{ toot: orshinSuugch.toot, orts: orshinSuugch.orts }] : []),
+      ]
+        .filter((t) => t && t.toot)
+        .map((t) => (t.orts ? `${t.orts}-р орц ${t.toot}` : String(t.toot)));
       return res.status(400).json({
         success: false,
-        message: "Бүртгэлгүй тоот байна",
+        message: `${tootNer({ toot: inputToot, orts: inputOrts })} таны бүртгэлд байхгүй байна.${burtgeltei.length ? ` Таны бүртгэлтэй тоот: ${[...new Set(burtgeltei)].join(", ")}.` : ""} Тоотоо шалгаад дахин оруулна уу.`,
       });
     }
   } catch (error) {
@@ -1942,7 +1965,7 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
 
         if (!tootFound) {
           throw new aldaa(
-            `(${tootToValidate}) тоот энэ барилгад бүртгэлгүй байна`,
+            `${tootNer({ toot: tootToValidate, orts: req.body.orts, davkhar: davkharToValidate, bairniiNer: targetBarilga.ner })} энэ барилгын орон сууц, гараж, агуулахын жагсаалтад бүртгэлгүй байна. Тоот, орц, давхраа шалгаад дахин оролдох эсвэл СӨХ-ийн ажилтанд хандана уу.`,
           );
         }
 
@@ -2933,7 +2956,7 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
 
         if (!tootFound) {
           throw new aldaa(
-            `(${tootToValidate}) тоот энэ барилгад бүртгэлгүй байна`,
+            `${tootNer({ toot: tootToValidate, orts: req.body.orts, davkhar: davkharFromRequest, bairniiNer: targetBarilga.ner })} энэ барилгын тоотын жагсаалтад бүртгэлгүй байна. Тоот, орц, давхраа шалгаад дахин оролдох эсвэл СӨХ-ийн ажилтанд хандана уу.`,
           );
         }
 
@@ -3917,7 +3940,7 @@ exports.dugaarBatalgaajuulya = asyncHandler(async (req, res, next) => {
       if (existing) {
         return res.status(409).json({
           success: false,
-          message: "Энэ утас аль хэдийн бүртгэгдсэн байна!",
+          message: `${utas} дугаар${[existing.ovog, existing.ner].filter(Boolean).length ? ` «${[existing.ovog, existing.ner].filter(Boolean).join(" ")}»${existing.toot ? ` (${existing.toot} тоот)` : ""} нэр дээр` : ""} аль хэдийн бүртгэгдсэн байна. Нэвтрэх хэсгээр орох эсвэл нууц үгээ сэргээнэ үү.`,
           codeSent: false,
         });
       }
@@ -4950,7 +4973,7 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
               code: "ULDEGDELTEI",
               uldegdel,
               gereeniiToo: gereenuud.length,
-              message: `Энэ оршин суугч ${uldegdel.toLocaleString("en-US", { minimumFractionDigits: 2 })}₮ үлдэгдэлтэй (${gereenuud.length} идэвхтэй гэрээ). Тооцоогоо хааж байж устгана уу.`,
+              message: `${ezemshigchNer(orshinSuugch, { orsonSuutsToot: false }) || "Энэ оршин суугч"} ${munguFormat(uldegdel)} үлдэгдэлтэй байна (${gereenuud.length} идэвхтэй гэрээ${gereenuud.some((g) => g.toot) ? `: ${[...new Set(gereenuud.map((g) => g.toot).filter(Boolean))].join(", ")} тоот` : ""}). Эхлээд үлдэгдлийг төлүүлж эсвэл тооцоог хааж байж устгана уу; зайлшгүй бол админ эрхтэй ажилтан албадан устгах боломжтой.`,
             });
           }
           if (albadakh) {

@@ -48,6 +48,7 @@ const {
   massUpdateOrshinSuugchKwt,
 } = require("../controller/orshinSuugch");
 const aldaa = require("../components/aldaa");
+const { tootNer, ezemshigchNer, olsonToot } = require("../utils/tootTailbar");
 const session = require("../models/session");
 const multer = require("multer");
 const {
@@ -931,9 +932,10 @@ router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
       if (orConditions.length > 0) {
         const existing = await OrshinSuugchModel.findOne({ $or: orConditions });
         if (existing) {
+          const ezen = ezemshigchNer(existing, { orsonSuutsToot: false });
           return res.status(400).json({
             success: false,
-            aldaa: "Энэ тоот дээр оршин суугч аль хэдийн бүртгэгдсэн байна.",
+            aldaa: `${tootNer(olsonToot(existing, { toot, barilgiinId, orts, davkhar }))} дээр${ezen ? ` ${ezen}` : ""} оршин суугч аль хэдийн бүртгэгдсэн байна. Өөр тоот сонгох, эсвэл эхлээд тухайн оршин суугчийн гэрээг цуцлаад дахин оролдоно уу.`,
           });
         }
       }
@@ -1197,9 +1199,10 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
           $or: orConditions,
         });
         if (existing) {
+          const ezen = ezemshigchNer(existing, { orsonSuutsToot: false });
           return res.status(400).json({
             success: false,
-            aldaa: "Энэ тоот дээр оршин суугч аль хэдийн бүртгэгдсэн байна.",
+            aldaa: `${tootNer(olsonToot(existing, { toot: updateToot, barilgiinId: updateBarilgiinId, orts: updateOrts, davkhar: updateDavkhar }))} дээр${ezen ? ` ${ezen}` : ""} оршин суугч аль хэдийн бүртгэгдсэн байна. Өөр тоот сонгох, эсвэл эхлээд тухайн оршин суугчийн гэрээг цуцлаад дахин оролдоно уу.`,
           });
         }
       }

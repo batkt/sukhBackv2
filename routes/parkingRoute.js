@@ -1193,17 +1193,13 @@ router
         let tulbur = [];
         var ebarimtAvakhDun = 0;
         guilgeenuud.map((guilgee) => {
-          ebarimtAvakhDun +=
-            guilgee.turul == "khariult" ||
-            guilgee.turul == "khungulult" ||
-            guilgee.turul?.includes("Божон") ||
-            guilgee.turul == "Соёолж Ц/Д" ||
-            guilgee.turul == "Хөнгөлөлт/ 24 цаг" ||
-            guilgee.turul == "Хөнгөлөлт/ 2 цаг" ||
-            guilgee.turul == "Fitness" ||
-            guilgee.turul?.includes("ugaalga")
-              ? 0
-              : guilgee.dun;
+          // Хөнгөлөлтийн бүх төрөл («discount», «Хөнгөлөлт» г.м.) и-баримтын
+          // дүнд орохгүй — бүрэн хөнгөлсөн машинд и-баримт гарахгүй.
+          ebarimtAvakhDun += zogsooliinKhungulultEsekh(guilgee.turul)
+            ? 0
+            : Number(guilgee.dun) > 0
+              ? Number(guilgee.dun)
+              : 0;
           tulbur.push({
             ognoo: guilgee.ognoo,
             turul: guilgee.turul,
@@ -5322,12 +5318,31 @@ router.post(
 
 // ─── Manual e-barimt from camera page ────────────────────────────────────────
 /** Хөнгөлөлт/буцаалтыг тооцохгүй, БОДИТ төлсөн дүн — и-баримт үүнээр гарна */
-const KHUNGULULT_TURLUUD = new Set(["khungulult", "discount", "Хөнгөлөлт", "khariult"]);
+/**
+ * Зогсоолын төлбөрийн мөр хөнгөлөлт (бодит мөнгө биш) эсэх. Тохиргоонд
+ * нэрлэсэн «Хөнгөлөлт/ 24 цаг» болон хамтрагчийн хөнгөлөлтүүдийг ч хамарна.
+ * Вэбийн камер кассын `khungulultTurulEsekh`-тэй ижил байх ёстой.
+ */
+function zogsooliinKhungulultEsekh(turul) {
+  const t = String(turul || "").trim();
+  if (!t) return false;
+  const l = t.toLowerCase();
+  return (
+    l === "khungulult" ||
+    l === "discount" ||
+    l === "khariult" ||
+    l.includes("хөнгөлөлт") ||
+    t.includes("Божон") ||
+    t === "Соёолж Ц/Д" ||
+    t === "Fitness" ||
+    l.includes("ugaalga")
+  );
+}
 function zogsooliinTulsunDun(obj) {
   const raw = obj?.tuukh?.[0]?.tulbur;
   const tulbur = Array.isArray(raw) ? raw : raw ? [raw] : [];
   return tulbur.reduce(
-    (s, t) => s + (Number(t?.dun) > 0 && !KHUNGULULT_TURLUUD.has(t?.turul) ? Number(t.dun) : 0),
+    (s, t) => s + (Number(t?.dun) > 0 && !zogsooliinKhungulultEsekh(t?.turul) ? Number(t.dun) : 0),
     0,
   );
 }

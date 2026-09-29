@@ -20,6 +20,7 @@ const {
   khariltsagchOorooUstgakh,
 } = require("../controller/khariltsagch");
 const aldaa = require("../components/aldaa");
+const { tootNer, ezemshigchNer, olsonToot } = require("../utils/tootTailbar");
 const {
   khariltsagchAdminUstgakh,
 } = require("../controller/khariltsagchAdminUstgakh");
@@ -652,11 +653,10 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
       if (orConditions.length > 0) {
         const existing = await khariltsagchModel.findOne({ $or: orConditions });
         if (existing) {
-          const existingName = [existing.ovog, existing.ner].filter(Boolean).join(" ") ||
-            (Array.isArray(existing.utas) ? existing.utas[0] : existing.utas) || "";
+          const ezen = ezemshigchNer(existing) || "өөр харилцагч";
           return res.status(400).json({
             success: false,
-            aldaa: `"${toot}" тоот дээр${existingName ? ` "${existingName}"` : ""} харилцагч аль хэдийн бүртгэгдсэн байна.`,
+            aldaa: `${tootNer(olsonToot(existing, { toot, barilgiinId, orts, davkhar }))} ${ezen}-д идэвхтэй бүртгэлтэй байна. Сул дугаар сонгох эсвэл өмнөх эзэмшигчээс салгаад дахин оролдоно уу.`,
           });
         }
       }
@@ -856,9 +856,22 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern || {})[0] || "";
       const label = field === "utas" ? "Утасны дугаар" : field || "Талбар";
+      const utga = error.keyValue?.[field];
+      // Давхцсан утастай харилцагчийг нэрээр нь заахын тулд хайна
+      let ezen = "";
+      if (field === "utas" && utga) {
+        try {
+          const { db } = require("zevbackv2");
+          const davkhardsan = await khariltsagch(db.erunkhiiKholbolt)
+            .findOne({ utas: utga })
+            .select("ovog ner utas toot toots")
+            .lean();
+          ezen = ezemshigchNer(davkhardsan);
+        } catch (_) { /* мессежид л хэрэглэнэ */ }
+      }
       return res.status(400).json({
         success: false,
-        aldaa: `${label} аль хэдийн бүртгэгдсэн байна.`,
+        aldaa: `${label}${utga ? ` (${utga})` : ""} аль хэдийн${ezen ? ` ${ezen}-д` : ""} бүртгэгдсэн байна. Өөр утга оруулах эсвэл тухайн харилцагчийн бүртгэлийг засварлана уу.`,
       });
     }
     next(error);
@@ -973,11 +986,10 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
           $or: orConditions,
         });
         if (existing) {
-          const existingName = [existing.ovog, existing.ner].filter(Boolean).join(" ") ||
-            (Array.isArray(existing.utas) ? existing.utas[0] : existing.utas) || "";
+          const ezen = ezemshigchNer(existing) || "өөр харилцагч";
           return res.status(400).json({
             success: false,
-            aldaa: `"${updateToot}" тоот дээр${existingName ? ` "${existingName}"` : ""} харилцагч аль хэдийн бүртгэгдсэн байна.`,
+            aldaa: `${tootNer(olsonToot(existing, { toot: updateToot, barilgiinId: updateBarilgiinId, orts: updateOrts, davkhar: updateDavkhar }))} ${ezen}-д идэвхтэй бүртгэлтэй байна. Сул дугаар сонгох эсвэл өмнөх эзэмшигчээс салгаад дахин оролдоно уу.`,
           });
         }
       }

@@ -2001,8 +2001,11 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             db.erunkhiiKholbolt,
           ).findOne(duplicateQuery);
           if (duplicateResident) {
+            const dNer = [duplicateResident.ovog, duplicateResident.ner].filter(Boolean).join(" ");
+            const dUtas = Array.isArray(duplicateResident.utas) ? duplicateResident.utas[0] : duplicateResident.utas;
+            const bairlal = [ortsToCheck ? `${ortsToCheck}-р орц` : "", davkharToCheck ? `${davkharToCheck} давхар` : ""].filter(Boolean).join(", ");
             throw new Error(
-              `"${tootToCheck}" тоот дээр оршин суугч аль хэдийн бүртгэгдсэн байна (мөр ${rowNumber}).`,
+              `"${tootToCheck}" тоот${bairlal ? ` (${bairlal})` : ""} дээр${dNer ? ` «${dNer}»` : ""}${dUtas ? ` (утас ${dUtas})` : ""} оршин суугч аль хэдийн бүртгэгдсэн байна (мөр ${rowNumber}). Excel-ийн тоотыг засах эсвэл өмнөх оршин суугчийн гэрээг цуцлаад дахин оруулна уу.`,
             );
           }
         }
