@@ -1370,13 +1370,12 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
       "Давхар",
       "Тоот",
       "Машины дугаар",
-      "Төрөл",
-      "Гэрээ дуусах огноо",
+      "Гараж тоот",
+      "Агуулах тоот",
       "Эхний үлдэгдэл",
-      "Цахилгаан кВт (тариф ₮/кВт)",
-      "Тайлбар",
+      "Цахилгаан квт",
       "Хоногоор бодох",
-      "Ирээдүйд ашиглах хоног",
+      "Ашиглах хоног",
     ];
 
     let workbook = new excel.Workbook();
@@ -1385,7 +1384,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
     worksheet.columns = headers.map((h, i) => ({
       header: h,
       key: h,
-      width: [15, 15, 12, 25, 10, 10, 10, 18, 15, 20, 15, 22, 22, 15, 20][i] || 15,
+      width: [15, 15, 12, 25, 10, 10, 10, 18, 15, 15, 15, 18, 15, 18][i] || 15,
     }));
 
     // Style the header row (Row 1)
@@ -1431,18 +1430,8 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
       });
     }
 
-    // Data validation for Turul (Column I) - "Үндсэн", "Түр"
-    worksheet.dataValidations.add("I2:I2000", {
-      type: "list",
-      allowBlank: true,
-      formulae: ['"Үндсэн,Түр"'],
-      showErrorMessage: true,
-      errorStyle: "error",
-      error: "Жагсаалтаас сонгоно уу!",
-    });
-
-    // Data validation for KhonogoorBodokh (Column N) - "Тийм", "Үгүй"
-    worksheet.dataValidations.add("N2:N2000", {
+    // Data validation for KhonogoorBodokh (Column M) - "Тийм", "Үгүй"
+    worksheet.dataValidations.add("M2:M2000", {
       type: "list",
       allowBlank: true,
       formulae: ['"Тийм,Үгүй"'],
@@ -1646,7 +1635,10 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             row["Хоногоор бодох"] === true ||
             String(row["Хоногоор бодох"]).toLowerCase() === "true" ||
             String(row["Хоногоор бодох"]).toLowerCase() === "тийм",
-          bodokhKhonog: parseInt(row["Ирээдүйд ашиглах хоног"]) || parseInt(row["Ашиглах хоног"]) || parseInt(row["Эхний сарын ашиглах хоног"]) || 0,
+          bodokhKhonog: parseInt(row["Ашиглах хоног"]) || parseInt(row["Ирээдүйд ашиглах хоног"]) || parseInt(row["Эхний сарын ашиглах хоног"]) || 0,
+          // New red-section columns
+          garaazhToot: row["Гараж тоот"]?.toString().trim() || "",
+          aguulakhToot: row["Агуулах тоот"]?.toString().trim() || "",
         };
 
         // Check if this is an update-only row (only toot, davkhar, ekhniiUldegdel, and possibly tsahilgaaniiZaalt or mashin)
@@ -2206,6 +2198,78 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
               orshinSuugch.toots[existingTootIndex] = tootEntry;
             } else {
               orshinSuugch.toots.push(tootEntry);
+            }
+          }
+        }
+
+        // Add Garage toot(s) if provided ("Гараж тоот" column)
+        if (userData.garaazhToot && finalBarilgiinId) {
+          const garaazhList = userData.garaazhToot
+            .split(",")
+            .map((t) => t.trim())
+            .filter((t) => t && t.length > 0);
+          for (const gt of garaazhList) {
+            const garaazhEntry = {
+              toot: gt,
+              turul: "Гараж",
+              source: "OWN_ORG",
+              baiguullagiinId: baiguullaga._id.toString(),
+              barilgiinId: finalBarilgiinId,
+              davkhar: userData.davkhar || "",
+              orts: userData.orts || "1",
+              duureg: duuregNer,
+              horoo: horooData,
+              soh: sohNer,
+              bairniiNer: targetBarilga.ner || "",
+              ekhniiUldegdel: 0,
+              createdAt: new Date(),
+            };
+            const existIdx = orshinSuugch.toots?.findIndex(
+              (t) =>
+                String(t.toot || "").trim() === gt &&
+                (t.turul === "Гараж") &&
+                String(t.barilgiinId || "") === String(finalBarilgiinId || "")
+            );
+            if (existIdx >= 0) {
+              orshinSuugch.toots[existIdx] = garaazhEntry;
+            } else {
+              orshinSuugch.toots.push(garaazhEntry);
+            }
+          }
+        }
+
+        // Add Warehouse/Storage toot(s) if provided ("Агуулах тоот" column)
+        if (userData.aguulakhToot && finalBarilgiinId) {
+          const aguulakhList = userData.aguulakhToot
+            .split(",")
+            .map((t) => t.trim())
+            .filter((t) => t && t.length > 0);
+          for (const at of aguulakhList) {
+            const aguulakhEntry = {
+              toot: at,
+              turul: "Агуулах",
+              source: "OWN_ORG",
+              baiguullagiinId: baiguullaga._id.toString(),
+              barilgiinId: finalBarilgiinId,
+              davkhar: userData.davkhar || "",
+              orts: userData.orts || "1",
+              duureg: duuregNer,
+              horoo: horooData,
+              soh: sohNer,
+              bairniiNer: targetBarilga.ner || "",
+              ekhniiUldegdel: 0,
+              createdAt: new Date(),
+            };
+            const existIdx = orshinSuugch.toots?.findIndex(
+              (t) =>
+                String(t.toot || "").trim() === at &&
+                (t.turul === "Агуулах") &&
+                String(t.barilgiinId || "") === String(finalBarilgiinId || "")
+            );
+            if (existIdx >= 0) {
+              orshinSuugch.toots[existIdx] = aguulakhEntry;
+            } else {
+              orshinSuugch.toots.push(aguulakhEntry);
             }
           }
         }
