@@ -64,7 +64,26 @@ router.get("/parking", tokenShalgakh, async (req, res, next) => {
 
     const query = {};
     if (baiguullagiinId) query.baiguullagiinId = baiguullagiinId;
-    if (barilgiinId) query.barilgiinId = barilgiinId;
+
+    // ── Бүх барилгад хамаарах зогсоол ────────────────────────────────────
+    // Нэг зогсоол хэд хэдэн барилгад үйлчилж болно (нийтийн доод хэсэг,
+    // хамтарсан хашаа). Тийм зогсоолыг `tokhirgoo.bukhBarilgadEsekh`-ээр
+    // тэмдэглэнэ.
+    //
+    // Өмнө нь `barilgiinId`-аар ХАТУУ шүүдэг байсан тул тэр зогсоол зөвхөн
+    // өөрийн барилгын сонголт дор харагдаж, бусад барилга сонговол хуудас
+    // ХООСОН гардаг байв. Хаалга нь эдгээр машиныг оруулдаг (`barilgaTusBur`
+    // унтраалттай) тул зөвхөн UI зөрүүтэй байсан.
+    //
+    // Тэмдэглэгээг `tokhirgoo` (Mixed) дотор хадгалсан нь зориудаар:
+    // `Parking` схем нь sukhParking-v1 багц дотор байдаг тул шинэ талбар
+    // нэмэх нь багцыг дахин нийтлэхийг шаардана.
+    if (barilgiinId) {
+      query.$or = [
+        { barilgiinId },
+        { "tokhirgoo.bukhBarilgadEsekh": true },
+      ];
+    }
 
     const kholbolt = req.body.tukhainBaaziinKholbolt || db.erunkhiiKholbolt;
     const ParkingModel = Parking(kholbolt);

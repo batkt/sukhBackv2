@@ -279,8 +279,22 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
       success: true,
       message: "Зочин амжилттай уригдлаа",
       data: savedDoc,
+      // Локал зогсоолын бүртгэл — ХААЛГА ҮҮНИЙГ уншина.
+      //
+      // `savedDoc` нь `ezenUrisanMashin` бичлэг. Dahua worker-ийн sdkService
+      // нь машин орох үед яг түүнийг хайж «Зочин» төрөл онооно. Тиймээс
+      // түрээсийн интеграц байхгүй ч зочин хаалган дээр танигддаг.
+      zogsool: { buurtgegdsen: true },
       turees: {
         buurtgegdsen: !!(tureesKhariu && tureesKhariu.success),
+        // `tokhirgoogui` нь өмнө нь ХАЯГДАЖ байсан.
+        //
+        // Апп нь «тохируулаагүй» ба «тохируулсан боловч уналаа» хоёрыг
+        // үүгээр ялгадаг. Илгээхгүй бол үргэлж `false` болж, түрээсийн
+        // интеграц ОГТ ашигладаггүй обьект (Тайм Таур гэх мэт) дээр ч
+        // «зогсоолын системд бүртгэгдсэнгүй» гэсэн анхааруулга гардаг —
+        // бодит байдалд зочин локал зогсоолд бүртгэгдсэн, хаалга танидаг.
+        tokhirgoogui: !!(tureesKhariu && tureesKhariu.tokhirgoogui),
         tulburiinTurul: tureesKhariu && tureesKhariu.tulburiinTurul,
         message: tureesKhariu && tureesKhariu.message,
       }
