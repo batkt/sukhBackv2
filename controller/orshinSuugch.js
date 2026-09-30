@@ -5560,14 +5560,9 @@ exports.syncResidentContracts = async function syncResidentContracts(
   );
 
   if (mainUnits.length === 0 && additionalUnits.length > 0) {
-    if (isKhariltsagch) {
-      // For customers (khariltsagch), promote the first additional unit to a main unit so a contract is created
-      mainUnits = [additionalUnits[0]];
-      additionalUnits = additionalUnits.slice(1);
-    } else {
-      // For residents (orshinSuugch), do NOT promote. Garages and warehouses should not get contracts of their own.
-      // mainUnits remains empty, meaning no contract will be created.
-    }
+    // If a resident or customer only has garage/storage units, promote the first one so a primary contract exists for billing
+    mainUnits = [additionalUnits[0]];
+    additionalUnits = additionalUnits.slice(1);
   }
 
   let anyReactivated = false;
