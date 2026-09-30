@@ -512,6 +512,34 @@ router.get(
         });
       }
 
+      // Огнооны шүүлтийг зогсолтын ЦАГААР бодуулна, зөвхөн `createdAt`-аар бус.
+      //
+      // Уилчлүүлэгчийн бичлэг ДАХИН хэрэглэгддэг: `tuukh` массив үргэлж нэг
+      // элементтэй бөгөөд машин дахин орохад тэр элементийн `orsonTsag` л
+      // дарж бичигддэг (sdkService болон гараас бүртгэх хоёр зам). Ингэхэд
+      // `createdAt` нь бичлэг ХАМГИЙН ЭХЭНД үүссэн өдөр хэвээр үлддэг.
+      //
+      // Тиймээс өнөөдрийн зогсолт өмнөх өдрийн `createdAt`-тай бичлэг дээр
+      // хийгдвэл `createdAt`-ын шүүлтэд ОРОХГҮЙ — жагсаалт хоосон харагдана.
+      // Шинээр үүссэн бичлэгүүд (ихэвчлэн үйлчлүүлэгч) харагдсаар байдаг тул
+      // асуудал нь "хааяа" шинжтэй болдог.
+      //
+      // `createdAt`-ыг `$or`-д хэвээр үлдээв: одоо харагдаж байгаа мөр
+      // алга болохгүй, зөвхөн дарагдсан мөрүүд нэмэгдэнэ. Индекс 0-ийг
+      // хэрэглэсэн нь UI мөр бүрд `tuukh[0]`-ийг л зурдагтай таарна.
+      if (dateFilter && body?.query?.createdAt) {
+        const ognoonuud = [
+          { createdAt: dateFilter },
+          { "tuukh.0.tsagiinTuukh.0.orsonTsag": dateFilter },
+          { "tuukh.0.tsagiinTuukh.0.garsanTsag": dateFilter },
+        ];
+        delete body.query.createdAt;
+        body.query.$and = [
+          ...(Array.isArray(body.query.$and) ? body.query.$and : []),
+          { $or: ognoonuud },
+        ];
+      }
+
       if (collectionsToQuery.length === 1) {
         const model = collectionsToQuery[0].name
           ? Uilchluulegch(
