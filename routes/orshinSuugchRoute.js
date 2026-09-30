@@ -908,9 +908,10 @@ router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
     }
     const orts = req.body.orts ? String(req.body.orts).trim() : "";
     if (toot && (barilgiinId || baiguullagiinId)) {
+      const turul = req.body.turul || req.body.units?.[0]?.turul || req.body.toots?.[0]?.turul || "Орон сууц";
       const orConditions = [];
-      const baseMatch = { toot };
-      const baseTootMatch = { toot };
+      const baseMatch = { toot, turul };
+      const baseTootMatch = { toot, turul };
       if (davkhar) {
         baseMatch.davkhar = davkhar;
         baseTootMatch.davkhar = davkhar;
@@ -1168,11 +1169,12 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
       ? String(req.body.baiguullagiinId)
       : null;
     if (updateToot && (updateBarilgiinId || updateBaiguullagiinId)) {
+      const updateTurul = req.body.turul || req.body.units?.[0]?.turul || req.body.toots?.[0]?.turul || "Орон сууц";
       const updateOrts = req.body.orts ? String(req.body.orts).trim() : null;
       const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
       const orConditions = [];
-      const baseMatch = { toot: updateToot };
-      const baseTootMatch = { toot: updateToot };
+      const baseMatch = { toot: updateToot, turul: updateTurul };
+      const baseTootMatch = { toot: updateToot, turul: updateTurul };
       if (updateDavkhar) {
         baseMatch.davkhar = updateDavkhar;
         baseTootMatch.davkhar = updateDavkhar;
