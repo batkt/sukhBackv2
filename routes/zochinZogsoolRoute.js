@@ -371,6 +371,68 @@ router.get("/zochin/zogsool/tuukh", tokenShalgakh, async (req, res, next) => {
 });
 
 /**
+ * Урилгын одоогийн байдлыг ЛОКАЛ зогсоолын өгөгдлөөс бүрдүүлнэ.
+ *
+ * Түрээсийн `urilgaAvya`-тай ИЖИЛ бүтэц буцаана — апп нэг л хэлбэр уншина:
+ *   { uneguiMinutUldsen, uneguiMinutAshiglasanNiit, tulburiinTurul,
+ *     sessionuud: [{ orsonTsag, garsanTsag, niitKhugatsaa, tulukhDun }] }
+ *
+ * Сессүүдийг урилгын дугаараар хайна: `Uilchluulegch.urisanMashin._id` нь
+ * зөвхөн нэг орох салаанд хавсаргагддаг тул түүнд найдвал хэсэг сесс
+ * алдагдана. Дугаар нь бүх салаанд үргэлж бичигддэг.
+ */
+async function urilgiinTuluvLokalAvya(kholbolt, urilgiinId) {
+  try {
+    if (!kholbolt || !urilgiinId) return null;
+
+    const { EzenUrisanMashin, Uilchluulegch } = require("sukhParking-v1");
+
+    const urilga = await EzenUrisanMashin(kholbolt).findById(urilgiinId).lean();
+    if (!urilga) return null;
+
+    let sessionuud = [];
+    if (urilga.urisanMashiniiDugaar) {
+      const muruud = await Uilchluulegch(kholbolt)
+        .find({
+          baiguullagiinId: String(urilga.baiguullagiinId || ""),
+          mashiniiDugaar: urilga.urisanMashiniiDugaar,
+          // Урилга үүссэнээс хойшхи сессүүд л хамаарна.
+          createdAt: { $gte: urilga.createdAt || new Date(0) },
+        })
+        .sort({ createdAt: 1 })
+        .limit(20)
+        .lean();
+
+      // Апп СҮҮЛИЙН сессийг авдаг тул хугацааны дарааллаар үлдээнэ.
+      sessionuud = muruud.flatMap((mur) =>
+        (mur.tuukh || []).map((t) => {
+          const tsag = (t.tsagiinTuukh || [])[0] || {};
+          return {
+            orsonTsag: tsag.orsonTsag || null,
+            garsanTsag: tsag.garsanTsag || null,
+            niitKhugatsaa: t.niitKhugatsaa || 0,
+            tulukhDun: t.tulukhDun || 0,
+          };
+        }),
+      );
+    }
+
+    return {
+      uneguiMinutUldsen: urilga.tusBurUneguiMinut || 0,
+      uneguiMinutAshiglasanNiit: urilga.tusBurAshiglasanUneguiMinutNiit || 0,
+      // Локал зогсоолд зочин өөрөө төлдөг — нэхэмжлэхэд бичих нь түрээсийн
+      // интеграцын боломж.
+      tulburiinTurul: "zochin",
+      tuluv: urilga.tuluv || 0,
+      sessionuud,
+    };
+  } catch (err) {
+    console.error("[ZOCHIN-ZOGSOOL] локал төлөв уншихад алдаа:", err.message);
+    return null;
+  }
+}
+
+/**
  * GET /zochin/zogsool/urilgiinTuluv/:urilgiinId
  * Түрээсийн зогсоол дээрх урилгын одоогийн байдлыг шууд асуух
  * (үнэгүй минут хэд үлдсэн гэх мэт).
@@ -393,6 +455,29 @@ router.get(
         amarSukhBaiguullagiinId: baiguullagiinId,
         amarSukhUrilgiinId: req.params.urilgiinId,
       });
+
+      if (khariu && khariu.success && khariu.data) return res.json(khariu);
+
+      // ── Локал зогсоолын нөөц ────────────────────────────────────────
+      // Обьектуудын нэг хэсэг нь түрээсийн зогсоол БИШ, локал систем
+      // (sukhParking-v1 + Dahua worker) ашигладаг. Тэдэнд түрээс рүү
+      // хандах нь `tokhirgoogui` буцаадаг тул апп «Зогсоолын мэдээлэл
+      // авах боломжгүй байна» гэж шар анхааруулга харуулдаг байв —
+      // бодит байдалд өгөгдөл ЛОКАЛ санд бий.
+      //
+      // Тиймээс түрээс хариу өгөөгүй бол ижил бүтцийг локалаас бүрдүүлнэ.
+      // Холболтыг файлын бусад хэсэгтэй ижил дарааллаар шийднэ: оршин
+      // суугчийн токенд `tukhainBaaziinKholbolt` тавигдаагүй байж магадгүй.
+      const kholbolt =
+        getKholboltByBaiguullagiinId(baiguullagiinId) ||
+        req.body.tukhainBaaziinKholbolt ||
+        db.erunkhiiKholbolt;
+
+      const lokal = await urilgiinTuluvLokalAvya(
+        kholbolt,
+        req.params.urilgiinId,
+      );
+      if (lokal) return res.json({ success: true, ekhSurvalj: "lokal", data: lokal });
 
       res.json(khariu);
     } catch (error) {
