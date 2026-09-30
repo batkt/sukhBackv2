@@ -311,7 +311,12 @@ router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
   const isGarage = tailbarLower.includes("зогсоол");
   const isStorage = tailbarLower.includes("агуулах");
 
-  if ((isGarage || isStorage) && gereeniiId && tukhainBaaziinKholbolt) {
+  if (
+    req.body.turul === "Авлага" &&
+    (isGarage || isStorage) &&
+    gereeniiId &&
+    tukhainBaaziinKholbolt
+  ) {
     try {
       const NekhemjlekhCron = require("../models/cronSchedule");
       const { calculateBillingCycleBounds } = require("../utils/dateUtils");
