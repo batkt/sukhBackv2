@@ -55,7 +55,7 @@ async function nekhemjlekhZadargaaAvya(kholbolt, { gereeniiId, nekhemjlekhIdnuud
     return { nekhemjlekhuud: [], angilal: khuvaarilya(0, {}), niit: 0 };
   }
 
-  const [nekhemjlekhuud, murnuud] = await Promise.all([
+  const [nekhemjlekhuud, murnuud, gereeniiNekhemjlekhuud, khungulultuud] = await Promise.all([
     Nekhemjlekh.find({ _id: { $in: idnuud }, gereeniiId: String(gereeniiId) })
       .select({ ognoo: 1, uldegdel: 1, niitTulbur: 1, tuluv: 1 })
       .sort({ ognoo: 1 })
@@ -67,7 +67,33 @@ async function nekhemjlekhZadargaaAvya(kholbolt, { gereeniiId, nekhemjlekhIdnuud
     })
       .select({ nekhemjlekhId: 1, dun: 1, zardliinNer: 1, tailbar: 1, turul: 1 })
       .lean(),
+    // Хөнгөлөлтийг нэхэмжлэхэд оноохын тулд гэрээний бүх нэхэмжлэх, хөнгөлөлт
+    Nekhemjlekh.find({ gereeniiId: String(gereeniiId) })
+      .select({ ognoo: 1, gereeniiId: 1 })
+      .sort({ ognoo: 1 })
+      .lean(),
+    Guilgee.find({
+      gereeniiId: String(gereeniiId),
+      dun: { $lt: 0 },
+      $or: [{ source: "khungulult" }, { turul: "Хөнгөлөлт" }, { zardliinTurul: "Хөнгөлөлт" }],
+    })
+      .select({ nekhemjlekhId: 1, dun: 1, zardliinNer: 1, ognoo: 1, source: 1, turul: 1, zardliinTurul: 1, gereeniiId: 1 })
+      .lean(),
   ]);
+
+  // Хөнгөлөлт аль нэхэмжлэхэд, аль ангилалд хамаарах (syncInvoicesStatus-тай ижил дүрэм)
+  const { khungulultNekhemjlekhendOnooyo } = require("../services/guilgeeService");
+  const khungulultAngilal = new Map(); // invId → { angilal: дүн }
+  for (const k of khungulultuud) {
+    const { invoiceCredit } = khungulultNekhemjlekhendOnooyo([k], gereeniiNekhemjlekhuud);
+    const [invId] = invoiceCredit.keys();
+    if (!invId) continue;
+    // «Хөнгөлөлт (Гараж)» гэх мэт ангилалтай нэр; үгүй бол орон сууц
+    const ang = angilalTaniya(k.zardliinNer || "");
+    const m = khungulultAngilal.get(invId) || {};
+    m[ang] = r2((m[ang] || 0) + Math.abs(Number(k.dun || 0)));
+    khungulultAngilal.set(invId, m);
+  }
 
   const niitAngilal = {};
   ANGILLUUD.forEach((k) => (niitAngilal[k] = 0));
@@ -85,11 +111,22 @@ async function nekhemjlekhZadargaaAvya(kholbolt, { gereeniiId, nekhemjlekhIdnuud
       });
     const zardluud = Array.from(nereer, ([ner, dun]) => ({ ner, dun, angilal: angilalTaniya(ner) }));
 
+    // Ангилал бүрийн цэвэр дүн = зардал − тухайн ангиллын хөнгөлөлт
     const jin = {};
     zardluud.forEach((z) => (jin[z.angilal] = (jin[z.angilal] || 0) + z.dun));
+    const khung = khungulultAngilal.get(id) || {};
+    Object.entries(khung).forEach(([ang, dun]) => {
+      // Ангилалдаа зардалгүй бол хамгийн том ангиллаас хасна
+      const zorilt = jin[ang] > 0 ? ang : Object.keys(jin).reduce((a, k) => (jin[k] > (jin[a] || 0) ? k : a), "Орон сууц");
+      jin[zorilt] = Math.max(0, (jin[zorilt] || 0) - dun);
+    });
+    const tsevertNiit = r2(Object.values(jin).reduce((a, b) => a + b, 0));
 
     const tuluvsun = String(inv.tuluv || "") === "Төлсөн";
-    const uldegdel = tuluvsun ? 0 : r2(Math.max(0, Number(inv.uldegdel ?? inv.niitTulbur ?? 0)));
+    // Хөнгөлөлтгүй (хуучин) үлдэгдэл хадгалагдсан байсан ч цэвэр дүнгээс хэтрүүлэхгүй
+    const uldegdel = tuluvsun
+      ? 0
+      : r2(Math.min(Math.max(0, Number(inv.uldegdel ?? inv.niitTulbur ?? 0)), zardluud.length ? tsevertNiit : Infinity));
     const angilal = khuvaarilya(uldegdel, jin);
     ANGILLUUD.forEach((k) => (niitAngilal[k] = r2(niitAngilal[k] + angilal[k])));
     niit = r2(niit + uldegdel);
