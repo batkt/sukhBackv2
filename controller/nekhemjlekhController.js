@@ -55,10 +55,33 @@ async function gereeNeesNekhemjlekhUusgekh(
     const { startOfCycle, endOfCycle } = calculateBillingCycleBounds(cronDay, today);
 
     // 1. Check for duplicates if requested
+    //
+    // ── Эхний үлдэгдлийн импортыг давхардал гэж тооцохгүй ────────────────
+    // Excel-ийн импорт нь гэрээ үүсгэх үед «эхний үлдэгдэл» нэхэмжлэх
+    // үүсгэдэг бөгөөд түүний `ognoo` нь гэрээний огноо болдог. Циклийн
+    // өдөр нь мөн гэрээний огноо тул тэр нэхэмжлэх ҮРГЭЛЖ дараагийн
+    // циклийн цонхонд унадаг.
+    //
+    // Жишээ (ГД-53590892): гэрээ 09-07, Excel-ийн нэхэмжлэх `ognoo` 09-07.
+    // 10-01-д cron гүйхэд цикл нь [09-07, 10-07) болж, тэр нэхэмжлэхийг
+    // олж `alreadyExists` буцаана — улмаас сарын нэхэмжлэх ҮҮСЭХГҮЙ, SMS
+    // ч явахгүй. «Гараар явуулж чадна, автоматаар болдоггүй» гэдэг шалтгаан.
+    //
+    // Тиймээс давхардал гэж тооцохдоо «эхний үлдэгдлээс БУСАД зардалтай»
+    // нэхэмжлэхийг л хайна. Зардалгүй (`forceEmpty`) нэхэмжлэхийг мөн
+    // давхардал гэж үзнэ — эс бөгөөс cron дахин гүйвэл хоёр дахь удаа
+    // үүсгэнэ.
     if (source === "automataar" || skipIfRecent) {
       const existing = await NekhemjlekhModel.findOne({
         gereeniiId: geree._id.toString(),
         ognoo: { $gte: startOfCycle, $lte: endOfCycle },
+        $or: [
+          // Сарын бодит зардал агуулсан нэхэмжлэх
+          { "medeelel.zardluud": { $elemMatch: { isEkhniiUldegdel: { $ne: true } } } },
+          // Зардалгүй нэхэмжлэх
+          { "medeelel.zardluud": { $size: 0 } },
+          { "medeelel.zardluud": { $exists: false } },
+        ],
       }).lean();
 
       if (existing) {

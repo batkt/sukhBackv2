@@ -195,6 +195,21 @@ router.get("/sessionAvya/:sessionId", async (req, res, next) => {
 });
 
 router.route("/ajiltanNevtrey").post(ajiltanNevtrey);
+
+/* ─── «Нууц үг мартсан?» ───────────────────────────────────────────────────
+ *
+ * Нэвтэрч чадахгүй байгаа ажилтанд зориулсан тул `tokenShalgakh` БАЙХГҮЙ.
+ * Хамгаалалт нь SMS код, оролдлогын хязгаар, дахин илгээх хүлээлт дээр тулна.
+ */
+const {
+  ajiltanNuutsUgCodeIlgeeye,
+  ajiltanNuutsUgCodeShalgaya,
+  ajiltanNuutsUgSergeeye,
+} = require("../controller/ajiltniiNuutsUg");
+
+router.post("/ajiltanNuutsUgCodeIlgeeye", ajiltanNuutsUgCodeIlgeeye);
+router.post("/ajiltanNuutsUgCodeShalgaya", ajiltanNuutsUgCodeShalgaya);
+router.post("/ajiltanNuutsUgSergeeye", ajiltanNuutsUgSergeeye);
 // ZevTabs удирдлагын систем сервер талаасаа дуудна (мастер token шаардана).
 router.route("/zevtabsNevtrelt").post(tokenShalgakh, zevtabsNevtrelt);
 // Нэг удаагийн кодыг вэб апп-ын `/nevtrekh` хуудас token болгож солино —
