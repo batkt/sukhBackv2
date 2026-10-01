@@ -259,13 +259,27 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   // FIFO: sort invoices by date (oldest first), distribute total payments across them
   const sortedInvoices = Object.values(invoiceCharges).sort((a, b) => new Date(a.date) - new Date(b.date));
   const nekhemjlekhuud = [];
-  let availableFunds = totalTulsun;
+
+  // Хөнгөлөлтийг тухайн нэхэмжлэхэд нь шууд оноож (syncInvoicesStatus-тай
+  // ижил дүрэм), үлдсэн төлөлтийг л FIFO-гаар хуваарилна.
+  const invoiceDocs = await NekhemjlekhiinTuukhModel.find({
+    _id: { $in: sortedInvoices.map((i) => i.id).filter((id) => id !== "uninvoiced") },
+  })
+    .select({ ognoo: 1, gereeniiId: 1 })
+    .sort({ ognoo: 1 })
+    .lean()
+    .catch(() => []);
+  const { invoiceCredit, creditIds } =
+    require("../services/guilgeeService").khungulultNekhemjlekhendOnooyo(summaryItems, invoiceDocs);
+  let availableFunds = summaryItems
+    .filter((it) => Number(it.dun || 0) < 0 && !creditIds.has(String(it._id)))
+    .reduce((s, it) => s + Math.abs(Number(it.dun || 0)), 0);
 
   for (const inv of sortedInvoices) {
-    const targetAmount = inv.charges;
+    const targetAmount = Math.max(0, inv.charges - (invoiceCredit.get(String(inv.id)) || 0));
     const isPaid = availableFunds + 0.1 >= targetAmount;
     const uld = isPaid ? 0 : Math.max(0, targetAmount - availableFunds);
-    const status = (isPaid && targetAmount > 0) ? "Төлсөн" : "Төлөөгүй";
+    const status = (isPaid && inv.charges > 0) ? "Төлсөн" : "Төлөөгүй";
 
     nekhemjlekhuud.push({
       nekhemjlekhId: inv.id,

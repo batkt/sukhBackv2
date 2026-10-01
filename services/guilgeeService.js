@@ -136,6 +136,61 @@ async function recordPayment(kholbolt, data, options = {}) {
 }
 
 /**
+ * Хөнгөлөлтийн мөрүүдийг нэхэмжлэхэд нь оноох.
+ *
+ * Хөнгөлөлт нь ерөнхий төлөлт биш — тухайн сарын нэхэмжлэхийг шууд
+ * бууруулна. Өмнө нь FIFO-гаар хамгийн эртний нэхэмжлэхэд зарцуулагдаж,
+ * 10-р сарын 13,500₮ хөнгөлөлт 8-р сарын 45,000-аас хасагддаг байв.
+ * Нэхэмжлэх: nekhemjlekhId-аар → ижил хуанлийн сарын эхний нэхэмжлэх →
+ * огноогоор хамгийн ойр (45 хоног дотор; мөчлөг сарын сүүлээс эхэлдэг үед).
+ * Зөвхөн ижил гэрээний нэхэмжлэхээс сонгоно.
+ *
+ * @param ledger   гүйлгээний мөрүүд
+ * @param invoices [{ _id, ognoo, gereeniiId? }] — огноогоор эрэмбэлсэн
+ * @returns { invoiceCredit: Map<invId, дүн>, creditIds: Set<мөрийн _id> }
+ */
+function khungulultNekhemjlekhendOnooyo(ledger, invoices) {
+  const sarKey = (d) => {
+    const t = d ? new Date(d) : null;
+    return t && !isNaN(t) ? `${t.getFullYear()}-${t.getMonth() + 1}` : "";
+  };
+  const khungulultEsekh = (r) =>
+    (r.dun || 0) < 0 &&
+    (r.source === "khungulult" || r.turul === "Хөнгөлөлт" || r.zardliinTurul === "Хөнгөлөлт");
+
+  const invoiceCredit = new Map();
+  const creditIds = new Set();
+  for (const r of ledger || []) {
+    if (!khungulultEsekh(r)) continue;
+    const gereeniiNekhemjlekh = (invoices || []).filter(
+      (i) => !i.gereeniiId || !r.gereeniiId || String(i.gereeniiId) === String(r.gereeniiId),
+    );
+    let invId = r.nekhemjlekhId ? String(r.nekhemjlekhId) : "";
+    if (!invId || !gereeniiNekhemjlekh.some((i) => String(i._id) === invId)) {
+      const sar = sarKey(r.ognoo);
+      let tokhirokh = sar && gereeniiNekhemjlekh.find((i) => sarKey(i.ognoo) === sar);
+      if (!tokhirokh && r.ognoo) {
+        const t = new Date(r.ognoo).getTime();
+        let khamgiinOir = Infinity;
+        for (const i of gereeniiNekhemjlekh) {
+          const zai = Math.abs(new Date(i.ognoo).getTime() - t);
+          if (zai < khamgiinOir) {
+            khamgiinOir = zai;
+            tokhirokh = i;
+          }
+        }
+        if (khamgiinOir > 45 * 24 * 3600 * 1000) tokhirokh = null;
+      }
+      invId = tokhirokh ? String(tokhirokh._id) : "";
+    }
+    if (!invId) continue; // тохирох нэхэмжлэхгүй бол ерөнхий төлөлтөөр
+    invoiceCredit.set(invId, (invoiceCredit.get(invId) || 0) + Math.abs(r.dun || 0));
+    creditIds.add(String(r._id));
+  }
+  return { invoiceCredit, creditIds };
+}
+
+/**
  * Synchronize all invoices for a contract based on total ledger balance (Full Sync / FIFO)
  */
 async function syncInvoicesStatus(kholbolt, gereeniiId) {
@@ -153,47 +208,10 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
       .select({ ognoo: 1 })
       .sort({ ognoo: 1 })
       .lean();
-    const sarKey = (d) => {
-      const t = d ? new Date(d) : null;
-      return t && !isNaN(t) ? `${t.getFullYear()}-${t.getMonth() + 1}` : "";
-    };
-
-    // Хөнгөлөлт нь ерөнхий төлөлт биш — тухайн сарын нэхэмжлэхийг шууд бууруулна.
-    // Өмнө нь FIFO-гаар хамгийн эртний (нэхэмжлэхгүй) авлагад зарцуулагдаж,
-    // 13,500₮ хөнгөлөлттэй нэхэмжлэх 140,000₮ хэвээр харагддаг байв.
-    // Нэхэмжлэх: nekhemjlekhId-аар, үгүй бол ижил сарын эхний нэхэмжлэх.
-    const khungulultEsekh = (r) =>
-      (r.dun || 0) < 0 &&
-      (r.source === "khungulult" || r.turul === "Хөнгөлөлт" || r.zardliinTurul === "Хөнгөлөлт");
-    const invoiceCredit = new Map();
-    const creditIds = new Set();
-    for (const r of allLedger) {
-      if (!khungulultEsekh(r)) continue;
-      let invId = r.nekhemjlekhId ? String(r.nekhemjlekhId) : "";
-      if (!invId || !invoicesForCredit.some((i) => String(i._id) === invId)) {
-        const sar = sarKey(r.ognoo);
-        let tokhirokh = sar && invoicesForCredit.find((i) => sarKey(i.ognoo) === sar);
-        // Нэхэмжлэлийн мөчлөг сарын дундаас эхэлдэг (жишээ нь 10-р сарын
-        // нэхэмжлэх 09.29-нд гардаг) бол хуанлийн сар таарахгүй — огноогоор
-        // хамгийн ойр (45 хоног дотор) нэхэмжлэхийг сонгоно.
-        if (!tokhirokh && r.ognoo) {
-          const t = new Date(r.ognoo).getTime();
-          let khamgiinOir = Infinity;
-          for (const i of invoicesForCredit) {
-            const zai = Math.abs(new Date(i.ognoo).getTime() - t);
-            if (zai < khamgiinOir) {
-              khamgiinOir = zai;
-              tokhirokh = i;
-            }
-          }
-          if (khamgiinOir > 45 * 24 * 3600 * 1000) tokhirokh = null;
-        }
-        invId = tokhirokh ? String(tokhirokh._id) : "";
-      }
-      if (!invId) continue; // тохирох нэхэмжлэхгүй бол ерөнхий төлөлтөөр
-      invoiceCredit.set(invId, (invoiceCredit.get(invId) || 0) + Math.abs(r.dun || 0));
-      creditIds.add(String(r._id));
-    }
+    const { invoiceCredit, creditIds } = khungulultNekhemjlekhendOnooyo(
+      allLedger,
+      invoicesForCredit,
+    );
 
     // 2. Calculate Total Paid (negative entries) — нэхэмжлэхэд оноосон хөнгөлөлтөөс бусад
     const totalPayments = allLedger
@@ -339,6 +357,7 @@ module.exports = {
   getBalance,
   getBalanceByInvoice,
   syncInvoicesStatus,
+  khungulultNekhemjlekhendOnooyo,
   getMongoClient,
   roundMoney,
 };
