@@ -39,6 +39,8 @@ const khungulultiinTuukhSchema = new Schema(
         davkhar: String,
         /** Нэг сарын суурь дүн (гэрээний сарын төлбөр) */
         sariinDun: Number,
+        /** Хувиар хөнгөлөх суурь — хөнгөлөх үеийн үлдэгдэл */
+        khuviinSuuri: Number,
         /** Энэ гэрээнд нийт хөнгөлсөн дүн */
         khungulsunDun: Number,
       },
