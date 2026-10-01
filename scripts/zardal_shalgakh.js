@@ -113,8 +113,27 @@ async function main() {
     .select({ gereeniiId: 1, ognoo: 1, niitTulbur: 1, tuluv: 1, medeelel: 1, nekhemjlekhiinDugaar: 1 })
     .lean();
 
+  // Ledger дээр тэр зардал АЛЬ нэхэмжлэхэд бичигдсэнийг индекслэнэ.
+  //
+  // ЧУХАЛ: нэхэмжлэхийн `medeelel.zardluud` нь зөвхөн АГШНЫ ХУУЛБАР, харин
+  // үлдэгдэл нь ledger-ээс бодогддог. Ledger дээр аль хэдийн бичигдсэн
+  // зардлыг дахин нэмбэл оршин суугч ХОЁР ДАХИН төлнө.
+  const ledgerMuruud = await GuilgeeAvlaguud(kholbolt)
+    .find({
+      baiguullagiinId: BAIGUULLAGIIN_ID,
+      zardliinNer: new RegExp(`^${ZARDLIIN_NER}$`, "i"),
+    })
+    .select({ nekhemjlekhId: 1, gereeniiId: 1 })
+    .lean();
+
+  const ledgerNekhemjlekhuud = new Set(
+    ledgerMuruud.map((m) => String(m.nekhemjlekhId || "")).filter(Boolean),
+  );
+
   const saruud = new Map();
   let niitDutuu = 0;
+  let zevkhunKhuulbarDutuu = 0;
+  let buremUgui = 0;
   let niitDun = 0;
   let tulsunDutuu = 0;
   let ekhniiUldegdelAlgasav = 0;
@@ -138,18 +157,30 @@ async function main() {
     const baina = zardluud.some((z) => tulkhuur(z.ner) === tulkhuur(ZARDLIIN_NER));
     if (baina) continue;
 
+    // Ledger дээр бий юу? Байвал мөнгө аль хэдийн тооцогдсон — зөвхөн
+    // нэхэмжлэхийн хуулбар дутуу, дүн өөрчлөх ШААРДЛАГАГҮЙ.
+    const ledgerTeiEsekh = ledgerNekhemjlekhuud.has(String(n._id));
+
     const sar = ubSar(n.ognoo);
-    if (!saruud.has(sar)) saruud.set(sar, { too: 0, dun: 0, tulsun: 0 });
+    if (!saruud.has(sar)) {
+      saruud.set(sar, { too: 0, dun: 0, tulsun: 0, khuulbar: 0 });
+    }
     const mur = saruud.get(sar);
     mur.too += 1;
-    mur.dun += g.tarif;
+    if (ledgerTeiEsekh) {
+      mur.khuulbar += 1;
+      zevkhunKhuulbarDutuu += 1;
+    } else {
+      mur.dun += g.tarif;
+      buremUgui += 1;
+      niitDun += g.tarif;
+    }
     if (String(n.tuluv || "").includes("Төлсөн")) {
       mur.tulsun += 1;
       tulsunDutuu += 1;
     }
 
     niitDutuu += 1;
-    niitDun += g.tarif;
   }
 
   // ── 3. Тайлан ────────────────────────────────────────────────────────
@@ -161,18 +192,25 @@ async function main() {
   console.log("");
 
   if (saruud.size > 0) {
-    console.log("  сар       дутуу   үүнээс төлсөн   дүн");
-    console.log("  --------  ------  -------------  ----------");
+    console.log("  сар       дутуу   ledger-тэй   огт алга   нэмэх дүн   төлсөн");
+    console.log("  --------  ------  -----------  ---------  ----------  ------");
     for (const sar of [...saruud.keys()].sort()) {
       const m = saruud.get(sar);
+      const ogtAlga = m.too - m.khuulbar;
       console.log(
-        `  ${sar.padEnd(8)}  ${String(m.too).padStart(6)}  ${String(m.tulsun).padStart(13)}  ${m.dun.toLocaleString("en-US").padStart(10)}`,
+        `  ${sar.padEnd(8)}  ${String(m.too).padStart(6)}  ${String(m.khuulbar).padStart(11)}  ` +
+          `${String(ogtAlga).padStart(9)}  ${m.dun.toLocaleString("en-US").padStart(10)}  ${String(m.tulsun).padStart(6)}`,
       );
     }
-    console.log("  --------  ------  -------------  ----------");
+    console.log("  --------  ------  -----------  ---------  ----------  ------");
     console.log(
-      `  НИЙТ      ${String(niitDutuu).padStart(6)}  ${String(tulsunDutuu).padStart(13)}  ${niitDun.toLocaleString("en-US").padStart(10)}`,
+      `  НИЙТ      ${String(niitDutuu).padStart(6)}  ${String(zevkhunKhuulbarDutuu).padStart(11)}  ` +
+        `${String(buremUgui).padStart(9)}  ${niitDun.toLocaleString("en-US").padStart(10)}  ${String(tulsunDutuu).padStart(6)}`,
     );
+    console.log("");
+    console.log("  ledger-тэй = мөнгө аль хэдийн тооцогдсон, зөвхөн нэхэмжлэхийн");
+    console.log("               хуулбар дутуу. Дүн нэмэх ШААРДЛАГАГҮЙ.");
+    console.log("  огт алга   = ledger дээр ч байхгүй. Зардал ба дүн хоёуланг нэмнэ.");
   }
 
   // ── 4. Ledger дээр тэр мөр байгаа эсэх ───────────────────────────────
