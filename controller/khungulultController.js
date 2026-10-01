@@ -197,13 +197,23 @@ async function murnuudBichye(
     const umnukhDun = Math.abs(Number(umnukh?.[0]?.dun) || 0);
     const sariinDunEnd = Math.min(dun, Math.max(0, suuri - umnukhDun));
     if (sariinDunEnd <= 0) continue;
-    const nekhemjlekh = await NekhemjlekhModel.findOne({
-      gereeniiId: String(geree._id),
-      ognoo: { $gte: kh.ekhlel, $lte: kh.tugsgul },
-    })
-      .sort({ ognoo: 1 })
-      .select({ ognoo: 1 })
-      .lean();
+    // Тухайн сарын нэхэмжлэх; мөчлөг сарын сүүлээс эхэлдэг бол (10-р сарын
+    // нэхэмжлэх 09.29) өмнөх сарын сүүлийн 15 хоногт гарсан нэхэмжлэхийг авна.
+    const nekhemjlekh =
+      (await NekhemjlekhModel.findOne({
+        gereeniiId: String(geree._id),
+        ognoo: { $gte: kh.ekhlel, $lte: kh.tugsgul },
+      })
+        .sort({ ognoo: 1 })
+        .select({ ognoo: 1 })
+        .lean()) ||
+      (await NekhemjlekhModel.findOne({
+        gereeniiId: String(geree._id),
+        ognoo: { $gte: new Date(kh.ekhlel.getTime() - 15 * 24 * 3600 * 1000), $lt: kh.ekhlel },
+      })
+        .sort({ ognoo: -1 })
+        .select({ ognoo: 1 })
+        .lean());
 
     await new GuilgeeModel({
       baiguullagiinId: String(tuukh.baiguullagiinId),
@@ -222,6 +232,8 @@ async function murnuudBichye(
         ? { khungulultKhuvi: Number(tuukh.khungulukhUtga) }
         : {}),
       khungulultiinTuukhId: String(tuukh._id),
+      // Тухайн сарын нэхэмжлэхийг шууд бууруулна (syncInvoicesStatus)
+      ...(nekhemjlekh?._id ? { nekhemjlekhId: String(nekhemjlekh._id) } : {}),
       source: "khungulult",
       guilgeeKhiisenAjiltniiNer: ajiltan.ner || "Систем",
       guilgeeKhiisenAjiltniiId: ajiltan.id || "",

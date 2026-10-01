@@ -148,9 +148,56 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
     // 1. Get all ledger entries for this contract
     const allLedger = await GuilgeeModel.find({ gereeniiId: gereeniiId }).lean();
 
-    // 2. Calculate Total Paid (negative entries)
+    // 4a. Invoices first — хөнгөлөлтийг нэхэмжлэхэд нь шууд оноохын тулд
+    const invoicesForCredit = await NekhemjlekhModel.find({ gereeniiId: gereeniiId })
+      .select({ ognoo: 1 })
+      .sort({ ognoo: 1 })
+      .lean();
+    const sarKey = (d) => {
+      const t = d ? new Date(d) : null;
+      return t && !isNaN(t) ? `${t.getFullYear()}-${t.getMonth() + 1}` : "";
+    };
+
+    // Хөнгөлөлт нь ерөнхий төлөлт биш — тухайн сарын нэхэмжлэхийг шууд бууруулна.
+    // Өмнө нь FIFO-гаар хамгийн эртний (нэхэмжлэхгүй) авлагад зарцуулагдаж,
+    // 13,500₮ хөнгөлөлттэй нэхэмжлэх 140,000₮ хэвээр харагддаг байв.
+    // Нэхэмжлэх: nekhemjlekhId-аар, үгүй бол ижил сарын эхний нэхэмжлэх.
+    const khungulultEsekh = (r) =>
+      (r.dun || 0) < 0 &&
+      (r.source === "khungulult" || r.turul === "Хөнгөлөлт" || r.zardliinTurul === "Хөнгөлөлт");
+    const invoiceCredit = new Map();
+    const creditIds = new Set();
+    for (const r of allLedger) {
+      if (!khungulultEsekh(r)) continue;
+      let invId = r.nekhemjlekhId ? String(r.nekhemjlekhId) : "";
+      if (!invId || !invoicesForCredit.some((i) => String(i._id) === invId)) {
+        const sar = sarKey(r.ognoo);
+        let tokhirokh = sar && invoicesForCredit.find((i) => sarKey(i.ognoo) === sar);
+        // Нэхэмжлэлийн мөчлөг сарын дундаас эхэлдэг (жишээ нь 10-р сарын
+        // нэхэмжлэх 09.29-нд гардаг) бол хуанлийн сар таарахгүй — огноогоор
+        // хамгийн ойр (45 хоног дотор) нэхэмжлэхийг сонгоно.
+        if (!tokhirokh && r.ognoo) {
+          const t = new Date(r.ognoo).getTime();
+          let khamgiinOir = Infinity;
+          for (const i of invoicesForCredit) {
+            const zai = Math.abs(new Date(i.ognoo).getTime() - t);
+            if (zai < khamgiinOir) {
+              khamgiinOir = zai;
+              tokhirokh = i;
+            }
+          }
+          if (khamgiinOir > 45 * 24 * 3600 * 1000) tokhirokh = null;
+        }
+        invId = tokhirokh ? String(tokhirokh._id) : "";
+      }
+      if (!invId) continue; // тохирох нэхэмжлэхгүй бол ерөнхий төлөлтөөр
+      invoiceCredit.set(invId, (invoiceCredit.get(invId) || 0) + Math.abs(r.dun || 0));
+      creditIds.add(String(r._id));
+    }
+
+    // 2. Calculate Total Paid (negative entries) — нэхэмжлэхэд оноосон хөнгөлөлтөөс бусад
     const totalPayments = allLedger
-      .filter((r) => (r.dun || 0) < 0)
+      .filter((r) => (r.dun || 0) < 0 && !creditIds.has(String(r._id)))
       .reduce((sum, r) => sum + Math.abs(r.dun || 0), 0);
 
     // 3. Calculate Total Charges NOT linked to any invoice (loose charges)
@@ -183,7 +230,8 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
         .reduce((sum, r) => sum + (r.dun || 0), 0);
 
       // Fallback to niitTulbur if ledger doesn't have explicit charges yet
-      const targetAmount = invCharge > 0 ? invCharge : (inv.niitTulbur || 0);
+      const chargeAmount = invCharge > 0 ? invCharge : (inv.niitTulbur || 0);
+      const targetAmount = Math.max(0, chargeAmount - (invoiceCredit.get(String(inv._id)) || 0));
 
       const isPaid = availableFunds + 0.1 >= targetAmount;
       const newStatus = isPaid ? "Төлсөн" : "Төлөөгүй";
