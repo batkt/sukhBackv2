@@ -294,9 +294,13 @@ exports.khungulultSuuriAvya = asyncHandler(async (req, res, next) => {
       if (!gid) return;
       uldegdel[gid] = (uldegdel[gid] || 0) + dun;
       const t = (tootsoo[gid] ||= { angilal: { "Орон сууц": 0, Агуулах: 0, Зогсоол: 0 }, yalgaagui: 0 });
-      // Авлага ба ангилалтай хөнгөлөлт нэрээрээ ангилагдана; төлөлт (нэргүй
-      // сөрөг) доор ангиллуудын үлдэгдлийн хувиар хуваарилагдана.
-      if (_id.eyreg || (_id.khungulult && /\((гараж|агуулах|орон сууц)\)/i.test(_id.n))) {
+      // Нэртэй авлага/төлөлт болон ангилалтай хөнгөлөлт нь ангилалдаа шууд сууна;
+      // нэргүй хуучин төлөлтийг доор ангиллын үлдэгдлийн хувиар хуваарилна.
+      if (
+        _id.eyreg ||
+        (_id.khungulult && /\((гараж|агуулах|орон сууц)\)/i.test(_id.n)) ||
+        /зогсоол|гараж|агуулах|орон сууц/i.test(String(_id.n || ""))
+      ) {
         t.angilal[angilalTaniya(_id.n)] += dun;
       } else {
         t.yalgaagui += dun;
