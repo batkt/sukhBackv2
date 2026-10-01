@@ -18,6 +18,8 @@ const {
 } = require("quickqpaypackvSukh");
 
 router.get("/qpayTulye/:baiguullagiinId/:barilgiinId/:dugaar", qpayTulye);
+// Ангиллаар (орон сууц / гараж / агуулах) төлсөн — ledger мөрийг ангиллаар нь тэмдэглэнэ
+router.get("/qpayTulye/:baiguullagiinId/:barilgiinId/:dugaar/:angilal/:gereeniiId?", qpayTulye);
 
 // BANK ACCOUNT ENDPOINT - MUST BE FIRST TO AVOID ROUTE CONFLICTS
 router.get("/qpayBankAccountsView", async (req, res, next) => {
@@ -1242,6 +1244,18 @@ router.post("/qpayGargaya", tokenShalgakh, tulukhErkhShalgaya, async (req, res, 
           req.body.barilgiinId.toString() +
           "/" +
           maxDugaar.toString();
+
+        // Апп-аас ангиллаар (СӨХ / гараж / агуулах) төлж байгаа бол callback-д
+        // ангиллын кодыг нэмнэ — вэбийн TransactionModal-ын avlagiinAngilal-тай ижил.
+        const ANGILLIIN_KOD = { "Орон сууц": "oron", "Зогсоол": "zogsool", "Гараж": "zogsool", "Агуулах": "aguulakh", oron: "oron", engiin: "oron", zogsool: "zogsool", aguulakh: "aguulakh" };
+        const angilliinKod = ANGILLIIN_KOD[String(req.body.angilal || "").trim()];
+        if (angilliinKod) {
+          callback_url += "/" + angilliinKod;
+          // QPay бичлэгт gereeniiId хадгалагдаагүй тохиолдолд ч гэрээнд бүртгэгдэнэ
+          if (req.body.gereeniiId && /^[a-f0-9]{24}$/i.test(String(req.body.gereeniiId))) {
+            callback_url += "/" + String(req.body.gereeniiId);
+          }
+        }
 
         req.body.zakhialgiinDugaar = maxDugaar.toString();
         if (req.body.dun > 0) {

@@ -14,6 +14,21 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
   console.log(`🔎 [calculateGereeCharges] Starting calculation for gereeId: ${geree._id?.toString() || geree._id}, gereeniiDugaar: ${geree.gereeniiDugaar}`);
   console.log(`🔎 [calculateGereeCharges] contractType: ${geree.turul}, options:`, JSON.stringify(options));
 
+  // Зогсоол/агуулахын гэрээнд орон сууцны ашиглалтын зардал нэхэмжлэхгүй
+  // (гэрээнд буруу хуулагдсан хуучин өгөгдлийг ч энд шүүнэ).
+  {
+    const { gereeniiTootTurul, zardluudShuuye, OR_SUUTS } = require("../utils/zardalAngilal");
+    const tootTurul = await gereeniiTootTurul(geree);
+    if (tootTurul !== OR_SUUTS) {
+      const ekh = geree.toObject ? geree.toObject() : geree;
+      const shuusen = zardluudShuuye(ekh.zardluud, tootTurul);
+      if (shuusen.length !== (ekh.zardluud || []).length) {
+        console.log(`🅿️ [calculateGereeCharges] ${tootTurul} гэрээ — ${(ekh.zardluud || []).length - shuusen.length} орон сууцны зардлыг хасав`);
+      }
+      geree = { ...ekh, zardluud: shuusen };
+    }
+  }
+
   const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(geree.baiguullagiinId).lean();
   const barilga = baiguullaga && baiguullaga.barilguud && baiguullaga.barilguud.find(b => String(b._id) === String(geree.barilgiinId));
 
@@ -167,6 +182,25 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     const existingAvlaguudNames = new Set(
       unbilledAvlaguud.map((a) => (a.tailbar || "").toLowerCase().trim())
     );
+    // Энэ сард ГАРААР (эзэмшигч холбох / «нэхэмжлэх илгээх») бичигдсэн
+    // зогсоол/агуулахын мөрүүд нэхэмжлэхэд аль хэдийн холбогдсон байдаг тул
+    // дээрх жагсаалтад ордоггүй — сарын нэхэмжлэх тэр гаражийг ДАХИН нэхэмжилдэг байв.
+    try {
+      const bd = options.billingDate ? new Date(options.billingDate) : new Date();
+      const sarEkh = new Date(bd.getFullYear(), bd.getMonth(), 1);
+      const sarTug = new Date(bd.getFullYear(), bd.getMonth() + 1, 0, 23, 59, 59, 999);
+      const garaarMur = await GuilgeeAvlaguudModel.find({
+        gereeniiId: String(geree._id),
+        dun: { $gt: 0 },
+        source: { $in: ["gar", "zogsool"] },
+        ognoo: { $gte: sarEkh, $lte: sarTug },
+      }).select({ tailbar: 1, zardliinNer: 1, toot: 1 }).lean();
+      garaarMur.forEach((a) => {
+        existingAvlaguudNames.add(
+          `${a.tailbar || ""} ${a.zardliinNer || ""} тоот ${a.toot || ""}`.toLowerCase().trim(),
+        );
+      });
+    } catch (_) {}
 
     // 1. Include any pre-existing unbilled guilgeeAvlaguud items
     for (const av of unbilledAvlaguud) {
@@ -216,6 +250,9 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
                 dun: gValue,
                 turul: "Авлага",
                 zardliinTurul: "Зогсоол",
+                // Гаражийн дугаар — өмнө нь орон сууцны тоот бичигддэг байсан тул
+                // вэбийн Гараж хүснэгт энэ мөрийг тухайн гаражид тааруулж чаддаггүй байв.
+                toot: String(p.toot),
               });
             }
           }
@@ -239,6 +276,7 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
                 dun: sValue,
                 turul: "Авлага",
                 zardliinTurul: "Агуулах",
+                toot: String(s.toot),
               });
             }
           }
@@ -344,9 +382,14 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
       return (z && z.isEkhniiUldegdel === true) || ner.includes("эхний үлдэгдэл");
     };
 
+    // Гараар бүртгэсэн авлага (гараж/агуулах, торгууль г.м.), хөнгөлөлт, төлөлт
+    // нь сарын нэхэмжлэх «үүссэн» гэсэн үг БИШ — өмнө нь эзэмшигч холбоход
+    // үүссэн гаражийн мөр тухайн сарын орон сууцны нэхэмжлэхийг бүхэлд нь хаадаг байв.
     const kholbootoiMurToo = await GuilgeeAvlaguudModel.countDocuments({
       nekhemjlekhId: invoice._id.toString(),
       ekhniiUldegdelEsekh: { $ne: true },
+      dun: { $gt: 0 },
+      source: { $nin: ["gar", "avlaga", "zogsool", "khungulult"] },
     });
     const zardluud = Array.isArray(invoice.medeelel?.zardluud)
       ? invoice.medeelel.zardluud
@@ -443,6 +486,7 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
           ...geree,
           _id: undefined,
           gereeniiId: geree._id.toString(),
+          ...(c.toot ? { toot: c.toot } : {}),
           nekhemjlekhId: invoice._id.toString(),
           dun: c.dun,
           zardliinNer: c.ner,

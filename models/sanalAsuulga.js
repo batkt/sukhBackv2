@@ -26,6 +26,8 @@ const asuultSchema = new Schema(
     songoltuud: [String],
     /** Заавал хариулах эсэх */
     zaavalEsekh: { type: Boolean, default: true },
+    /** Сонголттой асуултад «Бусад» сонголт + чөлөөт бичвэр (вэбийн «Бусад (текст хариулт)») */
+    busadTekst: { type: Boolean, default: false },
   },
   { _id: true },
 );

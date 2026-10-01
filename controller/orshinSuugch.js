@@ -152,16 +152,21 @@ async function validateCodeOnly(
   }).sort({ createdAt: -1 });
 
   if (!verificationCode) {
+    // Буруу оролдлогыг идэвхтэй код дээр тоолно (3 удаа буруу бол код хүчингүй)
+    const ur = await BatalgaajuulahCodeModel.buruuOroldlogoBurtgeye(utas, purpose);
     return {
       success: false,
-      message: "Хүчингүй код байна!",
+      message:
+        ur && ur.uldsen > 0
+          ? `Код буруу байна. ${ur.uldsen} удаа оролдох боломж үлдлээ.`
+          : "Код буруу эсвэл хугацаа нь дууссан байна. Шинэ код авна уу.",
     };
   }
 
   if (verificationCode.oroldlogo >= verificationCode.niitOroldokhErkh) {
     return {
       success: false,
-      message: "Хэт их оролдлого хийгдсэн байна!",
+      message: "Хэт олон удаа буруу оруулсан байна. Шинэ код авна уу.",
     };
   }
 
@@ -4034,7 +4039,18 @@ exports.orshinSuugchBatalgaajuulya = asyncHandler(async (req, res, next) => {
       });
     }
 
-    req.body.baiguullagiinId = orshinSuugch.baiguullagiinId;
+    // Зарим оршин суугчийн байгууллага зөвхөн toots[]-д бүртгэлтэй байдаг
+    req.body.baiguullagiinId =
+      orshinSuugch.baiguullagiinId ||
+      (orshinSuugch.toots || []).find((t) => t && t.baiguullagiinId)?.baiguullagiinId;
+
+    if (!req.body.baiguullagiinId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Таны бүртгэл байгууллагад холбогдоогүй байна. СӨХ-ийн ажилтантай холбогдож нууц үгээ сэргээлгэнэ үү.",
+      });
+    }
 
     await exports.dugaarBatalgaajuulya(req, res, next);
   } catch (error) {
@@ -4128,7 +4144,8 @@ exports.nuutsUgSergeeye = asyncHandler(async (req, res, next) => {
         step: 3,
         passwordChanged: passwordChanged,
         userId: activeUser._id.toString(),
-        userName: orshinSuugch.ner,
+        // Khariltsagch хэрэглэгчид orshinSuugch нь null байдаг
+        userName: activeUser.ner,
       },
     });
   } catch (error) {

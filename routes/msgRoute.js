@@ -37,7 +37,8 @@ function msgIlgeeye(
   res,
   kholbolt,
   baiguullagiinId,
-  barilgiinId
+  barilgiinId,
+  khaaltAlgasakh = false
 ) {
   try {
     const ENABLE_SMS = true; // Set to true to re-enable SMS service
@@ -50,7 +51,9 @@ function msgIlgeeye(
     }
 
     // Тухайн байгууллагын төлбөрийн SMS-ийг түр хаасан эсэх.
-    if (smsKhaasanUu(baiguullagiinId)) {
+    // Хаалт нь ТӨЛБӨРИЙН бөөн SMS-д л хамаарна — ажилтны гараар илгээх
+    // мэдэгдлийн SMS (вэбийн «Мессеж» суваг)-ийг хаахгүй.
+    if (!khaaltAlgasakh && smsKhaasanUu(baiguullagiinId)) {
       console.log(
         `⚠️ [msgIlgeeye] ${baiguullagiinId} байгууллагын төлбөрийн SMS түр хаалттай — ${jagsaalt?.length || 0} мессеж илгээгдсэнгүй.`
       );
@@ -114,8 +117,13 @@ function msgIlgeeye(
       if (response?.statusCode === 404 || (body && (body.reason || body.Result === "FAILED" || body.Result === "ERROR"))) {
         khariu.push({
           status: "ERROR",
+          to: jagsaalt[index].to,
           message: (body && (body.reason || body.Message || body.message || body.error)) || "SMS илгээх үед алдаа гарлаа",
         });
+        // Нэг дугаар алдаатай байсан ч бусдыг үргэлжлүүлэн илгээнэ
+        if (jagsaalt.length > index + 1) {
+          return msgIlgeeye(jagsaalt, key, dugaar, khariu, index + 1, next, req, res, kholbolt, baiguullagiinId, barilgiinId, khaaltAlgasakh);
+        }
         if (res && !res.headersSent) {
           res.send(khariu);
         }
@@ -152,7 +160,8 @@ function msgIlgeeye(
           res,
           kholbolt,
           baiguullagiinId,
-          barilgiinId
+          barilgiinId,
+          khaaltAlgasakh
         );
       } else {
         if (res && !res.headersSent) {
@@ -270,8 +279,11 @@ router.route("/msgIlgeeye").post(tokenShalgakh, async (req, res, next) => {
       });
     }
 
-    const BaiguullagaModel = Baiguullaga(kholbolt);
-    const baiguullaga = await BaiguullagaModel.findById(baiguullagiinId);
+    // Байгууллагын тохиргоо төв баазад байдаг — өмнө нь салбар баазаас хайж
+    // олдохгүй тул байгууллагын өөрийн SMS key/дугаар хэзээ ч хэрэглэгддэггүй байв.
+    const baiguullaga =
+      (await Baiguullaga(db.erunkhiiKholbolt).findById(baiguullagiinId).lean().catch(() => null)) ||
+      (await Baiguullaga(kholbolt).findById(baiguullagiinId).lean().catch(() => null));
 
     const msgIlgeekhKey =
       (baiguullaga?.tokhirgoo?.msgIlgeekhKey &&
@@ -289,9 +301,10 @@ router.route("/msgIlgeeye").post(tokenShalgakh, async (req, res, next) => {
     }
 
     const khariu = [];
+    const medegdliinSms = req.body?.turul === "medegdel";
 
     msgIlgeeye(
-      msgnuud,
+      msgnuud.map((m) => ({ ...m, to: String(m.to || "").trim() })).filter((m) => m.to),
       msgIlgeekhKey,
       msgIlgeekhDugaar,
       khariu,
@@ -301,7 +314,8 @@ router.route("/msgIlgeeye").post(tokenShalgakh, async (req, res, next) => {
       res,
       kholbolt,
       baiguullagiinId,
-      barilgiinId
+      barilgiinId,
+      medegdliinSms
     );
   } catch (error) {
     next(error);

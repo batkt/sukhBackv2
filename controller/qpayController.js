@@ -148,12 +148,19 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     return res.status(400).send("Invalid amount");
   }
 
+  // Ангиллаар төлсөн бол ledger мөрийг ангиллаар нь тэмдэглэнэ (вэбийн
+  // TransactionModal-ын «Орон сууц / Гараж / Агуулах» төлөлттэй ижил zardliinNer).
+  const ANGILAL = { oron: "Орон сууц", zogsool: "Зогсоол", aguulakh: "Агуулах" };
+  const angilliinNer = ANGILAL[String(req.params.angilal || "")];
+  const angilliinShoshgo = angilliinNer === "Зогсоол" ? "Гараж" : angilliinNer;
+
   // Record payment in Ledger (Authoritative)
   const ledgerResult = await guilgeeService.recordPayment(kholbolt, {
     baiguullagiinId,
-    gereeniiId: qpayBarimt.gereeniiId,
+    gereeniiId: qpayBarimt.gereeniiId || req.params.gereeniiId,
     dun: amount,
-    tailbar: `QPay төлөлт`,
+    tailbar: angilliinShoshgo ? `QPay төлөлт (${angilliinShoshgo})` : `QPay төлөлт`,
+    ...(angilliinNer ? { zardliinNer: angilliinNer } : {}),
     source: "nekhemjlekh",
     bankniiGuilgeeId: qpayBarimt.payment_id || dugaar,
     ognoo: new Date(),

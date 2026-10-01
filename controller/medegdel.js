@@ -531,6 +531,12 @@ exports.medegdelIlgeeye = asyncHandler(async (req, res, next) => {
     let pushSentCount = 0;
     let pushFailedCount = 0;
     const pushFailedList = [];
+    /** Апп доторх мэдэгдлийн жагсаалтад хадгалагдсан (хүргэгдсэн) тоо */
+    let appDotorKhurgesen = 0;
+    /** Утсанд push очоогүй ч апп дотор харагдах оршин суугчид (анхааруулга) */
+    const pushOchoogui = [];
+    /** Push-уудыг зэрэг илгээж, хариуг нь цикл дууссаны дараа хүлээнэ */
+    const pushAjilluud = [];
 
     for (const id of orshinSuugchIds) {
       const medegdel = new Medegdel(kholbolt)();
@@ -575,33 +581,72 @@ exports.medegdelIlgeeye = asyncHandler(async (req, res, next) => {
         io.emit(adminEvent, { type: "medegdelNew", data: medegdelObj });
       }
 
-      // Add PUSH notification for residents
+      // Мэдэгдэл нь оршин суугчийн апп доторх жагсаалтад хадгалагдсан тул
+      // ХҮРГЭГДСЭН гэж тооцно. Утасны push нь нэмэлт суваг — токенгүй бол
+      // «апп холбогдоогүй» биш, зөвхөн push очоогүй (апп дотор харагдана).
+      appDotorKhurgesen++;
+      const medegdelId = String(medegdel._id);
+      pushAjilluud.push((async () => {
       try {
-        const resident = await OrshinSuugch(db.erunkhiiKholbolt).findById(id).select("firebaseToken ner ovog toot");
-        if (resident && resident.firebaseToken) {
-          orshinSuugchidSonorduulgaIlgeeye(resident.firebaseToken, {
-            title: medegdelObj.title || "Таньд мэдэгдэл ирлээ!",
-            body: medegdelObj.message || "Шинэ мэдэгдэл",
-            type: "medegdel",
-            data: { id: String(medegdel._id) }
-          });
-          pushSentCount++;
-        } else {
+        const resident = await OrshinSuugch(db.erunkhiiKholbolt)
+          .findById(id)
+          .select("firebaseToken ner ovog toot");
+        const ner = resident
+          ? `${resident.ovog || ""} ${resident.ner || ""}`.trim() || "Оршин суугч"
+          : "Оршин суугч";
+        if (!resident) {
           pushFailedCount++;
-          if (resident) {
-            pushFailedList.push({
+          pushFailedList.push({ id, ner, toot: "", shaltgaan: "Оршин суугч олдсонгүй" });
+        } else if (!resident.firebaseToken) {
+          pushOchoogui.push({
+            id,
+            ner,
+            toot: resident.toot || "",
+            shaltgaan:
+              "Апп дотор харагдана — утсанд push очсонгүй (апп-аа шинэчлээгүй эсвэл мэдэгдэл зөвшөөрөөгүй)",
+          });
+        } else {
+          // Push-ийн бодит үр дүнг хүлээж авна (өмнө нь илгээгээгүй ч «амжилттай» гэж тоолдог байв)
+          const aldaa = await new Promise((resolve) => {
+            orshinSuugchidSonorduulgaIlgeeye(
+              resident.firebaseToken,
+              {
+                title: medegdelObj.title || "Таньд мэдэгдэл ирлээ!",
+                body: medegdelObj.message || "Шинэ мэдэгдэл",
+                type: "medegdel",
+                data: { id: medegdelId },
+              },
+              (khariu, err) => resolve(khariu ? null : err || new Error("push")),
+            ).catch((err) => resolve(err));
+          });
+          if (!aldaa) {
+            pushSentCount++;
+          } else {
+            const khuchingui =
+              aldaa.code === "messaging/registration-token-not-registered" ||
+              aldaa.code === "messaging/invalid-registration-token";
+            if (khuchingui) {
+              // Хүчингүй токеныг цэвэрлэнэ — апп дахин нээгдэхэд шинээр бүртгэгдэнэ
+              await OrshinSuugch(db.erunkhiiKholbolt)
+                .updateOne({ _id: id }, { $unset: { firebaseToken: "" } })
+                .catch(() => {});
+            }
+            pushOchoogui.push({
               id,
-              ner: `${resident.ovog || ""} ${resident.ner || ""}`.trim() || "Оршин суугч",
+              ner,
               toot: resident.toot || "",
-              shaltgaan: "Апп холбогдоогүй",
+              shaltgaan: khuchingui
+                ? "Апп дотор харагдана — утас дээрх апп устгагдсан эсвэл хуучирсан"
+                : "Апп дотор харагдана — push илгээхэд алдаа гарлаа",
             });
           }
         }
       } catch (pushErr) {
         console.error("Resident push error:", pushErr.message);
-        pushFailedCount++;
       }
+      })());
     }
+    await Promise.all(pushAjilluud);
 
     // If it's a complaint or suggestion (gomdol/sanal), notify admins via PUSH too
     if (turul === "gomdol" || turul === "sanal" || turul === "санал" || turul === "гомдол") {
@@ -633,7 +678,10 @@ exports.medegdelIlgeeye = asyncHandler(async (req, res, next) => {
       pushSentCount,
       pushFailedCount,
       pushFailedList,
-      ilgeesenCount: pushSentCount > 0 ? pushSentCount : medegdelList.length,
+      // Апп доторх жагсаалтад хүргэгдсэн / утсанд push очоогүй (анхааруулга)
+      appDotorKhurgesen,
+      pushOchoogui,
+      ilgeesenCount: appDotorKhurgesen,
       ilgeegeeguiCount: pushFailedCount,
       message: "Мэдэгдэл амжилттай илгээгдлээ",
     });

@@ -141,6 +141,8 @@ process.env.UV_THREADPOOL_SIZE = 20;
     // 4. Final settings
     process.env.TZ = "Asia/Ulaanbaatar";
     app.set("socketio", io);
+    // Гүйлгээ өөрчлөгдөхөд оршин суугчийн апп руу бодит цагт мэдэгдэнэ
+    require("./utils/realtimeTulbur").setIo(io);
 
     // --- GATE WORKER SOCKET REGISTRATION ---
     io.on("connection", (socket) => {

@@ -12,7 +12,7 @@ const express = require("express");
 const crypto = require("crypto");
 const router = express.Router();
 const { tokenShalgakh } = require("zevbackv2");
-const { SISTEMIIN_MEDLEG } = require("../utils/aiTuslakhMedleg");
+const { SISTEMIIN_MEDLEG, ORSHIN_SUUGCHIIN_MEDLEG } = require("../utils/aiTuslakhMedleg");
 const {
   TODORKHOILOLT,
   khamrakhKhureeBeldekh,
@@ -87,12 +87,22 @@ router.post("/aiTuslakh", tokenShalgakh, async (req, res) => {
     .slice(0, 120)
     .trim();
 
+  // Оршин суугчийн апп: тусдаа заавар, ажилтны өгөгдлийн хэрэгсэлгүй.
+  const orshinSuugchEsekh = req.body?.mode === "orshinSuugch";
+
   // Өгөгдлийн хэрэгслийн хамрах хүрээ. Олдохгүй бол хэрэгсэлгүй ажиллана.
-  const kh = await khamrakhKhureeBeldekh(req).catch((err) => {
-    console.error("AI туслах хүрээ тодорхойлоход алдаа:", err.message);
-    return null;
-  });
-  const systemText = [
+  const kh = orshinSuugchEsekh
+    ? null
+    : await khamrakhKhureeBeldekh(req).catch((err) => {
+        console.error("AI туслах хүрээ тодорхойлоход алдаа:", err.message);
+        return null;
+      });
+  const systemText = (orshinSuugchEsekh
+    ? [
+        ORSHIN_SUUGCHIIN_MEDLEG,
+        khuudas ? `Хэрэглэгч аппын «${khuudas}» хэсгээс асууж байна.` : "",
+      ]
+    : [
     SISTEMIIN_MEDLEG,
     khuudas
       ? `Хэрэглэгч одоо «${khuudas}» хуудсан дээр байна. Асуулт тодорхойгүй бол энэ хуудастай холбож хариул.`
@@ -100,7 +110,7 @@ router.post("/aiTuslakh", tokenShalgakh, async (req, res) => {
     kh
       ? khureeniiTailbar(kh)
       : "Өгөгдлийн хэрэгсэл энэ удаа ашиглах боломжгүй — бодит тоо асуувал аль хуудаснаас харахыг заа.",
-  ]
+  ])
     .filter(Boolean)
     .join("\n\n");
 

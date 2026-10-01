@@ -315,6 +315,25 @@ exports.khungulultSuuriAvya = asyncHandler(async (req, res, next) => {
         const khuvi = niit > 0 ? eyreg[i] / niit : k === "Орон сууц" ? 1 : 0;
         ur[k] = Math.round((t.angilal[k] + t.yalgaagui * khuvi) * 100) / 100;
       });
+      // Нэг ангилалд илүү төлсөн (сөрөг) дүнг бусад ангиллын өрөөс хасна —
+      // эс бөгөөс «Орон сууц үлдэгдэл 282,500» гэх мэт нийт өр (137,500)-өөс
+      // их дүн харагддаг байв. Ангиллын нийлбэр нь нийт үлдэгдэлтэй тэнцүү хэвээр.
+      let iluu = ANGILLUUD.reduce((a, k) => a + (ur[k] < 0 ? -ur[k] : 0), 0);
+      if (iluu > 0) {
+        ANGILLUUD.forEach((k) => {
+          if (ur[k] < 0) ur[k] = 0;
+        });
+        const eyregNiit = ANGILLUUD.reduce((a, k) => a + ur[k], 0);
+        if (eyregNiit > 0) {
+          const khasakh = Math.min(iluu, eyregNiit);
+          ANGILLUUD.forEach((k) => {
+            ur[k] = Math.round((ur[k] - (khasakh * ur[k]) / eyregNiit) * 100) / 100;
+          });
+          iluu -= khasakh;
+        }
+        // Бүх ангилал төлөгдөөд илүү үлдвэл — орон сууцанд илүү төлөлт (сөрөг) болгож үзүүлнэ
+        if (iluu > 0) ur["Орон сууц"] = Math.round((ur["Орон сууц"] - iluu) * 100) / 100;
+      }
       uldegdelAngilal[gid] = ur;
       uldegdel[gid] = Math.round(uldegdel[gid] * 100) / 100;
     });

@@ -103,6 +103,7 @@ async function handleZardluudUpdate(doc) {
 
     const { db } = require("zevbackv2");
     const Geree = require("./geree");
+    const { gereeniiTootTurul, zardluudShuuye } = require("../utils/zardalAngilal");
 
     const kholbolt = db.kholboltuud.find(
       (a) => String(a.baiguullagiinId) === String(doc.baiguullagiinId)
@@ -135,6 +136,13 @@ async function handleZardluudUpdate(doc) {
 
       // Remove any pre-existing entry with matching name/turul
       geree.zardluud = geree.zardluud.filter((z) => !isSameZardal(z, doc));
+
+      // Зогсоол/агуулахын гэрээнд өөр ангиллын (орон сууцны) зардал нэмэхгүй
+      const tootTurul = await gereeniiTootTurul(geree);
+      if (zardluudShuuye([doc], tootTurul).length === 0) {
+        await geree.save();
+        continue;
+      }
 
       // Construct fresh zardal entry
       const newZardal = {

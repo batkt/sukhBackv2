@@ -312,9 +312,16 @@ router.post("/zardalTseverlekhiya", tokenShalgakh, async (req, res, next) => {
     const gereenuud = await Geree(tukhainBaaziinKholbolt).find(gereeQuery);
     let updatedCount = 0;
 
+    const { gereeniiTootTurul, zardluudShuuye } = require("../utils/zardalAngilal");
     for (const geree of gereenuud) {
-      geree.zardluud = masterZardluud;
-      geree.niitTulbur = masterTotal;
+      // Зогсоол/агуулахын гэрээнд зөвхөн өөрийн ангиллын зардал
+      const tootTurul = await gereeniiTootTurul(geree);
+      const tokhirokh = zardluudShuuye(masterZardluud, tootTurul);
+      geree.zardluud = tokhirokh;
+      geree.niitTulbur =
+        tokhirokh === masterZardluud
+          ? masterTotal
+          : tokhirokh.reduce((sum, z) => sum + (z.tariff || 0), 0);
       await geree.save();
       updatedCount++;
     }

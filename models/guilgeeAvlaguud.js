@@ -224,6 +224,42 @@ guilgeeAvlaguudSchema.post("deleteOne", { document: true, query: false }, async 
   }
 });
 
+// ── Бодит цагийн мэдэгдэл: гүйлгээ өөрчлөгдөхөд оршин суугчийн апп шинэчлэгдэнэ ──
+function tulburMedegdeye(baiguullagiinId, gereeniiId) {
+  try {
+    require("../utils/realtimeTulbur").tulburShinechlegdlee(baiguullagiinId, gereeniiId);
+  } catch (_) {}
+}
+function filterMedegdeye(query) {
+  const f = (query && query.getFilter && query.getFilter()) || {};
+  const baig = f.baiguullagiinId;
+  const g = f.gereeniiId;
+  if (!baig || !g || typeof baig === "object") return;
+  const idnuud = typeof g === "object" ? (Array.isArray(g.$in) ? g.$in : []) : [g];
+  idnuud.forEach((id) => tulburMedegdeye(baig, id));
+}
+guilgeeAvlaguudSchema.post("save", function (doc) {
+  tulburMedegdeye(doc?.baiguullagiinId, doc?.gereeniiId);
+});
+guilgeeAvlaguudSchema.post("insertMany", function (docs) {
+  (docs || []).forEach((d) => tulburMedegdeye(d?.baiguullagiinId, d?.gereeniiId));
+});
+guilgeeAvlaguudSchema.post(["findOneAndUpdate", "findOneAndDelete"], function (doc) {
+  if (doc) tulburMedegdeye(doc.baiguullagiinId, doc.gereeniiId);
+  else filterMedegdeye(this);
+});
+guilgeeAvlaguudSchema.post(
+  ["updateOne", "updateMany", "deleteOne", "deleteMany"],
+  { query: true, document: false },
+  function () {
+    filterMedegdeye(this);
+  },
+);
+guilgeeAvlaguudSchema.post("deleteOne", { document: true, query: false }, function (doc) {
+  const d = doc || this;
+  tulburMedegdeye(d?.baiguullagiinId, d?.gereeniiId);
+});
+
 module.exports = function a(conn) {
 
   if (!conn || !conn.kholbolt)

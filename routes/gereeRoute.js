@@ -330,15 +330,26 @@ router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
         cronDay = cronSchedule.nekhemjlekhUusgekhOgnoo;
       }
 
+      // СОНГОСОН огнооны ХУАНЛИЙН сараар шалгана. Өмнө нь нэхэмжлэхийн
+      // мөчлөгөөр (cronDay-аас) шалгадаг байсан тул өмнөх сарын сүүлийн
+      // өдрүүдийг сонгоход энэ сарын мөчлөгт орж, «энэ сард бүртгэгдсэн»
+      // гэж буруу татгалздаг байв.
+      void cronDay;
+      void calculateBillingCycleBounds;
       const targetDate = req.body.ognoo ? new Date(req.body.ognoo) : new Date();
-      const { startOfCycle, endOfCycle } = calculateBillingCycleBounds(cronDay, targetDate);
-      const typeRegex = isGarage ? /зогсоол/i : /агуулах/i;
+      const startOfCycle = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1, 0, 0, 0, 0);
+      const endOfCycle = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59, 999);
+      const typeRegex = isGarage ? /зогсоол|гараж/i : /агуулах/i;
       const toot = req.body.toot ? String(req.body.toot) : undefined;
 
+      // Зөвхөн ГАРААР бүртгэсэн зогсоол/агуулахын авлага — сарын нэхэмжлэхийн
+      // мөр (source: nekhemjlekh/geree), төлөлт (сөрөг дүн)-ийг давхардал гэж үзэхгүй.
       const existing = await GuilgeeAvlaguud(tukhainBaaziinKholbolt).findOne({
         gereeniiId,
         ...(toot ? { toot } : {}),
-        tailbar: typeRegex,
+        dun: { $gt: 0 },
+        source: { $nin: ["nekhemjlekh", "geree"] },
+        $or: [{ tailbar: typeRegex }, { zardliinNer: typeRegex }],
         ognoo: { $gte: startOfCycle, $lte: endOfCycle },
       }).lean();
 
@@ -346,7 +357,8 @@ router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
         const typeLabel = isGarage ? "Зогсоол" : "Агуулах";
         return res.status(409).json({
           success: false,
-          error: `Энэ сард ${typeLabel} авлага аль хэдийн бүртгэгдсэн байна.`,
+          error: `${targetDate.getFullYear()} оны ${targetDate.getMonth() + 1}-р сард ${typeLabel} авлага аль хэдийн бүртгэгдсэн байна.`,
+          message: `${targetDate.getFullYear()} оны ${targetDate.getMonth() + 1}-р сард ${typeLabel} авлага аль хэдийн бүртгэгдсэн байна.`,
         });
       }
     } catch (err) {
@@ -622,6 +634,44 @@ router.put(
 // Хөнгөлөлт — бөөнөөр бүртгэх, устгах
 router.route("/khungulultKhadgalya").post(tokenShalgakh, khungulultKhadgalya);
 router.route("/khungulultSuuriAvya").post(tokenShalgakh, khungulultSuuriAvya);
+
+// ── Гараж / агуулахын нэхэмжлэх ──
+// Эзэмшигч холбох болон «Нэхэмжлэх илгээх» товч хоёулаа үүнийг дуудна — сард нэг удаа.
+router.post("/zogsoolAguulakhAvlagaUusgey", tokenShalgakh, async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const { baiguullagiinId } = req.body || {};
+    const kholbolt = db.kholboltuud.find((k) => String(k.baiguullagiinId) === String(baiguullagiinId));
+    if (!kholbolt) return res.status(404).json({ success: false, message: "Холболтын мэдээлэл олдсонгүй" });
+    const tok = req.body?.nevtersenAjiltniiToken || {};
+    const ur = await require("../utils/zogsoolAvlaga").zogsoolAvlagaUusgey(kholbolt, {
+      ...req.body,
+      ajiltanId: tok.id,
+      ajiltanNer: tok.ner,
+    });
+    return res.status(ur.success ? 200 : 400).json(ur);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Гараж/агуулах бүрийн нэхэмжилсэн дүн, төлсөн, үлдэгдэл, төлөв
+router.post("/zogsoolAguulakhTuluv", tokenShalgakh, async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const { baiguullagiinId, barilgiinId, turul } = req.body || {};
+    const kholbolt = db.kholboltuud.find((k) => String(k.baiguullagiinId) === String(baiguullagiinId));
+    if (!kholbolt) return res.status(404).json({ success: false, message: "Холболтын мэдээлэл олдсонгүй" });
+    const jagsaalt = await require("../utils/zogsoolAvlaga").zogsoolTuluvAvya(kholbolt, {
+      baiguullagiinId,
+      barilgiinId,
+      turul,
+    });
+    return res.json({ success: true, jagsaalt });
+  } catch (err) {
+    next(err);
+  }
+});
 router.route("/khungulultUstgaya").post(tokenShalgakh, khungulultUstgaya);
 router.route("/khungulultZasvarlaya").post(tokenShalgakh, khungulultZasvarlaya);
 router

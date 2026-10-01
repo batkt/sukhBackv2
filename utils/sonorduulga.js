@@ -96,10 +96,27 @@ async function sonorduulgaTaraaya({
     const shuult = {
       firebaseToken: { $exists: true, $nin: [null, ""] },
     };
-    if (baiguullagiinId) shuult.baiguullagiinId = String(baiguullagiinId);
-    if (Array.isArray(barilguud) && barilguud.length > 0) {
-      shuult.barilgiinId = { $in: barilguud.map(String) };
+    // Байгууллага/барилга нь зөвхөн toots[]-д бүртгэлтэй хэрэглэгчдийг ч хамруулна
+    // (өмнө нь тэд нийтлэл, санал асуулгын мэдэгдэл авдаггүй байв).
+    const nukhtsluud = [];
+    if (baiguullagiinId) {
+      nukhtsluud.push({
+        $or: [
+          { baiguullagiinId: String(baiguullagiinId) },
+          { "toots.baiguullagiinId": String(baiguullagiinId) },
+        ],
+      });
     }
+    if (Array.isArray(barilguud) && barilguud.length > 0) {
+      const ids = barilguud.map(String);
+      nukhtsluud.push({
+        $or: [
+          { barilgiinId: { $in: ids } },
+          { "toots.barilgiinId": { $in: ids } },
+        ],
+      });
+    }
+    if (nukhtsluud.length) shuult.$and = nukhtsluud;
 
     const modeluud = [OrshinSuugch];
     if (khariltsagchidCh) modeluud.push(Khariltsagch);

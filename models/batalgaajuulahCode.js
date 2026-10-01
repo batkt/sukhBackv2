@@ -107,6 +107,7 @@ batalgaajuulkhCodeSchema.statics.verifyCode = async function (
   }).sort({ createdAt: -1 });
 
   if (!verificationCode) {
+    await this.buruuOroldlogoBurtgeye(utas, purpose);
     return { success: false, message: "Хүчингүй код байна!" };
   }
 
@@ -119,6 +120,33 @@ batalgaajuulkhCodeSchema.statics.verifyCode = async function (
   await verificationCode.save();
 
   return { success: true, message: "Амжилттай баталгаажлаа" };
+};
+
+/**
+ * Буруу код оруулсан оролдлогыг тухайн утас/зорилгын ИДЭВХТЭЙ (сүүлийн) код
+ * дээр бүртгэнэ. Хязгаар хэтэрвэл кодыг хүчингүй болгоно — 4 оронтой кодыг
+ * 10 минутын дотор таах (brute force) боломжгүй болгоно.
+ */
+batalgaajuulkhCodeSchema.statics.buruuOroldlogoBurtgeye = async function (
+  utas,
+  purpose = "password_reset"
+) {
+  const idevkhtei = await this.findOne({
+    utas,
+    purpose,
+    khereglesenEsekh: false,
+    expiresAt: { $gt: new Date() },
+  }).sort({ createdAt: -1 });
+  if (!idevkhtei) return null;
+  idevkhtei.oroldlogo = (idevkhtei.oroldlogo || 0) + 1;
+  if (idevkhtei.oroldlogo >= (idevkhtei.niitOroldokhErkh || 3)) {
+    idevkhtei.khereglesenEsekh = true;
+    idevkhtei.khereglesenOgnoo = new Date();
+  }
+  await idevkhtei.save();
+  return {
+    uldsen: Math.max(0, (idevkhtei.niitOroldokhErkh || 3) - idevkhtei.oroldlogo),
+  };
 };
 
 batalgaajuulkhCodeSchema.statics.incrementAttempts = async function (

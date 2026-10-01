@@ -381,6 +381,12 @@ exports.createGeree = asyncHandler(async (req, res) => {
         })),
   };
 
+  // Зогсоол/агуулахын гэрээнд орон сууцны ашиглалтын зардал хуулахгүй
+  if (req.body.tootTurul) {
+    const { zardluudShuuye } = require("../utils/zardalAngilal");
+    contractData.zardluud = zardluudShuuye(contractData.zardluud, req.body.tootTurul);
+  }
+
   const geree = new GereeModel(contractData);
   await geree.save();
 
