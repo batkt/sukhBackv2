@@ -621,8 +621,41 @@ async function automataarNekhemjlekhUusgekh() {
   }
 }
 
+// ── Cron-ийг АЛЬ процесс гүйцэтгэх ───────────────────────────────────────
+//
+// Өмнө зөвхөн `NODE_APP_INSTANCE` -ээр хамгаалагдсан байв. Тэр нь PM2-ийн
+// CLUSTER горимд нэг инстанс л гүйцэтгэхийг хангадаг — гэхдээ хоёр ТУСДАА
+// процесс (`sukhBackv2` ба `devSukhBack`) хоёулаа `fork` горимд ажилладаг
+// тул тэр хувьсагч хоёуланд нь `undefined`, иймээс ХОЁУЛАА cron бүртгэдэг.
+//
+// Хоёулаа ЯГ ИЖИЛ өгөгдлийн сан дээр ажилладаг нь батлагдсан
+// (`mongodb://…@127.0.0.1:27017/amarSukh`). Үр дагавар:
+//
+//   • `*/1 * * * *` — банкны хуулга + `tulultTaniya` минут тутам ХОЁР
+//     процессоор гүйж, нэг гүйлгээг давхар тааруулах эрсдэлтэй
+//   • `01 01 * * *` — нэхэмжлэхийг аль нь хурдан бол үүсгэж, нөгөө нь
+//     давхардлын шалгалтад тулна. Тэр салаа SMS ЯВУУЛДАГГҮЙ тул
+//     «хагас нь илгээгддэггүй» болж байв
+//   • `20 7 * * *` — зогсоолын архивлалт: нэг нь устгахад нөгөөгийн
+//     хуулалт дутуу үлдэнэ
+//
+// `CRON_UNTRAA=1` тавьсан процесс cron бүртгэхгүй. Унтраалга нь ОПТ-АУТ
+// хэлбэртэй — тугийг тавих мартагдвал production-ийн cron санамсаргүй
+// зогсохгүй, зөвхөн dev дээр нэмэх шаардлагатай.
+const cronUntraaltai = ["1", "true", "yes"].includes(
+  String(process.env.CRON_UNTRAA || "").trim().toLowerCase(),
+);
+if (cronUntraaltai) {
+  console.log(
+    "⏸️  [CRON] CRON_UNTRAA тавигдсан — энэ процесс cron бүртгэхгүй",
+  );
+}
+
 // Only the first instance in PM2 (instance 0) or the standalone process handles crons
-if (!process.env.NODE_APP_INSTANCE || process.env.NODE_APP_INSTANCE === "0") {
+if (
+  !cronUntraaltai &&
+  (!process.env.NODE_APP_INSTANCE || process.env.NODE_APP_INSTANCE === "0")
+) {
   // nehemjleh ilgeeh tsag
   const cronJob = cron.schedule(
     "01 01 * * *",
