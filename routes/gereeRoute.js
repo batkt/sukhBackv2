@@ -672,6 +672,23 @@ router.post("/zogsoolAguulakhTuluv", tokenShalgakh, async (req, res, next) => {
     next(err);
   }
 });
+// Сонгосон нэхэмжлэхүүдийн мөр ба ангиллын (Орон сууц / Гараж / Агуулах)
+// үлдэгдэл — апп-ын төлбөрийн цонх
+router.post("/nekhemjlekhZadargaa", tokenShalgakh, async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const { baiguullagiinId, gereeniiId, nekhemjlekhIdnuud } = req.body || {};
+    const kholbolt = db.kholboltuud.find((k) => String(k.baiguullagiinId) === String(baiguullagiinId));
+    if (!kholbolt) return res.status(404).json({ success: false, message: "Холболтын мэдээлэл олдсонгүй" });
+    const ur = await require("../utils/nekhemjlekhZadargaa").nekhemjlekhZadargaaAvya(kholbolt, {
+      gereeniiId,
+      nekhemjlekhIdnuud,
+    });
+    return res.json({ success: true, ...ur });
+  } catch (err) {
+    next(err);
+  }
+});
 router.route("/khungulultUstgaya").post(tokenShalgakh, khungulultUstgaya);
 router.route("/khungulultZasvarlaya").post(tokenShalgakh, khungulultZasvarlaya);
 router
