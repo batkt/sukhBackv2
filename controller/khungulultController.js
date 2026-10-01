@@ -147,14 +147,27 @@ function sariinKhungulult(khungulukhTurul, utga, sariinDun) {
  */
 async function murnuudBichye(
   kholbolt,
-  { geree, saruud, sariinDun, tuukh, ajiltan, barilgiinId },
+  { geree, saruud, sariinDun, khuviinSuuri, tuukh, ajiltan, barilgiinId },
 ) {
   const GuilgeeModel = GuilgeeAvlaguud(kholbolt);
   const NekhemjlekhModel = require("../models/nekhemjlekhiinTuukh")(kholbolt);
-  // Сарын төлбөрөөс хэтрүүлж хөнгөлөхгүй — дүнгээр хөнгөлөхөд ч суурь нь дээд хязгаар.
-  const suuri = Math.max(0, Math.round(Number(sariinDun) || 0));
+  // Хувиар хөнгөлөхөд суурь нь ҮЛДЭГДЭЛ (дүнгээр хөнгөлөхтэй ижил — үлдэгдлээс
+  // хасагдана). Хуучин бичлэгт khuviinSuuri байхгүй бол сарын төлбөрөөр.
+  const khuviinSuuriDun =
+    khuviinSuuri != null && Number.isFinite(Number(khuviinSuuri))
+      ? Number(khuviinSuuri)
+      : Number(sariinDun) || 0;
+  // Дээд хязгаар: сарын төлбөр, тохируулаагүй бол үлдэгдэл.
+  const suuri = Math.max(
+    0,
+    Math.round(Number(sariinDun) > 0 ? Number(sariinDun) : khuviinSuuriDun),
+  );
   const dun = Math.min(
-    sariinKhungulult(tuukh.khungulukhTurul, tuukh.khungulukhUtga, sariinDun),
+    sariinKhungulult(
+      tuukh.khungulukhTurul,
+      tuukh.khungulukhUtga,
+      tuukh.khungulukhTurul === "khuvi" ? khuviinSuuriDun : sariinDun,
+    ),
     suuri,
   );
   if (dun <= 0) return 0;
@@ -245,6 +258,84 @@ async function erkhShalgaya(req, res) {
 }
 
 /**
+ * Гэрээ бүрийн бодит үлдэгдэл ба ангилал (Орон сууц / Агуулах / Зогсоол)
+ * бүрийн үлдэгдэл — авлагын дэвтрээс. Хувиар хөнгөлөх суурь болно.
+ */
+async function uldegdelBodyo(kholbolt, { baiguullagiinId, barilgiinId, gereeniiIdnuud }) {
+  const uldMatch = { baiguullagiinId: String(baiguullagiinId) };
+  if (barilgiinId) uldMatch.barilgiinId = String(barilgiinId);
+  if (Array.isArray(gereeniiIdnuud) && gereeniiIdnuud.length)
+    uldMatch.gereeniiId = { $in: gereeniiIdnuud.map(String) };
+  // Үлдэгдлийг гэрээ × гүйлгээний нэрээр задална — ангилал бүрийн үлдэгдэл.
+  const uldMur = await GuilgeeAvlaguud(kholbolt).aggregate([
+    { $match: uldMatch },
+    {
+      $group: {
+        _id: {
+          g: "$gereeniiId",
+          n: { $ifNull: ["$zardliinNer", { $ifNull: ["$tailbar", ""] }] },
+          eyreg: { $gt: ["$dun", 0] },
+          khungulult: { $eq: ["$source", "khungulult"] },
+        },
+        dun: { $sum: "$dun" },
+      },
+    },
+  ]);
+  const uldegdel = {};
+  const tootsoo = {}; // gid → { angilal: {cat: дүн}, ялгаагүй: дүн }
+  uldMur.forEach(({ _id, dun }) => {
+    const gid = _id?.g ? String(_id.g) : "";
+    if (!gid) return;
+    uldegdel[gid] = (uldegdel[gid] || 0) + dun;
+    const t = (tootsoo[gid] ||= { angilal: { "Орон сууц": 0, Агуулах: 0, Зогсоол: 0 }, yalgaagui: 0 });
+    // Нэртэй авлага/төлөлт болон ангилалтай хөнгөлөлт нь ангилалдаа шууд сууна;
+    // нэргүй хуучин төлөлтийг доор ангиллын үлдэгдлийн хувиар хуваарилна.
+    if (
+      _id.eyreg ||
+      (_id.khungulult && /\((гараж|агуулах|орон сууц)\)/i.test(_id.n)) ||
+      /зогсоол|гараж|агуулах|орон сууц/i.test(String(_id.n || ""))
+    ) {
+      t.angilal[angilalTaniya(_id.n)] += dun;
+    } else {
+      t.yalgaagui += dun;
+    }
+  });
+  const uldegdelAngilal = {};
+  Object.entries(tootsoo).forEach(([gid, t]) => {
+    const eyreg = ANGILLUUD.map((k) => Math.max(0, t.angilal[k]));
+    const niit = eyreg.reduce((a, b) => a + b, 0);
+    const ur = {};
+    ANGILLUUD.forEach((k, i) => {
+      const khuvi = niit > 0 ? eyreg[i] / niit : k === "Орон сууц" ? 1 : 0;
+      ur[k] = Math.round((t.angilal[k] + t.yalgaagui * khuvi) * 100) / 100;
+    });
+    // Нэг ангилалд илүү төлсөн (сөрөг) дүнг бусад ангиллын өрөөс хасна —
+    // эс бөгөөс «Орон сууц үлдэгдэл 282,500» гэх мэт нийт өр (137,500)-өөс
+    // их дүн харагддаг байв. Ангиллын нийлбэр нь нийт үлдэгдэлтэй тэнцүү хэвээр.
+    let iluu = ANGILLUUD.reduce((a, k) => a + (ur[k] < 0 ? -ur[k] : 0), 0);
+    if (iluu > 0) {
+      ANGILLUUD.forEach((k) => {
+        if (ur[k] < 0) ur[k] = 0;
+      });
+      const eyregNiit = ANGILLUUD.reduce((a, k) => a + ur[k], 0);
+      if (eyregNiit > 0) {
+        const khasakh = Math.min(iluu, eyregNiit);
+        ANGILLUUD.forEach((k) => {
+          ur[k] = Math.round((ur[k] - (khasakh * ur[k]) / eyregNiit) * 100) / 100;
+        });
+        iluu -= khasakh;
+      }
+      // Бүх ангилал төлөгдөөд илүү үлдвэл — орон сууцанд илүү төлөлт (сөрөг) болгож үзүүлнэ
+      if (iluu > 0) ur["Орон сууц"] = Math.round((ur["Орон сууц"] - iluu) * 100) / 100;
+    }
+    uldegdelAngilal[gid] = ur;
+    uldegdel[gid] = Math.round(uldegdel[gid] * 100) / 100;
+  });
+
+  return { uldegdel, uldegdelAngilal };
+}
+
+/**
  * POST /khungulultSuuriAvya — гэрээ бүрийн сарын төлбөр ба бодит үлдэгдэл.
  * Body: baiguullagiinId, barilgiinId?, gereeniiIdnuud?
  * Хариу: { suuri: { [gereeniiId]: { sariinDun, zadargaa } },
@@ -270,72 +361,9 @@ exports.khungulultSuuriAvya = asyncHandler(async (req, res, next) => {
       suuri[String(g._id)] = ur[i];
     });
 
-    const uldMatch = { baiguullagiinId: String(baiguullagiinId) };
-    if (barilgiinId) uldMatch.barilgiinId = String(barilgiinId);
-    // Үлдэгдлийг гэрээ × гүйлгээний нэрээр задална — ангилал бүрийн үлдэгдэл.
-    const uldMur = await GuilgeeAvlaguud(kholbolt).aggregate([
-      { $match: uldMatch },
-      {
-        $group: {
-          _id: {
-            g: "$gereeniiId",
-            n: { $ifNull: ["$zardliinNer", { $ifNull: ["$tailbar", ""] }] },
-            eyreg: { $gt: ["$dun", 0] },
-            khungulult: { $eq: ["$source", "khungulult"] },
-          },
-          dun: { $sum: "$dun" },
-        },
-      },
-    ]);
-    const uldegdel = {};
-    const tootsoo = {}; // gid → { angilal: {cat: дүн}, ялгаагүй: дүн }
-    uldMur.forEach(({ _id, dun }) => {
-      const gid = _id?.g ? String(_id.g) : "";
-      if (!gid) return;
-      uldegdel[gid] = (uldegdel[gid] || 0) + dun;
-      const t = (tootsoo[gid] ||= { angilal: { "Орон сууц": 0, Агуулах: 0, Зогсоол: 0 }, yalgaagui: 0 });
-      // Нэртэй авлага/төлөлт болон ангилалтай хөнгөлөлт нь ангилалдаа шууд сууна;
-      // нэргүй хуучин төлөлтийг доор ангиллын үлдэгдлийн хувиар хуваарилна.
-      if (
-        _id.eyreg ||
-        (_id.khungulult && /\((гараж|агуулах|орон сууц)\)/i.test(_id.n)) ||
-        /зогсоол|гараж|агуулах|орон сууц/i.test(String(_id.n || ""))
-      ) {
-        t.angilal[angilalTaniya(_id.n)] += dun;
-      } else {
-        t.yalgaagui += dun;
-      }
-    });
-    const uldegdelAngilal = {};
-    Object.entries(tootsoo).forEach(([gid, t]) => {
-      const eyreg = ANGILLUUD.map((k) => Math.max(0, t.angilal[k]));
-      const niit = eyreg.reduce((a, b) => a + b, 0);
-      const ur = {};
-      ANGILLUUD.forEach((k, i) => {
-        const khuvi = niit > 0 ? eyreg[i] / niit : k === "Орон сууц" ? 1 : 0;
-        ur[k] = Math.round((t.angilal[k] + t.yalgaagui * khuvi) * 100) / 100;
-      });
-      // Нэг ангилалд илүү төлсөн (сөрөг) дүнг бусад ангиллын өрөөс хасна —
-      // эс бөгөөс «Орон сууц үлдэгдэл 282,500» гэх мэт нийт өр (137,500)-өөс
-      // их дүн харагддаг байв. Ангиллын нийлбэр нь нийт үлдэгдэлтэй тэнцүү хэвээр.
-      let iluu = ANGILLUUD.reduce((a, k) => a + (ur[k] < 0 ? -ur[k] : 0), 0);
-      if (iluu > 0) {
-        ANGILLUUD.forEach((k) => {
-          if (ur[k] < 0) ur[k] = 0;
-        });
-        const eyregNiit = ANGILLUUD.reduce((a, k) => a + ur[k], 0);
-        if (eyregNiit > 0) {
-          const khasakh = Math.min(iluu, eyregNiit);
-          ANGILLUUD.forEach((k) => {
-            ur[k] = Math.round((ur[k] - (khasakh * ur[k]) / eyregNiit) * 100) / 100;
-          });
-          iluu -= khasakh;
-        }
-        // Бүх ангилал төлөгдөөд илүү үлдвэл — орон сууцанд илүү төлөлт (сөрөг) болгож үзүүлнэ
-        if (iluu > 0) ur["Орон сууц"] = Math.round((ur["Орон сууц"] - iluu) * 100) / 100;
-      }
-      uldegdelAngilal[gid] = ur;
-      uldegdel[gid] = Math.round(uldegdel[gid] * 100) / 100;
+    const { uldegdel, uldegdelAngilal } = await uldegdelBodyo(kholbolt, {
+      baiguullagiinId,
+      barilgiinId,
     });
 
     res.json({ suuri, uldegdel, uldegdelAngilal });
@@ -422,6 +450,14 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
       new Set(gereenuud.map((g) => String(g?.gereeniiId || "").trim()).filter(Boolean)),
     );
     results.total = davkhardalgui.length;
+    const { uldegdel: boditUldegdel, uldegdelAngilal: boditUldegdelAngilal } =
+      khungulukhTurul === "khuvi"
+        ? await uldegdelBodyo(kholbolt, {
+            baiguullagiinId,
+            barilgiinId,
+            gereeniiIdnuud: davkhardalgui,
+          })
+        : { uldegdel: {}, uldegdelAngilal: {} };
     for (const gereeniiId of davkhardalgui) {
       try {
         const geree = gereeniiId ? await GereeModel.findById(gereeniiId).lean() : null;
@@ -438,7 +474,23 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
             toot: geree.toot || "",
             shaltgaan: shaltgaanNer,
           });
-        if (sariinDun <= 0) {
+        // Хувиар: тухайн ангиллын (эсвэл нийт) бодит үлдэгдлээс бодно.
+        const khuviinSuuri =
+          khungulukhTurul === "khuvi"
+            ? Math.max(
+                0,
+                Number(
+                  boditUldegdelAngilal[gereeniiId]?.[angilal || "Орон сууц"] ??
+                    boditUldegdel[gereeniiId] ??
+                    0,
+                ) || 0,
+              )
+            : null;
+        if (khungulukhTurul === "khuvi" && khuviinSuuri <= 0) {
+          alggasakh("Үлдэгдэлгүй (төлөх дүн 0₮) тул хувиар хөнгөлөх суурь алга");
+          continue;
+        }
+        if (khungulukhTurul !== "khuvi" && sariinDun <= 0) {
           alggasakh(
             angilal
               ? `${angilliinNer(angilal)}-ын сарын төлбөр алга (хувиар хөнгөлөх суурь 0₮)`
@@ -450,6 +502,7 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
           geree,
           saruud,
           sariinDun,
+          khuviinSuuri,
           tuukh,
           ajiltan,
           barilgiinId,
@@ -468,6 +521,7 @@ exports.khungulultKhadgalya = asyncHandler(async (req, res, next) => {
           orts: geree.orts || "",
           davkhar: geree.davkhar || "",
           sariinDun,
+          ...(khuviinSuuri != null ? { khuviinSuuri } : {}),
           khungulsunDun: dun,
         });
         niitTulukh += sariinDun * saruud.length;
@@ -603,6 +657,7 @@ exports.khungulultZasvarlaya = asyncHandler(async (req, res, next) => {
         geree,
         saruud,
         sariinDun: k.sariinDun,
+        khuviinSuuri: k.khuviinSuuri,
         tuukh: shineTuukh,
         ajiltan,
         barilgiinId: tuukh.barilgiinId,
