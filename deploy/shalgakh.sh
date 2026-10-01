@@ -9,6 +9,9 @@
 set -u
 
 MIN="${1:-15}"
+# Хоёр дахь аргумент — publisher-ийн нууц үг. Заагаагүй бол тохиргооноос
+# уншихыг оролдоно (форматаас хамаарч чадахгүй байж магадгүй).
+NUUTS_ARG="${2:-}"
 GARALT="/tmp/urgats-shalgalt-$(date +%Y%m%d-%H%M%S).txt"
 exec > >(tee "$GARALT") 2>&1
 
@@ -25,7 +28,16 @@ systemctl show mediamtx -p ActiveEnterTimestamp --value
 echo
 echo "-- 2. Одоо нийтлэгдэж байгаа замууд ------------------------"
 # Нууц үгийг тохиргооноос уншина — скрипт дотор хадгалахгүй.
-NUUTS=$(grep -A4 'user: publisher' /opt/mediamtx/mediamtx.yml 2>/dev/null | grep -m1 'pass:' | awk '{print $2}')
+NUUTS="$NUUTS_ARG"
+if [ -z "$NUUTS" ]; then
+  # `- user: publisher` мөрийн ДАРАА гарах эхний `pass:`.
+  NUUTS=$(awk '/user:[[:space:]]*publisher/{f=1} f && /pass:/{print $2; exit}' /opt/mediamtx/mediamtx.yml 2>/dev/null)
+fi
+if [ -z "$NUUTS" ]; then
+  # Нөөц: `action: publish` эрхтэй хэрэглэгчийн нууц үг.
+  NUUTS=$(awk '/pass:/{p=$2} /action:[[:space:]]*publish/{print p; exit}' /opt/mediamtx/mediamtx.yml 2>/dev/null)
+fi
+NUUTS=$(printf '%s' "${NUUTS:-}" | tr -d '"'"'"'"')
 if [ -n "${NUUTS:-}" ]; then
   cat > /tmp/urgats-tuluv.py <<'PYEOF'
 import sys, json
@@ -46,7 +58,9 @@ PYEOF
   curl -s -u "publisher:$NUUTS" http://127.0.0.1:9997/v3/paths/list | python3 /tmp/urgats-tuluv.py
   rm -f /tmp/urgats-tuluv.py
 else
-  echo "  publisher-ийн нууц үг mediamtx.yml-ээс уншигдсангүй"
+  echo "  publisher-ийн нууц үг уншигдсангүй."
+  echo "  Хоёр дахь аргументаар дамжуул:  bash deploy/shalgakh.sh $MIN 'НУУЦҮГ'"
+  echo "  (нууц үг нь гаралтад бичигдэхгүй)"
 fi
 
 echo
@@ -63,7 +77,8 @@ tail -40 /var/log/mediamtx-urgats.log 2>/dev/null || echo "  (лог файл а
 
 echo
 echo "-- 6. Backend-ийн urgats мөрүүд ----------------------------"
-pm2 logs devSukhBack --lines 400 --nostream 2>/dev/null | grep -i urgats | tail -25 || echo "  (pm2 уншигдсангүй)"
+MUR=$(pm2 logs devSukhBack --lines 400 --nostream 2>/dev/null | grep -i urgats | tail -25)
+if [ -n "$MUR" ]; then echo "$MUR"; else echo "  (urgats мөр алга — backend тайван, эсвэл pm2 өөр хэрэглэгчийн дор)"; fi
 
 echo
 echo "=============================================================="
