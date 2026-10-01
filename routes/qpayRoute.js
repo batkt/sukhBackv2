@@ -19,7 +19,18 @@ const {
 
 router.get("/qpayTulye/:baiguullagiinId/:barilgiinId/:dugaar", qpayTulye);
 // Ангиллаар (орон сууц / гараж / агуулах) төлсөн — ledger мөрийг ангиллаар нь тэмдэглэнэ
-router.get("/qpayTulye/:baiguullagiinId/:barilgiinId/:dugaar/:angilal/:gereeniiId?", qpayTulye);
+//
+// ХОЁР маршрут, нэг нь `:gereeniiId?` биш.
+//
+// Express 5 нь `path-to-regexp` v8 хэрэглэдэг бөгөөд тэр нь `:param?`
+// хэлбэрийг ХАССАН. Иймд `/:gereeniiId?` бичвэл модуль ачаалах үед
+// `PathError: Unexpected ? at index 69` гэж шиддэг — апп асахаасаа өмнө
+// унана. `devSukhBack` 1100 гаруй удаа unаж асаасан шалтгаан яг энэ.
+//
+// Express 5-ын өөрийнх нь хэлбэр нь `{/:gereeniiId}`, гэхдээ хоёр маршрут
+// бичих нь 4 ба 5 хоёуланд ажилладаг тул хувилбараас хамаарахгүй.
+router.get("/qpayTulye/:baiguullagiinId/:barilgiinId/:dugaar/:angilal", qpayTulye);
+router.get("/qpayTulye/:baiguullagiinId/:barilgiinId/:dugaar/:angilal/:gereeniiId", qpayTulye);
 
 // BANK ACCOUNT ENDPOINT - MUST BE FIRST TO AVOID ROUTE CONFLICTS
 router.get("/qpayBankAccountsView", async (req, res, next) => {
