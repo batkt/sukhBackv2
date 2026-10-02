@@ -10,29 +10,49 @@
 async function qpayShalgayAyulgui({ invoice_id, baiguullagiinId, barilgiinId }, kholbolt) {
   const { qpayShalgay, QuickQpayObject } = require("quickqpaypackvSukh");
   let salbar = barilgiinId ? String(barilgiinId) : "";
-  if (!salbar && invoice_id) {
+  // Салбар эсвэл байгууллага дутуу бол нэхэмжлэх үүсгэхэд хадгалсан бичлэгээс
+  if ((!salbar || !baiguullagiinId) && invoice_id) {
     try {
       const bichleg = await QuickQpayObject(kholbolt)
         .findOne({ $or: [{ invoice_id }, { "qpay.invoice_id": invoice_id }] })
-        .select({ salbariinId: 1, barilgiinId: 1 })
+        .select({ salbariinId: 1, barilgiinId: 1, baiguullagiinId: 1 })
         .lean();
-      salbar = String(bichleg?.salbariinId || bichleg?.barilgiinId || "");
+      if (!salbar) salbar = String(bichleg?.salbariinId || bichleg?.barilgiinId || "");
+      if (!baiguullagiinId) baiguullagiinId = bichleg?.baiguullagiinId;
     } catch (_) {
-      /* салбаргүйгээр оролдоно */
+      /* бичлэггүйгээр оролдоно */
     }
   }
-  // Апп-ын ажилладаг /qpayShalgay маршруттай ЯГ ижил: холболтыг body дотор
-  // tukhainBaaziinKholbolt-оор дамжуулна. Үгүй бол багц QPay-ийн токеноо
-  // олохгүй, QPay «400 Bad Request» буцаадаг байв.
+  if (!baiguullagiinId && kholbolt?.baiguullagiinId) baiguullagiinId = kholbolt.baiguullagiinId;
+  // Багцын qpayShalgay нь QPay-ийн нэхэмжлэхийн дугаарыг `body.id`-аас
+  // уншдаг (invoice_id биш!) — үгүй бол QPay руу дугааргүй хүсэлт явж
+  // «400 Bad Request» буцдаг байв. Салбарыг `body.barilgiinId`-аар
+  // (qpayKhariltsagch.salbaruud[].salbariinId-тай яг тэнцүү) хайдаг.
+  if (!salbar) salbar = await anhnySalbar(kholbolt, baiguullagiinId);
   return qpayShalgay(
     {
+      id: invoice_id,
       invoice_id,
       baiguullagiinId: String(baiguullagiinId),
-      tukhainBaaziinKholbolt: kholbolt,
-      ...(salbar ? { barilgiinId: salbar, salbariinId: salbar } : {}),
+      ...(salbar ? { barilgiinId: salbar } : {}),
     },
     kholbolt,
   );
+}
+
+/** Бичлэгт салбар хадгалагдаагүй бол байгууллагын QPay-ийн цорын ганц/эхний салбар */
+async function anhnySalbar(kholbolt, baiguullagiinId) {
+  try {
+    const { QpayKhariltsagch } = require("quickqpaypackvSukh");
+    if (!QpayKhariltsagch) return "";
+    const kh = await QpayKhariltsagch(kholbolt)
+      .findOne({ baiguullagiinId: String(baiguullagiinId) })
+      .select({ salbaruud: 1 })
+      .lean();
+    return String(kh?.salbaruud?.[0]?.salbariinId || "");
+  } catch (_) {
+    return "";
+  }
 }
 
 module.exports = { qpayShalgayAyulgui };

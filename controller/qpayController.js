@@ -607,7 +607,14 @@ exports.qpayGuilgeeUtgaAvya = asyncHandler(async (req, res, next) => {
     if (guilgee.legacy_id) continue;
 
     try {
-      const khariu = await qpayShalgay({ invoice_id: guilgee.qpay?.invoice_id || guilgee.invoice_id }, tukhainBaaziinKholbolt);
+      const khariu = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui(
+        {
+          invoice_id: guilgee.qpay?.invoice_id || guilgee.invoice_id,
+          baiguullagiinId: guilgee.baiguullagiinId,
+          barilgiinId: guilgee.salbariinId,
+        },
+        tukhainBaaziinKholbolt,
+      );
       if (khariu?.payments?.[0]?.transactions?.[0]?.id) {
         await QuickQpayObject(tukhainBaaziinKholbolt).updateOne(
           { _id: guilgee._id },

@@ -573,10 +573,7 @@ exports.walletQpayCheck = asyncHandler(async (req, res, next) => {
       if (req.query.forcePaid === "true" || req.query.test === "true") {
         isPaid = true;
       } else {
-        checkResult = await qpayShalgay(
-          { invoice_id: qpayObject.invoice_id },
-          tukhainBaaziinKholbolt
-        );
+        checkResult = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui({ invoice_id: qpayObject.invoice_id }, tukhainBaaziinKholbolt);
 
         if (checkResult) {
           isPaid =
@@ -955,10 +952,7 @@ exports.debugQpayCheck = asyncHandler(async (req, res, next) => {
   }
 
   try {
-    const result = await qpayShalgay(
-      { invoice_id: invoiceId },
-      tukhainBaaziinKholbolt
-    );
+    const result = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui({ invoice_id: invoiceId }, tukhainBaaziinKholbolt);
     // Pull out the most useful identifiers for quick reading
     const payments = result?.payments || [];
     const summary = payments.map((p) => ({
@@ -1173,10 +1167,7 @@ exports.resyncWalletPayment = asyncHandler(async (req, res, next) => {
   // Try live QPay check to sync more details (trxNo, trxDate) if possible
   if (qpayObject.invoice_id) {
     try {
-      const checkResult = await qpayShalgay(
-        { invoice_id: qpayObject.invoice_id },
-        tukhainBaaziinKholbolt
-      );
+      const checkResult = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui({ invoice_id: qpayObject.invoice_id }, tukhainBaaziinKholbolt);
       if (checkResult?.payments?.[0]) {
         const payment = checkResult.payments[0];
         // qpayPaymentId is strictly invoice_id, no dynamic update from payment_id
@@ -1342,10 +1333,7 @@ async function settleWalletPayment(
 
   if (qpayObject.invoice_id) {
     try {
-      const checkResult = await qpayShalgay(
-        { invoice_id: qpayObject.invoice_id },
-        tukhainBaaziinKholbolt
-      );
+      const checkResult = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui({ invoice_id: qpayObject.invoice_id }, tukhainBaaziinKholbolt);
 
       const payment = checkResult?.payments?.[0];
       if (payment) {

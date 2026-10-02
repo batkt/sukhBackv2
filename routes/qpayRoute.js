@@ -1876,7 +1876,16 @@ router.post("/qpayShalgay", tokenShalgakh, async (req, res, next) => {
       }
     }
 
-    const khariu = await qpayShalgay(req.body, tukhainBaaziinKholbolt);
+    // Багц нь дугаарыг body.id-аас, салбарыг body.barilgiinId-аас уншдаг —
+    // апп invoice_id илгээдэг тул шууд дамжуулахад QPay 400 буцааж байв.
+    const khariu = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui(
+      {
+        invoice_id: req.body.invoice_id || req.body.id,
+        baiguullagiinId: req.body.baiguullagiinId,
+        barilgiinId: req.body.barilgiinId || req.body.salbariinId,
+      },
+      tukhainBaaziinKholbolt,
+    );
     console.log(
       `✅ [QPAY-SHALGAY] Success: status=${khariu.invoice_status || khariu.tuluv || "UNKNOWN"}`,
     );
@@ -3327,8 +3336,14 @@ router.get("/pay/check/:invoiceId", async (req, res, next) => {
 
     if (nekhemjlekh.qpayInvoiceId && nekhemjlekh.tuluv !== "Төлсөн") {
       try {
-        const qpayObject = await QuickQpayObject(kholbolt);
-        const qpayCheckResult = await qpayShalgay(qpayObject, nekhemjlekh.qpayInvoiceId);
+        const qpayCheckResult = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui(
+          {
+            invoice_id: nekhemjlekh.qpayInvoiceId,
+            baiguullagiinId: nekhemjlekh.baiguullagiinId,
+            barilgiinId: nekhemjlekh.barilgiinId,
+          },
+          kholbolt,
+        );
         if (qpayCheckResult && (qpayCheckResult.paid || qpayCheckResult.payment_id)) {
           const paymentAmount = Number(qpayCheckResult.amount || nekhemjlekh.niitTulbur || 0);
           const currentTulsun = Number(nekhemjlekh.tulsunDun || 0);
