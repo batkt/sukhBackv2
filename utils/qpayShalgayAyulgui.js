@@ -21,10 +21,14 @@ async function qpayShalgayAyulgui({ invoice_id, baiguullagiinId, barilgiinId }, 
       /* салбаргүйгээр оролдоно */
     }
   }
+  // Апп-ын ажилладаг /qpayShalgay маршруттай ЯГ ижил: холболтыг body дотор
+  // tukhainBaaziinKholbolt-оор дамжуулна. Үгүй бол багц QPay-ийн токеноо
+  // олохгүй, QPay «400 Bad Request» буцаадаг байв.
   return qpayShalgay(
     {
       invoice_id,
       baiguullagiinId: String(baiguullagiinId),
+      tukhainBaaziinKholbolt: kholbolt,
       ...(salbar ? { barilgiinId: salbar, salbariinId: salbar } : {}),
     },
     kholbolt,
