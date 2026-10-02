@@ -1121,10 +1121,23 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
                 (ot.turul || "Орон сууц") === (t.turul || "Орон сууц")
             )
             : null;
-          if (oldToot && oldToot.ekhniiUldegdel !== undefined) {
-            t.ekhniiUldegdel = oldToot.ekhniiUldegdel;
+          if (oldToot) {
+            // Бүртгэлтэй тоот — эхний үлдэгдлийг засахаас хамгаална
+            t.ekhniiUldegdel = oldToot.ekhniiUldegdel !== undefined ? oldToot.ekhniiUldegdel : 0;
           } else {
-            t.ekhniiUldegdel = 0;
+            // ШИНЭ тоот — оруулсан эхний үлдэгдлийг хадгална. Өмнө нь 0 болгодог
+            // байсан тул засах цонхоор нэмсэн тоотын эхний үлдэгдэл гүйлгээний
+            // түүхэд огт ордоггүй байв.
+            const dun = parseFloat(String(t.ekhniiUldegdel ?? 0).replace(/,/g, "")) || 0;
+            t.ekhniiUldegdel = dun;
+            if (dun !== 0) {
+              (req._shineTootEkhnii ||= []).push({
+                toot: String(t.toot || "").trim(),
+                barilgiinId: String(t.barilgiinId || req.body.barilgiinId || ""),
+                turul: t.turul || "Орон сууц",
+                dun,
+              });
+            }
           }
           return t;
         });
@@ -1331,7 +1344,14 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             }
           }
 
-          if (req.body.ekhniiUldegdel !== undefined && result.baiguullagiinId && result.baiguullagiinId.toString() === orgId) {
+          // Тоот бүр өөрийн эхний үлдэгдэлтэй (toots[].ekhniiUldegdel) үед бүх
+          // гэрээнд нэг дүн тараахгүй — шинэ тоотын үлдэгдлийг дарж бичдэг байв.
+          if (
+            req.body.ekhniiUldegdel !== undefined &&
+            !Array.isArray(req.body.toots) &&
+            result.baiguullagiinId &&
+            result.baiguullagiinId.toString() === orgId
+          ) {
             syncData.ekhniiUldegdel = parseFloat(req.body.ekhniiUldegdel) || 0;
           }
 
@@ -1353,6 +1373,37 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
               tukhainBaaziinKholbolt,
               req
             );
+          }
+
+          // Шинээр нэмсэн тоотын эхний үлдэгдлийг тухайн тоотын гэрээнд бичнэ.
+          // Шинэ гэрээ үүсэхэд createInvoiceForContract өөрөө бичдэг ч, өмнө нь
+          // цуцлагдсан гэрээ сэргээгдсэн үед бичигддэггүй байв. ensureEkhniiUldegdel
+          // нь эхний үлдэгдлийн мөр БАЙХГҮЙ үед л үүсгэдэг тул давхардахгүй,
+          // бүртгэлтэй тоотын үлдэгдлийг өөрчлөхгүй.
+          if (Array.isArray(req._shineTootEkhnii) && req._shineTootEkhnii.length > 0) {
+            const invoiceService = require("../services/invoiceService");
+            for (const sh of req._shineTootEkhnii) {
+              if (sh.turul === "Гараж" || sh.turul === "Агуулах") continue;
+              try {
+                const geree = await GereeModel.findOne({
+                  orshinSuugchId: result._id.toString(),
+                  toot: sh.toot,
+                  ...(sh.barilgiinId ? { barilgiinId: sh.barilgiinId } : {}),
+                  tuluv: "Идэвхтэй",
+                })
+                  .sort({ createdAt: -1 })
+                  .lean();
+                if (!geree) continue;
+                await GereeModel.updateOne({ _id: geree._id }, { $set: { ekhniiUldegdel: sh.dun } });
+                await invoiceService.ensureEkhniiUldegdel(
+                  tukhainBaaziinKholbolt,
+                  { ...geree, ekhniiUldegdel: sh.dun },
+                  { ajiltanId: req.ajiltan?._id, ajiltanNer: req.ajiltan?.ner },
+                );
+              } catch (e) {
+                console.error("Шинэ тоотын эхний үлдэгдэл бичихэд алдаа:", e.message);
+              }
+            }
           }
 
           // Sync to ledger if ekhniiUldegdel was updated

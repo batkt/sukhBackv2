@@ -931,10 +931,21 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
                   String(ot.barilgiinId) === String(t.barilgiinId)
               )
             : null;
-          if (oldToot && oldToot.ekhniiUldegdel !== undefined) {
-            t.ekhniiUldegdel = oldToot.ekhniiUldegdel;
+          if (oldToot) {
+            // Бүртгэлтэй тоот — эхний үлдэгдлийг засахаас хамгаална
+            t.ekhniiUldegdel = oldToot.ekhniiUldegdel !== undefined ? oldToot.ekhniiUldegdel : 0;
           } else {
-            t.ekhniiUldegdel = 0;
+            // ШИНЭ тоот — оруулсан эхний үлдэгдлийг хадгална (өмнө нь 0 болдог байв)
+            const dun = parseFloat(String(t.ekhniiUldegdel ?? 0).replace(/,/g, "")) || 0;
+            t.ekhniiUldegdel = dun;
+            if (dun !== 0) {
+              (req._shineTootEkhnii ||= []).push({
+                toot: String(t.toot || "").trim(),
+                barilgiinId: String(t.barilgiinId || req.body.barilgiinId || ""),
+                turul: t.turul || "Орон сууц",
+                dun,
+              });
+            }
           }
           return t;
         });
@@ -1121,7 +1132,13 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
             }
           }
 
-          if (req.body.ekhniiUldegdel !== undefined && result.baiguullagiinId && result.baiguullagiinId.toString() === orgId) {
+          // Тоот бүр өөрийн эхний үлдэгдэлтэй үед бүх гэрээнд нэг дүн тараахгүй
+          if (
+            req.body.ekhniiUldegdel !== undefined &&
+            !Array.isArray(req.body.toots) &&
+            result.baiguullagiinId &&
+            result.baiguullagiinId.toString() === orgId
+          ) {
             syncData.ekhniiUldegdel = parseFloat(req.body.ekhniiUldegdel) || 0;
           }
 
@@ -1143,6 +1160,33 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
               tukhainBaaziinKholbolt,
               req
             );
+          }
+
+          // Шинээр нэмсэн тоотын эхний үлдэгдэл — мөр байхгүй үед л үүсгэнэ
+          if (Array.isArray(req._shineTootEkhnii) && req._shineTootEkhnii.length > 0) {
+            const invoiceService = require("../services/invoiceService");
+            for (const sh of req._shineTootEkhnii) {
+              if (sh.turul === "Гараж" || sh.turul === "Агуулах") continue;
+              try {
+                const geree = await GereeModel.findOne({
+                  khariltsagchId: result._id.toString(),
+                  toot: sh.toot,
+                  ...(sh.barilgiinId ? { barilgiinId: sh.barilgiinId } : {}),
+                  tuluv: "Идэвхтэй",
+                })
+                  .sort({ createdAt: -1 })
+                  .lean();
+                if (!geree) continue;
+                await GereeModel.updateOne({ _id: geree._id }, { $set: { ekhniiUldegdel: sh.dun } });
+                await invoiceService.ensureEkhniiUldegdel(
+                  tukhainBaaziinKholbolt,
+                  { ...geree, ekhniiUldegdel: sh.dun },
+                  { ajiltanId: req.ajiltan?._id, ajiltanNer: req.ajiltan?.ner },
+                );
+              } catch (e) {
+                console.error("Шинэ тоотын эхний үлдэгдэл бичихэд алдаа:", e.message);
+              }
+            }
           }
 
           // Sync to ledger if ekhniiUldegdel was updated
