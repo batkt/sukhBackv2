@@ -2232,7 +2232,7 @@ async function qpayTulburBatalgaajuulakh(qpayInvoiceId, baiguullagiinId, kholbol
       0;
     const transactionId =
       tulburuud[0]?.transactions?.[0]?.id || khariu?.payments?.[0]?.transactions?.[0]?.id || null;
-    const tulsunOgnoo = require("../utils/qpayShalgayAyulgui").qpayTulsunOgnoo(khariu);
+    const tulsunOgnoo = require("../utils/qpayShalgayAyulgui").qpayTulsunOgnoo(khariu) || new Date();
     return { tulugdsun, dun, transactionId, tulsunOgnoo };
   } catch (err) {
     console.error("❌ [QPAY] төлбөр баталгаажуулахад алдаа:", err.message);

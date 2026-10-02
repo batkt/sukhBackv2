@@ -107,7 +107,7 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
       try {
         const khariu = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui({ invoice_id: qpayInvoiceId, baiguullagiinId, barilgiinId: qpayBarimt?.salbariinId || barilgiinId }, kholbolt);
         const tuluv = String(khariu?.invoice_status || "").toUpperCase();
-        tulsunOgnoo = require("../utils/qpayShalgayAyulgui").qpayTulsunOgnoo(khariu);
+        tulsunOgnoo = require("../utils/qpayShalgayAyulgui").qpayTulsunOgnoo(khariu) || new Date();
         batalgaajsan =
           tuluv === "PAID" ||
           tuluv === "CLOSED" ||
@@ -338,7 +338,7 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
       );
       const tuluv = String(khariu?.invoice_status || "").toUpperCase();
       if (tulburuud.length > 0 || tuluv === "PAID" || tuluv === "CLOSED") {
-        tulsunOgnoo = require("../utils/qpayShalgayAyulgui").qpayTulsunOgnoo(khariu);
+        tulsunOgnoo = require("../utils/qpayShalgayAyulgui").qpayTulsunOgnoo(khariu) || new Date();
         paidAmount =
           tulburuud.reduce((sum, p) => sum + (Number(p?.payment_amount ?? p?.amount) || 0), 0) ||
           Number(khariu?.paid_amount) ||

@@ -103,8 +103,16 @@ async function main() {
         continue;
       }
       const tulsun = qpayTulsunOgnoo(khariu);
+      if (!tulsun) {
+        console.log(`  ? ${invId}: QPay төлсөн огноо өгөөгүй — алгаслаа`);
+        continue;
+      }
+      // Зөвхөн боловсруулсан мөчөөр тамгалагдсан (ognoo ≈ createdAt) мөрүүд —
+      // гараар өөр огноогоор оруулсан эсвэл өмнөх төлөлтийг ХӨНДӨХГҮЙ.
       const zuruutei = murnuud.filter(
-        (m) => Math.abs(new Date(m.ognoo).getTime() - tulsun.getTime()) > TSAG_MS,
+        (m) =>
+          Math.abs(new Date(m.ognoo).getTime() - new Date(m.createdAt).getTime()) < 10 * 60 * 1000 &&
+          new Date(m.ognoo).getTime() - tulsun.getTime() > TSAG_MS,
       );
       if (zuruutei.length === 0) continue;
 

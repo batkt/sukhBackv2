@@ -63,9 +63,19 @@ async function anhnySalbar(kholbolt, baiguullagiinId) {
 function qpayTulsunOgnoo(khariu) {
   const tulburuud = Array.isArray(khariu?.payments) ? khariu.payments : [];
   const paid = tulburuud.find((p) => p?.payment_status === "PAID" || p?.status === "PAID") || tulburuud[0];
-  const raw = paid?.payment_date || paid?.paid_date || paid?.created_date || khariu?.paid_date;
+  const guilgee = Array.isArray(paid?.transactions) ? paid.transactions[0] : null;
+  const raw =
+    paid?.payment_date ||
+    paid?.paid_date ||
+    paid?.payment_created_date ||
+    paid?.created_date ||
+    guilgee?.transaction_date ||
+    guilgee?.created_date ||
+    khariu?.paid_date ||
+    null;
   const d = raw ? new Date(raw) : null;
-  if (!d || isNaN(d) || d.getTime() > Date.now() + 60000) return new Date();
+  // QPay огноо өгөөгүй бол ТААХГҮЙ — null (дуудагч нь одоогийн цагийг хэрэглэнэ)
+  if (!d || isNaN(d) || d.getTime() > Date.now() + 60000) return null;
   return d;
 }
 
