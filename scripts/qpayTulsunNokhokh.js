@@ -75,15 +75,34 @@ async function main() {
       if (!invId || !url) continue;
       dun.shalgasan++;
 
-      let khariu;
-      try {
-        khariu = await qpayShalgayAyulgui(
-          { invoice_id: invId, baiguullagiinId, barilgiinId: b.salbariinId },
-          kholbolt,
-        );
-      } catch (err) {
+      // Салбартай, дараа нь салбаргүй оролдоно — аль нь зөв болохыг
+      // QPay-ийн алдааны текстээр харуулна (400-гийн шалтгааныг мэдэхийн тулд).
+      let khariu = null;
+      const aldaanuud = [];
+      for (const salbar of [b.salbariinId, undefined]) {
+        try {
+          khariu = await qpayShalgayAyulgui(
+            { invoice_id: invId, baiguullagiinId, barilgiinId: salbar },
+            kholbolt,
+          );
+          break;
+        } catch (err) {
+          const bie = err?.response?.body;
+          aldaanuud.push(
+            `${salbar ? `салбар ${salbar}` : "салбаргүй"}: ${err.message}${
+              bie ? ` · ${typeof bie === "string" ? bie.slice(0, 200) : JSON.stringify(bie).slice(0, 200)}` : ""
+            }`,
+          );
+          if (!salbar) break;
+        }
+      }
+      if (!khariu) {
         dun.aldaa++;
-        console.log(`  ✗ ${invId}: QPay шалгаж чадсангүй — ${err.message}`);
+        // Эхний 5 алдааг дэлгэрэнгүй, бусдыг тоогоор
+        if (dun.aldaa <= 5) {
+          console.log(`  ✗ ${invId} (${b.ognoo || b.createdAt || ""}, дүн ${b.qpay?.amount ?? b.amount ?? "?"}):`);
+          aldaanuud.forEach((a) => console.log(`      ${a}`));
+        }
         continue;
       }
       const tulbur = (khariu?.payments || []).filter(
