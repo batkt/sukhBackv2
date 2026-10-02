@@ -18,8 +18,28 @@ exports.setIo = (socketIo) => {
   io = socketIo;
 };
 
+// Вебийн Гүйлгээний түүх / Хуулга хуудаснууд `tulburUpdated:<baiguullagiinId>`
+// сонсоно. Өмнө нь зөвхөн олон нэхэмжлэхийн QPay callback илгээдэг байсан тул
+// ганц нэхэмжлэх, ангиллын QPay төлөлт вебэд refresh хийлгүйгээр гардаггүй байв.
+const vebKhuleegdej = new Map();
+function vebdMedegdeye(baiguullagiinId) {
+  const tulkhuur = String(baiguullagiinId);
+  if (vebKhuleegdej.has(tulkhuur)) return;
+  vebKhuleegdej.set(
+    tulkhuur,
+    setTimeout(() => {
+      vebKhuleegdej.delete(tulkhuur);
+      try {
+        io.emit(`tulburUpdated:${tulkhuur}`, {});
+      } catch (_) {}
+    }, NEGTGEKH_MS),
+  );
+}
+
 exports.tulburShinechlegdlee = (baiguullagiinId, gereeniiId) => {
-  if (!io || !baiguullagiinId || !gereeniiId) return;
+  if (!io || !baiguullagiinId) return;
+  vebdMedegdeye(baiguullagiinId);
+  if (!gereeniiId) return;
   const tulkhuur = `${baiguullagiinId}|${gereeniiId}`;
   if (khuleegdej.has(tulkhuur)) return;
 
