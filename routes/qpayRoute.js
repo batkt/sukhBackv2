@@ -2226,10 +2226,7 @@ async function qpayTulburBatalgaajuulakh(qpayInvoiceId, baiguullagiinId, kholbol
     );
     const tuluv = String(khariu?.invoice_status || "").toUpperCase();
     const tulugdsun = tulburuud.length > 0 || tuluv === "PAID" || tuluv === "CLOSED";
-    const dun =
-      tulburuud.reduce((s, p) => s + (Number(p?.payment_amount ?? p?.amount) || 0), 0) ||
-      Number(khariu?.paid_amount) ||
-      0;
+    const dun = require("../utils/qpayShalgayAyulgui").qpayTulsunDun(khariu);
     const transactionId =
       tulburuud[0]?.transactions?.[0]?.id || khariu?.payments?.[0]?.transactions?.[0]?.id || null;
     const tulsunOgnoo = require("../utils/qpayShalgayAyulgui").qpayTulsunOgnoo(khariu) || new Date();
@@ -2365,6 +2362,8 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
     let qpayInvoiceIdForApi = null;
     let foundQpayRecord = null;
     let tulsunOgnoo = new Date();
+    // QPay-ийн баталгаажуулсан нийт төлсөн дүн
+    let qpayTulsunNiit = 0;
     let QuickQpayModel = null;
 
     try {
@@ -2420,6 +2419,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
       });
       // Иргэн QPay-д бодитоор төлсөн огноо — бүх бичлэгт энийг хэрэглэнэ
       tulsunOgnoo = batalgaa.tulsunOgnoo || new Date();
+      qpayTulsunNiit = Number(batalgaa.dun) || 0;
       if (!qpayInvoiceIdForApi) qpayInvoiceIdForApi = shalgakhId;
     }
 
@@ -2545,6 +2545,52 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
       paymentTransactionId = req.query.qpay_payment_id;
     }
 
+    // ── БОДИТ ТӨЛСӨН ДҮНГ хуваарилах ────────────────────────────────────
+    // ЯАГААД: олон нэхэмжлэхийг нэг QPay-ээр төлөхөд нэхэмжлэх БҮРД өөрийн
+    // нийт дүнг (niitTulbur) төлсөн гэж бүртгэдэг байв — 100₮ төлсөн ч
+    // 135,000₮ төлөлт орж байсан. Одоо QPay-ийн баталгаажуулсан дүн (эсвэл
+    // QR үүсгэсэн дүн)-г хуучин нэхэмжлэхээс нь эхлэн, нэхэмжлэх бүрийн
+    // үлдэгдлээс хэтрүүлэхгүйгээр хуваарилна. Илүү гарвал сүүлчийнхэд.
+    const qrDun = Number(
+      foundQpayRecord?.amount ||
+        foundQpayRecord?.qpay?.amount ||
+        foundQpayRecord?.sukhNekhemjlekh?.pay_amount ||
+        0,
+    );
+    const bodytTulsun = qpayTulsunNiit > 0 ? qpayTulsunNiit : qrDun;
+    const tulultKhuvaarilalt = new Map();
+    if (bodytTulsun > 0) {
+      const erembelsen = [...invoices]
+        .filter((inv) => inv && inv.tuluv !== "Төлсөн")
+        .sort((a, b) => new Date(a.ognoo || 0) - new Date(b.ognoo || 0));
+      let uldsen = bodytTulsun;
+      for (const inv of erembelsen) {
+        const id = String(inv._id || "");
+        const invUld =
+          typeof inv.uldegdel === "number" && inv.uldegdel > 0
+            ? inv.uldegdel
+            : Number(inv.niitTulbur) || 0;
+        const avakh = Math.max(0, Math.min(invUld, uldsen));
+        tulultKhuvaarilalt.set(id, Math.round(avakh * 100) / 100);
+        uldsen -= avakh;
+      }
+      if (uldsen > 0.005 && erembelsen.length > 0) {
+        const suul = String(erembelsen[erembelsen.length - 1]._id || "");
+        tulultKhuvaarilalt.set(
+          suul,
+          Math.round(((tulultKhuvaarilalt.get(suul) || 0) + uldsen) * 100) / 100,
+        );
+      }
+      console.log("ℹ️ [QPAY MULTI CALLBACK] Төлсөн дүнгийн хуваарилалт:", {
+        bodytTulsun,
+        qpayTulsunNiit,
+        qrDun,
+        khuvaarilalt: Object.fromEntries(tulultKhuvaarilalt),
+      });
+    } else {
+      console.warn("⚠️ [QPAY MULTI CALLBACK] Төлсөн дүн тодорхойгүй — нэхэмжлэхийн дүнгээр");
+    }
+
     // Update all invoices as paid
     const nekhemjlekhBolovsruulya = async (nekhemjlekh) => {
       try {
@@ -2632,6 +2678,15 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
           }
         }
 
+        // Бодит төлсөн дүнгийн хуваарилалт байвал түүнийг л бүртгэнэ
+        if (tulultKhuvaarilalt.size > 0) {
+          invoicePaidAmount = tulultKhuvaarilalt.get(nekhId) || 0;
+          if (invoicePaidAmount <= 0) {
+            console.log(`ℹ️ [QPAY MULTI CALLBACK] ${nekhId}: төлсөн дүнгээс хуваарилалт ногдоогүй — алгаслаа`);
+            return;
+          }
+        }
+
         // 2. Record the QPay payment in the ledger (Authoritative Lock / Idempotency Check)
         const guilgeeService = require("../services/guilgeeService");
         const ledgerResult = await guilgeeService.recordPayment(kholbolt, {
@@ -2679,7 +2734,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
             nekhemjlekh._id,
             {
               $set: (() => {
-                const multiPaidAmount = nekhemjlekh.niitTulbur || 0;
+                const multiPaidAmount = invoicePaidAmount || 0;
                 const multiCurrentUldegdel =
                   typeof nekhemjlekh.uldegdel === "number" &&
                     !isNaN(nekhemjlekh.uldegdel) &&
@@ -2709,7 +2764,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
               $push: {
                 paymentHistory: {
                   ognoo: tulsunOgnoo,
-                  dun: nekhemjlekh.niitTulbur || 0,
+                  dun: invoicePaidAmount || 0,
                   turul: "төлөлт",
                   guilgeeniiId:
                     paymentTransactionId ||

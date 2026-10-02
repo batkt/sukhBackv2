@@ -83,4 +83,26 @@ function qpayTulsunOgnoo(khariu) {
   return d;
 }
 
-module.exports = { qpayShalgayAyulgui, qpayTulsunOgnoo };
+/**
+ * QPay-ийн хариунаас ТӨЛСӨН дүн. Хариунд дүн байхгүй (зарим үед payments
+ * хоосон ирдэг) бол 0 — дуудагч нь QR үүсгэсэн дүнг (QuickQpayObject.amount)
+ * нөөц болгоно. QPay QR нь тогтмол дүнтэй тул PAID бол тэр дүнг л төлсөн.
+ */
+function qpayTulsunDun(khariu) {
+  const tulburuud = (Array.isArray(khariu?.payments) ? khariu.payments : []).filter(
+    (p) => p?.payment_status === "PAID" || p?.status === "PAID",
+  );
+  const too = (v) => Number(v) || 0;
+  const niit = tulburuud.reduce(
+    (s, p) =>
+      s +
+      (too(p?.payment_amount) ||
+        too(p?.amount) ||
+        too(p?.paid_amount) ||
+        too(p?.transactions?.[0]?.amount)),
+    0,
+  );
+  return niit || too(khariu?.paid_amount) || 0;
+}
+
+module.exports = { qpayShalgayAyulgui, qpayTulsunOgnoo, qpayTulsunDun };
