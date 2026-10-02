@@ -55,4 +55,18 @@ async function anhnySalbar(kholbolt, baiguullagiinId) {
   }
 }
 
-module.exports = { qpayShalgayAyulgui };
+/**
+ * QPay-ийн хариунаас ТӨЛСӨН огноо (payments[].payment_date). Төлбөрийг
+ * боловсруулсан мөчөөр биш, иргэн бодитоор төлсөн огноогоор бүртгэхэд —
+ * хоцорч ирсэн callback / нөхөх скриптийн үед ч огноо зөв гарна.
+ */
+function qpayTulsunOgnoo(khariu) {
+  const tulburuud = Array.isArray(khariu?.payments) ? khariu.payments : [];
+  const paid = tulburuud.find((p) => p?.payment_status === "PAID" || p?.status === "PAID") || tulburuud[0];
+  const raw = paid?.payment_date || paid?.paid_date || paid?.created_date || khariu?.paid_date;
+  const d = raw ? new Date(raw) : null;
+  if (!d || isNaN(d) || d.getTime() > Date.now() + 60000) return new Date();
+  return d;
+}
+
+module.exports = { qpayShalgayAyulgui, qpayTulsunOgnoo };

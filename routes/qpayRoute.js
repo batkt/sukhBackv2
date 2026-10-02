@@ -2215,7 +2215,7 @@ router.post(
  * Буцаах: { tulugdsun, dun (QPay-ийн төлсөн нийт), transactionId }
  */
 async function qpayTulburBatalgaajuulakh(qpayInvoiceId, baiguullagiinId, kholbolt, barilgiinId) {
-  if (!qpayInvoiceId) return { tulugdsun: false, dun: 0, transactionId: null };
+  if (!qpayInvoiceId) return { tulugdsun: false, dun: 0, transactionId: null, tulsunOgnoo: null };
   try {
     const khariu = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui(
       { invoice_id: qpayInvoiceId, baiguullagiinId, barilgiinId },
@@ -2232,7 +2232,8 @@ async function qpayTulburBatalgaajuulakh(qpayInvoiceId, baiguullagiinId, kholbol
       0;
     const transactionId =
       tulburuud[0]?.transactions?.[0]?.id || khariu?.payments?.[0]?.transactions?.[0]?.id || null;
-    return { tulugdsun, dun, transactionId };
+    const tulsunOgnoo = require("../utils/qpayShalgayAyulgui").qpayTulsunOgnoo(khariu);
+    return { tulugdsun, dun, transactionId, tulsunOgnoo };
   } catch (err) {
     console.error("❌ [QPAY] төлбөр баталгаажуулахад алдаа:", err.message);
     return { tulugdsun: false, dun: 0, transactionId: null };
@@ -2363,6 +2364,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
 
     let qpayInvoiceIdForApi = null;
     let foundQpayRecord = null;
+    let tulsunOgnoo = new Date();
     let QuickQpayModel = null;
 
     try {
@@ -2416,6 +2418,8 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
       invoices.forEach((inv) => {
         if (inv?.isSyntheticBalance) inv.niitTulbur = batalgaa.dun;
       });
+      // Иргэн QPay-д бодитоор төлсөн огноо — бүх бичлэгт энийг хэрэглэнэ
+      tulsunOgnoo = batalgaa.tulsunOgnoo || new Date();
       if (!qpayInvoiceIdForApi) qpayInvoiceIdForApi = shalgakhId;
     }
 
@@ -2643,7 +2647,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
               nekhemjlekh.isGenericPayment
               ? null
               : nekhemjlekh._id?.toString() || null,
-          ognoo: new Date(),
+          ognoo: tulsunOgnoo,
           dun: invoicePaidAmount,
           tailbar: "QPay төлөлт",
           source: "nekhemjlekh",
@@ -2704,7 +2708,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
               })(),
               $push: {
                 paymentHistory: {
-                  ognoo: new Date(),
+                  ognoo: tulsunOgnoo,
                   dun: nekhemjlekh.niitTulbur || 0,
                   turul: "төлөлт",
                   guilgeeniiId:
@@ -2776,7 +2780,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
           if (geree) {
             const bankGuilgee = new BankniiGuilgee(kholbolt)();
 
-            bankGuilgee.tranDate = new Date();
+            bankGuilgee.tranDate = tulsunOgnoo;
 
             bankGuilgee.amount = invoicePaidAmount;
             bankGuilgee.description = `QPay төлбөр - Гэрээ ${nekhemjlekh.gereeniiDugaar}`;
@@ -2807,7 +2811,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
             bankGuilgee.drOrCr = "Credit";
             bankGuilgee.tranCrnCode = "MNT";
             bankGuilgee.exchRate = 1;
-            bankGuilgee.postDate = new Date();
+            bankGuilgee.postDate = tulsunOgnoo;
 
             bankGuilgee.indexTalbar = `${bankGuilgee.barilgiinId}${bankGuilgee.bank}${bankGuilgee.dansniiDugaar}${bankGuilgee.record}${bankGuilgee.amount}`;
 
@@ -3196,7 +3200,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
                   kharsanEsekh: false,
                   status: "pending",
                   turul: "medegdel",
-                  ognoo: new Date(),
+                  ognoo: tulsunOgnoo,
                 });
                 await m.save();
                 ioNekh.emit("baiguullagiin" + baiguullagiinId, {

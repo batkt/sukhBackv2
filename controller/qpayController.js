@@ -97,15 +97,17 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     return res.sendStatus(200);
   }
 
+  // Иргэн бодитоор төлсөн огноо (QPay-ийн payment_date)
+  let tulsunOgnoo = new Date();
   // АЮУЛГҮЙ БАЙДАЛ: нийтэд нээлттэй callback — QPay «PAID» гэж баталсан үед л бүртгэнэ.
   {
-    const { qpayShalgay } = require("quickqpaypackvSukh");
     const qpayInvoiceId = qpayBarimt.invoice_id || qpayBarimt.qpay?.invoice_id;
     let batalgaajsan = false;
     if (qpayInvoiceId) {
       try {
         const khariu = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui({ invoice_id: qpayInvoiceId, baiguullagiinId, barilgiinId: qpayBarimt?.salbariinId || barilgiinId }, kholbolt);
         const tuluv = String(khariu?.invoice_status || "").toUpperCase();
+        tulsunOgnoo = require("../utils/qpayShalgayAyulgui").qpayTulsunOgnoo(khariu);
         batalgaajsan =
           tuluv === "PAID" ||
           tuluv === "CLOSED" ||
@@ -163,7 +165,7 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     ...(angilliinNer ? { zardliinNer: angilliinNer } : {}),
     source: "nekhemjlekh",
     bankniiGuilgeeId: qpayBarimt.payment_id || dugaar,
-    ognoo: new Date(),
+    ognoo: tulsunOgnoo,
     nekhemjlekhId: qpayBarimt.sukhNekhemjlekh?.nekhemjlekhiinId
   });
 
@@ -325,6 +327,8 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
     nekhemjlekh.qpayInvoiceId || qpayBichleg?.invoice_id || qpayBichleg?.qpay?.invoice_id || null;
 
   let paidAmount = 0;
+  // Иргэн бодитоор төлсөн огноо (QPay-ийн payment_date)
+  let tulsunOgnoo = new Date();
   let paymentTransactionId = null;
   if (qpayInvoiceId) {
     try {
@@ -334,6 +338,7 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
       );
       const tuluv = String(khariu?.invoice_status || "").toUpperCase();
       if (tulburuud.length > 0 || tuluv === "PAID" || tuluv === "CLOSED") {
+        tulsunOgnoo = require("../utils/qpayShalgayAyulgui").qpayTulsunOgnoo(khariu);
         paidAmount =
           tulburuud.reduce((sum, p) => sum + (Number(p?.payment_amount ?? p?.amount) || 0), 0) ||
           Number(khariu?.paid_amount) ||
@@ -385,7 +390,7 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
     tailbar: `QPay төлөлт`,
     source: "nekhemjlekh",
     bankniiGuilgeeId: paymentTransactionId || nekhemjlekh.qpayInvoiceId || "manual_sync",
-    ognoo: new Date(),
+    ognoo: tulsunOgnoo,
     nekhemjlekhId: nekhemjlekhiinId,
   });
 
@@ -412,7 +417,7 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
       const BankniiGuilgeeModel = BankniiGuilgee(kholbolt);
       const bankGuilgee = new BankniiGuilgeeModel();
 
-      bankGuilgee.tranDate = new Date();
+      bankGuilgee.tranDate = tulsunOgnoo;
       bankGuilgee.amount = paidAmount;
       bankGuilgee.description = `QPay төлбөр - Гэрээ ${nekhemjlekh.gereeniiDugaar || ""}`;
       bankGuilgee.accName = nekhemjlekh.nekhemjlekhiinDansniiNer || "";
@@ -438,7 +443,7 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
       bankGuilgee.drOrCr = "Credit";
       bankGuilgee.tranCrnCode = "MNT";
       bankGuilgee.exchRate = 1;
-      bankGuilgee.postDate = new Date();
+      bankGuilgee.postDate = tulsunOgnoo;
 
       bankGuilgee.indexTalbar = `${bankGuilgee.barilgiinId}${bankGuilgee.bank}${bankGuilgee.dansniiDugaar}${bankGuilgee.record}${bankGuilgee.amount}`;
 
@@ -459,12 +464,12 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
   nekhemjlekh.tuluv = isFullyPaid ? "Төлсөн" : "Төлөөгүй";
   nekhemjlekh.tulsunDun = newTulsun;
   nekhemjlekh.uldegdel = newUldegdel;
-  nekhemjlekh.tulsunOgnoo = new Date();
+  nekhemjlekh.tulsunOgnoo = tulsunOgnoo;
   nekhemjlekh.qpayPaymentId = paymentTransactionId;
   
   nekhemjlekh.paymentHistory = nekhemjlekh.paymentHistory || [];
   nekhemjlekh.paymentHistory.push({
-    ognoo: new Date(),
+    ognoo: tulsunOgnoo,
     dun: paidAmount,
     turul: "төлөлт",
     guilgeeniiId: paymentTransactionId || "manual_sync",
