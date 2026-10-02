@@ -104,7 +104,7 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
     let batalgaajsan = false;
     if (qpayInvoiceId) {
       try {
-        const khariu = await qpayShalgay({ invoice_id: qpayInvoiceId, baiguullagiinId: String(baiguullagiinId) }, kholbolt);
+        const khariu = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui({ invoice_id: qpayInvoiceId, baiguullagiinId, barilgiinId: qpayBarimt?.salbariinId || barilgiinId }, kholbolt);
         const tuluv = String(khariu?.invoice_status || "").toUpperCase();
         batalgaajsan =
           tuluv === "PAID" ||
@@ -328,7 +328,7 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
   let paymentTransactionId = null;
   if (qpayInvoiceId) {
     try {
-      const khariu = await qpayShalgay({ invoice_id: qpayInvoiceId, baiguullagiinId: String(baiguullagiinId) }, kholbolt);
+      const khariu = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui({ invoice_id: qpayInvoiceId, baiguullagiinId, barilgiinId: qpayBichleg?.salbariinId || nekhemjlekh?.barilgiinId }, kholbolt);
       const tulburuud = (Array.isArray(khariu?.payments) ? khariu.payments : []).filter(
         (p) => p?.payment_status === "PAID" || p?.status === "PAID",
       );

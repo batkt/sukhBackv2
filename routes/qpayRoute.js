@@ -2205,11 +2205,11 @@ router.post(
  * хүсэлтийн `amount`, параметрт огт итгэхгүй.
  * Буцаах: { tulugdsun, dun (QPay-ийн төлсөн нийт), transactionId }
  */
-async function qpayTulburBatalgaajuulakh(qpayInvoiceId, baiguullagiinId, kholbolt) {
+async function qpayTulburBatalgaajuulakh(qpayInvoiceId, baiguullagiinId, kholbolt, barilgiinId) {
   if (!qpayInvoiceId) return { tulugdsun: false, dun: 0, transactionId: null };
   try {
-    const khariu = await qpayShalgay(
-      { invoice_id: qpayInvoiceId, baiguullagiinId: String(baiguullagiinId) },
+    const khariu = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui(
+      { invoice_id: qpayInvoiceId, baiguullagiinId, barilgiinId },
       kholbolt,
     );
     const tulburuud = (Array.isArray(khariu?.payments) ? khariu.payments : []).filter(
@@ -2390,7 +2390,12 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
     {
       const shalgakhId =
         qpayInvoiceIdForApi || invoices.find((inv) => inv?.qpayInvoiceId)?.qpayInvoiceId || null;
-      const batalgaa = await qpayTulburBatalgaajuulakh(shalgakhId, baiguullagiinId, kholbolt);
+      const batalgaa = await qpayTulburBatalgaajuulakh(
+        shalgakhId,
+        baiguullagiinId,
+        kholbolt,
+        foundQpayRecord?.salbariinId || invoices.find((inv) => inv?.barilgiinId)?.barilgiinId,
+      );
       if (!batalgaa.tulugdsun) {
         console.warn("⛔ [QPAY MULTI CALLBACK] QPay төлбөрийг баталгаажуулсангүй — бүртгэхгүй", {
           baiguullagiinId,
@@ -2501,13 +2506,7 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
 
     if (qpayInvoiceIdForApi) {
       try {
-        const khariu = await qpayShalgay(
-          {
-            invoice_id: qpayInvoiceIdForApi,
-            baiguullagiinId: String(baiguullagiinId),
-          },
-          kholbolt,
-        );
+        const khariu = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui({ invoice_id: qpayInvoiceIdForApi, baiguullagiinId }, kholbolt);
 
         if (khariu?.payments?.[0]?.transactions?.[0]?.id) {
           paymentTransactionId = khariu.payments[0].transactions[0].id;
