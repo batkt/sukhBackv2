@@ -1223,6 +1223,12 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
       }
     }
 
+    if (req.body.ner !== undefined) {
+      const trimmedNer = String(req.body.ner || "").trim();
+      req.body.ner = trimmedNer;
+      req.body.hasCustomName = trimmedNer.length > 0;
+    }
+
     // Propagate top-level name changes to toots array if provided
     if (req.body.toots && Array.isArray(req.body.toots)) {
       req.body.toots.forEach(t => {

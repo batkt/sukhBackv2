@@ -8,6 +8,10 @@ const orshinSuugchSchema = new Schema(
   {
     id: String,
     ner: String,
+    hasCustomName: {
+      type: Boolean,
+      default: false,
+    },
     toot: String, // Keep for backward compatibility
     toots: [
       {

@@ -2293,27 +2293,8 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
           }
 
           // Update user fields in memory
-          // Update primary user fields ONLY if they are not already set
-          // This prevents overwriting the user's registration name with a bill name (e.g. from a relative's unit)
-          if (billingInfo.customerName && !orshinSuugch.ner) {
-
-            const trimmedName = billingInfo.customerName.trim();
-            const nameParts = trimmedName.split(/\s+/);
-
-            if (nameParts.length >= 2) {
-
-              orshinSuugch.ner = nameParts[nameParts.length - 1];
-
-              orshinSuugch.ovog = nameParts.slice(0, nameParts.length - 1).join(" ");
-            } else if (trimmedName.includes('.')) {
-              // Handle "Ч.Ганзориг" format
-              const dotParts = trimmedName.split('.');
-              orshinSuugch.ner = dotParts[dotParts.length - 1];
-              orshinSuugch.ovog = dotParts.slice(0, dotParts.length - 1).join(".") + ".";
-            } else {
-              orshinSuugch.ner = trimmedName;
-            }
-          }
+          // BPay / Wallet хаягийн customerName нь тухайн хаягийн тоолуурын нэр тул
+          // хэрэглэгчийн өөрийн нэрийг (orshinSuugch.ner) дарахгүй.
           if (billingInfo.customerAddress)
             orshinSuugch.bairniiNer = billingInfo.customerAddress;
           if (billingInfo.customerId)
@@ -2698,10 +2679,17 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
       }
     }
 
-    const token = await orshinSuugch.tokenUusgeye();
+    let resultUser = orshinSuugch.toObject ? orshinSuugch.toObject() : { ...orshinSuugch };
+    const isWalletLoginUser =
+      !resultUser.baiguullagiinId ||
+      String(resultUser.baiguullagiinId) === CENTRALIZED_ORG_ID;
+    if (isWalletLoginUser && resultUser.hasCustomName !== true) {
+      resultUser.ner = "";
+      resultUser.ovog = "";
+    }
 
     const butsaakhObject = {
-      result: orshinSuugch,
+      result: resultUser,
       success: true,
       token: token,
       walletUserInfo: walletUserInfo,
@@ -3578,22 +3566,8 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
 
           // Update user with billing data
           const updateData = {};
-          if (billingInfo.customerName && !orshinSuugch.ner) {
-            // Strict name extraction: Mongolia convention is [Patronymic/Surname] [Given Name]
-            const trimmedName = billingInfo.customerName.trim();
-            const nameParts = trimmedName.split(/\s+/);
-
-            if (nameParts.length >= 2) {
-              updateData.ner = nameParts[nameParts.length - 1];
-              updateData.ovog = nameParts.slice(0, nameParts.length - 1).join(" ");
-            } else if (trimmedName.includes('.')) {
-              const dotParts = trimmedName.split('.');
-              updateData.ner = dotParts[dotParts.length - 1];
-              updateData.ovog = dotParts.slice(0, dotParts.length - 1).join(".") + ".";
-            } else {
-              updateData.ner = trimmedName;
-            }
-          }
+          // BPay / Wallet хаягийн customerName нь тухайн хаягийн тоолуурын нэр тул
+          // хэрэглэгчийн өөрийн бүртгэлийн нэрийг (orshinSuugch.ner) дарахгүй.
           if (billingInfo.customerAddress) {
             updateData.bairniiNer = billingInfo.customerAddress;
           }
@@ -3747,22 +3721,9 @@ exports.walletBillingHavakh = asyncHandler(async (req, res, next) => {
 
     // 5. Update local OrshinSuugch and Centralized Org Sync
     const updateData = {};
-    if (billingInfo.customerName && !orshinSuugch.ner) {
-      // Strict name extraction: Mongolia convention is [Patronymic/Surname] [Given Name]
-      const trimmedName = billingInfo.customerName.trim();
-      const nameParts = trimmedName.split(/\s+/);
-
-      if (nameParts.length >= 2) {
-        updateData.ner = nameParts[nameParts.length - 1];
-        updateData.ovog = nameParts.slice(0, nameParts.length - 1).join(" ");
-      } else if (trimmedName.includes('.')) {
-        const dotParts = trimmedName.split('.');
-        updateData.ner = dotParts[dotParts.length - 1];
-        updateData.ovog = dotParts.slice(0, dotParts.length - 1).join(".") + ".";
-      } else {
-        updateData.ner = trimmedName;
-      }
-    }
+    // BPay / Wallet хаягийн customerName нь тухайн хаягийн тоолуурын нэр тул
+    // хэрэглэгчийн өөрийн бүртгэлийн нэрийг (orshinSuugch.ner) дарахгүй.
+    // Зөвхөн хэрэглэгч өөрөө хувийн мэдээллээсээ нэрээ зассан үед хадгална.
     if (billingInfo.customerAddress) updateData.bairniiNer = billingInfo.customerAddress;
     updateData.toot = doorNo;
     updateData.walletBairId = bairId;
@@ -4350,6 +4311,17 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
           "\u26a0\ufe0f [Profile] Машины жагсаалт уншихад алдаа:",
           mashiniiAldaa.message,
         );
+      }
+
+      // Wallet / BPay хэрэглэгч бөгөөд өөрөө хувийн мэдээллээс нэрээ гараар
+      // оруулаагүй (hasCustomName !== true) бол хаягнаас ирсэн нэрийг харуулахгүй, хоосон буцаана.
+      const isWalletUser =
+        !urdunJson.baiguullagiinId ||
+        String(urdunJson.baiguullagiinId) === CENTRALIZED_ORG_ID;
+
+      if (isWalletUser && urdunJson.hasCustomName !== true) {
+        urdunJson.ner = "";
+        urdunJson.ovog = "";
       }
 
       res.send(urdunJson);
