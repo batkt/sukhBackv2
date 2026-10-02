@@ -2679,6 +2679,8 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
       }
     }
 
+    const token = await orshinSuugch.tokenUusgeye();
+
     let resultUser = orshinSuugch.toObject ? orshinSuugch.toObject() : { ...orshinSuugch };
     const isWalletLoginUser =
       !resultUser.baiguullagiinId ||
