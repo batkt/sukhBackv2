@@ -72,6 +72,10 @@ function qpayTulsunOgnoo(khariu) {
     guilgee?.transaction_date ||
     guilgee?.created_date ||
     khariu?.paid_date ||
+    // QPay /payment/check: нэхэмжлэх PAID болсон мөч (жишээ 2026-10-02T00:21:52Z)
+    (["PAID", "CLOSED"].includes(String(khariu?.invoice_status || "").toUpperCase())
+      ? khariu?.invoice_status_date
+      : null) ||
     null;
   const d = raw ? new Date(raw) : null;
   // QPay огноо өгөөгүй бол ТААХГҮЙ — null (дуудагч нь одоогийн цагийг хэрэглэнэ)

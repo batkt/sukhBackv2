@@ -112,7 +112,8 @@ async function main() {
       const zuruutei = murnuud.filter(
         (m) =>
           Math.abs(new Date(m.ognoo).getTime() - new Date(m.createdAt).getTime()) < 10 * 60 * 1000 &&
-          new Date(m.ognoo).getTime() - tulsun.getTime() > TSAG_MS,
+          // 5 минутаас илүү хожуу тамгалагдсан (08:21 төлсөн → 09:18 бүртгэгдсэн г.м.)
+          new Date(m.ognoo).getTime() - tulsun.getTime() > 5 * 60 * 1000,
       );
       if (zuruutei.length === 0) continue;
 
