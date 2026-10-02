@@ -19,7 +19,10 @@
  *   node scripts/qpayTulsunNokhokh.js --khonog 30 --baiguullaga <id>
  *   node scripts/qpayTulsunNokhokh.js --apply                # бодитоор нөхөх
  */
-require("dotenv").config({ path: "../tokhirgoo/tokhirgoo.env" });
+// Сервертэй (index.js) ижил тохиргоо — хаанаас ажиллуулсан ч зөв олно
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "../tokhirgoo/local.env") });
+require("dotenv").config({ path: path.join(__dirname, "../tokhirgoo/tokhirgoo.env") });
 const axios = require("axios");
 const { db } = require("zevbackv2");
 
@@ -35,8 +38,9 @@ const qpayInvoiceId = (b) => b.invoice_id || b.qpay?.invoice_id || null;
 const callbackUrl = (b) => b.qpay?.callback_url || b.callback_url || null;
 
 async function main() {
-  const MONGODB_URI = process.env.MONGODB_URI;
-  if (!MONGODB_URI) throw new Error("MONGODB_URI тохируулаагүй байна");
+  const MONGODB_URI =
+    process.env.MONGODB_URI ||
+    "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSukh?authSource=admin";
   db.kholboltUusgey(null, MONGODB_URI);
   await new Promise((r) => setTimeout(r, 2000));
 

@@ -9,12 +9,16 @@
  *   node scripts/khungulultNekhemjlekhSync.js            # бүх байгууллага
  *   node scripts/khungulultNekhemjlekhSync.js <baiguullagiinId>
  */
-require("dotenv").config({ path: "../tokhirgoo/tokhirgoo.env" });
+// Сервертэй (index.js) ижил тохиргоо — хаанаас ажиллуулсан ч зөв олно
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "../tokhirgoo/local.env") });
+require("dotenv").config({ path: path.join(__dirname, "../tokhirgoo/tokhirgoo.env") });
 const { db } = require("zevbackv2");
 
 async function main() {
-  const MONGODB_URI = process.env.MONGODB_URI;
-  if (!MONGODB_URI) throw new Error("MONGODB_URI тохируулаагүй байна");
+  const MONGODB_URI =
+    process.env.MONGODB_URI ||
+    "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSukh?authSource=admin";
   db.kholboltUusgey(null, MONGODB_URI);
   await new Promise((r) => setTimeout(r, 2000));
 
