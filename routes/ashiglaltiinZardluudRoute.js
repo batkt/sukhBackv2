@@ -12,6 +12,10 @@ const {
   ashiglaltiinZardalExcelTemplateAvya,
   ashiglaltiinZardalExcelTatya,
 } = require("../controller/ashiglaltiinZardalExcelController");
+const {
+  zardlaasGereenuudiigTseverleye,
+  gereeniiZardluudBichye,
+} = require("../utils/gereeniiZardalTseverlegee");
 
 const uploadFile = multer({ storage: multer.memoryStorage() });
 
@@ -191,41 +195,39 @@ router.post("/ashiglaltiinZardalUstgaya", tokenShalgakh, async (req, res, next) 
     if (!zardal) {
       return res.status(404).send({ success: false, message: "Зардал олдсонгүй (өмнө нь устгагдсан байж магадгүй)." });
     }
+    // ДАРААЛАЛ ЧУХАЛ: эхлээд гэрээнүүдээс хасаад, дараа нь мастер бичлэгийг
+    // устгана. Эсрэгээр нь хийвэл (өмнө нь ингэдэг байсан) гэрээнээс хасах
+    // явцад алдаа гарахад мастер бичлэг аль хэдийн алга болсон тул юуг хасах
+    // байсныг дахин олох аргагүй болдог.
+    const tseverlegee = await zardlaasGereenuudiigTseverleye(kholbolt, zardal);
+
     await Zardal.findOneAndDelete({ _id: id, baiguullagiinId });
 
-    const ner = String(zardal.ner || "").trim().toLowerCase();
-    const turul = String(zardal.turul || "").trim().toLowerCase();
-    const adilZardal = (z) => {
-      if (String(z?.ner || "").trim().toLowerCase() !== ner) return false;
-      const zt = String(z?.turul || "").trim().toLowerCase();
-      return !turul || !zt || zt === turul;
-    };
-
-    const gereeShuult = { baiguullagiinId, "zardluud.0": { $exists: true } };
-    if (zardal.barilgiinId) {
-      gereeShuult.$or = [
-        { barilgiinId: String(zardal.barilgiinId) },
-        { barilgiinId: { $exists: false } },
-        { barilgiinId: null },
-        { barilgiinId: "" },
-      ];
-    }
-    // Бичих холболтоор (read=false) уншиж хадгална.
-    const gereenuud = await Geree(kholbolt).find(gereeShuult);
-    let zassanToo = 0;
-    for (const geree of gereenuud) {
-      const umnukh = geree.zardluud.length;
-      geree.zardluud = geree.zardluud.filter((z) => !adilZardal(z));
-      if (geree.zardluud.length === umnukh) continue;
-      geree.niitTulbur = geree.zardluud.reduce((sum, z) => sum + (z.tariff || 0), 0);
-      await geree.save();
-      zassanToo++;
-    }
+    // Зарим гэрээ амжилтгүй болбол ЧИМЭЭГҮЙ өнгөрүүлж болохгүй — тэр гэрээнүүд
+    // дараа сарын нэхэмжлэхэд устгасан зардлаа дахин бичих тул ажилтан мэдэх
+    // ёстой.
+    if (tseverlegee.aldaatai.length)
+      return res.send({
+        success: true,
+        buren: false,
+        message:
+          `"${zardal.ner}" зардал устгагдаж ${tseverlegee.zassan} гэрээнээс хасагдлаа. ` +
+          `Гэвч ${tseverlegee.aldaatai.length} гэрээнээс хасаж чадсангүй — ` +
+          `тэдгээрийг шалгана уу: ` +
+          tseverlegee.aldaatai
+            .slice(0, 5)
+            .map((a) => a.gereeniiDugaar || a.gereeniiId)
+            .join(", ") +
+          (tseverlegee.aldaatai.length > 5 ? " ..." : ""),
+        zassanGereeToo: tseverlegee.zassan,
+        aldaataiGereenuud: tseverlegee.aldaatai,
+      });
 
     res.send({
       success: true,
-      message: `"${zardal.ner}" зардал устгагдаж ${zassanToo} гэрээнээс хасагдлаа.`,
-      zassanGereeToo: zassanToo,
+      buren: true,
+      message: `"${zardal.ner}" зардал устгагдаж ${tseverlegee.zassan} гэрээнээс хасагдлаа.`,
+      zassanGereeToo: tseverlegee.zassan,
     });
   } catch (err) {
     next(err);
@@ -296,8 +298,6 @@ router.post("/zardalTseverlekhiya", tokenShalgakh, async (req, res, next) => {
       zaaltTariffTiers: doc.zaaltTariffTiers || [],
     }));
 
-    const masterTotal = masterZardluud.reduce((sum, z) => sum + (z.tariff || 0), 0);
-
     const gereeQuery = { baiguullagiinId: String(baiguullagiinId) };
     if (barilgiinId) {
       gereeQuery.$or = [
@@ -309,27 +309,50 @@ router.post("/zardalTseverlekhiya", tokenShalgakh, async (req, res, next) => {
       ];
     }
 
-    const gereenuud = await Geree(tukhainBaaziinKholbolt).find(gereeQuery);
+    const GereeModel = Geree(tukhainBaaziinKholbolt);
+    const gereenuud = await GereeModel.find(gereeQuery)
+      .select({ gereeniiDugaar: 1, tootTurul: 1, toot: 1, barilgiinId: 1, khariltsagchId: 1, orshinSuugchId: 1 })
+      .lean();
     let updatedCount = 0;
+    const aldaatai = [];
 
     const { gereeniiTootTurul, zardluudShuuye } = require("../utils/zardalAngilal");
     for (const geree of gereenuud) {
-      // Зогсоол/агуулахын гэрээнд зөвхөн өөрийн ангиллын зардал
-      const tootTurul = await gereeniiTootTurul(geree);
-      const tokhirokh = zardluudShuuye(masterZardluud, tootTurul);
-      geree.zardluud = tokhirokh;
-      geree.niitTulbur =
-        tokhirokh === masterZardluud
-          ? masterTotal
-          : tokhirokh.reduce((sum, z) => sum + (z.tariff || 0), 0);
-      await geree.save();
-      updatedCount++;
+      // Нэг гэрээ унасан ч бусдыг үргэлжлүүлнэ. Өмнө нь энд try/catch байхгүй
+      // байсан тул хуучин өгөгдөлтэй ганц гэрээ синкийг бүхэлд нь таслаад,
+      // дараагийн гэрээнүүд устгасан зардлаа хэвээр үлдээж байв.
+      try {
+        // Зогсоол/агуулахын гэрээнд зөвхөн өөрийн ангиллын зардал
+        const tootTurul = await gereeniiTootTurul(geree);
+        const tokhirokh = zardluudShuuye(masterZardluud, tootTurul);
+        await gereeniiZardluudBichye(GereeModel, geree._id, tokhirokh);
+        updatedCount++;
+      } catch (aldaa) {
+        console.error(
+          `[zardalTseverlekhiya] гэрээг синк хийж чадсангүй: ${geree.gereeniiDugaar || geree._id} —`,
+          aldaa?.message,
+        );
+        aldaatai.push({
+          gereeniiId: String(geree._id),
+          gereeniiDugaar: geree.gereeniiDugaar || "",
+          aldaa: aldaa?.message || "Тодорхойгүй алдаа",
+        });
+      }
     }
 
     res.send({
       success: true,
-      message: `Амжилттай ${updatedCount} гэрээний зардлыг синк хийж шинэчиллээ`,
+      buren: aldaatai.length === 0,
+      message: aldaatai.length
+        ? `${updatedCount} гэрээг синк хийлээ. ${aldaatai.length} гэрээ амжилтгүй — ` +
+          aldaatai
+            .slice(0, 5)
+            .map((a) => a.gereeniiDugaar || a.gereeniiId)
+            .join(", ") +
+          (aldaatai.length > 5 ? " ..." : "")
+        : `Амжилттай ${updatedCount} гэрээний зардлыг синк хийж шинэчиллээ`,
       updatedContractsCount: updatedCount,
+      aldaataiGereenuud: aldaatai,
     });
   } catch (err) {
     next(err);

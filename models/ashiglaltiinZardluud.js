@@ -41,26 +41,25 @@ const ashiglaltiinZardluudSchema = new Schema(
   }
 );
 
-// Helper function to check if two zardals match (flexible case & whitespace)
-function isSameZardal(z1, z2) {
-  if (!z1 || !z2) return false;
-  const ner1 = String(z1.ner || "").trim().toLowerCase();
-  const ner2 = String(z2.ner || "").trim().toLowerCase();
-  if (!ner1 || !ner2 || ner1 !== ner2) return false;
-
-  const turul1 = String(z1.turul || "").trim().toLowerCase();
-  const turul2 = String(z2.turul || "").trim().toLowerCase();
-  if (turul1 && turul2 && turul1 !== turul2) return false;
-
-  return true;
-}
+// Тааруулах дүрэм нь устгах/синк хийх замуудтай ЯГ ИЖИЛ байх ёстой — эс
+// бөгөөс нэг зам хасдаг мөрийг нөгөө нь үлдээж орхино. Тиймээс ганц
+// тодорхойлолтыг хуваалцана.
+const {
+  zardalAdilUu: isSameZardal,
+  gereeniiShuult,
+  gereeniiZardluudBichye,
+} = require("../utils/gereeniiZardalTseverlegee");
 
 // Pre-deletion hook: Store document before query execution so we never lose it in post hook
+//
+// `deleteMany` нь ОЛОН баримт устгадаг атлаа энд `findOne` л дуудаж байсан тул
+// эхнийхээс бусад зардал гэрээнээс хасагдалгүй үлддэг байв. Бүгдийг нь хадгална.
 ashiglaltiinZardluudSchema.pre(
   ["findOneAndDelete", "deleteOne", "findOneAndRemove", "deleteMany"],
   async function () {
     try {
-      this._docToDelete = await this.model.findOne(this.getQuery()).lean();
+      this._docsToDelete = await this.model.find(this.getQuery()).lean();
+      this._docToDelete = this._docsToDelete[0] || null;
     } catch (_) {}
   }
 );
@@ -86,9 +85,16 @@ ashiglaltiinZardluudSchema.post(
   ["findOneAndDelete", "deleteOne", "findOneAndRemove", "deleteMany"],
   async function (resDoc) {
     try {
-      const doc = resDoc || this._docToDelete;
-      if (!doc) return;
-      await handleZardluudDelete(doc);
+      // `deleteMany`-д олон баримт устсан байж болно. `resDoc` нь устгалын
+      // үр дүн (тоо) байж болох тул зөвхөн баримт мөн үед нь ашиглана.
+      const docuud =
+        this._docsToDelete?.length > 0
+          ? this._docsToDelete
+          : [resDoc?.baiguullagiinId ? resDoc : this._docToDelete].filter(Boolean);
+
+      for (const doc of docuud) {
+        await handleZardluudDelete(doc);
+      }
     } catch (err) {
       console.error("Error in post-delete hook for ashiglaltiinZardluud:", err);
     }
@@ -112,73 +118,63 @@ async function handleZardluudUpdate(doc) {
     if (!kholbolt) return;
 
     // Build flexible geree query for organization & building
-    const gereeQuery = {
-      baiguullagiinId: String(doc.baiguullagiinId),
-    };
+    const gereeQuery = gereeniiShuult(doc.baiguullagiinId, doc.barilgiinId);
 
-    if (doc.barilgiinId) {
-      const bIdStr = String(doc.barilgiinId);
-      gereeQuery.$or = [
-        { barilgiinId: bIdStr },
-        { barilgiinId: doc.barilgiinId },
-        { barilgiinId: { $exists: false } },
-        { barilgiinId: null },
-        { barilgiinId: "" },
-      ];
-    }
-
-    const gereenuud = await Geree(kholbolt, true).find(gereeQuery);
+    // Бичих холболтоор уншина. Өмнө нь `Geree(kholbolt, true)` буюу уншилтын
+    // холболтоор уншаад буцааж хадгалдаг байсан тул хуучирсан хуулбар дээр
+    // ажиллаж, зэрэг хийгдсэн өөрчлөлтийг дарж бичих эрсдэлтэй байв.
+    const GereeModel = Geree(kholbolt);
+    const gereenuud = await GereeModel.find(gereeQuery).lean();
 
     for (const geree of gereenuud) {
-      if (!geree.zardluud) {
-        geree.zardluud = [];
+      // Нэг гэрээ унасан ч бусдыг үргэлжлүүлнэ.
+      try {
+        // Remove any pre-existing entry with matching name/turul
+        let zardluud = (geree.zardluud || []).filter((z) => !isSameZardal(z, doc));
+
+        // Зогсоол/агуулахын гэрээнд өөр ангиллын (орон сууцны) зардал нэмэхгүй
+        const tootTurul = await gereeniiTootTurul(geree);
+        if (zardluudShuuye([doc], tootTurul).length === 0) {
+          await gereeniiZardluudBichye(GereeModel, geree._id, zardluud);
+          continue;
+        }
+
+        // Construct fresh zardal entry
+        const newZardal = {
+          ner: doc.ner,
+          turul: doc.turul,
+          tariff: doc.tariff || 0,
+          tariffUsgeer: doc.tariffUsgeer || "",
+          zardliinTurul: doc.zardliinTurul || "Энгийн",
+          barilgiinId: doc.barilgiinId || "",
+          tulukhDun: 0,
+          dun: doc.dun || 0,
+          bodokhArga: doc.bodokhArga || "",
+          tseverUsDun: doc.tseverUsDun || 0,
+          bokhirUsDun: doc.bokhirUsDun || 0,
+          usKhalaasniiDun: doc.usKhalaasniiDun || 0,
+          tsakhilgaanUrjver: doc.tsakhilgaanUrjver || 1,
+          tsakhilgaanChadal: doc.tsakhilgaanChadal || 0,
+          tsakhilgaanDemjikh: doc.tsakhilgaanDemjikh || 0,
+          tailbar: doc.tailbar || "",
+          suuriKhuraamj: doc.suuriKhuraamj || 0,
+          nuatNemekhEsekh: doc.nuatNemekhEsekh || false,
+          ognoonuud: doc.ognoonuud || [],
+          zaalt: doc.zaalt || false,
+          zaaltTariff: doc.zaaltTariff || 0,
+          zaaltDefaultDun: doc.zaaltDefaultDun || 0,
+          zaaltTariffTiers: doc.zaaltTariffTiers || [],
+        };
+
+        zardluud = [...zardluud, newZardal];
+
+        await gereeniiZardluudBichye(GereeModel, geree._id, zardluud);
+      } catch (aldaa) {
+        console.error(
+          `[ashiglaltiinZardluud] "${doc.ner}" зардлыг гэрээнд бичиж чадсангүй: ${geree.gereeniiDugaar || geree._id} —`,
+          aldaa?.message,
+        );
       }
-
-      // Remove any pre-existing entry with matching name/turul
-      geree.zardluud = geree.zardluud.filter((z) => !isSameZardal(z, doc));
-
-      // Зогсоол/агуулахын гэрээнд өөр ангиллын (орон сууцны) зардал нэмэхгүй
-      const tootTurul = await gereeniiTootTurul(geree);
-      if (zardluudShuuye([doc], tootTurul).length === 0) {
-        await geree.save();
-        continue;
-      }
-
-      // Construct fresh zardal entry
-      const newZardal = {
-        ner: doc.ner,
-        turul: doc.turul,
-        tariff: doc.tariff || 0,
-        tariffUsgeer: doc.tariffUsgeer || "",
-        zardliinTurul: doc.zardliinTurul || "Энгийн",
-        barilgiinId: doc.barilgiinId || "",
-        tulukhDun: 0,
-        dun: doc.dun || 0,
-        bodokhArga: doc.bodokhArga || "",
-        tseverUsDun: doc.tseverUsDun || 0,
-        bokhirUsDun: doc.bokhirUsDun || 0,
-        usKhalaasniiDun: doc.usKhalaasniiDun || 0,
-        tsakhilgaanUrjver: doc.tsakhilgaanUrjver || 1,
-        tsakhilgaanChadal: doc.tsakhilgaanChadal || 0,
-        tsakhilgaanDemjikh: doc.tsakhilgaanDemjikh || 0,
-        tailbar: doc.tailbar || "",
-        suuriKhuraamj: doc.suuriKhuraamj || 0,
-        nuatNemekhEsekh: doc.nuatNemekhEsekh || false,
-        ognoonuud: doc.ognoonuud || [],
-        zaalt: doc.zaalt || false,
-        zaaltTariff: doc.zaaltTariff || 0,
-        zaaltDefaultDun: doc.zaaltDefaultDun || 0,
-        zaaltTariffTiers: doc.zaaltTariffTiers || [],
-      };
-
-      geree.zardluud.push(newZardal);
-
-      const niitTulbur = geree.zardluud.reduce((sum, zardal) => {
-        return sum + (zardal.tariff || 0);
-      }, 0);
-
-      geree.niitTulbur = niitTulbur;
-      await geree.save();
     }
   } catch (error) {
     console.error(
@@ -193,7 +189,9 @@ async function handleZardluudDelete(doc) {
     if (!doc || !doc.baiguullagiinId) return;
 
     const { db } = require("zevbackv2");
-    const Geree = require("./geree");
+    const {
+      zardlaasGereenuudiigTseverleye,
+    } = require("../utils/gereeniiZardalTseverlegee");
 
     const kholbolt = db.kholboltuud.find(
       (a) => String(a.baiguullagiinId) === String(doc.baiguullagiinId)
@@ -201,38 +199,14 @@ async function handleZardluudDelete(doc) {
 
     if (!kholbolt) return;
 
-    const gereeQuery = {
-      baiguullagiinId: String(doc.baiguullagiinId),
-    };
-
-    if (doc.barilgiinId) {
-      const bIdStr = String(doc.barilgiinId);
-      gereeQuery.$or = [
-        { barilgiinId: bIdStr },
-        { barilgiinId: doc.barilgiinId },
-        { barilgiinId: { $exists: false } },
-        { barilgiinId: null },
-        { barilgiinId: "" },
-      ];
-    }
-
-    const gereenuud = await Geree(kholbolt, true).find(gereeQuery);
-
-    for (const geree of gereenuud) {
-      if (!geree.zardluud || geree.zardluud.length === 0) continue;
-
-      const initialLength = geree.zardluud.length;
-      geree.zardluud = geree.zardluud.filter((z) => !isSameZardal(z, doc));
-
-      if (geree.zardluud.length !== initialLength) {
-        const niitTulbur = geree.zardluud.reduce((sum, zardal) => {
-          return sum + (zardal.tariff || 0);
-        }, 0);
-
-        geree.niitTulbur = niitTulbur;
-        await geree.save();
-      }
-    }
+    // Хуваалцсан хэрэгсэл нь гэрээ бүрийг тусад нь барьж, `updateOne`-оор
+    // бичдэг тул хуучин өгөгдөлтэй ганц гэрээ бусдыг нь таслахгүй.
+    const urDun = await zardlaasGereenuudiigTseverleye(kholbolt, doc);
+    if (urDun.aldaatai.length)
+      console.error(
+        `[ashiglaltiinZardluud] "${doc.ner}" зардлыг ${urDun.aldaatai.length} гэрээнээс хасаж чадсангүй:`,
+        urDun.aldaatai.map((a) => a.gereeniiDugaar || a.gereeniiId).join(", "),
+      );
   } catch (error) {
     console.error(
       "Error updating geree after ashiglaltiinZardluud deletion:",
