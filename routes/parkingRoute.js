@@ -835,8 +835,11 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
     if (req.body.mashiniiDugaar)
       // .trim() to match how CAMERA_IP is handled two lines down. Without it a
       // trailing space from the ANPR read makes the plate a different string
-      // than the one stored at entry, and every lookup misses.
-      req.body.mashiniiDugaar = req.body.mashiniiDugaar.replace(/\0/g, "").trim();
+      // than the one stored at entry, and every lookup misses. Also strip "Blocked" prefix.
+      req.body.mashiniiDugaar = req.body.mashiniiDugaar
+        .replace(/\0/g, "")
+        .replace(/^(blocked|блок)\s*/i, "")
+        .trim();
     if (req.body.CAMERA_IP)
       req.body.CAMERA_IP = req.body.CAMERA_IP.replace(/\0/g, "").trim();
     if (req.body.camerA_IP)

@@ -854,20 +854,26 @@ exports.medegdelUserReply = asyncHandler(async (req, res, next) => {
       io.emit(userEvent, replyObj);
     }
     
-    // Notify admins when user replies
+    // Notify admins when user replies (excluding sender's own token)
     try {
+      const resident = await OrshinSuugch(db.erunkhiiKholbolt)
+        .findById(userId)
+        .select("firebaseToken")
+        .lean();
+      const senderFCM = resident?.firebaseToken;
+
       const admins = await Ajiltan(db.erunkhiiKholbolt).find({ 
         baiguullagiinId: baiguullagiinId,
         firebaseToken: { $exists: true, $ne: "" }
       }).select("firebaseToken");
       
       for (const adminItem of admins) {
-        if (adminItem.firebaseToken) {
+        if (adminItem.firebaseToken && (!senderFCM || adminItem.firebaseToken !== senderFCM)) {
           orshinSuugchidSonorduulgaIlgeeye(adminItem.firebaseToken, {
             title: "Оршин суугч хариу ирүүллээ",
             body: replyObj.message || "Шинэ хариу ирлээ",
             type: "admin_notification",
-            data: { type: "medegdel_user_reply", parentId: String(parentId) }
+            data: { type: "medegdel_user_reply", parentId: String(parentId), senderId: String(userId) }
           });
         }
       }
