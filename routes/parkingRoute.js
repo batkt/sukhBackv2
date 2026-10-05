@@ -856,7 +856,10 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
         const dun = uilchluulegch?.tuukh?.[0]?.tulukhDun;
         const ip = req.body.CAMERA_IP || req.body.camerA_IP;
         const io = req.app.get("socketio");
-        if (io && ip && dun !== undefined && dun !== null && Number(dun) > 0) {
+        // Дүн ТЭГ байсан ч илгээнэ: оршин суугч үнэгүй гардаг ч самбар дээр
+        // төрөл нь ("Оршин суугч") харагдах ёстой. Тэг дүнг доор ажилтан
+        // "Үнэгүй" болгож харуулна — зогсоолын жагсаалттай ижил үг.
+        if (io && ip && dun !== undefined && dun !== null) {
           io.to(`gate-room-${req.body.barilgiinId}`).emit("sambar-show", {
             ip,
             plate:
