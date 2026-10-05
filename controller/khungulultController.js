@@ -299,7 +299,13 @@ async function uldegdelBodyo(kholbolt, { baiguullagiinId, barilgiinId, gereeniiI
     const gid = _id?.g ? String(_id.g) : "";
     if (!gid) return;
     uldegdel[gid] = (uldegdel[gid] || 0) + dun;
-    const t = (tootsoo[gid] ||= { angilal: { "Орон сууц": 0, Агуулах: 0, Зогсоол: 0 }, yalgaagui: 0 });
+    const t = (tootsoo[gid] ||= {
+      angilal: { "Орон сууц": 0, Агуулах: 0, Зогсоол: 0 },
+
+      avlaga: { "Орон сууц": 0, Агуулах: 0, Зогсоол: 0 },
+      yalgaagui: 0,
+    });
+    if (_id.eyreg) t.avlaga[angilalTaniya(_id.n)] += dun;
     // Нэртэй авлага/төлөлт болон ангилалтай хөнгөлөлт нь ангилалдаа шууд сууна;
     // нэргүй хуучин төлөлтийг доор ангиллын үлдэгдлийн хувиар хуваарилна.
     if (
@@ -314,7 +320,8 @@ async function uldegdelBodyo(kholbolt, { baiguullagiinId, barilgiinId, gereeniiI
   });
   const uldegdelAngilal = {};
   Object.entries(tootsoo).forEach(([gid, t]) => {
-    const eyreg = ANGILLUUD.map((k) => Math.max(0, t.angilal[k]));
+   
+    const eyreg = ANGILLUUD.map((k) => Math.max(0, t.avlaga[k]));
     const niit = eyreg.reduce((a, b) => a + b, 0);
     const ur = {};
     ANGILLUUD.forEach((k, i) => {
