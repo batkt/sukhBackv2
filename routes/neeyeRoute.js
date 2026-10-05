@@ -314,7 +314,11 @@ router.get("/neeye/:ip", async (req, res) => {
       pendingGateCommands.set(commandId, { resolve, timeout });
     });
 
-    let vehicleTurul = "Оршин суугч";
+    // Анхны утга нь ҮЙЛЧЛҮҮЛЭГЧ. Mashin дээр ч байхгүй, урисан зочин ч
+    // биш машиныг ҮЙЛЧЛҮҮЛЭГЧ гэж үзнэ — өмнө нь "Оршин суугч" гэж
+    // тавьдаг байсан нь гаднаас орж ирсэн төлбөртэй машиныг самбар дээр
+    // оршин суугч мэт харуулдаг байв.
+    let vehicleTurul = "Үйлчлүүлэгч";
     if (mashiniiDugaar) {
       try {
         const { Mashin, EzenUrisanMashin } = require("sukhParking-v1");
