@@ -2904,19 +2904,34 @@ router.get("/v1/search_car/:plate_number", async (req, res, next) => {
               .findOne(matchMashin)
               .sort({ createdAt: -1 });
             if ((!!freeze || !!localEsekh) && !!oldsonMashin) {
-              oldsonMashin.freezeOgnoo =
-                oldsonMashin.tuukh[0].tsagiinTuukh[0].garsanTsag;
+              const exitTime =
+                oldsonMashin?.tuukh?.[0]?.tsagiinTuukh?.[0]?.garsanTsag;
+              const freezeDate = exitTime ? new Date(exitTime) : new Date();
+              oldsonMashin.freezeOgnoo = freezeDate;
               await Uilchluulegch(kholbolt).updateOne(
                 { _id: oldsonMashin._id },
                 {
-                  freezeOgnoo: oldsonMashin.tuukh[0].tsagiinTuukh[0].garsanTsag
-                    ? oldsonMashin.tuukh[0].tsagiinTuukh[0].garsanTsag
-                    : new Date(),
+                  freezeOgnoo: freezeDate,
                 },
               );
             }
             if (!!oldsonMashin && !!oldsonMashin.mashiniiDugaar) {
-              if (
+              const garsanTsag =
+                oldsonMashin?.tuukh?.[0]?.tsagiinTuukh?.[0]?.garsanTsag;
+              const hasExited = !!garsanTsag;
+              const savedDun =
+                Number(oldsonMashin?.tuukh?.[0]?.tulukhDun) > 0
+                  ? Number(oldsonMashin.tuukh[0].tulukhDun)
+                  : Number(oldsonMashin.niitDun) > 0
+                    ? Number(oldsonMashin.niitDun)
+                    : 0;
+
+              // Хэрэв машин аль хэдийн гарсан бол гарцын үед бодогдсон бодит дүн
+              // (niitDun / tulukhDun)-г ашиглана. Дараа нь дахин zogsooliinDunAvya
+              // дуудаж гарсанаас хойшхи цагийг нэмж бодохгүй!
+              if (hasExited && savedDun > 0) {
+                bodsonDun = savedDun;
+              } else if (
                 zogsool?.togtmolTulburEsekh &&
                 zogsool?.togtmolTulburiinDun > 0 &&
                 oldsonMashin?.turul == "Дурын"
@@ -3020,17 +3035,31 @@ router.get("/v2/search_car/:plate_number", async (req, res, next) => {
               .sort({ createdAt: -1 })
               .limit(1);
             if ((!!freeze || !!localEsekh) && !!oldsonMashin) {
+              const exitTime =
+                oldsonMashin?.tuukh?.[0]?.tsagiinTuukh?.[0]?.garsanTsag;
+              const freezeDate = exitTime ? new Date(exitTime) : new Date();
+              oldsonMashin.freezeOgnoo = freezeDate;
               await Uilchluulegch(kholbolt).updateOne(
                 { _id: oldsonMashin._id },
                 {
-                  freezeOgnoo: oldsonMashin.tuukh[0].tsagiinTuukh[0].garsanTsag
-                    ? oldsonMashin.tuukh[0].tsagiinTuukh[0].garsanTsag
-                    : new Date(),
+                  freezeOgnoo: freezeDate,
                 },
               );
             }
             if (!!oldsonMashin && !!oldsonMashin.mashiniiDugaar) {
-              if (
+              const garsanTsag =
+                oldsonMashin?.tuukh?.[0]?.tsagiinTuukh?.[0]?.garsanTsag;
+              const hasExited = !!garsanTsag;
+              const savedDun =
+                Number(oldsonMashin?.tuukh?.[0]?.tulukhDun) > 0
+                  ? Number(oldsonMashin.tuukh[0].tulukhDun)
+                  : Number(oldsonMashin.niitDun) > 0
+                    ? Number(oldsonMashin.niitDun)
+                    : 0;
+
+              if (hasExited && savedDun > 0) {
+                bodsonDun = savedDun;
+              } else if (
                 zogsool?.togtmolTulburEsekh &&
                 zogsool?.togtmolTulburiinDun > 0 &&
                 oldsonMashin?.turul == "Дурын"
