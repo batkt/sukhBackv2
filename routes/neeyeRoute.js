@@ -314,7 +314,25 @@ router.get("/neeye/:ip", async (req, res) => {
       pendingGateCommands.set(commandId, { resolve, timeout });
     });
 
-    io.to(roomName).emit("execute-open", { ip, plate: mashiniiDugaar, commandId });
+    let vehicleTurul = "Оршин суугч";
+    if (mashiniiDugaar) {
+      try {
+        const { Mashin, EzenUrisanMashin } = require("sukhParking-v1");
+        const kholbolt = getKholboltByBaiguullagiinId(baiguullagiinId) || db.erunkhiiKholbolt;
+        const m = await Mashin(kholbolt).findOne({ dugaar: mashiniiDugaar }).lean();
+        if (m && m.turul) {
+          vehicleTurul = m.turul;
+        } else {
+          const z = await EzenUrisanMashin(kholbolt).findOne({
+            urisanMashiniiDugaar: mashiniiDugaar,
+            tuluv: { $in: [0, 1] },
+          }).lean();
+          if (z) vehicleTurul = "Зочин";
+        }
+      } catch (_) {}
+    }
+
+    io.to(roomName).emit("execute-open", { ip, plate: mashiniiDugaar, commandId, turul: vehicleTurul });
 
     const result = await waitForResult;
     const latencyMs = Date.now() - startedAt;

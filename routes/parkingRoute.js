@@ -1234,6 +1234,28 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
     if (khariu && khariu.aldaa) {
       console.warn(`⚠️ [sdkData] Request blocked or errored: ${khariu.aldaa}`);
     }
+    if (!khariu || typeof khariu !== "object") {
+      khariu = { success: true };
+    }
+    if (!khariu.aldaa && !khariu.turul && req.body.mashiniiDugaar) {
+      try {
+        const MashinModel = Mashin(req.body.tukhainBaaziinKholbolt);
+        const m = await MashinModel.findOne({ dugaar: req.body.mashiniiDugaar }).lean();
+        if (m && m.turul) {
+          khariu.turul = m.turul;
+        } else {
+          const z = await EzenUrisanMashin(req.body.tukhainBaaziinKholbolt).findOne({
+            urisanMashiniiDugaar: req.body.mashiniiDugaar,
+            tuluv: { $in: [0, 1] },
+          }).lean();
+          if (z) {
+            khariu.turul = "Зочин";
+          } else {
+            khariu.turul = "Оршин суугч";
+          }
+        }
+      } catch (_) {}
+    }
     res.send(khariu);
   } catch (err) {
     next(err);
