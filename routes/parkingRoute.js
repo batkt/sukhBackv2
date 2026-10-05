@@ -853,7 +853,19 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
       // commandId л авчирдаг тул локал ажилтан дүнг хаанаас ч авах аргагүй
       // байв. Иймд гар утасны мэдэгдэлтэй ИЖИЛ дүнг самбар руу илгээнэ.
       try {
-        const dun = uilchluulegch?.tuukh?.[0]?.tulukhDun;
+        // ЯМАР дүнг самбарт гаргах вэ:
+        //
+        // `tulukhDun` нь ТӨЛӨХ ҮЛДЭГДЭЛ бөгөөд төлбөр хийгдмэгц 0 болдог
+        // (/zogsooliinTulburTulye доторх "tuukh.$.tulukhDun": 0). Машин
+        // хаалга хүрэхдээ аль хэдийн төлсөн байдаг тул үүнийг шууд авбал
+        // 862,000₮ төлсөн үйлчлүүлэгчид ч самбар "Үнэгүй" гэж харуулна.
+        //
+        // Иймд: үлдэгдэл байвал ҮЛДЭГДЛИЙГ, төлчихсөн бол ТӨЛСӨН дүнг.
+        // Аль аль нь тэг бол жинхэнэ үнэгүй гарц.
+        const tuukh0 = uilchluulegch?.tuukh?.[0];
+        const uldegdel = Number(tuukh0?.tulukhDun) || 0;
+        const tulsun = Number(tuukh0?.tulbur) || 0;
+        const dun = uldegdel > 0 ? uldegdel : tulsun;
         const ip = req.body.CAMERA_IP || req.body.camerA_IP;
         const io = req.app.get("socketio");
         // Дүн ТЭГ байсан ч илгээнэ: оршин суугч үнэгүй гардаг ч самбар дээр
@@ -1252,7 +1264,11 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
           if (z) {
             khariu.turul = "Зочин";
           } else {
-            khariu.turul = "Оршин суугч";
+            // Mashin дээр ч БАЙХГҮЙ, урисан зочин ч БИШ бол энэ нь гаднаас
+            // орж ирсэн ҮЙЛЧЛҮҮЛЭГЧ. Өмнө нь "Оршин суугч" гэж тавьдаг
+            // байсан нь төлбөртэй үйлчлүүлэгчийг оршин суугч мэт харуулж,
+            // самбар болон хариуд нь буруу төрөл тараадаг байв.
+            khariu.turul = "Үйлчлүүлэгч";
           }
         }
       } catch (_) {}
