@@ -22,6 +22,8 @@ function mashiniiDugaarTseverle(dugaar) {
 }
 
 /** Дугаар биш, зүгээр "хоосон" гэсэн утга агуулсан бичлэгүүд. */
+const { zochniiTokhirgooAvya } = require("./zochinTokhirgoo");
+
 const KHOOSON_UTGANUUD = new Set(["", "БҮРТГЭЛГҮЙ", "-", "ҮГҮЙ"]);
 
 /**
@@ -154,16 +156,23 @@ async function mashinuudBurtgeye({
     }
   }
 
-  /** Зочны тохиргооны талбаруудыг нэг дор бэлдэнэ. */
+  /**
+   * Зочны тохиргооны талбаруудыг нэг дор бэлдэнэ.
+   *
+   * Оршин суугч ба харилцагчийн зочны квот ӨӨР байж болно — иймд
+   * тохиргоог `zochinTurul`-ээр нь салгаж авна. Харилцагч дээр тусад нь
+   * тохируулаагүй талбар нь оршин суугчийнхаар нөхөгдөнө.
+   */
+  const zt = zochniiTokhirgooAvya(tokhirgoo, zochinTurul);
   const zochinTalbaruud = () => ({
-    zochinUrikhEsekh: tokhirgoo?.zochinUrikhEsekh !== false,
+    zochinUrikhEsekh: zt?.zochinUrikhEsekh !== false,
     zochinTurul,
-    zochinErkhiinToo: tokhirgoo?.zochinErkhiinToo || 0,
-    zochinTusBurUneguiMinut: tokhirgoo?.zochinTusBurUneguiMinut || 0,
-    zochinNiitUneguiMinut: tokhirgoo?.zochinNiitUneguiMinut || 0,
-    zochinTailbar: tokhirgoo?.zochinTailbar || "",
-    davtamjiinTurul: tokhirgoo?.davtamjiinTurul || "saraar",
-    davtamjUtga: tokhirgoo?.davtamjUtga,
+    zochinErkhiinToo: zt?.zochinErkhiinToo || 0,
+    zochinTusBurUneguiMinut: zt?.zochinTusBurUneguiMinut || 0,
+    zochinNiitUneguiMinut: zt?.zochinNiitUneguiMinut || 0,
+    zochinTailbar: zt?.zochinTailbar || "",
+    davtamjiinTurul: zt?.davtamjiinTurul || "saraar",
+    davtamjUtga: zt?.davtamjUtga,
   });
 
   for (const dugaar of jagsaalt) {

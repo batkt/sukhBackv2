@@ -107,6 +107,21 @@ const baiguullagaSchema = new Schema(
             zochinTailbar: String,
             davtamjiinTurul: String,
             davtamjUtga: Number,
+            /**
+             * ХАРИЛЦАГЧИД тусад нь. Оршин суугч, харилцагч хоёр өөр тооны зочин
+             * урьдаг тул квот нь салсан. Энд тохируулаагүй талбар нь дээрх (оршин
+             * суугчийн) утгыг ӨВЛӨНӨ — `utils/zochinTokhirgoo.js`.
+             */
+            khariltsagch: {
+              zochinUrikhEsekh: Boolean,
+              zochinErkhiinToo: Number,
+              zochinTusBurUneguiMinut: Number,
+              zochinNiitUneguiMinut: Number,
+              zochinNekhemjlekhEsekh: Boolean,
+              zochinTailbar: String,
+              davtamjiinTurul: String,
+              davtamjUtga: Number,
+            },
             orshinSuugchMashiniiLimit: Number,
             /**
              * Харилцагч дээр бүртгэж болох машины ДЭЭД тоо.
@@ -298,6 +313,21 @@ const baiguullagaSchema = new Schema(
         zochinTailbar: String,
         davtamjiinTurul: String,
         davtamjUtga: Number,
+        /**
+         * ХАРИЛЦАГЧИД тусад нь. Оршин суугч, харилцагч хоёр өөр тооны зочин
+         * урьдаг тул квот нь салсан. Энд тохируулаагүй талбар нь дээрх (оршин
+         * суугчийн) утгыг ӨВЛӨНӨ — `utils/zochinTokhirgoo.js`.
+         */
+        khariltsagch: {
+          zochinUrikhEsekh: Boolean,
+          zochinErkhiinToo: Number,
+          zochinTusBurUneguiMinut: Number,
+          zochinNiitUneguiMinut: Number,
+          zochinNekhemjlekhEsekh: Boolean,
+          zochinTailbar: String,
+          davtamjiinTurul: String,
+          davtamjUtga: Number,
+        },
         orshinSuugchMashiniiLimit: Number,
         /**
          * Харилцагч дээр бүртгэж болох машины ДЭЭД тоо.

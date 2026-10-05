@@ -757,11 +757,16 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
               targetBarilga?.tokhirgoo?.zochinTokhirgoo;
             const orgSettings = baiguullaga?.tokhirgoo?.zochinTokhirgoo;
 
-            const defaultSettings =
+            // ХАРИЛЦАГЧийн бичлэг тул харилцагчид зориулсан квотыг авна.
+            // Тусад нь тохируулаагүй бол оршин суугчийнхоор нөхөгдөнө.
+            const { zochniiTokhirgooAvya } = require("../utils/zochinTokhirgoo");
+            const defaultSettings = zochniiTokhirgooAvya(
               buildingSettings &&
                 buildingSettings.zochinUrikhEsekh !== undefined
                 ? buildingSettings
-                : orgSettings;
+                : orgSettings,
+              "Харилцагч",
+            );
 
             console.log(
               "🔍 [AUTO-ZOCHIN] Checking defaults for:",

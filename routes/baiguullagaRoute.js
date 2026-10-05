@@ -302,9 +302,33 @@ router.post("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
       if (kholbolt && kholbolt.kholbolt) {
         const Mashin = require("../models/mashin");
         
+        // Тохиргоо солиход машинууд дээрх хуулбар утга бас шинэчлэгдэнэ.
+        // ЧУХАЛ: оршин суугч, харилцагч хоёр ӨӨР квоттой байж болох тул
+        // хоёуланг нь, тус бүрийн тохиргоогоор нь түгээнэ. Өмнө нь зөвхөн
+        // `zochinTurul: "Оршин суугч"` машинууд шинэчлэгддэг байсан тул
+        // харилцагчийнх хэзээ ч шинэчлэгддэггүй байв.
+        const { zochniiTokhirgooAvya } = require("../utils/zochinTokhirgoo");
+        const zochinTalbaruudYavuulya = (zt) => ({
+          zochinUrikhEsekh: zt.zochinUrikhEsekh,
+          zochinErkhiinToo: zt.zochinErkhiinToo,
+          zochinTusBurUneguiMinut: zt.zochinTusBurUneguiMinut,
+          zochinNiitUneguiMinut: zt.zochinNiitUneguiMinut,
+          davtamjiinTurul: zt.davtamjiinTurul,
+          davtamjUtga: zt.davtamjUtga,
+          zochinTailbar: zt.zochinTailbar,
+        });
+
         // 1. Sync org defaults to all resident cars
         if (baiguullaga.tokhirgoo && baiguullaga.tokhirgoo.zochinTokhirgoo) {
            const orgSettings = baiguullaga.tokhirgoo.zochinTokhirgoo;
+           await Mashin(kholbolt).updateMany({
+             baiguullagiinId: String(baiguullaga._id),
+             zochinTurul: "Харилцагч"
+           }, {
+             $set: zochinTalbaruudYavuulya(
+               zochniiTokhirgooAvya(orgSettings, "Харилцагч"),
+             )
+           });
            await Mashin(kholbolt).updateMany({
              baiguullagiinId: String(baiguullaga._id),
              zochinTurul: "Оршин суугч"
@@ -326,6 +350,15 @@ router.post("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
            for (const b of baiguullaga.barilguud) {
               if (b.tokhirgoo && b.tokhirgoo.zochinTokhirgoo) {
                  const bSettings = b.tokhirgoo.zochinTokhirgoo;
+                 await Mashin(kholbolt).updateMany({
+                   baiguullagiinId: String(baiguullaga._id),
+                   barilgiinId: String(b._id),
+                   zochinTurul: "Харилцагч"
+                 }, {
+                   $set: zochinTalbaruudYavuulya(
+                     zochniiTokhirgooAvya(bSettings, "Харилцагч"),
+                   )
+                 });
                  await Mashin(kholbolt).updateMany({
                    baiguullagiinId: String(baiguullaga._id),
                    barilgiinId: String(b._id),
