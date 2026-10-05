@@ -1106,7 +1106,8 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
       console.error("[Gate] Дугаар тохируулахад алдаа:", e.message);
     }
 
-    const khariu = await sdkData(req, medegdel);
+    // `let` — доор (1238-р мөр) хариу нь объект биш бол орлуулдаг.
+    let khariu = await sdkData(req, medegdel);
 
     // Log Зочин entry now that sdkData has activated it
     if (pendingZochin && req.body.CAMERA_IP) {
