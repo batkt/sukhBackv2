@@ -5,6 +5,20 @@ const OrshinSuugch = require("../models/orshinSuugch");
 const Ajiltan = require("../models/ajiltan");
 const { orshinSuugchidSonorduulgaIlgeeye } = require("./appNotification");
 
+const CENTRALIZED_ORG_ID = "698e7fd3b6dd386b6c56a808";
+
+function getMedegdelKholbolt(baiguullagiinId) {
+  if (!baiguullagiinId) return null;
+  const found = db.kholboltuud?.find(
+    (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
+  );
+  if (found) return found;
+  if (String(baiguullagiinId) === CENTRALIZED_ORG_ID) {
+    return db.erunkhiiKholbolt;
+  }
+  return null;
+}
+
 exports.medegdelUnreadCount = asyncHandler(async (req, res, next) => {
   try {
     const source = req.method === "GET" ? req.query : req.body;
@@ -18,9 +32,7 @@ exports.medegdelUnreadCount = asyncHandler(async (req, res, next) => {
       });
     }
 
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
-    );
+    const kholbolt = getMedegdelKholbolt(baiguullagiinId);
 
     if (!kholbolt) {
       return res.json({ success: true, count: 0 });
@@ -58,9 +70,7 @@ exports.medegdelUnreadList = asyncHandler(async (req, res, next) => {
       });
     }
 
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
-    );
+    const kholbolt = getMedegdelKholbolt(baiguullagiinId);
 
     if (!kholbolt) {
       return res.json({ success: true, data: [] });
@@ -110,9 +120,7 @@ exports.medegdelAvya = asyncHandler(async (req, res, next) => {
 
     // tukhainBaaziinKholbolt check removed as we find connection by baiguullagiinId below
 
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
-    );
+    const kholbolt = getMedegdelKholbolt(baiguullagiinId);
 
     if (!kholbolt) {
       return res.status(404).json({
@@ -168,9 +176,7 @@ exports.medegdelNegAvya = asyncHandler(async (req, res, next) => {
       });
     }
 
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
-    );
+    const kholbolt = getMedegdelKholbolt(baiguullagiinId);
 
     if (!kholbolt) {
       return res.status(404).json({
@@ -210,9 +216,7 @@ exports.medegdelKharsanEsekh = asyncHandler(async (req, res, next) => {
       return res.status(400).json({ success: false, message: "baiguullagiinId is required" });
     }
 
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
-    );
+    const kholbolt = getMedegdelKholbolt(baiguullagiinId);
     if (!kholbolt) {
       return res.status(404).json({ success: false, message: "Холболтын мэдээлэл олдсонгүй" });
     }
@@ -282,9 +286,7 @@ exports.medegdelZasah = asyncHandler(async (req, res, next) => {
       });
     }
 
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
-    );
+    const kholbolt = getMedegdelKholbolt(baiguullagiinId);
 
     if (!kholbolt) {
       return res.status(404).json({
@@ -438,9 +440,7 @@ exports.medegdelUstgakh = asyncHandler(async (req, res, next) => {
       });
     }
 
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
-    );
+    const kholbolt = getMedegdelKholbolt(baiguullagiinId);
 
     if (!kholbolt) {
       return res.status(404).json({
@@ -488,9 +488,7 @@ exports.medegdelIlgeeye = asyncHandler(async (req, res, next) => {
       });
     }
 
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
-    );
+    const kholbolt = getMedegdelKholbolt(baiguullagiinId);
 
     if (!kholbolt) {
       return res.status(404).json({
@@ -720,9 +718,7 @@ exports.medegdelThread = asyncHandler(async (req, res, next) => {
       });
     }
 
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
-    );
+    const kholbolt = getMedegdelKholbolt(baiguullagiinId);
     if (!kholbolt) {
       return res.status(404).json({
         success: false,
@@ -796,9 +792,7 @@ exports.medegdelUserReply = asyncHandler(async (req, res, next) => {
       });
     }
 
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
-    );
+    const kholbolt = getMedegdelKholbolt(baiguullagiinId);
     if (!kholbolt) {
       return res.status(404).json({
         success: false,
@@ -924,9 +918,7 @@ exports.medegdelAdminReply = asyncHandler(async (req, res, next) => {
       });
     }
 
-    const kholbolt = db.kholboltuud.find(
-      (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
-    );
+    const kholbolt = getMedegdelKholbolt(baiguullagiinId);
     if (!kholbolt) {
       return res.status(404).json({
         success: false,
