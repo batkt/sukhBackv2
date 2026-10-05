@@ -19,6 +19,9 @@ const {
   kheregselAjilluulakh,
   khureeniiTailbar,
 } = require("../utils/aiTuslakhKheregsel");
+const { logIlgeekh, unelgeeIlgeekh } = require("../utils/aiTuslakhLog");
+
+const SISTEM = "amarhome"; // AI log-ийн system талбар
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -62,15 +65,61 @@ function messejuudTseverlekh(messages) {
 }
 
 router.post("/aiTuslakh", tokenShalgakh, async (req, res) => {
+  const ekhlekh = Date.now();
+  const logId = crypto.randomUUID();
+  res.setHeader("X-Ai-Log-Id", logId);
+  res.setHeader("Access-Control-Expose-Headers", "X-Ai-Log-Id");
+
+  const token = req.body?.nevtersenAjiltniiToken || {};
+  const orshinSuugchEsekh = req.body?.mode === "orshinSuugch";
+  const khuudas = String(req.body?.khuudasniiNer || req.body?.khuudas || "")
+    .slice(0, 120)
+    .trim();
+  const messages = messejuudTseverlekh(req.body?.messages);
+
+  // Log-д хэрэгтэй төлөв. Хүсэлт бүрд яг нэг удаа илгээнэ.
+  let khariu = "";
+  const kheregsel = [];
+  let provider = null;
+  let kh = null;
+  let logIlgeesen = false;
+  const logDuusgakh = ({ amjilttai = false, aldaaniiTurul = "", aldaa = "" } = {}) => {
+    if (logIlgeesen) return;
+    logIlgeesen = true;
+    const suuliinAsuult = [...messages].reverse().find((m) => m.role === "user");
+    logIlgeekh({
+      logId,
+      system: SISTEM,
+      mode: orshinSuugchEsekh ? "orshinSuugch" : "ajiltan",
+      baiguullagiinId: String(
+        kh?.baiguullagiinId || req.body?.tukhainBaaziinKholbolt?.baiguullagiinId || token.baiguullagiinId || "",
+      ),
+      barilgiinId: String(req.body?.barilgiinId || ""),
+      khereglegchiinId: String(token.id || ""),
+      khereglegchiinNer: orshinSuugchEsekh ? "" : String(token.ner || ""),
+      khuudas,
+      asuult: (suuliinAsuult?.content || "").slice(0, 2000),
+      messejiinToo: Array.isArray(req.body?.messages) ? req.body.messages.length : 0,
+      khariu: khariu.slice(0, 4000),
+      amjilttai,
+      aldaaniiTurul,
+      aldaa: String(aldaa || "").slice(0, 300),
+      kheregsel,
+      zagvar: provider?.zagvar || "",
+      khugatsaaMs: Date.now() - ekhlekh,
+    });
+  };
+
   const geminiKey = process.env.GEMINI_API_KEY;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (!geminiKey && !anthropicKey) {
-    return res.status(503).json({ message: "AI туслах тохируулагдаагүй байна." });
+    const message = "AI туслах тохируулагдаагүй байна.";
+    logDuusgakh({ aldaaniiTurul: "tulkhuur", aldaa: message });
+    return res.status(503).json({ message, logId });
   }
 
-  const messages = messejuudTseverlekh(req.body?.messages);
   if (!messages.length || messages[messages.length - 1].role !== "user") {
-    return res.status(400).json({ message: "Асуултаа бичнэ үү." });
+    return res.status(400).json({ message: "Асуултаа бичнэ үү.", logId });
   }
 
   const tulkhuur = crypto
@@ -78,20 +127,25 @@ router.post("/aiTuslakh", tokenShalgakh, async (req, res) => {
     .update(String(req.headers.authorization || req.ip))
     .digest("hex");
   if (!khyazgaarShalgaya(tulkhuur)) {
+    // Хязгаар хэтрүүлсэн хүсэлтийг log-д бичихгүй (log-ийг үерлүүлэхгүйн тулд).
     return res
       .status(429)
-      .json({ message: "Хэт олон асуулт илгээлээ. Хэдэн минутын дараа дахин оролдоно уу." });
+      .json({ message: "Хэт олон асуулт илгээлээ. Хэдэн минутын дараа дахин оролдоно уу.", logId });
   }
 
-  const khuudas = String(req.body?.khuudasniiNer || req.body?.khuudas || "")
-    .slice(0, 120)
-    .trim();
-
-  // Оршин суугчийн апп: тусдаа заавар, ажилтны өгөгдлийн хэрэгсэлгүй.
-  const orshinSuugchEsekh = req.body?.mode === "orshinSuugch";
+  const tasalsan = new AbortController();
+  // Хэрэглэгч цонхоо хаавал AI руу хийсэн хүсэлтийг ч зогсооно.
+  res.on("close", () => {
+    // Хариу дуусахаас өмнө холболт хаагдсан — хэрэглэгч тасалсан.
+    if (!res.writableFinished) {
+      logDuusgakh({ aldaaniiTurul: "tasalsan", aldaa: "Хэрэглэгч хариуг дуусахаас өмнө тасалсан." });
+    }
+    tasalsan.abort();
+  });
 
   // Өгөгдлийн хэрэгслийн хамрах хүрээ. Олдохгүй бол хэрэгсэлгүй ажиллана.
-  const kh = orshinSuugchEsekh
+  // Оршин суугчийн апп: тусдаа заавар, ажилтны өгөгдлийн хэрэгсэлгүй.
+  kh = orshinSuugchEsekh
     ? null
     : await khamrakhKhureeBeldekh(req).catch((err) => {
         console.error("AI туслах хүрээ тодорхойлоход алдаа:", err.message);
@@ -114,10 +168,6 @@ router.post("/aiTuslakh", tokenShalgakh, async (req, res) => {
     .filter(Boolean)
     .join("\n\n");
 
-  const tasalsan = new AbortController();
-  // Хэрэглэгч цонхоо хаавал AI руу хийсэн хүсэлтийг ч зогсооно.
-  res.on("close", () => tasalsan.abort());
-
   // Толгойг анхны текст бичих үед л илгээнэ — түүнээс өмнө алдаа гарвал JSON алдаа буцаана.
   let ekhelsen = false;
   const bichikh = (text) => {
@@ -126,21 +176,26 @@ router.post("/aiTuslakh", tokenShalgakh, async (req, res) => {
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("X-Accel-Buffering", "no"); // nginx buffering-ийг унтраана
+      res.setHeader("X-Ai-Log-Id", logId);
+      res.setHeader("Access-Control-Expose-Headers", "X-Ai-Log-Id");
       ekhelsen = true;
     }
+    khariu += text;
     res.write(text);
   };
 
-  const provider = geminiKey
+  provider = geminiKey
     ? geminiProvider(geminiKey, systemText, messages, kh ? TODORKHOILOLT : null)
     : anthropicProvider(anthropicKey, systemText, messages, kh ? TODORKHOILOLT : null);
 
+  let aldaaniiLog = null;
   try {
     for (let eelj = 0; eelj < MAX_EELJ; eelj++) {
       const { duudlaguud } = await provider.duudakh(tasalsan.signal, bichikh);
       if (!duudlaguud.length || !kh) break;
       const khariunuud = [];
       for (const d of duudlaguud) {
+        kheregsel.push(d.name);
         const ur = await kheregselAjilluulakh(kh, d.name, d.args);
         let json = JSON.stringify(ur);
         if (json.length > MAX_UR_DUN) json = JSON.stringify({ aldaa: "Хариу хэт урт байна — асуултыг нарийсгана уу." });
@@ -150,15 +205,69 @@ router.post("/aiTuslakh", tokenShalgakh, async (req, res) => {
       if (eelj === MAX_EELJ - 1) bichikh("\n\n(Асуулт хэт нарийн байна — илүү тодорхой асууна уу.)");
     }
   } catch (err) {
-    if (tasalsan.signal.aborted) return;
-    console.error("AI туслах алдаа:", err.status || "", String(err.message || "").slice(0, 300));
-    if (!ekhelsen) {
-      return res.status(502).json({ message: aldaaniiMedegdel(err), aldaa: boditAldaa(err) });
+    if (tasalsan.signal.aborted) {
+      logDuusgakh({ aldaaniiTurul: "tasalsan", aldaa: "Хэрэглэгч хариуг дуусахаас өмнө тасалсан." });
+      return;
     }
+    console.error("AI туслах алдаа:", err.status || "", String(err.message || "").slice(0, 300));
+    const message = aldaaniiMedegdel(err);
+    if (!ekhelsen) {
+      logDuusgakh({ aldaaniiTurul: aldaaniiTurulTodorkhoilokh(err), aldaa: message });
+      return res.status(502).json({ message, aldaa: boditAldaa(err), logId });
+    }
+    aldaaniiLog = { aldaaniiTurul: aldaaniiTurulTodorkhoilokh(err), aldaa: message };
     bichikh("\n\n(Хариу тасалдлаа. Дахин оролдоно уу.)");
   }
-  if (!ekhelsen) bichikh("Уучлаарай, хариу гаргаж чадсангүй. Асуултаа өөрөөр асууна уу.");
+  if (tasalsan.signal.aborted) {
+    logDuusgakh({ aldaaniiTurul: "tasalsan", aldaa: "Хэрэглэгч хариуг дуусахаас өмнө тасалсан." });
+    return;
+  }
+  if (aldaaniiLog) {
+    logDuusgakh(aldaaniiLog);
+  } else if (!ekhelsen) {
+    const message = "Уучлаарай, хариу гаргаж чадсангүй. Асуултаа өөрөөр асууна уу.";
+    bichikh(message);
+    logDuusgakh({ aldaaniiTurul: "khooson", aldaa: message });
+  } else {
+    logDuusgakh({ amjilttai: true });
+  }
   res.end();
+});
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * POST /aiTuslakhUnelgee  body: { logId, unelgee: 1 | -1 | 0, tailbar? }
+ * Хариултын 👍/👎 үнэлгээг systemiinUdirdlaga руу дамжуулна (0 = үнэлгээг арилгах).
+ */
+router.post("/aiTuslakhUnelgee", tokenShalgakh, async (req, res) => {
+  const { logId, unelgee, tailbar } = req.body || {};
+  if (typeof logId !== "string" || !UUID_RE.test(logId)) {
+    return res.status(400).json({ message: "logId буруу байна." });
+  }
+  if (![1, -1, 0].includes(unelgee)) {
+    return res.status(400).json({ message: "Үнэлгээ буруу байна." });
+  }
+  if (tailbar != null && (typeof tailbar !== "string" || tailbar.length > 300)) {
+    return res.status(400).json({ message: "Тайлбар 300 тэмдэгтээс хэтрэхгүй байх ёстой." });
+  }
+  const khereglegchiinId = String(req.body?.nevtersenAjiltniiToken?.id || "");
+  if (!khereglegchiinId) return res.status(401).json({ message: "Нэвтрэх шаардлагатай." });
+  try {
+    const ur = await unelgeeIlgeekh({
+      logId,
+      khereglegchiinId,
+      unelgee,
+      tailbar: typeof tailbar === "string" ? tailbar.trim() : "",
+    });
+    if (ur.tokhirgoogui) {
+      return res.status(503).json({ message: "Үнэлгээ хадгалах тохиргоо хийгдээгүй байна." });
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    console.warn("AI туслах үнэлгээ дамжуулж чадсангүй:", String(err?.message || err).slice(0, 200));
+    return res.status(502).json({ message: "Үнэлгээ хадгалж чадсангүй. Дахин оролдоно уу." });
+  }
 });
 
 /** Google/Anthropic-ийн алдааны JSON-оос error объектыг гаргана. */
@@ -202,6 +311,48 @@ function aldaaniiMedegdel(err) {
   if (err?.status === 503 || err?.status === 529 || err?.status === 500)
     return "AI туслахын сервер (Google) түр ачаалалтай байна. Хэдэн минутын дараа дахин оролдоно уу.";
   return err?.status ? "AI туслах хариу өгч чадсангүй." : "AI туслахтай холбогдож чадсангүй.";
+}
+
+/**
+ * Log-ийн aldaaniiTurul — aldaaniiMedegdel-тэй ижил дүрмээр ангилна:
+ * kvot | tulkhuur | zagvar | achaalal | kholbolt | busad.
+ */
+function aldaaniiTurulTodorkhoilokh(err) {
+  const e = aldaaObjekt(err);
+  const msg = String(e?.message || "").toLowerCase();
+  const tuluv = String(e?.status || e?.type || "");
+  if (
+    err?.status === 429 ||
+    tuluv === "RESOURCE_EXHAUSTED" ||
+    tuluv === "rate_limit_error" ||
+    msg.includes("quota") ||
+    msg.includes("rate limit") ||
+    msg.includes("credit balance")
+  )
+    return "kvot";
+  if (
+    err?.status === 401 ||
+    err?.status === 403 ||
+    tuluv === "PERMISSION_DENIED" ||
+    tuluv === "UNAUTHENTICATED" ||
+    (err?.status === 400 && msg.includes("api key"))
+  )
+    return "tulkhuur";
+  if (err?.status === 404) return "zagvar";
+  if (
+    err?.status === 503 ||
+    err?.status === 529 ||
+    err?.status === 500 ||
+    tuluv === "UNAVAILABLE" ||
+    tuluv === "overloaded_error"
+  )
+    return "achaalal";
+  // Upstream хариу ирээгүй (сүлжээ, DNS, timeout) — fetch TypeError/AbortError.
+  if (!err?.status) {
+    const ner = String(err?.name || "");
+    if (ner === "TypeError" || ner === "AbortError" || ner === "TimeoutError" || err?.cause) return "kholbolt";
+  }
+  return "busad";
 }
 
 /**
@@ -267,7 +418,11 @@ function geminiProvider(key, systemText, messages, tools) {
     parts: [{ text: m.content }],
   }));
   let suuliinParts = [];
+  let ashiglasanZagvar = model; // нөөц (lite) загвар руу шилжсэн бол түүгээр солигдоно
   return {
+    get zagvar() {
+      return ashiglasanZagvar;
+    },
     async duudakh(signal, bichikh) {
       const khuselt = (zagvar) => upstreamDuudakh(
         `${GEMINI_URL}/${encodeURIComponent(zagvar)}:streamGenerateContent?alt=sse`,
@@ -296,6 +451,7 @@ function geminiProvider(key, systemText, messages, tools) {
       for (let i = 0; i < oroldlogo.length; i++) {
         try {
           resp = await khuselt(oroldlogo[i]);
+          ashiglasanZagvar = oroldlogo[i];
           break;
         } catch (err) {
           suuliinAldaa = err;
@@ -347,6 +503,7 @@ function anthropicProvider(key, systemText, messages, tools) {
   const msgs = messages.map((m) => ({ role: m.role, content: m.content }));
   let suuliinBlokuud = [];
   return {
+    zagvar: model,
     async duudakh(signal, bichikh) {
       const resp = await upstreamDuudakh(
         ANTHROPIC_URL,
