@@ -656,6 +656,23 @@ router.get("/zochinQuotaStatus", tokenShalgakh, async (req, res, next) => {
 
     if (!residentId) return res.status(401).send("Нэвтрэх шаардлагатай");
 
+    // Эзэмшигч нь ОРШИН СУУГЧ уу, ХАРИЛЦАГЧ уу? Зочны квот хоёуланд өөр
+    // байж болох тул энд шийднэ. Өмнө нь доорх хайлтууд нь
+    // зөвхөн оршин суугчийг хайдаг ХАТУУ утгатай байсан тул
+    // харилцагч өөрийн квотыг хэзээ ч харж чаддаггүй байв.
+    const { db: tuvBaaz } = require("zevbackv2");
+    const { zochniiTokhirgooAvya } = require("../utils/zochinTokhirgoo");
+    let zochinTurulNer = "Оршин суугч";
+    try {
+      const khariltsagchModel = require("../models/khariltsagch")(
+        tuvBaaz.erunkhiiKholbolt,
+      );
+      const khEzen = await khariltsagchModel.findById(residentId).lean();
+      if (khEzen) zochinTurulNer = "Харилцагч";
+    } catch (e) {
+      console.error("⚠️ [QUOTA] Харилцагч эсэхийг шалгахад алдаа:", e.message);
+    }
+
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
@@ -666,7 +683,7 @@ router.get("/zochinQuotaStatus", tokenShalgakh, async (req, res, next) => {
         { ezemshigchiinId: String(residentId) },
         { orshinSuugchiinId: String(residentId) }
       ],
-      zochinTurul: "Оршин суугч"
+      zochinTurul: zochinTurulNer
     };
 
     // Filter by organization and building if provided
@@ -687,7 +704,7 @@ router.get("/zochinQuotaStatus", tokenShalgakh, async (req, res, next) => {
           { ezemshigchiinId: residentId },
           { orshinSuugchiinId: residentId }
         ],
-        zochinTurul: "Оршин суугч"
+        zochinTurul: zochinTurulNer
       });
     }
 
@@ -726,7 +743,12 @@ router.get("/zochinQuotaStatus", tokenShalgakh, async (req, res, next) => {
         targetBarilga = baiguullagaRecord.barilguud[0];
       }
 
-      buildingSettings = targetBarilga?.zochinTokhirgoo || targetBarilga?.tokhirgoo?.zochinTokhirgoo;
+      // Харилцагч бол `zochinTokhirgoo.khariltsagch`-аас, тохируулаагүй
+      // талбарыг оршин суугчийнхаар нөхөж авна.
+      buildingSettings = zochniiTokhirgooAvya(
+        targetBarilga?.zochinTokhirgoo || targetBarilga?.tokhirgoo?.zochinTokhirgoo,
+        zochinTurulNer,
+      );
     }
 
     if (!masterSetting && !buildingSettings) {
