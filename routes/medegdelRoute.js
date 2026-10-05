@@ -58,8 +58,27 @@ const chatStorage = multer.diskStorage({
 // 20MB – nginx must have client_max_body_size 20M or uploads get 413 (see nginx.conf.example)
 const uploadChatFile = multer({ storage: chatStorage, limits: { fileSize: 20 * 1024 * 1024 } });
 
-router.route("/medegdelIlgeeye").post(tokenShalgakh, upload.array("zurag", 10), medegdelIlgeeye);
-router.post("/medegdel/uploadChatFile", tokenShalgakh, uploadChatFile.single("file"), medegdelUploadChatFile);
+const CENTRALIZED_ORG_ID = "698e7fd3b6dd386b6c56a808";
+
+// Non-org / Bpay residents have no baiguullagiinId in their JWT token.
+// tokenShalgakh would otherwise overwrite req.body.baiguullagiinId with undefined.
+const medegdelTokenShalgakh = (req, res, next) => {
+  const origBaigId = req.body?.baiguullagiinId || req.query?.baiguullagiinId;
+  tokenShalgakh(req, res, (err) => {
+    if (err) return next(err);
+    if (!req.body) req.body = {};
+    if (!req.body.baiguullagiinId) {
+      req.body.baiguullagiinId = origBaigId || CENTRALIZED_ORG_ID;
+    }
+    if (String(req.body.baiguullagiinId) === CENTRALIZED_ORG_ID && !req.body.tukhainBaaziinKholbolt) {
+      req.body.tukhainBaaziinKholbolt = db.erunkhiiKholbolt;
+    }
+    next();
+  });
+};
+
+router.route("/medegdelIlgeeye").post(medegdelTokenShalgakh, upload.array("zurag", 10), medegdelIlgeeye);
+router.post("/medegdel/uploadChatFile", medegdelTokenShalgakh, uploadChatFile.single("file"), medegdelUploadChatFile);
 
 router.get("/medegdelZuragAvya/:baiguullagiinId/:ner", (req, res, next) => {
   const fileName = req.params.ner;
@@ -77,17 +96,17 @@ router.get("/medegdelZuragAvya/:baiguullagiinId/:ner", (req, res, next) => {
 });
 
 // IMPORTANT: These must be before /medegdel/:baiguullagiinId/:ner so /medegdel/thread/:id is not matched as image
-router.get("/medegdel/unreadCount", tokenShalgakh, medegdelUnreadCount);
-router.get("/medegdel/unreadList", tokenShalgakh, medegdelUnreadList);
-router.get("/medegdel/thread/:id", tokenShalgakh, medegdelThread);
-router.post("/medegdel/reply", tokenShalgakh, medegdelUserReply);
-router.post("/medegdel/adminReply", tokenShalgakh, medegdelAdminReply);
-router.post("/medegdel/:id/kharsanEsekh", tokenShalgakh, medegdelKharsanEsekh);
-router.patch("/medegdel/:id/kharsanEsekh", tokenShalgakh, medegdelKharsanEsekh);
-router.get("/medegdel", tokenShalgakh, medegdelAvya);
-router.get("/medegdel/:id", tokenShalgakh, medegdelNegAvya);
-router.put("/medegdel/:id", tokenShalgakh, medegdelZasah);
-router.delete("/medegdel/:id", tokenShalgakh, medegdelUstgakh);
+router.get("/medegdel/unreadCount", medegdelTokenShalgakh, medegdelUnreadCount);
+router.get("/medegdel/unreadList", medegdelTokenShalgakh, medegdelUnreadList);
+router.get("/medegdel/thread/:id", medegdelTokenShalgakh, medegdelThread);
+router.post("/medegdel/reply", medegdelTokenShalgakh, medegdelUserReply);
+router.post("/medegdel/adminReply", medegdelTokenShalgakh, medegdelAdminReply);
+router.post("/medegdel/:id/kharsanEsekh", medegdelTokenShalgakh, medegdelKharsanEsekh);
+router.patch("/medegdel/:id/kharsanEsekh", medegdelTokenShalgakh, medegdelKharsanEsekh);
+router.get("/medegdel", medegdelTokenShalgakh, medegdelAvya);
+router.get("/medegdel/:id", medegdelTokenShalgakh, medegdelNegAvya);
+router.put("/medegdel/:id", medegdelTokenShalgakh, medegdelZasah);
+router.delete("/medegdel/:id", medegdelTokenShalgakh, medegdelUstgakh);
 
 // Route matching the URL structure user provided: /medegdel/:baiguullagiinId/:ner (must be last so it doesn't catch /medegdel/thread/:id)
 router.get("/medegdel/:baiguullagiinId/:ner", (req, res, next) => {

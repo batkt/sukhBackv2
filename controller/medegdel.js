@@ -8,29 +8,21 @@ const { orshinSuugchidSonorduulgaIlgeeye } = require("./appNotification");
 const CENTRALIZED_ORG_ID = "698e7fd3b6dd386b6c56a808";
 
 function getMedegdelKholbolt(baiguullagiinId) {
-  if (!baiguullagiinId) return null;
+  if (!baiguullagiinId || String(baiguullagiinId) === CENTRALIZED_ORG_ID) {
+    return db.erunkhiiKholbolt;
+  }
   const found = db.kholboltuud?.find(
     (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
   );
   if (found) return found;
-  if (String(baiguullagiinId) === CENTRALIZED_ORG_ID) {
-    return db.erunkhiiKholbolt;
-  }
-  return null;
+  return db.erunkhiiKholbolt;
 }
 
 exports.medegdelUnreadCount = asyncHandler(async (req, res, next) => {
   try {
     const source = req.method === "GET" ? req.query : req.body;
-    const { baiguullagiinId, barilgiinId } = source || {};
-
-    if (!baiguullagiinId) {
-      return res.status(400).json({
-        success: true,
-        count: 0,
-        message: "baiguullagiinId is required",
-      });
-    }
+    let { baiguullagiinId, barilgiinId } = source || {};
+    baiguullagiinId = baiguullagiinId || CENTRALIZED_ORG_ID;
 
     const kholbolt = getMedegdelKholbolt(baiguullagiinId);
 
@@ -60,15 +52,8 @@ exports.medegdelUnreadCount = asyncHandler(async (req, res, next) => {
 exports.medegdelUnreadList = asyncHandler(async (req, res, next) => {
   try {
     const source = req.method === "GET" ? req.query : req.body;
-    const { baiguullagiinId, barilgiinId } = source || {};
-
-    if (!baiguullagiinId) {
-      return res.status(400).json({
-        success: true,
-        data: [],
-        message: "baiguullagiinId is required",
-      });
-    }
+    let { baiguullagiinId, barilgiinId } = source || {};
+    baiguullagiinId = baiguullagiinId || CENTRALIZED_ORG_ID;
 
     const kholbolt = getMedegdelKholbolt(baiguullagiinId);
 
@@ -109,18 +94,12 @@ exports.medegdelAvya = asyncHandler(async (req, res, next) => {
       ? req.query
       : req.body;
 
-    const { baiguullagiinId, barilgiinId, orshinSuugchId, tukhainBaaziinKholbolt, turul } = source || {};
-
-    if (!baiguullagiinId) {
-      return res.status(400).json({
-        success: false,
-        message: "baiguullagiinId is required",
-      });
-    }
-
-    // tukhainBaaziinKholbolt check removed as we find connection by baiguullagiinId below
+    let { baiguullagiinId, barilgiinId, orshinSuugchId, tukhainBaaziinKholbolt, turul } = source || {};
+    baiguullagiinId = baiguullagiinId || CENTRALIZED_ORG_ID;
 
     const kholbolt = getMedegdelKholbolt(baiguullagiinId);
+
+    // tukhainBaaziinKholbolt check removed as we find connection by baiguullagiinId below
 
     if (!kholbolt) {
       return res.status(404).json({
@@ -153,26 +132,12 @@ exports.medegdelAvya = asyncHandler(async (req, res, next) => {
 exports.medegdelNegAvya = asyncHandler(async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { baiguullagiinId, tukhainBaaziinKholbolt } = req.query || req.body || {};
+    const baiguullagiinId = req.query?.baiguullagiinId || req.body?.baiguullagiinId || CENTRALIZED_ORG_ID;
 
     if (!id) {
       return res.status(400).json({
         success: false,
         message: "id is required",
-      });
-    }
-
-    if (!baiguullagiinId) {
-      return res.status(400).json({
-        success: false,
-        message: "baiguullagiinId is required",
-      });
-    }
-
-    if (!tukhainBaaziinKholbolt) {
-      return res.status(400).json({
-        success: false,
-        message: "tukhainBaaziinKholbolt is required",
       });
     }
 
@@ -207,13 +172,10 @@ exports.medegdelNegAvya = asyncHandler(async (req, res, next) => {
 exports.medegdelKharsanEsekh = asyncHandler(async (req, res, next) => {
   try {
     const { id } = req.params;
-    const baiguullagiinId = req.query.baiguullagiinId || req.body?.baiguullagiinId;
+    const baiguullagiinId = req.query.baiguullagiinId || req.body?.baiguullagiinId || CENTRALIZED_ORG_ID;
 
     if (!id) {
       return res.status(400).json({ success: false, message: "id is required" });
-    }
-    if (!baiguullagiinId) {
-      return res.status(400).json({ success: false, message: "baiguullagiinId is required" });
     }
 
     const kholbolt = getMedegdelKholbolt(baiguullagiinId);
@@ -472,21 +434,14 @@ exports.medegdelIlgeeye = asyncHandler(async (req, res, next) => {
     const {
       medeelel: medeelelRaw,
       orshinSuugchId,
-      baiguullagiinId,
       barilgiinId,
       tukhainBaaziinKholbolt,
       turul,
     } = req.body;
+    const baiguullagiinId = req.body?.baiguullagiinId || req.query?.baiguullagiinId || CENTRALIZED_ORG_ID;
 
     // medeelel might be stringified if sent via multipart/form-data
     const medeelel = typeof medeelelRaw === 'string' ? JSON.parse(medeelelRaw) : medeelelRaw;
-
-    if (!baiguullagiinId) {
-      return res.status(400).json({
-        success: false,
-        message: "baiguullagiinId is required",
-      });
-    }
 
     const kholbolt = getMedegdelKholbolt(baiguullagiinId);
 
@@ -691,10 +646,7 @@ exports.medegdelIlgeeye = asyncHandler(async (req, res, next) => {
 // Upload chat file (image or voice) for reply. Returns path like "baiguullagiinId/chat-xxx.ext".
 exports.medegdelUploadChatFile = asyncHandler(async (req, res, next) => {
   try {
-    const baiguullagiinId = req.body.baiguullagiinId;
-    if (!baiguullagiinId) {
-      return res.status(400).json({ success: false, message: "baiguullagiinId is required" });
-    }
+    const baiguullagiinId = req.body?.baiguullagiinId || req.query?.baiguullagiinId || CENTRALIZED_ORG_ID;
     if (!req.file || !req.file.filename) {
       return res.status(400).json({ success: false, message: "file is required" });
     }
@@ -709,12 +661,12 @@ exports.medegdelUploadChatFile = asyncHandler(async (req, res, next) => {
 exports.medegdelThread = asyncHandler(async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { baiguullagiinId, tukhainBaaziinKholbolt } = req.query || req.body || {};
+    const baiguullagiinId = req.query?.baiguullagiinId || req.body?.baiguullagiinId || CENTRALIZED_ORG_ID;
 
-    if (!id || !baiguullagiinId) {
+    if (!id) {
       return res.status(400).json({
         success: false,
-        message: "id and baiguullagiinId are required",
+        message: "id is required",
       });
     }
 
@@ -784,13 +736,7 @@ exports.medegdelUserReply = asyncHandler(async (req, res, next) => {
       });
     }
 
-    const baiguullagiinId = req.body.baiguullagiinId;
-    if (!baiguullagiinId) {
-      return res.status(400).json({
-        success: false,
-        message: "baiguullagiinId is required",
-      });
-    }
+    const baiguullagiinId = req.body?.baiguullagiinId || req.query?.baiguullagiinId || CENTRALIZED_ORG_ID;
 
     const kholbolt = getMedegdelKholbolt(baiguullagiinId);
     if (!kholbolt) {
