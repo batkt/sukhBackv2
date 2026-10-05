@@ -1229,10 +1229,24 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
           if (garsan) {
             // `tulukhDun` нь төлбөр хийгдмэгц 0 болдог тул үлдэгдэл
             // байхгүй бол ТӨЛСӨН дүнг харуулна.
+            //
+            // `tuukh[].tulbur` нь ТӨЛБӨРИЙН МАССИВ — `{ ognoo, turul, dun }`
+            // гэсэн бичлэгүүд (uilchluulegch загвар). Үүнийг шууд `Number()`
+            // болговол NaN болох тул бичлэг бүрийн `dun`-г НИЙЛБЭРЛЭНЭ.
             const uldegdel = Number(tuukh0?.tulukhDun) || 0;
-            const tulsun = Number(tuukh0?.tulbur) || 0;
+            const tulsun = Array.isArray(tuukh0?.tulbur)
+              ? tuukh0.tulbur.reduce((niit, mur) => niit + (Number(mur?.dun) || 0), 0)
+              : Number(tuukh0?.tulbur) || 0;
             const dun = uldegdel > 0 ? uldegdel : tulsun;
-            const turul = sambariinMur?.turul || khariu?.turul || "";
+
+            // Төрөл: бүртгэлтэй машинд л `turul` бичигддэг. Хоосон бол
+            // `urisanMashin` талбараас зочин эсэхийг нь мэдэж болно, эс
+            // бөгөөс гаднаас орж ирсэн ҮЙЛЧЛҮҮЛЭГЧ. Хоосон орхивол самбар
+            // төрлийн мөрөнд СӨХ-ийн нэрийг тавьдаг.
+            let turul = sambariinMur?.turul || khariu?.turul || "";
+            if (!turul) {
+              turul = sambariinMur?.urisanMashin ? "Зочин" : "Үйлчлүүлэгч";
+            }
             io.to(`gate-room-${req.body.barilgiinId}`).emit("sambar-show", {
               ip,
               plate: sambariinMur?.mashiniiDugaar || req.body.mashiniiDugaar,
