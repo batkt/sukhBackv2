@@ -3393,6 +3393,14 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
     const { baiguullagiinId, barilgiinId, ognoo } = req.body;
+    // Сонгосон ашиглалтын зардал (жишээ «Ус») — байвал эхний үлдэгдлийг тэр
+    // зардлын нэрээр бүртгэнэ; үгүй бол ерөнхий «Эхний үлдэгдэл».
+    const songosonZardal = String(req.body.zardliinNer || "").trim();
+    const songosonZardliinTurul = String(req.body.zardliinTurul || "").trim();
+    const ekhniiNer = songosonZardal || "Эхний үлдэгдэл";
+    const ekhniiTailbar = songosonZardal
+      ? `Excel-ээр оруулсан эхний үлдэгдэл (${songosonZardal})`
+      : "Excel-ээр оруулсан эхний үлдэгдэл";
 
     if (!baiguullagiinId) {
       throw new aldaa("Байгууллагын ID хоосон");
@@ -3536,10 +3544,11 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
           dun: amount,
           turul: "avlaga",
 
-          zardliinNer: "Эхний үлдэгдэл",
+          zardliinNer: ekhniiNer,
+          ...(songosonZardliinTurul ? { zardliinTurul: songosonZardliinTurul } : {}),
           ekhniiUldegdelEsekh: true,
           source: "gar",
-          tailbar: "Excel-ээр оруулсан эхний үлдэгдэл",
+          tailbar: ekhniiTailbar,
           guilgeeKhiisenAjiltniiNer:
             req.body.nevtersenAjiltniiToken?.ner || "System",
           guilgeeKhiisenAjiltniiId: req.body.nevtersenAjiltniiToken?.id || null,
@@ -3573,13 +3582,17 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
             // Update the "Эхний үлдэгдэл" row inside medeelel.zardluud
             let hasEkhniiLine = false;
             const zardluud = (invoice.medeelel?.zardluud || []).map((z) => {
-              if (z.isEkhniiUldegdel || z.ner === "Эхний үлдэгдэл") {
+              // Зардал сонгосон бол тэр нэртэй эхний үлдэгдлийн мөрөнд л нэмнэ
+              const tokhirokh = songosonZardal
+                ? z.isEkhniiUldegdel && z.ner === ekhniiNer
+                : z.isEkhniiUldegdel || z.ner === "Эхний үлдэгдэл";
+              if (!hasEkhniiLine && tokhirokh) {
                 hasEkhniiLine = true;
                 return {
                   ...z,
                   tariff: (z.tariff || 0) + amount,
                   dun: (z.dun || 0) + amount,
-                  tailbar: `Excel-ээр оруулсан эхний үлдэгдэл`,
+                  tailbar: ekhniiTailbar,
                 };
               }
               return z;
@@ -3588,13 +3601,13 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
             // append one so manual send/sync won't "lose" imported opening balance.
             if (!hasEkhniiLine) {
               zardluud.push({
-                ner: "Эхний үлдэгдэл",
-                zardliinTurul: "Авлага",
+                ner: ekhniiNer,
+                zardliinTurul: songosonZardliinTurul || "Авлага",
                 dun: amount,
                 tariff: amount,
                 tulukhDun: amount,
                 isEkhniiUldegdel: true,
-                tailbar: "Excel-ээр оруулсан эхний үлдэгдэл",
+                tailbar: ekhniiTailbar,
               });
             }
 
