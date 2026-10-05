@@ -847,6 +847,33 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
     if (!!req?.body?.color) {
     }
     const medegdel = async (uilchluulegch, orshinSuugchiinId) => {
+      // ГАРЦЫН САМБАР: төлбөртэй машин гарахад дүнг нь дэлгэцэнд гаргана.
+      //
+      // Дүн нь ЗӨВХӨН энд мэдэгдэж байна — `execute-open` нь ip/plate/
+      // commandId л авчирдаг тул локал ажилтан дүнг хаанаас ч авах аргагүй
+      // байв. Иймд гар утасны мэдэгдэлтэй ИЖИЛ дүнг самбар руу илгээнэ.
+      try {
+        const dun = uilchluulegch?.tuukh?.[0]?.tulukhDun;
+        const ip = req.body.CAMERA_IP || req.body.camerA_IP;
+        const io = req.app.get("socketio");
+        if (io && ip && dun !== undefined && dun !== null && Number(dun) > 0) {
+          io.to(`gate-room-${req.body.barilgiinId}`).emit("sambar-show", {
+            ip,
+            plate:
+              uilchluulegch?.mashiniiDugaar || req.body.mashiniiDugaar || "",
+            // Машины ТӨРӨЛ — Зочин / Үйлчлүүлэгч / Оршин суугч / СӨХ /
+            // Ажилтан гэх мэт. `uilchluulegch.turul` дээр сууна.
+            turul: uilchluulegch?.turul || "",
+            dun: String(dun),
+          });
+          console.log(
+            `[Sambar] гарцын дүн илгээв ip=${ip} turul=${uilchluulegch?.turul || "-"} dun=${dun} barilga=${req.body.barilgiinId}`,
+          );
+        }
+      } catch (e) {
+        console.error("[Sambar] дүн илгээхэд алдаа:", e.message);
+      }
+
       /**
        * Web.с машин бүртгэсэн тохиолдолд orshinSuugchiinId байхгүй байгаа тул
        * зарим машин дээр orshinSuugchiinId undefined ирж болно.
