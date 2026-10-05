@@ -847,47 +847,6 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
     if (!!req?.body?.color) {
     }
     const medegdel = async (uilchluulegch, orshinSuugchiinId) => {
-      // ГАРЦЫН САМБАР: төлбөртэй машин гарахад дүнг нь дэлгэцэнд гаргана.
-      //
-      // Дүн нь ЗӨВХӨН энд мэдэгдэж байна — `execute-open` нь ip/plate/
-      // commandId л авчирдаг тул локал ажилтан дүнг хаанаас ч авах аргагүй
-      // байв. Иймд гар утасны мэдэгдэлтэй ИЖИЛ дүнг самбар руу илгээнэ.
-      try {
-        // ЯМАР дүнг самбарт гаргах вэ:
-        //
-        // `tulukhDun` нь ТӨЛӨХ ҮЛДЭГДЭЛ бөгөөд төлбөр хийгдмэгц 0 болдог
-        // (/zogsooliinTulburTulye доторх "tuukh.$.tulukhDun": 0). Машин
-        // хаалга хүрэхдээ аль хэдийн төлсөн байдаг тул үүнийг шууд авбал
-        // 862,000₮ төлсөн үйлчлүүлэгчид ч самбар "Үнэгүй" гэж харуулна.
-        //
-        // Иймд: үлдэгдэл байвал ҮЛДЭГДЛИЙГ, төлчихсөн бол ТӨЛСӨН дүнг.
-        // Аль аль нь тэг бол жинхэнэ үнэгүй гарц.
-        const tuukh0 = uilchluulegch?.tuukh?.[0];
-        const uldegdel = Number(tuukh0?.tulukhDun) || 0;
-        const tulsun = Number(tuukh0?.tulbur) || 0;
-        const dun = uldegdel > 0 ? uldegdel : tulsun;
-        const ip = req.body.CAMERA_IP || req.body.camerA_IP;
-        const io = req.app.get("socketio");
-        // Дүн ТЭГ байсан ч илгээнэ: оршин суугч үнэгүй гардаг ч самбар дээр
-        // төрөл нь ("Оршин суугч") харагдах ёстой. Тэг дүнг доор ажилтан
-        // "Үнэгүй" болгож харуулна — зогсоолын жагсаалттай ижил үг.
-        if (io && ip && dun !== undefined && dun !== null) {
-          io.to(`gate-room-${req.body.barilgiinId}`).emit("sambar-show", {
-            ip,
-            plate:
-              uilchluulegch?.mashiniiDugaar || req.body.mashiniiDugaar || "",
-            // Машины ТӨРӨЛ — Зочин / Үйлчлүүлэгч / Оршин суугч / СӨХ /
-            // Ажилтан гэх мэт. `uilchluulegch.turul` дээр сууна.
-            turul: uilchluulegch?.turul || "",
-            dun: String(dun),
-          });
-          console.log(
-            `[Sambar] гарцын дүн илгээв ip=${ip} turul=${uilchluulegch?.turul || "-"} dun=${dun} barilga=${req.body.barilgiinId}`,
-          );
-        }
-      } catch (e) {
-        console.error("[Sambar] дүн илгээхэд алдаа:", e.message);
-      }
 
       /**
        * Web.с машин бүртгэсэн тохиолдолд orshinSuugchiinId байхгүй байгаа тул
@@ -1241,6 +1200,52 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
         }
       } catch (e) {
         console.error("Post-sdkData duration and discount fix error:", e);
+      }
+    }
+
+    // ГАРЦЫН САМБАР — БҮХ машинд.
+    //
+    // `sdkData` нь callback-ээ ЗӨВХӨН `Mashin` дээр бүртгэлтэй машинд
+    // дууддаг (sukhParking-v1/lib/serivice/sdkService.js:919). Зочин,
+    // үйлчлүүлэгч нь тэнд байдаггүй тул самбар руу юу ч очдоггүй байв —
+    // яг ТӨЛБӨРТЭЙ машинууд нь. Иймд callback-аас ҮЛ ХАМААРАН энд илгээнэ.
+    //
+    // ЗӨВХӨН ГАРАХ үед: сүүлийн зогсолт нь `garsanTsag`-тай бол машин
+    // гарсан гэсэн үг. Орох үед орцын самбарыг `execute-open` бичдэг тул
+    // энд бичвэл хоёр бичигч уралдана.
+    if (req.body.mashiniiDugaar) {
+      try {
+        const io = req.app.get("socketio");
+        const ip = req.body.CAMERA_IP || req.body.camerA_IP;
+        if (io && ip) {
+          const sambariinMur = await Uilchluulegch(
+            req.body.tukhainBaaziinKholbolt,
+          )
+            .findOne({ mashiniiDugaar: req.body.mashiniiDugaar })
+            .sort({ createdAt: -1 })
+            .lean();
+          const tuukh0 = sambariinMur?.tuukh?.[0];
+          const garsan = tuukh0?.tsagiinTuukh?.[0]?.garsanTsag;
+          if (garsan) {
+            // `tulukhDun` нь төлбөр хийгдмэгц 0 болдог тул үлдэгдэл
+            // байхгүй бол ТӨЛСӨН дүнг харуулна.
+            const uldegdel = Number(tuukh0?.tulukhDun) || 0;
+            const tulsun = Number(tuukh0?.tulbur) || 0;
+            const dun = uldegdel > 0 ? uldegdel : tulsun;
+            const turul = sambariinMur?.turul || khariu?.turul || "";
+            io.to(`gate-room-${req.body.barilgiinId}`).emit("sambar-show", {
+              ip,
+              plate: sambariinMur?.mashiniiDugaar || req.body.mashiniiDugaar,
+              turul,
+              dun: String(dun),
+            });
+            console.log(
+              `[Sambar] гарцын дүн илгээв ip=${ip} turul=${turul || "-"} dun=${dun} barilga=${req.body.barilgiinId}`,
+            );
+          }
+        }
+      } catch (e) {
+        console.error("[Sambar] дүн илгээхэд алдаа:", e.message);
       }
     }
 
