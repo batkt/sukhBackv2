@@ -231,6 +231,12 @@ async function logEdit(req, db, modelName, documentId, oldDoc, newDoc, additiona
     }
 
     const changes = getChanges(oldDoc, newDoc);
+    // Дуудагч монгол талбарын нэр өгсөн бол (baiguullagaAudit г.м.)
+    if (additionalContext.talbarNeruud) {
+      changes.forEach((c) => {
+        if (additionalContext.talbarNeruud[c.talbar]) c.talbarNer = additionalContext.talbarNeruud[c.talbar];
+      });
+    }
     if (changes.length === 0) {
       // No actual changes - skip logging silently
       return;
@@ -282,7 +288,7 @@ async function logEdit(req, db, modelName, documentId, oldDoc, newDoc, additiona
     }
 
     const classDugaar = classDugaarAvya(newDoc);
-    const classNer = classNerAvya(newDoc) || classNerAvya(oldDoc);
+    const classNer = additionalContext.classNer || classNerAvya(newDoc) || classNerAvya(oldDoc);
 
     const classOgnoo = newDoc?.ognoo || 
                      newDoc?.createdAt || 
