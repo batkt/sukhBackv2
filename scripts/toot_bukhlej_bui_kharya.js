@@ -85,15 +85,27 @@ async function main() {
         `\n   Бааз: ${baaz}\n`,
     );
 
+    // Ижил алдааны мөр ХОЁР загварт бий: orshinSuugch БА khariltsagch.
+    // Хоёуланг нь шалгана — өөр цуглуулгад байгаа бичлэг ч блоклоно.
+    const TSUGLUULGUUD = ["orshinSuugch", "khariltsagch"];
+
     let niitOlson = 0;
     for (const { ner, q } of nukhtsluud) {
-      const olson = await conn
-        .collection("orshinSuugch")
-        .find(q)
-        .limit(10)
-        .toArray();
+      let olson = [];
+      let olsonTsuglulga = "";
+      for (const ts of TSUGLUULGUUD) {
+        const ur = await conn.collection(ts).find(q).limit(10).toArray();
+        if (ur.length) {
+          olson = ur;
+          olsonTsuglulga = ts;
+          break;
+        }
+      }
 
-      console.log(`${olson.length ? "⛔" : "✅"} ${ner}: ${olson.length}`);
+      console.log(
+        `${olson.length ? "⛔" : "✅"} ${ner}: ${olson.length}` +
+          `${olsonTsuglulga ? ` [${olsonTsuglulga}]` : ""}`,
+      );
       for (const os of olson) {
         niitOlson += 1;
         const taarakhToots = (os.toots || []).filter(
@@ -113,6 +125,43 @@ async function main() {
               `${String(t.barilgiinId || "") !== String(barilgiinId) ? "  ← ӨӨР БАРИЛГЫНХ" : ""}` +
               `${/гараж|гараш|зогсоол|агуулах/i.test(String(t.turul || "")) ? "  ← ГАРАЖ/АГУУЛАХ" : ""}`,
           );
+        }
+      }
+    }
+
+    // СУЛ хувилбар: давхар/орцыг тооцохгүй. `d`/`o` хоосон үед шалгуур нь
+    // яг ингэж АЖИЛЛАДАГ — улмаас өөр давхрын ижил тоот ч блоклоно.
+    if (davkhar || orts) {
+      const sulQ = {
+        $or: [
+          { toot: String(toot), barilgiinId: String(barilgiinId) },
+          {
+            barilgiinId: String(barilgiinId),
+            toots: { $elemMatch: { toot: String(toot) } },
+          },
+          {
+            toots: {
+              $elemMatch: { toot: String(toot), barilgiinId: String(barilgiinId) },
+            },
+          },
+        ],
+      };
+      console.log("\n— Давхар/орцгүй СУЛ шалгалт (импорт ийм байж болно):");
+      for (const ts of TSUGLUULGUUD) {
+        const ur = await conn.collection(ts).find(sulQ).limit(10).toArray();
+        console.log(`   ${ur.length ? "⛔" : "✅"} ${ts}: ${ur.length}`);
+        for (const os of ur) {
+          niitOlson += 1;
+          console.log(
+            `      _id=${os._id} нэр="${[os.ovog, os.ner].filter(Boolean).join(" ") || "-"}" ` +
+              `утас=${os.utas || "-"} toot=${os.toot ?? "-"} davkhar=${os.davkhar ?? "-"} orts=${os.orts ?? "-"}`,
+          );
+          for (const t of (os.toots || []).filter((x) => String(x?.toot || "") === String(toot))) {
+            console.log(
+              `        toots[]: toot=${t.toot} turul=${t.turul ?? "-"} ` +
+                `davkhar=${t.davkhar ?? "-"} orts=${t.orts ?? "-"} barilgiinId=${t.barilgiinId ?? "БАЙХГҮЙ"}`,
+            );
+          }
         }
       }
     }
