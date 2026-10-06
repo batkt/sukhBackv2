@@ -178,14 +178,13 @@ router.get(
       {
         const bichleg = await QuickQpayObject(kholbolt)
           .findOne({ zakhialgiinDugaar: zd })
-          .select("invoice_id qpay.invoice_id tulsunEsekh salbariinId barilgiinId")
+          .select("invoice_id qpay.invoice_id tulsunEsekh")
           .lean();
         if (bichleg && !bichleg.tulsunEsekh) {
           const batalgaa = await qpayTulburBatalgaajuulakh(
             bichleg.invoice_id || bichleg.qpay?.invoice_id,
             b,
             kholbolt,
-            bichleg.salbariinId || bichleg.barilgiinId || req.params.barilgiinId,
           );
           if (!batalgaa.tulugdsun) {
             console.warn("⛔ [QPAY CALLBACK] QPay төлбөрийг баталгаажуулсангүй — тэмдэглэхгүй", zd);
@@ -303,16 +302,13 @@ const qpaycallbackGadaaStickerHandler = async (req, res, next) => {
     {
       const bichleg = await QuickQpayObject(kholbolt)
         .findOne({ zakhialgiinDugaar: zd })
-        .select("invoice_id qpay.invoice_id tulsunEsekh salbariinId barilgiinId")
+        .select("invoice_id qpay.invoice_id tulsunEsekh")
         .lean();
       if (bichleg && !bichleg.tulsunEsekh) {
-        // Салбарыг (QPay-ийн мерчант) заавал дамжуулна — үгүй бол олон салбартай
-        // байгууллагад өөр салбарын токеноор шалгаж PAID гэж олдохгүй байв
         const batalgaa = await qpayTulburBatalgaajuulakh(
           bichleg.invoice_id || bichleg.qpay?.invoice_id,
           b,
           kholbolt,
-          bichleg.salbariinId || req.params.barilgiinId || bichleg.barilgiinId,
         );
         if (!batalgaa.tulugdsun) {
           console.warn("⛔ [QPAY CALLBACK GADAA] QPay төлбөрийг баталгаажуулсангүй — бүртгэхгүй", zd);
@@ -2270,11 +2266,6 @@ async function qpayTulburBatalgaajuulakh(qpayInvoiceId, baiguullagiinId, kholbol
     const transactionId =
       tulburuud[0]?.transactions?.[0]?.id || khariu?.payments?.[0]?.transactions?.[0]?.id || null;
     const tulsunOgnoo = require("../utils/qpayShalgayAyulgui").qpayTulsunOgnoo(khariu) || new Date();
-    if (!tulugdsun) {
-      console.warn(
-        `⚠️ [QPAY] төлөгдөөгүй хариу: invoice=${qpayInvoiceId} salbar=${barilgiinId || "-"} status=${tuluv || "-"} payments=${(khariu?.payments || []).length} count=${khariu?.count ?? "-"}`,
-      );
-    }
     return { tulugdsun, dun, transactionId, tulsunOgnoo };
   } catch (err) {
     console.error("❌ [QPAY] төлбөр баталгаажуулахад алдаа:", err.message);
