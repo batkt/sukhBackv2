@@ -514,12 +514,25 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
           ekhniiUldegdelEsekh: !!c.isEkhniiUldegdel,
           guilgeeKhiisenAjiltniiNer: options.ajiltanNer || "Систем",
           guilgeeKhiisenAjiltniiId: options.ajiltanId || geree.orshinSuugchId,
+        }, {
+          // Мөр бүрийн дараа биш, доор бүгдийг бичиж дуусаад НЭГ удаа
+          // sync хийнэ. 11 зардалтай нэхэмжлэх = 11 биш 1 удаагийн sync.
+          deferSync: true,
         });
         console.log(`  [Charge Processing] ✅ Saved new charge in ledger. ID: ${savedCharge?._id?.toString() || savedCharge?._id}`);
       } catch (recErr) {
         console.error(`  [Charge Processing] ❌ ERROR recording charge for "${c.ner}":`, recErr.message, recErr.stack);
       }
     }
+
+    // Бүх зардлыг бичиж дууссаны ДАРАА нэг удаа төлвийг тэнцүүлнэ.
+    // `syncInvoicesStatus` нь бүтэн ledger-ээс дүгнэдэг идемпотент функц тул
+    // үр дүн нь мөр бүрийн дараа дуудахтай ижил.
+    await guilgeeService
+      .syncInvoicesStatus(kholbolt, geree._id.toString())
+      .catch((err) =>
+        console.error("❌ [LEDGER SYNC] syncInvoicesStatus failed:", err.message),
+      );
 
     // Байгаа нэхэмжлэхийг дахин дүүргэсэн үед толгойн дүн нь үүсгэх үеийнхээрээ
     // хөлдүү үлддэг байв — авлагын мөрүүд шинээр бичигдсэн бол `niitTulbur`-ийг

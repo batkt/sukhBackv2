@@ -17,6 +17,22 @@ function getMongoClient(kholbolt) {
 
 /**
  * Record a charge (receivable) in the ledger
+ *
+ * `options.deferSync` — мөрийг бичээд `syncInvoicesStatus`-ыг ДУУДАХГҮЙ.
+ *
+ * ЯАГААД ХЭРЭГТЭЙ ВЭ: нэхэмжлэх үүсгэхэд ~11 зардлын мөр бичигддэг ба мөр
+ * бүрийн дараа тухайн гэрээний БҮХ ТҮҮХИЙГ дахин тооцдог байв. Нэг
+ * нэхэмжлэх = 11 удаагийн бүрэн sync; sync бүр нь гэрээний өмнөх нэхэмжлэх
+ * БҮРийг (өөрчлөлт байгаа эсэхээс үл хамааран) дахин бичдэг тул
+ *
+ *     11 зардал × (3 уншилт + N нэхэмжлэхийн бичилт)
+ *
+ * болж, N буюу гэрээний нэхэмжлэхийн тоо САР БҮР нэмэгддэг тул ачаалал нь
+ * сар ирэх тусам ХУРИМТЛАГДАН өсдөг байв.
+ *
+ * `syncInvoicesStatus` нь бүтэн ledger-ээс дүгнэлтээ гаргадаг идемпотент
+ * функц тул бүх мөрийг бичиж дуусаад НЭГ удаа дуудахад үр дүн ЯГ ижил
+ * гарна — зөвхөн завсрын төлөв өөр бөгөөд түүнийг хэн ч хардаггүй.
  */
 async function recordCharge(kholbolt, data, options = {}) {
   const GuilgeeAvlaguudModel = GuilgeeAvlaguud(kholbolt);
@@ -53,8 +69,8 @@ async function recordCharge(kholbolt, data, options = {}) {
 
   const saved = await charge.save();
 
-  // Sync statuses immediately
-  if (data.gereeniiId) {
+  // Багцаар бичиж байгаа дуудагч өөрөө эцэст нь нэг удаа sync хийнэ.
+  if (data.gereeniiId && !options.deferSync) {
     await syncInvoicesStatus(kholbolt, data.gereeniiId).catch(err => {
       console.error("❌ [LEDGER SYNC] syncInvoicesStatus failed:", err.message);
     });
@@ -128,8 +144,9 @@ async function recordPayment(kholbolt, data, options = {}) {
   await paymentRecord.save();
   console.log(`✅ [LEDGER] Payment persisted: ${paymentRecord._id}, amount=${paymentRecord.dun}`);
 
-  // Trigger Full Sync of invoice statuses for this contract
-  if (data.gereeniiId) {
+  // Trigger Full Sync of invoice statuses for this contract.
+  // `recordPayments` нь багцаа дуусгаад өөрөө нэг удаа дуудна (deferSync).
+  if (data.gereeniiId && !options.deferSync) {
     await syncInvoicesStatus(kholbolt, data.gereeniiId).catch((err) => {
       console.error("❌ [LEDGER SYNC] syncInvoicesStatus failed:", err.message);
     });
@@ -203,17 +220,18 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
 
 
 
-    // 1. Get all ledger entries for this contract
-    const allLedger = await GuilgeeModel.find({ gereeniiId: gereeniiId }).lean();
+    // 1. Get all ledger entries for this contract.
+    //    Нэхэмжлэхийн жагсаалтыг НЭГ УДАА л татна — өмнө нь яг ижил
+    //    query хоёр удаа явдаг байв (нэг нь хөнгөлөлтөд, нэг нь FIFO-д).
+    const [allLedger, invoices] = await Promise.all([
+      GuilgeeModel.find({ gereeniiId: gereeniiId }).lean(),
+      NekhemjlekhModel.find({ gereeniiId: gereeniiId }).sort({ ognoo: 1 }).lean(),
+    ]);
 
     // 4a. Invoices first — хөнгөлөлтийг нэхэмжлэхэд нь шууд оноохын тулд
-    const invoicesForCredit = await NekhemjlekhModel.find({ gereeniiId: gereeniiId })
-      .select({ ognoo: 1 })
-      .sort({ ognoo: 1 })
-      .lean();
     const { invoiceCredit, creditIds } = khungulultNekhemjlekhendOnooyo(
       allLedger,
-      invoicesForCredit,
+      invoices,
     );
 
     // 2. Calculate Total Paid (negative entries) — нэхэмжлэхэд оноосон хөнгөлөлтөөс бусад
@@ -228,27 +246,40 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
 
     let availableFunds = totalPayments - looseCharges;
 
-    // 4. Fetch all invoices for this contract, sorted by date (FIFO)
-    const invoices = await NekhemjlekhModel.find({ gereeniiId: gereeniiId })
-      .sort({ ognoo: 1 })
-      .lean();
+    // Ledger-ийг нэхэмжлэхээр нь НЭГ удаа бүлэглэнэ. Өмнө нь нэхэмжлэх
+    // бүрийн хувьд бүх ledger-ийг дахин шүүдэг байсан тул гэрээний
+    // нэхэмжлэх × ledger мөр гэсэн квадрат ажиллагаа үүсдэг байв.
+    const ledgerByInvoice = new Map();
+    for (const r of allLedger) {
+      const key = String(r.nekhemjlekhId || "");
+      if (!key) continue;
+      let bulge = ledgerByInvoice.get(key);
+      if (!bulge) {
+        bulge = { too: 0, nemekh: 0 };
+        ledgerByInvoice.set(key, bulge);
+      }
+      bulge.too += 1;
+      if ((r.dun || 0) > 0) bulge.nemekh += r.dun || 0;
+    }
 
+    // Бичилтүүдийг цуглуулаад НЭГ bulkWrite-аар явуулна (сүлжээний
+    // дамжлага нэхэмжлэх тутамд биш, нэг л удаа).
+    const bichilt = [];
+    const ustgakh = [];
 
     for (const inv of invoices) {
       // Check if there are ANY ledger items (charges or payments) linked to this invoice
-      const linkedItems = allLedger.filter((r) => String(r.nekhemjlekhId || "") === String(inv._id));
+      const bulge = ledgerByInvoice.get(String(inv._id));
 
-      if (linkedItems.length === 0) {
+      if (!bulge) {
         // If there are no ledger entries associated with this invoice, it is orphan/empty. Delete it.
-        await NekhemjlekhModel.findByIdAndDelete(inv._id);
+        ustgakh.push(inv._id);
         console.log(`🗑️ [LEDGER SYNC] Deleted orphan empty invoice: ${inv._id}`);
         continue;
       }
 
       // Amount for this specific invoice = sum of positive dun linked to it in ledger
-      const invCharge = allLedger
-        .filter((r) => String(r.nekhemjlekhId || "") === String(inv._id) && (r.dun || 0) > 0)
-        .reduce((sum, r) => sum + (r.dun || 0), 0);
+      const invCharge = bulge.nemekh;
 
       // Fallback to niitTulbur if ledger doesn't have explicit charges yet
       const chargeAmount = invCharge > 0 ? invCharge : (inv.niitTulbur || 0);
@@ -259,23 +290,48 @@ async function syncInvoicesStatus(kholbolt, gereeniiId) {
       const newUldegdel = isPaid ? 0 : Math.max(0, targetAmount - availableFunds);
 
 
-      // Update the invoice with new status AND uldegdel
-      // We update regardless of status change to ensure uldegdel is consistent
+      // Update the invoice with new status AND uldegdel.
+      //
+      // ӨӨРЧЛӨГДӨӨГҮЙ бол бичихгүй. Өмнө нь "тогтвортой байлгах" үүднээс
+      // болзолгүй бичдэг байсан тул нэхэмжлэх үүсгэх бүрт тухайн гэрээний
+      // бүх хуучин нэхэмжлэх ижил утгаараа дахин дахин бичигддэг байв.
       const updateData = {
         tuluv: newStatus,
         uldegdel: newUldegdel,
-        tulsunOgnoo: isPaid ? new Date() : null,
       };
       if (invCharge > 0) {
         updateData.niitTulbur = invCharge;
       }
-      await NekhemjlekhModel.findByIdAndUpdate(inv._id, updateData);
+
+      const uurchlugdsun =
+        inv.tuluv !== newStatus ||
+        roundMoney(inv.uldegdel || 0) !== roundMoney(newUldegdel) ||
+        (invCharge > 0 && roundMoney(inv.niitTulbur || 0) !== roundMoney(invCharge));
+
+      if (uurchlugdsun) {
+        // `tulsunOgnoo`-г зөвхөн төлөв ӨӨРЧЛӨГДӨХ үед хөдөлгөнө — эс
+        // бөгөөс sync ажиллах бүрт төлсөн огноо нь өнөөдөр болж шинэчлэгдэнэ.
+        if (isPaid && inv.tuluv !== "Төлсөн") updateData.tulsunOgnoo = new Date();
+        if (!isPaid) updateData.tulsunOgnoo = null;
+
+        bichilt.push({
+          updateOne: { filter: { _id: inv._id }, update: { $set: updateData } },
+        });
+      }
 
       if (isPaid) {
         availableFunds -= targetAmount;
       } else {
         availableFunds = 0;
       }
+    }
+
+    if (ustgakh.length) {
+      bichilt.push({ deleteMany: { filter: { _id: { $in: ustgakh } } } });
+    }
+    if (bichilt.length) {
+      // `ordered: false` — нэг бичилт унасан ч бусад нь үргэлжилнэ.
+      await NekhemjlekhModel.bulkWrite(bichilt, { ordered: false });
     }
   } catch (err) {
     console.error("❌ [LEDGER SYNC] Error in syncInvoicesStatus:", err.message, err.stack);
@@ -295,7 +351,13 @@ async function recordPayments(kholbolt, payments, options = {}) {
     await session.withTransaction(async () => {
       const results = [];
       for (const payment of payments) {
-        const res = await recordPayment(kholbolt, payment, { ...options, session });
+        // Доор багц дуусахад нэг удаа sync хийнэ — төлөлт бүрийн дараа
+        // гэрээний бүх түүхийг дахин бичих шаардлагагүй.
+        const res = await recordPayment(kholbolt, payment, {
+          ...options,
+          session,
+          deferSync: true,
+        });
         results.push(res);
       }
       result = { success: true, results };
