@@ -1,5 +1,47 @@
 const express = require("express");
 const router = express.Router();
+
+/**
+ * Тохиргоог ДАРЖ БИЧИХГҮЙ, НИЙЛҮҮЛНЭ.
+ *
+ * ЯАГААД: `baiguullaga.set(req.body)` нь `tokhirgoo`-г бүхэлд нь СОЛЬДОГ.
+ * Вэб тухайн хэсгийнхээ талбаруудыг л илгээдэг тул илгээгээгүй түлхүүр нь
+ * схемийн анхдагч утга (boolean бол `false`) руу буцдаг — хэн ч дараагүй
+ * мөртлөө тохиргоо ӨӨРӨӨ унтарсан мэт харагдана. Нэг хуудсыг хоёр хүн
+ * (эсвэл хоёр таб) зэрэг хадгалахад ч нөгөөгийнх нь өөрчлөлт замхардаг.
+ *
+ * Массивыг нийлүүлэхгүй — тэдгээрийг (жишээ нь зардлын жагсаалт) вэб
+ * бүтнээр нь удирддаг тул солигдох нь ЗӨВ.
+ */
+function engiinObjectEsekh(utga) {
+  return (
+    !!utga &&
+    typeof utga === "object" &&
+    !Array.isArray(utga) &&
+    !(utga instanceof Date) &&
+    !utga._bsontype // ObjectId гэх мэт BSON утгыг задлахгүй
+  );
+}
+
+function tokhirgooNiiluuley(khuuchin, shine) {
+  if (!engiinObjectEsekh(shine)) return shine;
+
+  const suuri = engiinObjectEsekh(khuuchin)
+    ? typeof khuuchin.toObject === "function"
+      ? khuuchin.toObject()
+      : { ...khuuchin }
+    : {};
+
+  const ur = { ...suuri };
+  for (const [tulkhuur, utga] of Object.entries(shine)) {
+    // Илгээгээгүй (undefined) талбарыг ХӨНДӨХГҮЙ.
+    if (utga === undefined) continue;
+    ur[tulkhuur] = engiinObjectEsekh(utga)
+      ? tokhirgooNiiluuley(suuri[tulkhuur], utga)
+      : utga;
+  }
+  return ur;
+}
 const Baiguullaga = require("../models/baiguullaga");
 const Ajiltan = require("../models/ajiltan");
 //const { crudWithFile, crud } = require("../components/crud");
@@ -276,6 +318,14 @@ router.post("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
 
               delete updatedBarilga._id;
               delete updatedBarilga.baiguullagiinId;
+
+              // Барилгын тохиргоог хуучин утган дээр нь НИЙЛҮҮЛНЭ.
+              if (updatedBarilga.tokhirgoo) {
+                updatedBarilga.tokhirgoo = tokhirgooNiiluuley(
+                  oldBuilding.tokhirgoo,
+                  updatedBarilga.tokhirgoo,
+                );
+              }
               
               // Use .set() to ensure Mongoose tracks changes in nested objects like tokhirgoo.zochinTokhirgoo
               baiguullaga.barilguud[index].set(updatedBarilga);
@@ -292,6 +342,14 @@ router.post("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
     
     // Use .set() to ensure Mongoose detects changes in nested objects like tokhirgoo.zochinTokhirgoo
     // This replaces manual Object.assign and individual field updates
+    // Байгууллагын тохиргоог ч мөн адил НИЙЛҮҮЛНЭ.
+    if (req.body.tokhirgoo) {
+      req.body.tokhirgoo = tokhirgooNiiluuley(
+        baiguullaga.tokhirgoo,
+        req.body.tokhirgoo,
+      );
+    }
+
     baiguullaga.set(req.body);
     
     // Save the updated baiguullaga
