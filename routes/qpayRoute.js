@@ -1827,6 +1827,42 @@ router.post("/qpayGargaya", tokenShalgakh, tulukhErkhShalgaya, async (req, res, 
       console.log(
         `✅ [QPAY-GARGAYA] Success: invoice_id=${khariu.invoice_id || khariu.invoiceId || khariu.id}`,
       );
+
+      // ХУУЧИН invoice_id-г ДАРЖ БИЧНЭ.
+      //
+      // `zakhialgiinDugaar` нь (бичлэгийн _id + дүн) гэж ТОГТМОЛ үүсдэг тул
+      // нэг машин дахин QR уншуулахад ИЖИЛ захиалга дээр ШИНЭ нэхэмжлэх
+      // үүснэ. Гэтэл QuickQpayObject дээрх `invoice_id` нь хамгийн ЭХНИЙ
+      // нэхэмжлэхийнх хэвээр үлддэг байв. Үүний улмаас callback нь
+      // ХУУЧИН нэхэмжлэхийг QPay-гээс асууж, "төлөгдөөгүй" гэсэн хариу
+      // авч, ҮНЭХЭЭР ТӨЛСӨН төлбөрийг бүртгэхгүй өнгөрдөг байв.
+      try {
+        const shineInvoiceId =
+          khariu?.invoice_id || khariu?.invoiceId || khariu?.id;
+        const zd = req.body?.zakhialgiinDugaar;
+        if (shineInvoiceId && zd) {
+          const { db } = require("zevbackv2");
+          const kh = db.kholboltuud.find(
+            (a) => String(a.baiguullagiinId) === String(req.body.baiguullagiinId),
+          );
+          if (kh) {
+            // Төлөгдсөн захиалгыг ХӨНДӨХГҮЙ — зөвхөн хүлээгдэж буйг.
+            const shinechlegdsen = await QuickQpayObject(kh).findOneAndUpdate(
+              { zakhialgiinDugaar: zd, tulsunEsekh: { $ne: true } },
+              { $set: { invoice_id: shineInvoiceId } },
+              { new: true },
+            );
+            if (shinechlegdsen) {
+              console.log(
+                `🔄 [QPAY-GARGAYA] ${zd} захиалгын invoice_id шинэчлэгдлээ → ${shineInvoiceId}`,
+              );
+            }
+          }
+        }
+      } catch (e) {
+        console.error("⚠️ [QPAY-GARGAYA] invoice_id шинэчлэхэд алдаа:", e.message);
+      }
+
       res.send(khariu);
     }
   } catch (err) {
