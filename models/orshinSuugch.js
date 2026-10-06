@@ -278,38 +278,87 @@ orshinSuugchSchema.pre("save", async function (next) {
     baiguullagiinId: baId,
     turul: tur,
   } of toCheck) {
+    const isGarage = tur === "Гараж" || tur === "Зогсоол";
+    const isStorage = tur === "Агуулах";
+    const isApt = !isGarage && !isStorage;
+
     const orConditions = [];
-    const baseMatch = { toot: t };
-    const baseTootMatch = { toot: t };
-    if (d) {
-      baseMatch.davkhar = d;
-      baseTootMatch.davkhar = d;
-    }
-    if (o) {
-      baseMatch.orts = o;
-      baseTootMatch.orts = o;
-    }
+
     if (bId) {
-      orConditions.push({ ...baseMatch, barilgiinId: bId });
-      orConditions.push({
-        barilgiinId: bId,
-        toots: { $elemMatch: baseTootMatch },
-      });
-      orConditions.push({
-        toots: { $elemMatch: { ...baseTootMatch, barilgiinId: bId } },
-      });
+      if (isApt) {
+        // Орон сууц: баримтын ДЭЭД талын toot эсвэл toots[] доторх орон сууцтай л мөргөлдөнө
+        const baseMatch = { toot: t, barilgiinId: bId };
+        const baseTootMatch = {
+          toot: t,
+          barilgiinId: bId,
+          turul: { $nin: ["Гараж", "Зогсоол", "Агуулах"] },
+        };
+        if (d) {
+          baseMatch.davkhar = d;
+          baseTootMatch.davkhar = d;
+        }
+        if (o) {
+          baseMatch.orts = o;
+          baseTootMatch.orts = o;
+        }
+        orConditions.push(baseMatch);
+        orConditions.push({ toots: { $elemMatch: baseTootMatch } });
+        orConditions.push({
+          barilgiinId: bId,
+          toots: {
+            $elemMatch: {
+              toot: t,
+              turul: { $nin: ["Гараж", "Зогсоол", "Агуулах"] },
+              ...(d ? { davkhar: d } : {}),
+              ...(o ? { orts: o } : {}),
+            },
+          },
+        });
+      } else if (isGarage) {
+        // Гараж: зөвхөн toots[] доторх гараж/зогсоолтой мөргөлдөнө (дээд талын орон сууц, агуулахтай МӨРГӨЛДӨХГҮЙ)
+        const garageElem = {
+          toot: t,
+          barilgiinId: bId,
+          turul: { $in: ["Гараж", "Зогсоол"] },
+        };
+        if (d) garageElem.davkhar = d;
+        orConditions.push({ toots: { $elemMatch: garageElem } });
+        orConditions.push({
+          barilgiinId: bId,
+          toots: {
+            $elemMatch: {
+              toot: t,
+              turul: { $in: ["Гараж", "Зогсоол"] },
+              ...(d ? { davkhar: d } : {}),
+            },
+          },
+        });
+      } else if (isStorage) {
+        // Агуулах: зөвхөн toots[] доторх агуулахтай мөргөлдөнө (орон сууц, гаражтай МӨРГӨЛДӨХГҮЙ)
+        const storageElem = {
+          toot: t,
+          barilgiinId: bId,
+          turul: "Агуулах",
+        };
+        if (d) storageElem.davkhar = d;
+        orConditions.push({ toots: { $elemMatch: storageElem } });
+        orConditions.push({
+          barilgiinId: bId,
+          toots: {
+            $elemMatch: {
+              toot: t,
+              turul: "Агуулах",
+              ...(d ? { davkhar: d } : {}),
+            },
+          },
+        });
+      }
     }
     if (orConditions.length > 0) {
       const query = { $or: orConditions };
       if (this._id) query._id = { $ne: this._id };
       const existing = await OrshinSuugchModel.findOne(query);
       if (existing) {
-        // АЛЬ нэгж давхардсаныг хэлнэ.
-        //
-        // Өмнө нь зүгээр л «Энэ тоот…» гэдэг байсан тул аль тоот нь
-        // мөргөлдсөнийг мэдэх аргагүй байв: нэг бичлэгт орон сууц, гараж,
-        // агуулах бүгд шалгагддаг учир хэрэглэгч орон сууцаа буруутган
-        // хайдаг байсан (жишээ: 905 чөлөөтэй мөртлөө Гараж 5 эзэнтэй).
         const ezen = [existing.ovog, existing.ner].filter(Boolean).join(" ");
         return next(
           new Error(

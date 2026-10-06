@@ -1976,9 +1976,13 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             baseMatch.orts = ortsToCheck;
             baseTootMatch.orts = ortsToCheck;
           }
-          const elemMatchNoBId = { toot: tootToCheck };
+          const elemMatchNoBId = {
+            toot: tootToCheck,
+            turul: { $nin: ["Гараж", "Зогсоол", "Агуулах"] },
+          };
           if (davkharToCheck) elemMatchNoBId.davkhar = davkharToCheck;
           if (ortsToCheck) elemMatchNoBId.orts = ortsToCheck;
+          baseTootMatch.turul = { $nin: ["Гараж", "Зогсоол", "Агуулах"] };
           const duplicateQuery = {
             $or: [
               baseMatch,
@@ -2202,6 +2206,25 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           }
         }
 
+        const resolveUnitFloorAndOrts = (unitMap, unitNum) => {
+          if (!unitMap || typeof unitMap !== "object") return { davkhar: "", orts: "" };
+          const target = String(unitNum).trim();
+          for (const [key, val] of Object.entries(unitMap)) {
+            const list = Array.isArray(val)
+              ? val.flatMap((v) => String(v).split(","))
+              : String(val).split(",");
+            const match = list.some((x) => String(x).trim() === target);
+            if (match) {
+              if (key.includes("::")) {
+                const parts = key.split("::");
+                return { orts: parts[0]?.trim() || "", davkhar: parts[1]?.trim() || "" };
+              }
+              return { orts: "", davkhar: key.trim() };
+            }
+          }
+          return { davkhar: "", orts: "" };
+        };
+
         // Add Garage toot(s) if provided ("Гараж тоот" column)
         if (userData.garaazhToot && finalBarilgiinId) {
           const garaazhList = userData.garaazhToot
@@ -2209,14 +2232,21 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             .map((t) => t.trim())
             .filter((t) => t && t.length > 0);
           for (const gt of garaazhList) {
+            const zogsoolBairlal = resolveUnitFloorAndOrts(
+              targetBarilga.tokhirgoo?.davkhariinZogsoolnuud,
+              gt,
+            );
+            const garageDavkhar = zogsoolBairlal.davkhar || "B1";
+            const garageOrts = zogsoolBairlal.orts || "1";
+
             const garaazhEntry = {
               toot: gt,
               turul: "Гараж",
               source: "OWN_ORG",
               baiguullagiinId: baiguullaga._id.toString(),
               barilgiinId: finalBarilgiinId,
-              davkhar: userData.davkhar || "",
-              orts: userData.orts || "1",
+              davkhar: garageDavkhar,
+              orts: garageOrts,
               duureg: duuregNer,
               horoo: horooData,
               soh: sohNer,
@@ -2227,7 +2257,7 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             const existIdx = orshinSuugch.toots?.findIndex(
               (t) =>
                 String(t.toot || "").trim() === gt &&
-                (t.turul === "Гараж") &&
+                (t.turul === "Гараж" || t.turul === "Зогсоол") &&
                 String(t.barilgiinId || "") === String(finalBarilgiinId || "")
             );
             if (existIdx >= 0) {
@@ -2245,14 +2275,21 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
             .map((t) => t.trim())
             .filter((t) => t && t.length > 0);
           for (const at of aguulakhList) {
+            const aguulakhBairlal = resolveUnitFloorAndOrts(
+              targetBarilga.tokhirgoo?.davkhariinAguulakhnuud,
+              at,
+            );
+            const aguulakhDavkhar = aguulakhBairlal.davkhar || "B1";
+            const aguulakhOrts = aguulakhBairlal.orts || "1";
+
             const aguulakhEntry = {
               toot: at,
               turul: "Агуулах",
               source: "OWN_ORG",
               baiguullagiinId: baiguullaga._id.toString(),
               barilgiinId: finalBarilgiinId,
-              davkhar: userData.davkhar || "",
-              orts: userData.orts || "1",
+              davkhar: aguulakhDavkhar,
+              orts: aguulakhOrts,
               duureg: duuregNer,
               horoo: horooData,
               soh: sohNer,

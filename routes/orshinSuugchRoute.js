@@ -909,26 +909,77 @@ router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
     const orts = req.body.orts ? String(req.body.orts).trim() : "";
     if (toot && (barilgiinId || baiguullagiinId)) {
       const turul = req.body.turul || req.body.units?.[0]?.turul || req.body.toots?.[0]?.turul || "Орон сууц";
+      const isGarage = turul === "Гараж" || turul === "Зогсоол";
+      const isStorage = turul === "Агуулах";
+      const isApt = !isGarage && !isStorage;
+
       const orConditions = [];
-      const baseMatch = { toot, turul };
-      const baseTootMatch = { toot, turul };
-      if (davkhar) {
-        baseMatch.davkhar = davkhar;
-        baseTootMatch.davkhar = davkhar;
-      }
-      if (orts) {
-        baseMatch.orts = orts;
-        baseTootMatch.orts = orts;
-      }
       if (barilgiinId) {
-        orConditions.push({ ...baseMatch, barilgiinId });
-        orConditions.push({
-          barilgiinId,
-          toots: { $elemMatch: baseTootMatch },
-        });
-        orConditions.push({
-          toots: { $elemMatch: { ...baseTootMatch, barilgiinId } },
-        });
+        if (isApt) {
+          const baseMatch = { toot, barilgiinId };
+          const baseTootMatch = {
+            toot,
+            barilgiinId,
+            turul: { $nin: ["Гараж", "Зогсоол", "Агуулах"] },
+          };
+          if (davkhar) {
+            baseMatch.davkhar = davkhar;
+            baseTootMatch.davkhar = davkhar;
+          }
+          if (orts) {
+            baseMatch.orts = orts;
+            baseTootMatch.orts = orts;
+          }
+          orConditions.push(baseMatch);
+          orConditions.push({ toots: { $elemMatch: baseTootMatch } });
+          orConditions.push({
+            barilgiinId,
+            toots: {
+              $elemMatch: {
+                toot,
+                turul: { $nin: ["Гараж", "Зогсоол", "Агуулах"] },
+                ...(davkhar ? { davkhar } : {}),
+                ...(orts ? { orts } : {}),
+              },
+            },
+          });
+        } else if (isGarage) {
+          const garageElem = {
+            toot,
+            barilgiinId,
+            turul: { $in: ["Гараж", "Зогсоол"] },
+            ...(davkhar ? { davkhar } : {}),
+          };
+          orConditions.push({ toots: { $elemMatch: garageElem } });
+          orConditions.push({
+            barilgiinId,
+            toots: {
+              $elemMatch: {
+                toot,
+                turul: { $in: ["Гараж", "Зогсоол"] },
+                ...(davkhar ? { davkhar } : {}),
+              },
+            },
+          });
+        } else if (isStorage) {
+          const storageElem = {
+            toot,
+            barilgiinId,
+            turul: "Агуулах",
+            ...(davkhar ? { davkhar } : {}),
+          };
+          orConditions.push({ toots: { $elemMatch: storageElem } });
+          orConditions.push({
+            barilgiinId,
+            toots: {
+              $elemMatch: {
+                toot,
+                turul: "Агуулах",
+                ...(davkhar ? { davkhar } : {}),
+              },
+            },
+          });
+        }
       }
       if (orConditions.length > 0) {
         const existing = await OrshinSuugchModel.findOne({ $or: orConditions });
@@ -1183,30 +1234,80 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
       : null;
     if (updateToot && (updateBarilgiinId || updateBaiguullagiinId)) {
       const updateTurul = req.body.turul || req.body.units?.[0]?.turul || req.body.toots?.[0]?.turul || "Орон сууц";
+      const isGarage = updateTurul === "Гараж" || updateTurul === "Зогсоол";
+      const isStorage = updateTurul === "Агуулах";
+      const isApt = !isGarage && !isStorage;
+
       const updateOrts = req.body.orts ? String(req.body.orts).trim() : null;
       const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
       const orConditions = [];
-      const baseMatch = { toot: updateToot, turul: updateTurul };
-      const baseTootMatch = { toot: updateToot, turul: updateTurul };
-      if (updateDavkhar) {
-        baseMatch.davkhar = updateDavkhar;
-        baseTootMatch.davkhar = updateDavkhar;
-      }
-      if (updateOrts) {
-        baseMatch.orts = updateOrts;
-        baseTootMatch.orts = updateOrts;
-      }
+
       if (updateBarilgiinId) {
-        orConditions.push({ ...baseMatch, barilgiinId: updateBarilgiinId });
-        orConditions.push({
-          barilgiinId: updateBarilgiinId,
-          toots: { $elemMatch: baseTootMatch },
-        });
-        orConditions.push({
-          toots: {
-            $elemMatch: { ...baseTootMatch, barilgiinId: updateBarilgiinId },
-          },
-        });
+        if (isApt) {
+          const baseMatch = { toot: updateToot, barilgiinId: updateBarilgiinId };
+          const baseTootMatch = {
+            toot: updateToot,
+            barilgiinId: updateBarilgiinId,
+            turul: { $nin: ["Гараж", "Зогсоол", "Агуулах"] },
+          };
+          if (updateDavkhar) {
+            baseMatch.davkhar = updateDavkhar;
+            baseTootMatch.davkhar = updateDavkhar;
+          }
+          if (updateOrts) {
+            baseMatch.orts = updateOrts;
+            baseTootMatch.orts = updateOrts;
+          }
+          orConditions.push(baseMatch);
+          orConditions.push({ toots: { $elemMatch: baseTootMatch } });
+          orConditions.push({
+            barilgiinId: updateBarilgiinId,
+            toots: {
+              $elemMatch: {
+                toot: updateToot,
+                turul: { $nin: ["Гараж", "Зогсоол", "Агуулах"] },
+                ...(updateDavkhar ? { davkhar: updateDavkhar } : {}),
+                ...(updateOrts ? { orts: updateOrts } : {}),
+              },
+            },
+          });
+        } else if (isGarage) {
+          const garageElem = {
+            toot: updateToot,
+            barilgiinId: updateBarilgiinId,
+            turul: { $in: ["Гараж", "Зогсоол"] },
+            ...(updateDavkhar ? { davkhar: updateDavkhar } : {}),
+          };
+          orConditions.push({ toots: { $elemMatch: garageElem } });
+          orConditions.push({
+            barilgiinId: updateBarilgiinId,
+            toots: {
+              $elemMatch: {
+                toot: updateToot,
+                turul: { $in: ["Гараж", "Зогсоол"] },
+                ...(updateDavkhar ? { davkhar: updateDavkhar } : {}),
+              },
+            },
+          });
+        } else if (isStorage) {
+          const storageElem = {
+            toot: updateToot,
+            barilgiinId: updateBarilgiinId,
+            turul: "Агуулах",
+            ...(updateDavkhar ? { davkhar: updateDavkhar } : {}),
+          };
+          orConditions.push({ toots: { $elemMatch: storageElem } });
+          orConditions.push({
+            barilgiinId: updateBarilgiinId,
+            toots: {
+              $elemMatch: {
+                toot: updateToot,
+                turul: "Агуулах",
+                ...(updateDavkhar ? { davkhar: updateDavkhar } : {}),
+              },
+            },
+          });
+        }
       }
       if (orConditions.length > 0) {
         const existing = await OrshinSuugchModel.findOne({
