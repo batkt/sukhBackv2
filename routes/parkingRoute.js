@@ -2943,9 +2943,25 @@ router.get("/v1/search_car/:plate_number", async (req, res, next) => {
             // Бичлэгийн `barilgiinId` нь машин ЗОГССОН барилга, харин
             // дуудагч нь урисан оршин суугчийн барилгыг илгээж болзошгүй
             // тул энд ч шүүхгүй. Зогсоолын `_id` таарч байгаа нь хангалттай.
-            oldsonMashin = await Uilchluulegch(kholbolt, true)
-              .findOne(matchMashin)
-              .sort({ createdAt: -1 });
+            // ӨРТЭЙ зогсолтыг нь СОНГОНО.
+            //
+            // Нэг машин олон удаа орж гарсан байж болно. Өмнө нь зөвхөн
+            // ХАМГИЙН СҮҮЛИЙН бичлэгийг авдаг байсан: хэрэв тэр нь
+            // төлбөргүй (tulukhDun = 0) бол дүн 0 гарч, доорх
+            // `bodsonDun > 0` нөхцөл унаад "Машины мэдээлэл олдсонгүй"
+            // гэж хэлдэг байв — өмнөх зогсолт нь төлөгдөөгүй хэвээр
+            // байхад. Иймд эхлээд ӨРТЭЙГ нь хайж, байхгүй бол сүүлийнхийг.
+            const oldsonMuruud = await Uilchluulegch(kholbolt, true)
+              .find(matchMashin)
+              .sort({ createdAt: -1 })
+              .limit(20);
+
+            oldsonMashin =
+              oldsonMuruud.find(
+                (mur) =>
+                  Number(mur?.tuukh?.[0]?.tulukhDun) > 0 ||
+                  Number(mur?.niitDun) > 0,
+              ) || oldsonMuruud[0];
             if ((!!freeze || !!localEsekh) && !!oldsonMashin) {
               const exitTime =
                 oldsonMashin?.tuukh?.[0]?.tsagiinTuukh?.[0]?.garsanTsag;
