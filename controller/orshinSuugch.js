@@ -2313,12 +2313,27 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
       Array.isArray(orshinSuugch.toots) &&
       orshinSuugch.toots.length > 0
     ) {
+      // ГАРАЖ/АГУУЛАХАД ГЭРЭЭ ҮҮСГЭХГҮЙ.
+      //
+      // Тоот бүрт гэрээ үүсгэх нь гараж/агуулахад ХООСОН гэрээ төрүүлдэг:
+      // `zardluudShuuye` нь ийм гэрээнээс нэрэндээ гараж/зогсоол/агуулах
+      // агуулаагүй БҮХ зардлыг хасдаг тул ердийн ашиглалтын зардал үлддэггүй.
+      //
+      // Гаражийн төлбөр гэрээгүйгээр ажиллана: сарын нэхэмжлэх нь
+      // `resident.toots`-оос уншиж ОРОН СУУЦНЫ гэрээнд «Зогсоолын төлбөр
+      // (тоот N)» нэмдэг, `gereeOlyo` нь эзэмшигчийн гэрээг олдог, гаражийн
+      // төлөв нь гэрээгээр БИШ `toot`-оор бүлэглэдэг.
+      //
+      // Excel импорт дээр ч ижил шүүлт тавигдсан
+      // (controller/excelImportController.js).
+      const GEREEGUI_TURLUUD = /гараж|гараш|зогсоол|агуулах/i;
       const ownOrgToots = orshinSuugch.toots.filter(
         (t) =>
           t.source === "OWN_ORG" &&
           t.baiguullagiinId &&
           t.barilgiinId &&
-          String(t.baiguullagiinId) !== String(CENTRALIZED_ORG_ID),
+          String(t.baiguullagiinId) !== String(CENTRALIZED_ORG_ID) &&
+          !GEREEGUI_TURLUUD.test(String(t.turul || "")),
       );
 
       for (const tootEntry of ownOrgToots) {
@@ -3140,12 +3155,27 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
       Array.isArray(orshinSuugch.toots) &&
       orshinSuugch.toots.length > 0
     ) {
+      // ГАРАЖ/АГУУЛАХАД ГЭРЭЭ ҮҮСГЭХГҮЙ.
+      //
+      // Тоот бүрт гэрээ үүсгэх нь гараж/агуулахад ХООСОН гэрээ төрүүлдэг:
+      // `zardluudShuuye` нь ийм гэрээнээс нэрэндээ гараж/зогсоол/агуулах
+      // агуулаагүй БҮХ зардлыг хасдаг тул ердийн ашиглалтын зардал үлддэггүй.
+      //
+      // Гаражийн төлбөр гэрээгүйгээр ажиллана: сарын нэхэмжлэх нь
+      // `resident.toots`-оос уншиж ОРОН СУУЦНЫ гэрээнд «Зогсоолын төлбөр
+      // (тоот N)» нэмдэг, `gereeOlyo` нь эзэмшигчийн гэрээг олдог, гаражийн
+      // төлөв нь гэрээгээр БИШ `toot`-оор бүлэглэдэг.
+      //
+      // Excel импорт дээр ч ижил шүүлт тавигдсан
+      // (controller/excelImportController.js).
+      const GEREEGUI_TURLUUD = /гараж|гараш|зогсоол|агуулах/i;
       const ownOrgToots = orshinSuugch.toots.filter(
         (t) =>
           t.source === "OWN_ORG" &&
           t.baiguullagiinId &&
           t.barilgiinId &&
-          String(t.baiguullagiinId) !== String(CENTRALIZED_ORG_ID),
+          String(t.baiguullagiinId) !== String(CENTRALIZED_ORG_ID) &&
+          !GEREEGUI_TURLUUD.test(String(t.turul || "")),
       );
 
       for (const tootEntry of ownOrgToots) {

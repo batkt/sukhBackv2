@@ -2354,8 +2354,27 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           Array.isArray(orshinSuugch.toots) &&
           orshinSuugch.toots.length > 0
         ) {
+          // ГАРАЖ/АГУУЛАХАД ГЭРЭЭ ҮҮСГЭХГҮЙ.
+          //
+          // Өмнө нь тоот бүрт (орон сууц, гараж, агуулах) тус тусад нь гэрээ
+          // үүсгэдэг байсан нь ХООСОН гэрээ төрүүлдэг: гаражийн гэрээг
+          // `zardluudShuuye` нь "Гараж" гэж ангилаад, нэрэндээ
+          // гараж/зогсоол/агуулах агуулаагүй БҮХ зардлыг хасдаг тул ердийн
+          // ашиглалтын зардал нэг ч үлддэггүй.
+          //
+          // Гаражийн төлбөр ийм гэрээгүйгээр ч бүрэн ажиллана:
+          //   • сарын нэхэмжлэх нь `resident.toots`-оос уншиж ОРОН СУУЦНЫ
+          //     гэрээнд «Зогсоолын төлбөр (тоот N)» мөрийг нэмдэг;
+          //   • `zogsoolAvlagaUusgey` → `gereeOlyo` нь эзэмшигчийн гэрээг
+          //     олдог (utils/zogsoolAvlaga.js);
+          //   • гаражийн төлөв нь гэрээгээр БИШ, `toot`-оор бүлэглэдэг.
+          const GEREEGUI_TURLUUD = /гараж|гараш|зогсоол|агуулах/i;
           const ownOrgToots = orshinSuugch.toots.filter(
-            (t) => t.source === "OWN_ORG" && t.baiguullagiinId && t.barilgiinId,
+            (t) =>
+              t.source === "OWN_ORG" &&
+              t.baiguullagiinId &&
+              t.barilgiinId &&
+              !GEREEGUI_TURLUUD.test(String(t.turul || "")),
           );
 
           for (const tootEntry of ownOrgToots) {
