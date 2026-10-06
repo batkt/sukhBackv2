@@ -123,7 +123,8 @@ router.use((req, res, next) => {
     if (baiguullagiinId && req.app) {
       try {
         console.log(`📡 [GEREE ROUTE] Emitting tulburUpdated socket event for org: ${baiguullagiinId}`);
-        req.app.get("socketio").emit(`tulburUpdated:${baiguullagiinId}`, {});
+        // 800ms-ийн нэгтгэгчээр — хүснэгт нэг л удаа сэргэнэ.
+        require("../utils/realtimeTulbur").tulburShinechlegdlee(baiguullagiinId);
       } catch (e) { }
     }
 

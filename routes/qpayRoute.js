@@ -3375,7 +3375,8 @@ const qpayNekhemjlekhMultipleCallbackHandler = async (req, res, next) => {
 
     const ioMulti = req.app.get("socketio");
     if (ioMulti) {
-      ioMulti.emit(`tulburUpdated:${baiguullagiinId}`, {});
+      // 800ms-ийн нэгтгэгчээр — хүснэгт нэг л удаа сэргэнэ.
+      require("../utils/realtimeTulbur").tulburShinechlegdlee(baiguullagiinId);
     }
 
     res.sendStatus(200);

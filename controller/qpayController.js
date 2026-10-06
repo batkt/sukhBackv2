@@ -205,7 +205,8 @@ exports.qpayTulye = asyncHandler(async (req, res) => {
   const io = req.app.get("socketio");
   if (io) {
     io.emit(`qpay/${baiguullagiinId}/${qpayBarimt.zakhialgiinDugaar}`);
-    io.emit(`tulburUpdated:${baiguullagiinId}`, {});
+    // 800ms-ийн нэгтгэгчээр — хүснэгт нэг л удаа сэргэнэ.
+    require("../utils/realtimeTulbur").tulburShinechlegdlee(baiguullagiinId);
 
     // Targeted notification to the resident & admin panel
     try {
@@ -533,7 +534,8 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
   // Socket updates
   const io = req.app.get("socketio");
   if (io) {
-    io.emit(`tulburUpdated:${baiguullagiinId}`, {});
+    // 800ms-ийн нэгтгэгчээр — хүснэгт нэг л удаа сэргэнэ.
+    require("../utils/realtimeTulbur").tulburShinechlegdlee(baiguullagiinId);
 
     // Targeted notification to the resident & admin panel
     try {

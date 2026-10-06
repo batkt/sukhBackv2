@@ -12,7 +12,12 @@ const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
 function emitUpdate(req, baiguullagiinId) {
   if (baiguullagiinId && req.app) {
     try {
-      req.app.get("socketio").emit(`tulburUpdated:${baiguullagiinId}`, {});
+      // ШУУД emit хийхгүй — нэгтгэгчээр дамжуулна.
+      //
+      // Нэг үйлдэлд (гар төлөлт г.м.) олон газраас `tulburUpdated` явснаар
+      // вэбийн Гүйлгээний түүх хүснэгт 3+ удаа дахин ачаалагддаг байв.
+      // `realtimeTulbur` нь 800ms дотор нэг л удаа илгээнэ.
+      require("../utils/realtimeTulbur").tulburShinechlegdlee(baiguullagiinId);
     } catch (e) {}
   }
 }
