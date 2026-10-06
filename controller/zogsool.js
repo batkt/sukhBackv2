@@ -488,9 +488,21 @@ module.exports.archiveUilchluulegchKhonog =
         ).find({}, { _id: 1 }).lean();
         const archivedIdSet = new Set(archivedIds.map(d => String(d._id)));
         console.log("archiveBeforeDate --->:", archiveBeforeDate);
+        // ТӨЛӨӨГҮЙ машиныг архивлахгүй.
+        //
+        // Архивлалт нь бичлэгийг `Uilchluulegch{YYYY}{MM}` руу зөөж, амьд
+        // цуглуулгаас УСТГАДАГ. Харин өөрөө үйлчлэх хайлт
+        // (/v1/search_car → `Uilchluulegch(kholbolt, true)`) нь зөвхөн амьд
+        // цуглуулгаас хайдаг тул архивлагдсан машин "Машины мэдээлэл
+        // олдсонгүй" болж, ӨРӨӨ ТӨЛӨХ БОЛОМЖГҮЙ үлддэг байв.
+        //
+        // `$not: { $gt: 0 }` нь талбар нь байхгүй, null, 0 буюу сөрөг
+        // бүх тохиолдлыг хамарна — өөрөөр хэлбэл "үлдэгдэлгүй". Өртэй
+        // бичлэг нь төлөгдөх хүртлээ амьд цуглуулгадаа үлдэнэ.
         const data = await Uilchluulegch(kholbolt).find({
           _id: { $nin: Array.from(archivedIdSet) },
           "tuukh.0.tsagiinTuukh.0.garsanTsag": { $exists: true },
+          "tuukh.0.tulukhDun": { $not: { $gt: 0 } },
           createdAt: { $lt: archiveBeforeDate }
         }).lean();
         if (!data.length) continue;
