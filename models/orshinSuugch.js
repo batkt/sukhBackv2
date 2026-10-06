@@ -237,7 +237,14 @@ orshinSuugchSchema.pre("save", async function (next) {
     ? String(this.baiguullagiinId)
     : "";
   if (toot && (barilgiinId || baiguullagiinId)) {
-    toCheck.push({ toot, davkhar, orts, barilgiinId, baiguullagiinId });
+    toCheck.push({
+      toot,
+      davkhar,
+      orts,
+      barilgiinId,
+      baiguullagiinId,
+      turul: "Орон сууц",
+    });
   }
 
   // Each toot in toots array
@@ -257,6 +264,7 @@ orshinSuugchSchema.pre("save", async function (next) {
           orts: tOrts,
           barilgiinId: tBarilgiinId,
           baiguullagiinId: tBaiguullagiinId,
+          turul: t?.turul || "Орон сууц",
         });
       }
     }
@@ -268,6 +276,7 @@ orshinSuugchSchema.pre("save", async function (next) {
     orts: o,
     barilgiinId: bId,
     baiguullagiinId: baId,
+    turul: tur,
   } of toCheck) {
     const orConditions = [];
     const baseMatch = { toot: t };
@@ -295,8 +304,20 @@ orshinSuugchSchema.pre("save", async function (next) {
       if (this._id) query._id = { $ne: this._id };
       const existing = await OrshinSuugchModel.findOne(query);
       if (existing) {
+        // АЛЬ нэгж давхардсаныг хэлнэ.
+        //
+        // Өмнө нь зүгээр л «Энэ тоот…» гэдэг байсан тул аль тоот нь
+        // мөргөлдсөнийг мэдэх аргагүй байв: нэг бичлэгт орон сууц, гараж,
+        // агуулах бүгд шалгагддаг учир хэрэглэгч орон сууцаа буруутган
+        // хайдаг байсан (жишээ: 905 чөлөөтэй мөртлөө Гараж 5 эзэнтэй).
+        const ezen = [existing.ovog, existing.ner].filter(Boolean).join(" ");
         return next(
-          new Error("Энэ тоот дээр оршин суугч аль хэдийн бүртгэгдсэн байна."),
+          new Error(
+            `${tur || "Орон сууц"} «${t}» дээр` +
+              `${ezen ? ` «${ezen}»` : ""}` +
+              `${existing.utas ? ` (утас ${existing.utas})` : ""}` +
+              ` аль хэдийн бүртгэгдсэн байна.`,
+          ),
         );
       }
     }
