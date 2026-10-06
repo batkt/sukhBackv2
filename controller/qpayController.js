@@ -323,21 +323,41 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
   })
     .sort({ ognoo: -1 })
     .lean();
-  const qpayInvoiceId =
-    nekhemjlekh.qpayInvoiceId || qpayBichleg?.invoice_id || qpayBichleg?.qpay?.invoice_id || null;
+  // ОДООГИЙН ба ӨМНӨХ бүх QPay нэхэмжлэхээр шалгана.
+  //
+  // `/pay/info` нь хуучирсан QR-ыг шинэчлэхдээ `qpayInvoiceId`-г СОЛИНО.
+  // Иргэн аль хэдийн нээчихсэн ХУУЧИН QR-аар төлчихвөл, зөвхөн одоогийн
+  // дугаараар шалгахад QPay «төлөгдөөгүй» гэж хариулж, ҮНЭХЭЭР ТӨЛСӨН
+  // төлбөр бүртгэгдэхгүй үлддэг (зогсоол дээр яг ийм алдаа гарсан).
+  const shalgakhIds = [
+    ...new Set(
+      [
+        nekhemjlekh.qpayInvoiceId,
+        ...(Array.isArray(nekhemjlekh.umnukhQpayInvoiceIds)
+          ? nekhemjlekh.umnukhQpayInvoiceIds
+          : []),
+        qpayBichleg?.invoice_id,
+        qpayBichleg?.qpay?.invoice_id,
+      ]
+        .filter(Boolean)
+        .map(String),
+    ),
+  ];
 
+  let qpayInvoiceId = shalgakhIds[0] || null;
   let paidAmount = 0;
   // Иргэн бодитоор төлсөн огноо (QPay-ийн payment_date)
   let tulsunOgnoo = new Date();
   let paymentTransactionId = null;
-  if (qpayInvoiceId) {
+  for (const shalgakhId of shalgakhIds) {
     try {
-      const khariu = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui({ invoice_id: qpayInvoiceId, baiguullagiinId, barilgiinId: qpayBichleg?.salbariinId || nekhemjlekh?.barilgiinId }, kholbolt);
+      const khariu = await require("../utils/qpayShalgayAyulgui").qpayShalgayAyulgui({ invoice_id: shalgakhId, baiguullagiinId, barilgiinId: qpayBichleg?.salbariinId || nekhemjlekh?.barilgiinId }, kholbolt);
       const tulburuud = (Array.isArray(khariu?.payments) ? khariu.payments : []).filter(
         (p) => p?.payment_status === "PAID" || p?.status === "PAID",
       );
       const tuluv = String(khariu?.invoice_status || "").toUpperCase();
       if (tulburuud.length > 0 || tuluv === "PAID" || tuluv === "CLOSED") {
+        qpayInvoiceId = shalgakhId; // төлөгдсөн нь ЭНЭ нэхэмжлэх
         tulsunOgnoo = require("../utils/qpayShalgayAyulgui").qpayTulsunOgnoo(khariu) || new Date();
         // QPay-ийн хариунд дүн байхгүй бол QR үүсгэсэн дүн (тогтмол дүнтэй QR)
         paidAmount =
@@ -346,9 +366,13 @@ exports.qpayNekhemjlekhCallback = asyncHandler(async (req, res) => {
           0;
         paymentTransactionId =
           tulburuud[0]?.transactions?.[0]?.id || khariu?.payments?.[0]?.transactions?.[0]?.id || null;
+        break;
       }
     } catch (err) {
-      console.error("⚠️ [QPAY-INVOICE CALLBACK] QPay шалгахад алдаа:", err.message);
+      console.error(
+        `⚠️ [QPAY-INVOICE CALLBACK] QPay шалгахад алдаа (${shalgakhId}):`,
+        err.message,
+      );
     }
   }
 

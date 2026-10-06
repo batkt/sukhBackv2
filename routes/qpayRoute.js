@@ -3613,6 +3613,13 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
     }
 
     let qpayAmountMismatched = false;
+    // QPay нэхэмжлэх ХУУЧИРСАН эсэх. QPay нь нэхэмжлэхээ тодорхой
+    // хугацааны дараа хүчингүй болгодог бөгөөд бид түүнийг хадгалсан QR-аа
+    // дахин үзүүлсээр байдаг тул иргэнд УНШИГДАХГҮЙ QR харагддаг байв.
+    // Хугацааг орчны хувьсагчаар тохируулна (анхдагч 5 минут).
+    let qpayKhugatsaaDuussan = false;
+    const QPAY_AMIDRAL_MS =
+      (Number(process.env.QPAY_NEKHEMJLEKH_AMIDRAL_MIN) || 5) * 60 * 1000;
     let displayDun = invoice.niitTulbur;
     if (invoice.qpayInvoiceId && invoice.tuluv !== "Төлсөн") {
       try {
@@ -3624,6 +3631,11 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
             qpayAmountMismatched = true;
           } else {
             displayDun = qpayRec.qpay?.amount || qpayRec.dun || invoice.niitTulbur;
+            const uussenOgnoo = qpayRec.ognoo || qpayRec.createdAt;
+            if (uussenOgnoo) {
+              const nas = Date.now() - new Date(uussenOgnoo).getTime();
+              qpayKhugatsaaDuussan = nas > QPAY_AMIDRAL_MS;
+            }
           }
         }
       } catch (err) {
@@ -3631,7 +3643,11 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
       }
     }
 
-    if ((!invoice.qpayInvoiceId || qpayAmountMismatched) && invoice.tuluv !== "Төлсөн" && invoice.niitTulbur > 0) {
+    if (
+      (!invoice.qpayInvoiceId || qpayAmountMismatched || qpayKhugatsaaDuussan) &&
+      invoice.tuluv !== "Төлсөн" &&
+      invoice.niitTulbur > 0
+    ) {
       try {
         const { qpayGargaya } = require("quickqpaypackvSukh");
         const callback_url = process.env.UNDSEN_SERVER + "/api/qpayNekhemjlekhCallback/" + invoice.baiguullagiinId.toString() + "/" + invoice._id.toString();
@@ -3650,9 +3666,16 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
 
         if (khariu) {
           const NekhemjlekhModel = NekhemjlekhiinTuukh(foundKholbolt);
+          // ХУУЧИН дугаарыг хаяхгүй — иргэн аль хэдийн нээсэн QR-аараа
+          // төлвөл callback түүгээр нь баталгаажуулна
+          // (controller/qpayController.js → shalgakhIds).
+          const khuuchinQpayId = invoice.qpayInvoiceId;
           invoice = await NekhemjlekhModel.findByIdAndUpdate(
             invoice._id,
             {
+              ...(khuuchinQpayId
+                ? { $addToSet: { umnukhQpayInvoiceIds: String(khuuchinQpayId) } }
+                : {}),
               $set: {
                 qpayInvoiceId: khariu.invoice_id || khariu.invoiceId || khariu.id,
                 qpayUrl: khariu.qr_text || khariu.url || khariu.invoice_url || khariu.qr_image,

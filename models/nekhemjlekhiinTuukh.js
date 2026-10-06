@@ -50,6 +50,10 @@ const nekhemjlekhiinTuukhSchema = new Schema(
     },
     qpayPaymentId: String,
     qpayInvoiceId: String,
+    // QR шинэчлэгдэхэд ХУУЧИН нэхэмжлэхийн дугаарууд энд хуримтлагдана.
+    // Иргэн аль хэдийн нээсэн хуучин QR-аар төлсөн ч callback нь түүнийг
+    // олж баталгаажуулах боломжтой байхын тулд.
+    umnukhQpayInvoiceIds: [String],
     qpayUrl: String,
     qpayUrls: mongoose.Schema.Types.Mixed,
     tulukhOgnoo: Date,
