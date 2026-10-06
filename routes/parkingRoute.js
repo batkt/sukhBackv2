@@ -2920,7 +2920,13 @@ router.get("/v1/search_car/:plate_number", async (req, res, next) => {
           : {
               tokiNer: { $exists: true },
             };
-        if (req.query.barilgiinId) query["barilgiinId"] = req.query.barilgiinId;
+        // БҮХ БАРИЛГААР хайна.
+        //
+        // Зочин нэг барилгын оршин суугчийн урилгаар ӨӨР барилгын
+        // зогсоолд тавьж болно (жишээ: урилга нь 6a97bbeb…, зогсоол нь
+        // 6a978709…). Хайлтыг нэг барилгаар хязгаарлавал машины зогсоол
+        // давхацахгүй тул "Машины мэдээлэл олдсонгүй" гээд төлбөрөө
+        // төлж чадахгүй үлддэг байв. Байгууллагын хүрээнд хайна.
         var zogsooluud = await getParkingFind(
           kholbolt,
           kholbolt.baiguullagiinId,
@@ -2934,8 +2940,9 @@ router.get("/v1/search_car/:plate_number", async (req, res, next) => {
               "tuukh.0.tuluv": 0,
               zurchil: { $exists: false },
             };
-            if (req.query.barilgiinId)
-              matchMashin["barilgiinId"] = req.query.barilgiinId;
+            // Бичлэгийн `barilgiinId` нь машин ЗОГССОН барилга, харин
+            // дуудагч нь урисан оршин суугчийн барилгыг илгээж болзошгүй
+            // тул энд ч шүүхгүй. Зогсоолын `_id` таарч байгаа нь хангалттай.
             oldsonMashin = await Uilchluulegch(kholbolt, true)
               .findOne(matchMashin)
               .sort({ createdAt: -1 });
