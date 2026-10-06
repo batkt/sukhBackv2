@@ -57,6 +57,39 @@ async function gereeOlyo(kholbolt, { baiguullagiinId, barilgiinId, gereeniiId, o
     const g = await GereeModel.findById(String(gereeniiId)).lean().catch(() => null);
     if (g) return g;
   }
+  // Сарын нэхэмжлэхтэй ИЖИЛ гэрээнд бичнэ (invoiceService-ийн гараж шүүлттэй
+  // адил): оршин суугчийн тоотын мөрийн gereeniiId → linkedAptToot-ийн гэрээ.
+  // Өмнө нь «хамгийн сүүлд үүссэн гэрээ»-нд бичдэг байсан тул сарын нэхэмжлэх
+  // өөр гэрээнээс гаражийг ДАХИН нэхэмжилдэг байв.
+  if (orshinSuugchId) {
+    try {
+      const { db } = require("zevbackv2");
+      const OrshinSuugch = require("../models/orshinSuugch");
+      const os = await OrshinSuugch(db.erunkhiiKholbolt).findById(String(orshinSuugchId)).lean();
+      const mur = (os?.toots || []).find(
+        (t) =>
+          String(t?.toot || "").trim() === String(toot) &&
+          ["Гараж", "Зогсоол", "Агуулах"].includes(t?.turul) &&
+          (!barilgiinId || !t.barilgiinId || String(t.barilgiinId) === String(barilgiinId)),
+      );
+      if (mur?.gereeniiId) {
+        const g = await GereeModel.findOne({ _id: String(mur.gereeniiId), ...idevkhtei }).lean().catch(() => null);
+        if (g) return g;
+      }
+      if (mur?.linkedAptToot) {
+        const g = await GereeModel.findOne({
+          baiguullagiinId: String(baiguullagiinId),
+          orshinSuugchId: String(orshinSuugchId),
+          toot: String(mur.linkedAptToot).trim(),
+          ...(barilgiinId ? { barilgiinId: String(barilgiinId) } : {}),
+          ...idevkhtei,
+        }).sort({ createdAt: -1 }).lean();
+        if (g) return g;
+      }
+    } catch (_) {
+      /* доорх ерөнхий хайлтаар */
+    }
+  }
   const ezen = orshinSuugchId
     ? { orshinSuugchId: String(orshinSuugchId) }
     : khariltsagchId
@@ -99,8 +132,12 @@ async function zogsoolAvlagaUusgey(kholbolt, data) {
 
   // Энэ сард тухайн гаражид аль ч эх сурвалжаас (гар/сарын нэхэмжлэх) нэхэмжилсэн эсэх
   const GuilgeeModel = GuilgeeAvlaguud(kholbolt);
+  const ezenId = geree.orshinSuugchId || data.orshinSuugchId;
   const umnukhuud = await GuilgeeModel.find({
-    gereeniiId: String(geree._id),
+    $or: [
+      { gereeniiId: String(geree._id) },
+      ...(ezenId ? [{ orshinSuugchId: String(ezenId) }] : []),
+    ],
     dun: { $gt: 0 },
     ognoo: { $gte: sarEkh, $lte: sarTug },
   }).lean();
