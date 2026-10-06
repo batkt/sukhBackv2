@@ -133,10 +133,25 @@ async function zogsoolAvlagaUusgey(kholbolt, data) {
   // Энэ сард тухайн гаражид аль ч эх сурвалжаас (гар/сарын нэхэмжлэх) нэхэмжилсэн эсэх
   const GuilgeeModel = GuilgeeAvlaguud(kholbolt);
   const ezenId = geree.orshinSuugchId || data.orshinSuugchId;
+  const barilgiinIdKhayg = String(data.barilgiinId || geree.barilgiinId || "");
   const umnukhuud = await GuilgeeModel.find({
     $or: [
       { gereeniiId: String(geree._id) },
       ...(ezenId ? [{ orshinSuugchId: String(ezenId) }] : []),
+      // БАРИЛГЫН тухайн ТООТОД энэ сард бичигдсэн АЛЬ Ч мөр.
+      //
+      // Сарын нэхэмжлэх (`invoiceService`) нь зогсоолын мөрөө ОРОН СУУЦНЫ
+      // гэрээн дээр бичдэг бол `gereeOlyo` нь гаражийн `nemeltTootnuud`-аар
+      // ӨӨР гэрээ олж болно. Тэр үед дээрх хоёр нөхцөл аль нь ч таарахгүй
+      // тул нэг гаражид НЭГ сард ХОЁР төлбөр бичигддэг байв (эзэмшигч
+      // холбох үйлдэл нь энэ функцийг автоматаар дууддаг).
+      //
+      // Гаражийн дугаар нэг барилгын дотор ДАВТАГДАХГҮЙ тул барилга+тоотоор
+      // шалгахад хангалттай. Доорх `angilliinMur`/`murniiToot` шүүлт нь
+      // зогсоол/агуулахын ангиллыг нь салгана.
+      ...(barilgiinIdKhayg
+        ? [{ barilgiinId: barilgiinIdKhayg, toot: String(toot) }]
+        : []),
     ],
     dun: { $gt: 0 },
     ognoo: { $gte: sarEkh, $lte: sarTug },
