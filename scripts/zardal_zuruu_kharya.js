@@ -42,7 +42,20 @@ function zardalAngilal(z) {
 }
 
 async function main() {
-  const [, , baaziinNer, gereeniiDugaar] = process.argv;
+  // Тугуудыг (--…) болон тэдгээрийн утгыг ХАСААД байрлалын аргументуудыг авна.
+  // Өмнө нь `--zovkhon-aldaatai` нь гэрээний дугаар болж уншигдаад хайлт
+  // хоосон буцаадаг байв.
+  const UTGATAI_TUG = new Set(["--uri"]);
+  const tugsguluud = [];
+  for (let i = 2; i < process.argv.length; i++) {
+    const a = process.argv[i];
+    if (a.startsWith("--")) {
+      if (UTGATAI_TUG.has(a)) i += 1; // тугийн утгыг алгасна
+      continue;
+    }
+    tugsguluud.push(a);
+  }
+  const [baaziinNer, gereeniiDugaar] = tugsguluud;
   const uriBase = argValue("--uri") || DEFAULT_URI;
   const zovkhonAldaatai = process.argv.includes("--zovkhon-aldaatai");
 
