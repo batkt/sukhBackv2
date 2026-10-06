@@ -4952,9 +4952,15 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
       throw new aldaa("Хэрэглэгч олдсонгүй!");
     }
 
-    // ── Шалгуур: үлдэгдэлтэй оршин суугчийг устгахгүй ─────────────────────
-    // Устгахад гэрээ нь цуцлагдаж авлага нь эзэнгүй үлддэг. Тооцоо хаагдаагүй
-    // бол зогсооно; админ зориуд устгах бол ?albadakh=1 (UI баталгаажуулалттай).
+    // ── ҮЛДЭГДЭЛТЭЙ ч устгахыг ЗӨВШӨӨРНӨ ────────────────────────────────
+    //
+    // Өмнө нь үлдэгдэлтэй оршин суугчийг устгахыг 409-өөр хориглодог,
+    // зөвхөн админ `?albadakh=1`-ээр давж гардаг байв. Хэрэглэгчийн
+    // хүсэлтээр энэ хоригийг АВСАН.
+    //
+    // АНХААР: устгахад гэрээ нь цуцлагдаж, авлага нь эзэнгүй үлддэг —
+    // тэр өр хураагдахаа больж, хуулганд ч харагдахгүй. Иймд хориглохын
+    // оронд ул мөр үлдээхээр БҮРТГЭНЭ.
     try {
       const kholbolt = req.body?.tukhainBaaziinKholbolt;
       if (kholbolt) {
@@ -4969,28 +4975,14 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
             { $group: { _id: null, dun: { $sum: "$dun" } } },
           ]);
           const uldegdel = Math.round((Number(niit?.dun) || 0) * 100) / 100;
-          const albadakh = String(req.query?.albadakh || "") === "1";
-          if (uldegdel > 0.5 && !albadakh) {
-            return res.status(409).json({
-              success: false,
-              code: "ULDEGDELTEI",
-              uldegdel,
-              gereeniiToo: gereenuud.length,
-              message: `${ezemshigchNer(orshinSuugch, { orsonSuutsToot: false }) || "Энэ оршин суугч"} ${munguFormat(uldegdel)} үлдэгдэлтэй байна (${gereenuud.length} идэвхтэй гэрээ${gereenuud.some((g) => g.toot) ? `: ${[...new Set(gereenuud.map((g) => g.toot).filter(Boolean))].join(", ")} тоот` : ""}). Эхлээд үлдэгдлийг төлүүлж эсвэл тооцоог хааж байж устгана уу; зайлшгүй бол админ эрхтэй ажилтан албадан устгах боломжтой.`,
-            });
-          }
-          if (albadakh) {
-            const Ajiltan = require("../models/ajiltan");
-            const aj = await Ajiltan(db.erunkhiiKholbolt)
-              .findById(req.body?.nevtersenAjiltniiToken?.id)
-              .select("erkh")
-              .lean();
-            if (String(aj?.erkh || "").toLowerCase() !== "admin") {
-              return res.status(403).json({
-                success: false,
-                message: "Үлдэгдэлтэй оршин суугчийг зөвхөн админ устгах эрхтэй.",
-              });
-            }
+          if (uldegdel > 0.5) {
+            console.warn(
+              `⚠️ [DELETE-RESIDENT] ҮЛДЭГДЭЛТЭЙ устгаж байна: id=${userIdString} ` +
+                `нэр="${ezemshigchNer(orshinSuugch, { orsonSuutsToot: false }) || "-"}" ` +
+                `утас=${orshinSuugch.utas || "-"} үлдэгдэл=${munguFormat(uldegdel)} ` +
+                `гэрээ=${gereenuud.length} (${[...new Set(gereenuud.map((g) => g.toot).filter(Boolean))].join(", ") || "-"} тоот) ` +
+                `устгасан=${req.body?.nevtersenAjiltniiToken?.ner || req.body?.nevtersenAjiltniiToken?.id || "-"}`,
+            );
           }
         }
       }
