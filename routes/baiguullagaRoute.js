@@ -82,6 +82,8 @@ router.post("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
         message: "Байгууллага олдсонгүй",
       });
     }
+    // Засварын өмнөх агшин — тохиргооны өөрчлөлтийг талбар бүрээр түүхэнд бичнэ
+    const auditKhuuchin = baiguullaga.toObject();
     
     // Handle barilguud array - if provided, merge with existing or add new ones
     if (req.body.barilguud && Array.isArray(req.body.barilguud)) {
@@ -293,7 +295,14 @@ router.post("/baiguullaga/:id", tokenShalgakh, async (req, res, next) => {
     baiguullaga.set(req.body);
     
     // Save the updated baiguullaga
+    baiguullaga.$locals.auditAlgasakh = true;
     await baiguullaga.save();
+    try {
+      const { baiguullagaAuditBichye } = require("../utils/baiguullagaAudit");
+      await baiguullagaAuditBichye(req, db, id, auditKhuuchin, baiguullaga.toObject());
+    } catch (auditErr) {
+      console.error("❌ [AUDIT] baiguullaga:", auditErr.message);
+    }
 
     // ======== SYNC ZOCHIN TOKHIRGOO TO MASHIN ========
     try {

@@ -70,7 +70,8 @@ function auditPlugin(schema) {
 
   /* ── save() — байгаа баримтын засвар ─────────────────────────────── */
   schema.pre("save", async function () {
-    if (this.isNew || khasakhEsekh(this) || !ajiltniiKhuseltEsekh()) return;
+    // Дуудагч өөрөө нарийвчилсан аудит бичдэг бол (baiguullagaAudit) давхар бичихгүй
+    if (this.isNew || this.$locals?.auditAlgasakh || khasakhEsekh(this) || !ajiltniiKhuseltEsekh()) return;
     if (!this._auditKhuuchin && this._id) {
       try {
         this._auditKhuuchin = await this.constructor.findById(this._id).lean();
@@ -79,7 +80,7 @@ function auditPlugin(schema) {
   });
   schema.post("save", async function (doc) {
     const req = ajiltniiKhuseltEsekh();
-    if (!req || !this._auditKhuuchin || khasakhEsekh(this)) return;
+    if (!req || !this._auditKhuuchin || this.$locals?.auditAlgasakh || khasakhEsekh(this)) return;
     try {
       const shine = doc.toObject ? doc.toObject() : doc;
       await logEdit(req, dbAvya(), ner(this), String(doc._id), this._auditKhuuchin, shine, orchin(shine));
