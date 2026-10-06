@@ -121,6 +121,48 @@ async function main() {
           "      Дээрх жагсаалтаас аль нөхцөл (source эсвэл ognoo) унасныг хараарай.",
       );
     }
+    // ── ЗОГСООЛ/ГАРАЖИЙН мөрүүд — гэрээгээр нь ШҮҮХГҮЙ ─────────────────
+    //
+    // Гаражийн төлбөр нь орон сууцныхаас ӨӨР гэрээн дээр бичигдсэн байж
+    // болно (тоот 704 vs тоот 61). Иймд энд бүх гэрээгээр нь хайж,
+    // мөр бүрийн gereeniiId-г харуулна.
+    const zogsoolMur = await conn
+      .collection("guilgeeAvlaguud")
+      .find({
+        ognoo: { $gte: sarEkh, $lte: sarTug },
+        $or: [
+          { tailbar: { $regex: "зогсоол|гараж|агуулах", $options: "i" } },
+          { zardliinNer: { $regex: "зогсоол|гараж|агуулах", $options: "i" } },
+        ],
+      })
+      .sort({ ognoo: -1 })
+      .limit(40)
+      .toArray();
+
+    console.log(
+      `
+🅿️  Энэ сарын зогсоол/гаражийн мөрүүд (бүх гэрээгээр): ${zogsoolMur.length}
+`,
+    );
+    for (const m of zogsoolMur) {
+      console.log(
+        `  dun=${m.dun}  toot=${m.toot ?? "-"}  source=${m.source === undefined ? "⛔ БАЙХГҮЙ" : JSON.stringify(m.source)}
+` +
+          `    gereeniiId=${m.gereeniiId}  ${String(m.gereeniiId) === String(geree._id) ? "← ЭНЭ гэрээнийх" : "← ӨӨР гэрээнийх"}
+` +
+          `    zardliinNer=${JSON.stringify(m.zardliinNer ?? null)}  zardliinTurul=${m.zardliinTurul}
+` +
+          `    tailbar=${JSON.stringify(m.tailbar ?? null)}  turul=${m.turul}
+` +
+          `    ajiltan=${m.guilgeeKhiisenAjiltniiNer ?? "-"}  nekhemjlekhId=${m.nekhemjlekhId ?? "-"}
+` +
+          `    ognoo=${m.ognoo && new Date(m.ognoo).toISOString()}  createdAt=${m.createdAt ? new Date(m.createdAt).toISOString() : "-"}
+` +
+          `    _id=${m._id}
+`,
+      );
+    }
+
   } finally {
     await conn.close();
   }
