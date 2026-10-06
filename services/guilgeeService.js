@@ -35,8 +35,11 @@ async function recordCharge(kholbolt, data, options = {}) {
     }
   }
 
+  // Дуудагчид `...geree` дэлгэдэг тул гэрээний createdAt/updatedAt мөрөнд
+  // орж «Бүртгэсэн огноо» нь гэрээ үүссэн огноо болдог байв.
+  const { createdAt: _c, updatedAt: _u, __v: _v, ...tseverData } = data;
   const charge = new GuilgeeAvlaguudModel({
-    ...data,
+    ...tseverData,
     dun: amount,
     undsenDun: amount,
     tulukhDun: amount,

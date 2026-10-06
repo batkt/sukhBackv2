@@ -189,8 +189,13 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
       const bd = options.billingDate ? new Date(options.billingDate) : new Date();
       const sarEkh = new Date(bd.getFullYear(), bd.getMonth(), 1);
       const sarTug = new Date(bd.getFullYear(), bd.getMonth() + 1, 0, 23, 59, 59, 999);
+      // Оршин суугчийн БҮХ гэрээг шалгана — эзэмшигч холбоход гаражийн мөр
+      // өөр гэрээнд бичигдсэн үед ч давхар нэхэмжлэхгүй.
       const garaarMur = await GuilgeeAvlaguudModel.find({
-        gereeniiId: String(geree._id),
+        $or: [
+          { gereeniiId: String(geree._id) },
+          ...(geree.orshinSuugchId ? [{ orshinSuugchId: String(geree.orshinSuugchId) }] : []),
+        ],
         dun: { $gt: 0 },
         source: { $in: ["gar", "zogsool"] },
         ognoo: { $gte: sarEkh, $lte: sarTug },
@@ -243,7 +248,7 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
 
           for (const p of parkingSlots) {
             const parkingName = `зогсоол (тоот ${p.toot})`.toLowerCase();
-            const hasExisting = Array.from(existingAvlaguudNames).some((n) => n.includes(`зогсоол`) && n.includes(String(p.toot).toLowerCase()));
+            const hasExisting = Array.from(existingAvlaguudNames).some((n) => /зогсоол|гараж|гараш/.test(n) && tootTaarakh(n, p.toot));
             if (!hasExisting) {
               charges.push({
                 ner: `Зогсоолын төлбөр (тоот ${p.toot})`,
@@ -269,7 +274,7 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
 
           for (const s of storageSlots) {
             const storageName = `агуулах (тоот ${s.toot})`.toLowerCase();
-            const hasExisting = Array.from(existingAvlaguudNames).some((n) => n.includes(`агуулах`) && n.includes(String(s.toot).toLowerCase()));
+            const hasExisting = Array.from(existingAvlaguudNames).some((n) => n.includes(`агуулах`) && tootTaarakh(n, s.toot));
             if (!hasExisting) {
               charges.push({
                 ner: `Агуулахын төлбөр (тоот ${s.toot})`,
@@ -290,6 +295,13 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
   const total = charges.reduce((sum, c) => sum + c.dun, 0);
   console.log(`🔎 [calculateGereeCharges] charges:`, JSON.stringify(charges, null, 2), `Total: ${total}`);
   return { charges, total };
+}
+
+/** «… тоот 61 …» бичвэрт яг тэр тоот байгаа эсэх (61 ≠ 610, 70 ≠ 704) */
+function tootTaarakh(bichver, toot) {
+  const t = String(toot || "").trim().toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (!t) return false;
+  return new RegExp(`тоот\\s*${t}(?![^\\s),])`, "i").test(String(bichver || ""));
 }
 
 function getDaysInMonth(date) {
@@ -433,6 +445,10 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
     invoice = new NekhemjlekhiinTuukhModel({
       ...geree,
       _id: undefined,
+      // Гэрээний огноог өвлөхгүй — нэхэмжлэх үүссэн жинхэнэ огноо
+      createdAt: undefined,
+      updatedAt: undefined,
+      __v: undefined,
       gereeniiId: geree._id.toString(),
       nekhemjlekhiinDugaar: invoiceNumber,
       ognoo: billingDate,
