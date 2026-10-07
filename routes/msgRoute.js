@@ -21,6 +21,7 @@ const MsgTuukh = require("../models/msgTuukh");
 const TULBURIIN_SMS_KHAASAN = [
   "69f3f56a2899d5fdc24251d1",
   "6a4b3d1c124040b3dad66792",
+  "6a9786569a202a8f8f859f94"
 ];
 
 const smsKhaasanUu = (baiguullagiinId) =>
