@@ -45,6 +45,9 @@ function sariinTuluv(d) {
   return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+const ognooText = (d) =>
+  d ? new Date(d).toISOString().slice(0, 19).replace("T", " ") : "—";
+
 const mungu = (n) => Number(n || 0).toLocaleString("mn-MN");
 
 function argAvya(argv, ner) {
@@ -111,6 +114,8 @@ async function main() {
         zardliinNer: 1,
         source: 1,
         ekhniiUldegdelEsekh: 1,
+        turul: 1,
+        tailbar: 1,
         createdAt: 1,
         updatedAt: 1,
       })
@@ -212,6 +217,34 @@ async function main() {
       const d = ekhniiZuruu.reduce((s, m) => s + Number(m.dun || 0), 0);
       console.log(`   ⚠️  Нийт ${mungu(d)}₮ нь буруу сарын нэхэмжлэхэд орсон.`);
     }
+    // ── 5. НЭРГҮЙ мөр ─────────────────────────────────────────────────
+    //
+    // Хэвийн зардал бүр `zardliinNer`-тэй байдаг. Нэргүй мөр нь ямар
+    // замаар үүссэн нь тодорхойгүй — ихэвчлэн сөрөг дүнтэй (хөнгөлөлт,
+    // буцаалт) тул нэхэмжлэхийн дүнг ЧИМЭЭГҮЙ бууруулна.
+    const nergui = muruud.filter((m) => !String(m.zardliinNer || "").trim());
+    const nerguiDun = nergui.reduce((s, m) => s + Number(m.dun || 0), 0);
+    console.log(`
+${"=".repeat(70)}`);
+    console.log(
+      `5. НЭРГҮЙ мөр (zardliinNer хоосон): ${nergui.length} — нийт ${mungu(nerguiDun)}₮`,
+    );
+    console.log("=".repeat(70));
+    for (const m of nergui) {
+      const nSar = m.nekhemjlekhId
+        ? nekhSar.get(String(m.nekhemjlekhId)) || "(нэхэмжлэх олдсонгүй)"
+        : "— ХОЛБООГҮЙ —";
+      console.log(
+        `   ${m.gereeniiDugaar || "?"} тоот ${m.toot || "?"} | ${mungu(m.dun)}₮` +
+          ` | мөр ${sariinTuluv(m.ognoo)} → нэхэмжлэх ${nSar}` +
+          ` | source=${m.source || "—"} | turul=${m.turul || "—"}` +
+          ` | tailbar="${m.tailbar || ""}"`,
+      );
+      console.log(
+        `      _id=${m._id} geree=${m.gereeniiId} үүссэн ${ognooText(m.createdAt)} зассан ${ognooText(m.updatedAt)}`,
+      );
+    }
+
   } finally {
     await conn.close();
   }
