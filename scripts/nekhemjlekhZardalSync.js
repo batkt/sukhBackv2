@@ -400,7 +400,11 @@ async function main() {
         source: "nekhemjlekh",
         nekhemjlekhDeerKharagdakh: true,
         ekhniiUldegdelEsekh: false,
-        guilgeeKhiisenAjiltniiNer: "Систем (зардлын синк)",
+        // Ердийн нэхэмжлэх үүсгэлттэй ЯГ ижил — `invoiceService`-ийн
+        // зардлын давталт ч мөн адил бичдэг. Ингэснээр синкээр нэмэгдсэн
+        // мөр нь жагсаалт дээр бусдаасаа ялгарахгүй.
+        guilgeeKhiisenAjiltniiNer: "Систем",
+        guilgeeKhiisenAjiltniiId: geree.orshinSuugchId,
       })),
       { ordered: false },
     );
