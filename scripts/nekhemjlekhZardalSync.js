@@ -47,7 +47,12 @@ process.setMaxListeners(0);
 const { db } = require("zevbackv2");
 const { getKholboltByBaiguullagiinId } = require("../utils/dbConnection");
 const { gereeniiShuult } = require("../utils/gereeniiZardalTseverlegee");
-const { gereeniiTootTurul, zardluudShuuye } = require("../utils/zardalAngilal");
+const {
+  gereeniiTootTurul,
+  zardluudShuuye,
+  zardalAngilal,
+  OR_SUUTS,
+} = require("../utils/zardalAngilal");
 
 const AshiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
 const Geree = require("../models/geree");
@@ -82,7 +87,15 @@ if (!ORG || SARUUD.length === 0) {
 const GARAAR = new Set(["gar", "avlaga", "zogsool", "khungulult"]);
 
 const mun = (n) => `${Number(n || 0).toLocaleString("mn-MN")}₮`;
-const jishiye = (s) => String(s || "").trim().toLowerCase();
+/**
+ * Нэрийг жишихэд бэлтгэнэ.
+ *
+ * ДОТООД зайг нь ч хураана: нэг барилгад «Ажилчдын цалин 4 хүн», нөгөөд нь
+ * «Ажилчдын  цалин 4 хүн» (хоёр зайтай) гэж бичигдсэн байдаг. Зөвхөн захыг
+ * нь тайрвал эдгээр нь ӨӨР зардал мэт уншигдаж, нэгийг нь устгаад нөгөөг нь
+ * нэмэх дэмий эргэлт үүсгэдэг.
+ */
+const jishiye = (s) => String(s || "").trim().replace(/\s+/g, " ").toLowerCase();
 /** УБ цагаар YYYY-MM */
 const sarKey = (d) => {
   const t = new Date(new Date(d).getTime() + 8 * 3600 * 1000);
@@ -207,6 +220,31 @@ async function main() {
     const zorikh = zardluudShuuye(gereeniiZardal(geree), tootTurul);
     const zorikhByNer = new Map(zorikh.map((z) => [jishiye(z.ner), z]));
 
+    // Энэ барилгын ашиглалтын зардлууд ямар `zardliinTurul`-тэй вэ.
+    // Үүнээс ӨӨР төрлийн мөр бол ашиглалтын зардал БИШ — хөндөхгүй.
+    const zorikhTurluud = new Set(zorikh.map((z) => jishiye(z.zardliinTurul || "Энгийн")));
+
+    /**
+     * Жагсаалтад ТААРААГҮЙ мөрийг устгаж болох уу.
+     *
+     * Зогсоол, гараж, агуулахын төлбөр нь нэхэмжлэх үүсгэх үед ашиглалтын
+     * зардалтай ЯГ адилхан `source: "nekhemjlekh"`-ээр бичигддэг тул зөвхөн
+     * `source`-оор ялгаж болохгүй — зогсоолынх `turul: "Авлага"`,
+     * `zardliinTurul: "Зогсоол"` байдаг, нэр нь ч «зогсоол/гараж/агуулах»
+     * агуулдаг.
+     *
+     * ЗӨВХӨН жагсаалтад таараагүй мөрд хэрэглэнэ. Нэр нь жагсаалттай
+     * таарсан бол энэ шалгалт хэрэггүй — «Зогсоолын хаалт» нь бодит
+     * ашиглалтын зардал атлаа нэрэндээ «зогсоол» агуулдаг тул энд
+     * хамгаалагдвал дүн нь хэзээ ч засагдахгүй, бүр давхар нэмэгдэнэ.
+     */
+    const ustgajBolokhUu = (m) => {
+      const ner = m.zardliinNer || m.tailbar;
+      if (zardalAngilal({ ner, zardliinTurul: m.zardliinTurul }) !== OR_SUUTS) return false;
+      if (jishiye(m.turul) === "авлага") return false;
+      return zorikhTurluud.has(jishiye(m.zardliinTurul || "Энгийн"));
+    };
+
     const mur = murByNekh.get(String(nekh._id)) || [];
     for (const m of mur) {
       if ((m.dun || 0) < 0 || m.ekhniiUldegdelEsekh || GARAAR.has(m.source)) {
@@ -217,6 +255,16 @@ async function main() {
       }
       const ner = jishiye(m.zardliinNer || m.tailbar);
       const zorilt = zorikhByNer.get(ner);
+
+      // Жагсаалтад таараагүй бөгөөд ашиглалтын зардал мэт БИШ бол бүрэн
+      // хөндөхгүй — мөн дахин нэмэгдэхээс сэргийлж нэрийг нь ч хасахгүй.
+      if (!zorilt && !ustgajBolokhUu(m)) {
+        khamgaalsan++;
+        khuuchinNiit += Math.max(0, m.dun || 0);
+        shineNiit += Math.max(0, m.dun || 0);
+        continue;
+      }
+
       khuuchinNiit += m.dun || 0;
       if (!zorilt) {
         ustgakh.push({ m, nekh, geree });
