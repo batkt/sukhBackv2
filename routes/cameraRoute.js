@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { v4: uuidv4 } = require("uuid");
 const { pubClient, subClient } = require("../utils/redisClient");
+const { gateWorkerToo } = require("../utils/gateRoom");
 
 // Global map to track pending WebRTC signaling requests.
 // This is process-local, so in PM2 cluster mode the worker that receives the
@@ -73,11 +74,9 @@ router.post("/camera/stream/:barilgiinId/stream", async (req, res) => {
   const correlationId = uuidv4();
   const roomName = `gate-room-${barilgiinId}`;
 
-  // With the Socket.IO Redis adapter attached, `adapter.rooms` reflects room
-  // membership across every cluster worker, not just this process - so this
-  // check is accurate even when the actual gate-worker socket lives elsewhere.
-  const room = io.sockets.adapter.rooms.get(roomName);
-  const roomSize = room ? room.size : 0;
+  // `adapter.rooms` нь зөвхөн энэ процессыг хардаг — cluster горимд бүх
+  // процессоос Redis adapter-аар асууна.
+  const roomSize = await gateWorkerToo(io, barilgiinId);
   console.log(
     `[Camera] 📡 Relaying WebRTC offer (ID: ${correlationId}) to room: ${roomName} | sockets in room: ${roomSize}`,
   );

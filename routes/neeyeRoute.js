@@ -4,6 +4,7 @@ const { db } = require("zevbackv2");
 const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
 const { pubClient, subClient } = require("../utils/redisClient");
+const { gateWorkerToo } = require("../utils/gateRoom");
 const KhaalgaNeeyeTuukh = require("../models/khaalgaNeeyeTuukh");
 const Ajiltan = require("../models/ajiltan");
 const OrshinSuugch = require("../models/orshinSuugch");
@@ -290,8 +291,7 @@ router.get("/neeye/:ip", async (req, res) => {
     // 2. Is a gate worker even connected for this building? Fail fast and
     //    say so plainly instead of pretending the command was sent.
     const roomName = `gate-room-${barilgiinId}`;
-    const room = io.sockets.adapter.rooms.get(roomName);
-    const roomSize = room ? room.size : 0;
+    const roomSize = await gateWorkerToo(io, barilgiinId);
 
     console.log(
       `[Gate] OPEN request ip=${ip} plate=${plateLog} barilgiinId=${barilgiinId} workers=${roomSize}`,

@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { gateWorkerToo } = require("../utils/gateRoom");
 
 /**
  * Камерын урсгалыг ШААРДЛАГААР асаах/зогсоох дамжуулагч.
@@ -39,7 +40,7 @@ function loopbackEsekh(req) {
   return ip === "127.0.0.1" || ip === "::1";
 }
 
-router.post("/camera/urgats/:tuluv", (req, res) => {
+router.post("/camera/urgats/:tuluv", async (req, res) => {
   if (!loopbackEsekh(req)) {
     console.warn(`[Urgats] ⚠️ гаднаас хандалт хаагдлаа: ${req.ip}`);
     return res.status(403).json({ aldaa: "Зөвхөн дотоод хандалт" });
@@ -69,8 +70,7 @@ router.post("/camera/urgats/:tuluv", (req, res) => {
   }
 
   const roomName = `gate-room-${barilgiinId}`;
-  const room = io.sockets.adapter.rooms.get(roomName);
-  const roomSize = room ? room.size : 0;
+  const roomSize = await gateWorkerToo(io, barilgiinId);
 
   if (roomSize === 0) {
     console.warn(
