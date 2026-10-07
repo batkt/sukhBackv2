@@ -271,7 +271,12 @@ async function main() {
       } else {
         const shine = zardliinDun(zorilt);
         shineNiit += shine;
-        if (Math.round(shine) !== Math.round(m.dun || 0)) zasakh.push({ m, nekh, geree, shine });
+        // ЗӨВХӨН дүнг нь тэнцүүлнэ. Мөрийн НЭРийг хөндөхгүй — «Ажилчдын
+        // цалин» гэх мэт хоёр янзаар бичигдсэн нэр хэвээр үлдэнэ, гэхдээ
+        // тааруулалт нь дотоод зайг хурааж харьцуулдаг тул дүн нь зөв
+        // засагдана.
+        if (Math.round(shine) !== Math.round(m.dun || 0))
+          zasakh.push({ m, nekh, geree, shine });
         zorikhByNer.delete(ner);
       }
     }

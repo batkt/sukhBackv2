@@ -88,10 +88,16 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
     return false;
   };
 
+  // Давхардлыг таних түлхүүр. ДОТООД зайг нь ч хурааж байж «Ажилчдын цалин»
+  // ба «Ажилчдын  цалин» (хоёр зайтай) нэг зардал гэж танигдана — эс бөгөөс
+  // гэрээнд хоёулаа үлдсэн тохиолдолд нэхэмжлэхэд ХОЁР УДАА бичигдэнэ.
+  const zardliinTulkhuur = (ner) =>
+    String(ner || "").trim().replace(/\s+/g, " ").toLowerCase();
+
   const rawZaaltZardluud = (geree.zardluud || []).filter(isMeterCharge);
   const zaaltMap = new Map();
   for (const z of rawZaaltZardluud) {
-    const key = (z.ner || "").trim().toLowerCase();
+    const key = zardliinTulkhuur(z.ner);
     const existing = zaaltMap.get(key);
     if (!existing || z.zardliinTurul === "Хувьсах" || z.zaalt === true) {
       zaaltMap.set(key, z);
@@ -103,7 +109,7 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
   const rawFixedZardluud = (geree.zardluud || []).filter(z => !isMeterCharge(z));
   const fixedMap = new Map();
   for (const z of rawFixedZardluud) {
-    const key = (z.ner || "").trim().toLowerCase();
+    const key = zardliinTulkhuur(z.ner);
     if (meterNames.has(key)) continue;
     if (!fixedMap.has(key)) {
       fixedMap.set(key, z);
