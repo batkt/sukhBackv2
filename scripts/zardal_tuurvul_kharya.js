@@ -43,12 +43,20 @@ function tug(ner) {
   const i = argv.indexOf(ner);
   return i > -1 ? argv[i + 1] : null;
 }
-const BAIGUULLAGIIN_ID = argv.find((a, i) => {
-  if (a.startsWith("--")) return false;
-  return !["--too", "--barilga", "--geree"].some(
-    (t) => argv.indexOf(t) === i - 1,
-  );
-});
+// Тугийн УТГЫГ байгууллагын ID гэж андуурахгүй.
+//
+// Өмнө нь `argv.indexOf(t) === i - 1` гэж шалгадаг байв. Туг байхгүй бол
+// `indexOf` нь -1 буцаадаг бөгөөд эхний аргумент дээр `i - 1` мөн -1 тул
+// ҮРГЭЛЖ таарч, байгууллагын ID хаягдаж байлаа.
+const TUGNUUD = ["--too", "--barilga", "--geree"];
+const tugiinUtguud = new Set();
+for (const t of TUGNUUD) {
+  const i = argv.indexOf(t);
+  if (i > -1) tugiinUtguud.add(i + 1);
+}
+const BAIGUULLAGIIN_ID = argv.find(
+  (a, i) => !a.startsWith("--") && !tugiinUtguud.has(i),
+);
 const TOO = Number(tug("--too")) || 3;
 const ZOVKHON_BARILGA = tug("--barilga");
 const ZOVKHON_GEREE = tug("--geree");
