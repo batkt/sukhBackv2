@@ -3302,6 +3302,81 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
   }
 });
 
+
+/**
+ * Гэрээ бүрийн ЭЗЭМШИГЧИЙН нэр/утсыг олж `gereeniiId → {ner, utas}` болгоно.
+ *
+ * ЯАГААД: гэрээний эзэн нь ОРШИН СУУГЧ эсвэл ХАРИЛЦАГЧ (байгууллага)
+ * байж болно. Excel-ийн загварууд зөвхөн `orshinSuugchId`-аар хайдаг
+ * байсан тул харилцагчийн эзэмшлийн тоотуудын «Нэр» багана ХООСОН
+ * гардаг байв.
+ *
+ * Оршин суугчийг ЭХЭЛЖ харна — ингэснээр өмнө нь зөв гарч байсан мөрүүд
+ * хэвээр үлдэж, зөвхөн хоосон байсан нь нөхөгдөнө.
+ */
+async function ezemshigchdiigOloy(gereenuud) {
+  const { db } = require("zevbackv2");
+  const Khariltsagch = require("../models/khariltsagch");
+
+  const orshinSuugchiinIdnuud = [
+    ...new Set(gereenuud.map((g) => g.orshinSuugchId).filter(Boolean)),
+  ];
+  const khariltsagchiinIdnuud = [
+    ...new Set(gereenuud.map((g) => g.khariltsagchId).filter(Boolean)),
+  ];
+
+  const [orshinSuugchid, khariltsagchid] = await Promise.all([
+    orshinSuugchiinIdnuud.length
+      ? OrshinSuugch(db.erunkhiiKholbolt)
+          .find({ _id: { $in: orshinSuugchiinIdnuud } })
+          .select("_id ovog ner utas")
+          .lean()
+      : [],
+    khariltsagchiinIdnuud.length
+      ? Khariltsagch(db.erunkhiiKholbolt)
+          .find({ _id: { $in: khariltsagchiinIdnuud } })
+          .select("_id ovog ner utas")
+          .lean()
+      : [],
+  ]);
+
+  const orshinSuugchMap = new Map(
+    orshinSuugchid.map((o) => [String(o._id), o]),
+  );
+  const khariltsagchMap = new Map(
+    khariltsagchid.map((k) => [String(k._id), k]),
+  );
+
+  const utasAvya = (e) =>
+    Array.isArray(e?.utas) ? e.utas[0] : e?.utas || "";
+
+  const ur = new Map();
+  for (const g of gereenuud) {
+    const orshinSuugch = g.orshinSuugchId
+      ? orshinSuugchMap.get(String(g.orshinSuugchId))
+      : null;
+    const khariltsagch = g.khariltsagchId
+      ? khariltsagchMap.get(String(g.khariltsagchId))
+      : null;
+
+    // Харилцагч нь байгууллага ч, хүн ч байж болно — овогтой бол хамт.
+    const khariltsagchiinNer = [khariltsagch?.ovog, khariltsagch?.ner]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    ur.set(String(g._id), {
+      ner: orshinSuugch?.ner || khariltsagchiinNer || "",
+      utas:
+        (Array.isArray(g.utas) ? g.utas[0] : g.utas) ||
+        utasAvya(orshinSuugch) ||
+        utasAvya(khariltsagch) ||
+        "",
+    });
+  }
+
+  return ur;
+}
 exports.generateInitialBalanceTemplate = asyncHandler(
   async (req, res, next) => {
     try {
@@ -3371,23 +3446,12 @@ exports.generateInitialBalanceTemplate = asyncHandler(
 
           const gereenuud = await Geree(kholbolt)
             .find(shuult)
-            .select("gereeniiDugaar toot davkhar orts utas orshinSuugchId")
+            .select(
+              "gereeniiDugaar toot davkhar orts utas orshinSuugchId khariltsagchId",
+            )
             .lean();
 
-          const orshinSuugchiinIdnuud = [
-            ...new Set(
-              gereenuud.map((g) => g.orshinSuugchId).filter(Boolean),
-            ),
-          ];
-          const orshinSuugchid = orshinSuugchiinIdnuud.length
-            ? await OrshinSuugch(db.erunkhiiKholbolt)
-                .find({ _id: { $in: orshinSuugchiinIdnuud } })
-                .select("_id ner utas")
-                .lean()
-            : [];
-          const orshinSuugchMap = new Map(
-            orshinSuugchid.map((o) => [String(o._id), o]),
-          );
+          const ezemshigchid = await ezemshigchdiigOloy(gereenuud);
 
           // Тоотоор эрэмбэлбэл цаасан дээр хайхад хялбар.
           const tootoorEmbekh = (a, b) => {
@@ -3398,22 +3462,12 @@ exports.generateInitialBalanceTemplate = asyncHandler(
           };
 
           gereenuud.sort(tootoorEmbekh).forEach((geree) => {
-            const orshinSuugch = geree.orshinSuugchId
-              ? orshinSuugchMap.get(String(geree.orshinSuugchId))
-              : null;
-
-            const utas = Array.isArray(geree.utas)
-              ? geree.utas[0]
-              : geree.utas ||
-                (Array.isArray(orshinSuugch?.utas)
-                  ? orshinSuugch.utas[0]
-                  : orshinSuugch?.utas) ||
-                "";
+            const ezen = ezemshigchid.get(String(geree._id)) || {};
 
             worksheet.addRow({
-              ner: orshinSuugch?.ner || "",
+              ner: ezen.ner || "",
               gereeniiDugaar: geree.gereeniiDugaar || "",
-              utas: utas || "",
+              utas: ezen.utas || "",
               orts: geree.orts || "",
               davkhar: geree.davkhar || "",
               toot: geree.toot || "",
@@ -3990,21 +4044,12 @@ exports.generateTulultTemplate = asyncHandler(async (req, res, next) => {
 
         const gereenuud = await Geree(kholbolt)
           .find(shuult)
-          .select("gereeniiDugaar toot orts utas orshinSuugchId")
+          .select(
+            "gereeniiDugaar toot orts utas orshinSuugchId khariltsagchId",
+          )
           .lean();
 
-        const orshinSuugchiinIdnuud = [
-          ...new Set(gereenuud.map((g) => g.orshinSuugchId).filter(Boolean)),
-        ];
-        const orshinSuugchid = orshinSuugchiinIdnuud.length
-          ? await OrshinSuugch(db.erunkhiiKholbolt)
-              .find({ _id: { $in: orshinSuugchiinIdnuud } })
-              .select("_id ner utas")
-              .lean()
-          : [];
-        const orshinSuugchMap = new Map(
-          orshinSuugchid.map((o) => [String(o._id), o]),
-        );
+        const ezemshigchid = await ezemshigchdiigOloy(gereenuud);
 
         const tootoorEmbekh = (a, b) => {
           const x = parseFloat(a.toot);
@@ -4014,22 +4059,12 @@ exports.generateTulultTemplate = asyncHandler(async (req, res, next) => {
         };
 
         gereenuud.sort(tootoorEmbekh).forEach((geree) => {
-          const orshinSuugch = geree.orshinSuugchId
-            ? orshinSuugchMap.get(String(geree.orshinSuugchId))
-            : null;
-
-          const utas = Array.isArray(geree.utas)
-            ? geree.utas[0]
-            : geree.utas ||
-              (Array.isArray(orshinSuugch?.utas)
-                ? orshinSuugch.utas[0]
-                : orshinSuugch?.utas) ||
-              "";
+          const ezen = ezemshigchid.get(String(geree._id)) || {};
 
           worksheet.addRow({
-            ner: orshinSuugch?.ner || "",
+            ner: ezen.ner || "",
             gereeniiDugaar: geree.gereeniiDugaar || "",
-            utas: utas || "",
+            utas: ezen.utas || "",
             orts: geree.orts || "",
             toot: geree.toot || "",
             tulult: "",
