@@ -47,9 +47,16 @@ async function main() {
   const argv = process.argv.slice(2);
   const uriBase = argAvya(argv, "--uri") || DEFAULT_URI;
   const saruudToo = Number(argAvya(argv, "--saruud")) || 6;
+  // Шалгах зардлын нэрс. Өгөөгүй бол ГЭРЭЭН дээрх бүх нэрийг авна —
+  // ингэснээр «байх ЁСТОЙ атлаа нэхэмжлэхэд алга» тохиолдол илэрнэ.
+  const nerText = argAvya(argv, "--ner");
+  const shalgakhNeruud = nerText
+    ? nerText.split(",").map((s) => s.trim()).filter(Boolean)
+    : null;
+  const jisheeKharuulya = argv.includes("--jishee");
 
   const tugiinUtguud = new Set();
-  ["--uri", "--saruud"].forEach((t) => {
+  ["--uri", "--saruud", "--ner"].forEach((t) => {
     const i = argv.indexOf(t);
     if (i > -1) tugiinUtguud.add(i + 1);
   });
@@ -90,6 +97,31 @@ async function main() {
     console.log(
       `   Идэвхтэй гэрээ: ${gereenuud.length}, барилга: ${barilgiinGeree.size}`,
     );
+
+    // ГЭРЭЭН дээр ямар зардал байх ёстойг цуглуулна.
+    let neruud = shalgakhNeruud;
+    if (!neruud) {
+      const gereeniiNeruud = await conn
+        .collection("geree")
+        .distinct("zardluud.ner", { tuluv: "Идэвхтэй" });
+      neruud = gereeniiNeruud
+        .map((n) => String(n || "").trim())
+        .filter(Boolean)
+        .sort();
+    }
+    console.log(`   Шалгах зардлын нэр: ${neruud.join(", ") || "(алга)"}`);
+
+    // Нэг нэхэмжлэхийн БҮТЦИЙГ харуулна — талбарын зам таарч байгаа эсэхийг
+    // нүдээр батлахгүйгээр тоонуудыг тайлбарлаж болохгүй.
+    if (jisheeKharuulya) {
+      const jishee = await conn
+        .collection("nekhemjlekhiinTuukh")
+        .findOne({}, { sort: { ognoo: -1 } });
+      console.log("");
+      console.log("── ЖИШЭЭ нэхэмжлэх (бүтэц шалгах) ──");
+      console.log(JSON.stringify(jishee, null, 2).slice(0, 4000));
+      console.log("── жишээ дуусав ──");
+    }
 
     const odoo = new Date();
     for (let i = saruudToo - 1; i >= 0; i--) {
@@ -149,20 +181,20 @@ async function main() {
           `\n   ${temdeg} барилга ${b}: нэхэмжлэх ${minii.length}/${niitGeree} гэрээнд`,
         );
 
-        if (!neriinToo.size) {
-          console.log("      ❗ нэг ч зардлын мөр алга (хоосон нэхэмжлэх)");
-          continue;
-        }
-
-        for (const [ner, too] of [...neriinToo].sort()) {
-          const t = too < minii.length ? "⚠️ " : "  ";
+        // ЗААВАЛ бүх нэрийг хэвлэнэ — 0 байсан ч. Өмнө нь олдсон нэрсийг
+        // л хэвлэдэг байсан тул «0 нэхэмжлэхэд байна» гэдэг нь «ийм зардал
+        // байхгүй» гэдгээс ялгагдахгүй, бүрэн алга болсныг НУУДАГ байв.
+        for (const ner of neruud) {
+          const too = neriinToo.get(ner) || 0;
+          const t = too === 0 ? "❌" : too < minii.length ? "⚠️ " : "✅";
           console.log(`      ${t} «${ner}»: ${too}/${minii.length}`);
         }
 
-        // Тухайн барилгын аль нэг нэхэмжлэхэд огт байхгүй нэрс.
-        const bukhNer = new Set();
-        for (const [n] of neriinToo) bukhNer.add(n);
-        void bukhNer;
+        // Хүлээгээгүй нэрс (нэхэмжлэхэд байгаа ч гэрээнд алга).
+        for (const [ner, too] of [...neriinToo].sort()) {
+          if (neruud.includes(ner)) continue;
+          console.log(`      ·  «${ner}» (гэрээнд байхгүй нэр): ${too}/${minii.length}`);
+        }
       }
     }
   } finally {
