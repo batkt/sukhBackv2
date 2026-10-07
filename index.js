@@ -149,7 +149,18 @@ process.env.UV_THREADPOOL_SIZE = 20;
     io.on("connection", (socket) => {
       socket.on("register-gate-worker", (barilgiinId) => {
         socket.join(`gate-room-${barilgiinId}`);
-        console.log(`🏠 [SOCKET] Local Gate Worker registered for Building: ${barilgiinId}`);
+        console.log(
+          `🏠 [SOCKET] Local Gate Worker registered for Building: ${barilgiinId} ` +
+          `pid=${process.pid} transport=${socket.conn.transport.name} ip=${socket.handshake.headers["x-real-ip"] || socket.handshake.address}`,
+        );
+        // Cluster горимд polling → websocket шилжилт өөр процесс руу очвол
+        // холболт тасардаг — шалтгааныг нь харахын тулд.
+        socket.conn.once("upgrade", () => {
+          console.log(`🏠 [SOCKET] Gate worker ${barilgiinId} upgraded to ${socket.conn.transport.name}`);
+        });
+        socket.on("disconnect", (reason) => {
+          console.warn(`🏠 [SOCKET] Gate worker disconnected for Building: ${barilgiinId} pid=${process.pid} reason=${reason}`);
+        });
       });
 
       // Handle WebRTC answers from local workers
