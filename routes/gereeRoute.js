@@ -23,6 +23,8 @@ const {
   importTootBurtgelFromExcel,
   generateInitialBalanceTemplate,
   importInitialBalanceFromExcel,
+  generateTulultTemplate,
+  importTulultFromExcel,
 } = require("../controller/excelImportController");
 const {
   tsakhilgaanExcelTemplateAvya,
@@ -87,6 +89,15 @@ router.post(
   uploadFile.single("file"),
   tokenShalgakh,
   importInitialBalanceFromExcel,
+);
+
+// Төлөлтийн Excel — авлагынхтай ижил хос (загвар татах / импортлох).
+router.post("/generateTulultTemplate", tokenShalgakh, generateTulultTemplate);
+router.post(
+  "/importTulultFromExcel",
+  uploadFile.single("file"),
+  tokenShalgakh,
+  importTulultFromExcel,
 );
 
 

@@ -3920,3 +3920,318 @@ exports.bankniiGuilgeeExcelOruulya = asyncHandler(async (req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * ТӨЛӨЛТИЙН ЗАГВАР — бүх идэвхтэй гэрээгээр дүүргэсэн Excel.
+ *
+ * `generateInitialBalanceTemplate`-тай ижил зарчим: хэрэглэгч зөвхөн
+ * «Төлөлт» (ба хүсвэл «Тайлбар») баганыг бөглөнө, бусад багана нь гэрээг
+ * олоход хэрэглэгдэнэ.
+ */
+exports.generateTulultTemplate = asyncHandler(async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const { baiguullagiinId, barilgiinId } = req.body || {};
+
+    const workbook = new excel.Workbook();
+    const worksheet = workbook.addWorksheet("Төлөлт");
+
+    worksheet.columns = [
+      { header: "Нэр", key: "ner", width: 24 },
+      { header: "Гэрээний дугаар", key: "gereeniiDugaar", width: 22 },
+      { header: "Утас", key: "utas", width: 16 },
+      { header: "Орц", key: "orts", width: 8 },
+      { header: "Тоот", key: "toot", width: 12 },
+      { header: "Төлөлт", key: "tulult", width: 18 },
+      { header: "Тайлбар", key: "tailbar", width: 30 },
+    ];
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.eachCell((cell) => {
+      tolgoiNud(cell);
+      cell.border = {
+        top: { style: "thin" },
+        left: { style: "thin" },
+        bottom: { style: "thin" },
+        right: { style: "thin" },
+      };
+    });
+    headerRow.commit();
+
+    const tulultGarchig = worksheet.getCell("F1");
+    tulultGarchig.note = {
+      texts: [
+        {
+          font: { bold: true, size: 10, name: "Calibri" },
+          text: "ЗӨВХӨН ЭНЭ БАГАНЫГ БӨГЛӨНӨ\n",
+        },
+        {
+          font: { size: 10, name: "Calibri" },
+          text:
+            "Бусад багана нь системээс бэлдэгдсэн — өөрчлөх шаардлагагүй.\n" +
+            "Төлөлтгүй тоотын мөрийг хоосон орхивол алгасана.\n" +
+            "«Тайлбар» нь сонголттой — хоосон бол тоотоор автоматаар бичнэ.",
+        },
+      ],
+      margins: { insetmode: "custom", inset: [0.13, 0.13, 0.25, 0.25] },
+    };
+
+    if (baiguullagiinId) {
+      const kholbolt = db.kholboltuud.find(
+        (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+      );
+
+      if (kholbolt) {
+        const shuult = {
+          baiguullagiinId: String(baiguullagiinId),
+          tuluv: "Идэвхтэй",
+        };
+        if (barilgiinId) shuult.barilgiinId = String(barilgiinId);
+
+        const gereenuud = await Geree(kholbolt)
+          .find(shuult)
+          .select("gereeniiDugaar toot orts utas orshinSuugchId")
+          .lean();
+
+        const orshinSuugchiinIdnuud = [
+          ...new Set(gereenuud.map((g) => g.orshinSuugchId).filter(Boolean)),
+        ];
+        const orshinSuugchid = orshinSuugchiinIdnuud.length
+          ? await OrshinSuugch(db.erunkhiiKholbolt)
+              .find({ _id: { $in: orshinSuugchiinIdnuud } })
+              .select("_id ner utas")
+              .lean()
+          : [];
+        const orshinSuugchMap = new Map(
+          orshinSuugchid.map((o) => [String(o._id), o]),
+        );
+
+        const tootoorEmbekh = (a, b) => {
+          const x = parseFloat(a.toot);
+          const y = parseFloat(b.toot);
+          if (!isNaN(x) && !isNaN(y)) return x - y;
+          return String(a.toot || "").localeCompare(String(b.toot || ""));
+        };
+
+        gereenuud.sort(tootoorEmbekh).forEach((geree) => {
+          const orshinSuugch = geree.orshinSuugchId
+            ? orshinSuugchMap.get(String(geree.orshinSuugchId))
+            : null;
+
+          const utas = Array.isArray(geree.utas)
+            ? geree.utas[0]
+            : geree.utas ||
+              (Array.isArray(orshinSuugch?.utas)
+                ? orshinSuugch.utas[0]
+                : orshinSuugch?.utas) ||
+              "";
+
+          worksheet.addRow({
+            ner: orshinSuugch?.ner || "",
+            gereeniiDugaar: geree.gereeniiDugaar || "",
+            utas: utas || "",
+            orts: geree.orts || "",
+            toot: geree.toot || "",
+            tulult: "",
+            tailbar: "",
+          });
+        });
+
+        worksheet.getColumn("tulult").numFmt = "#,##0.00";
+        worksheet.getColumn("tulult").alignment = { horizontal: "right" };
+      }
+    }
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="tulult_template_${Date.now()}.xlsx"`,
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * ТӨЛӨЛТИЙГ Excel-ээр бүртгэнэ — нэг файлд олон тоот.
+ *
+ * Авлага нэмдэг `importInitialBalanceFromExcel`-ээс ялгаатай нь мөр бүрийг
+ * `guilgeeService.recordPayment`-аар бичнэ. Яагаад гэвэл төлөлт нь зүгээр
+ * нэг сөрөг мөр биш: дотроо нэхэмжлэхүүдэд хуваарилж, `syncInvoicesStatus`
+ * -аар төлөв/үлдэгдлийг дахин боддог. Гараар мөр бичвэл нэхэмжлэхийн
+ * «Төлсөн» төлөв шинэчлэгдэхгүй үлдэнэ.
+ *
+ * Мөр бүрийг ТУСДАА бичнэ (багц гүйлгээ биш) — нэг буруу мөр бусдыг нь
+ * унагаахгүй, алдааг мөрөөр нь буцаана.
+ */
+exports.importTulultFromExcel = asyncHandler(async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const guilgeeService = require("../services/guilgeeService");
+    const { baiguullagiinId, barilgiinId, ognoo } = req.body;
+
+    if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
+    if (!req.file) throw new aldaa("Excel файл оруулах");
+
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const allRows = XLSX.utils.sheet_to_json(worksheet, {
+      raw: false,
+      header: 1,
+    });
+    const headerRow = allRows[0] || [];
+
+    // Загварын 2-р мөр тайлбар/хоосон байж болно — өгөгдөлтэй эсэхээр шийднэ.
+    const secondRow = allRows[1];
+    const isSecondRowEmpty =
+      !secondRow ||
+      !secondRow.some((c) => c !== undefined && c !== null && c !== "");
+    const startIndex = isSecondRowEmpty ? 2 : 1;
+
+    const dataRows = allRows
+      .slice(startIndex)
+      .filter((r) => r.some((c) => c !== undefined && c !== null && c !== ""));
+    const data = dataRows.map((r) => {
+      const obj = {};
+      headerRow.forEach((key, idx) => {
+        if (key) obj[key] = r[idx] !== undefined ? r[idx] : "";
+      });
+      return obj;
+    });
+
+    if (!data.length) throw new aldaa("Excel хоосон");
+
+    const tukhainBaaziinKholbolt = db.kholboltuud.find(
+      (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+    );
+    if (!tukhainBaaziinKholbolt) throw new aldaa("Холболт олдсонгүй");
+
+    const GereeModel = Geree(tukhainBaaziinKholbolt);
+
+    const results = { success: [], failed: [], skipped: 0, total: data.length };
+
+    let importOgnoo = new Date();
+    if (ognoo) {
+      const parsed = new Date(ognoo);
+      if (!isNaN(parsed.getTime())) importOgnoo = parsed;
+    }
+
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const rowNumber = i + 2;
+
+      try {
+        const utas = row["Утас"]?.toString().trim();
+        const gereeniiDugaar = row["Гэрээний дугаар"]?.toString().trim();
+        const toot = row["Тоот"]?.toString().trim();
+        const tulultRaw = row["Төлөлт"];
+        const tailbarNud = row["Тайлбар"]?.toString().trim();
+        const amount = parseExcelNumber(tulultRaw);
+
+        // Бөглөөгүй мөр нь алдаа БИШ — загвар бүх гэрээгээр дүүргэгдэж ирдэг.
+        const khooson =
+          tulultRaw === undefined ||
+          tulultRaw === null ||
+          String(tulultRaw).trim() === "";
+        if (khooson) {
+          results.skipped += 1;
+          continue;
+        }
+
+        if (isNaN(amount) || amount === 0) {
+          results.failed.push({
+            row: rowNumber,
+            reason: "Дүн буруу эсвэл 0 байна",
+          });
+          continue;
+        }
+
+        const query = { baiguullagiinId: String(baiguullagiinId) };
+        if (barilgiinId) query.barilgiinId = String(barilgiinId);
+
+        const orConditions = [];
+        if (utas) orConditions.push({ utas });
+        if (gereeniiDugaar) orConditions.push({ gereeniiDugaar });
+        if (toot) orConditions.push({ toot });
+
+        if (!orConditions.length) {
+          results.failed.push({
+            row: rowNumber,
+            reason:
+              "Утас, Гэрээний дугаар, эсвэл Тоот-ын аль нэгийг бөглөнө үү",
+          });
+          continue;
+        }
+        query.$or = orConditions;
+
+        const geree = await GereeModel.findOne(query).lean();
+        if (!geree) {
+          results.failed.push({
+            row: rowNumber,
+            reason: "Гэрээ олдсонгүй (Утас/Дугаар/Тоот таарахгүй байна)",
+          });
+          continue;
+        }
+
+        const urDun = await guilgeeService.recordPayment(
+          tukhainBaaziinKholbolt,
+          {
+            baiguullagiinId: String(baiguullagiinId),
+            baiguullagiinNer: geree.baiguullagiinNer || "",
+            barilgiinId: String(geree.barilgiinId || ""),
+            gereeniiId: String(geree._id),
+            gereeniiDugaar: geree.gereeniiDugaar || "",
+            orshinSuugchId: geree.orshinSuugchId || "",
+            toot: geree.toot || "",
+            ognoo: importOgnoo,
+            // Төлөлт нь дэвтэр дээр СӨРӨГ мөр (controller/tulbur.js-тэй ижил).
+            dun: -Math.abs(amount),
+            tailbar: tailbarNud || `Төлөлт - ${geree.toot || ""} тоот`,
+            source: "gar",
+            guilgeeKhiisenAjiltniiNer:
+              req.body.nevtersenAjiltniiToken?.ner || "System",
+            guilgeeKhiisenAjiltniiId:
+              req.body.nevtersenAjiltniiToken?.id || null,
+          },
+        );
+
+        if (!urDun?.success) {
+          results.failed.push({
+            row: rowNumber,
+            reason: urDun?.error || "Төлөлт бүртгэхэд алдаа",
+          });
+          continue;
+        }
+
+        results.success.push({
+          row: rowNumber,
+          gereeniiDugaar: geree.gereeniiDugaar,
+          toot: geree.toot,
+          dun: Math.abs(amount),
+          davkhardsan: urDun.alreadyExists === true,
+        });
+      } catch (rowAldaa) {
+        results.failed.push({ row: rowNumber, reason: rowAldaa.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      message:
+        `${results.success.length} төлөлт бүртгэгдлээ` +
+        (results.failed.length
+          ? `, ${results.failed.length} мөр алдаатай`
+          : "") +
+        (results.skipped ? `, ${results.skipped} мөр хоосон` : ""),
+      results,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
