@@ -206,6 +206,7 @@ async function main() {
   const nemekh = [];
   const zasakh = [];
   const ustgakh = [];
+  const alagssanNekh = [];   // төлбөрийн баримт г.м. — хөндөөгүй
   let khuuchinNiit = 0;
   let shineNiit = 0;
   let khamgaalsan = 0;
@@ -246,6 +247,35 @@ async function main() {
     };
 
     const mur = murByNekh.get(String(nekh._id)) || [];
+
+    /* ── ТӨЛБӨРИЙН БАРИМТЫГ АЛГАСАНА ──────────────────────────────────
+     *
+     * Төлөлт бүртгэхэд түүнийг барих жижиг нэхэмжлэх үүсдэг — зардлын
+     * мөргүй, зөвхөн төлөлт агуулсан баримт. Мөн эхний үлдэгдлийн баримт ч
+     * ийм. Ийм баримтыг «бүх зардал нь дутуу» гэж үзвэл 11 зардлыг бүтнээр
+     * нь нэмж, айлыг нэг сар ИЛҮҮ нэхэмжилнэ.
+     *
+     * Жинхэнэ сарын нэхэмжлэх дээр ашиглалтын зардлын мөр АЛЬ ХЭДИЙН
+     * байдаг. Нэг ч байхгүй бол энэ нь үйлчилгээний нэхэмжлэх БИШ —
+     * хөндөхгүй өнгөрнө.
+     */
+    const ashiglaltiinMurTei = mur.some(
+      (m) =>
+        (m.dun || 0) > 0 &&
+        !m.ekhniiUldegdelEsekh &&
+        !GARAAR.has(m.source) &&
+        zorikhByNer.has(jishiye(m.zardliinNer || m.tailbar)),
+    );
+    if (!ashiglaltiinMurTei) {
+      alagssanNekh.push({ nekh, geree, murToo: mur.length });
+      mur.forEach((m) => {
+        khamgaalsan++;
+        khuuchinNiit += Math.max(0, m.dun || 0);
+        shineNiit += Math.max(0, m.dun || 0);
+      });
+      continue;
+    }
+
     for (const m of mur) {
       if ((m.dun || 0) < 0 || m.ekhniiUldegdelEsekh || GARAAR.has(m.source)) {
         khamgaalsan++;
@@ -295,6 +325,10 @@ async function main() {
   console.log(`  ЗАСАХ  : ${zasakh.length} мөр  (${mun(zasakh.reduce((s, x) => s + (x.shine - (x.m.dun || 0)), 0))})`);
   console.log(`  УСТГАХ : ${ustgakh.length} мөр  (−${mun(ustgakh.reduce((s, x) => s + (x.m.dun || 0), 0))})`);
   console.log(`  хөндөхгүй (эхний үлдэгдэл / төлөлт / гараар нэмсэн): ${khamgaalsan} мөр`);
+  console.log(`  АЛГАССАН нэхэмжлэх (ашиглалтын зардлын мөргүй — төлбөрийн баримт г.м.): ${alagssanNekh.length}`);
+  alagssanNekh.slice(0, 10).forEach((a) =>
+    console.log(`     ∅ ${String(a.nekh.nekhemjlekhiinDugaar || a.nekh._id).padEnd(22)} ${new Date(a.nekh.ognoo).toISOString().slice(0,10)}  ${a.murToo} мөр`));
+  if (alagssanNekh.length > 10) console.log(`     … бусад ${alagssanNekh.length - 10}`);
   console.log(`  НИЙТ ДҮН: ${mun(khuuchinNiit)} → ${mun(shineNiit)}  (${shineNiit - khuuchinNiit >= 0 ? "+" : ""}${mun(shineNiit - khuuchinNiit)})`);
 
   // Барилгаар задалсан — байгууллагын хэмжээнд ажиллуулахад аль барилгад
