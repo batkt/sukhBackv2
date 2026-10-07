@@ -56,6 +56,17 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
   }
 
   const isMeterCharge = (z) => {
+    // ТОДОРХОЙ «тогтмол» гэж заасан зардлыг тоолууртай гэж үзэхгүй.
+    //
+    // «Тог цахилгаан» нь `turul: "Тогтмол"`, `bodokhArga: "тогтмол"` боловч
+    // нэгж нь кВт учраас `zaalt: true` тугтай хадгалагдсан байв. Доорх
+    // `z.zaalt === true` шалгалт тэр тугийг л хардаг тул энэ зардал
+    // тоолуурын замд орж, заалт байхгүй үед ОГТ нэхэмжлэгдэхгүй өнгөрдөг
+    // байлаа. Тооцох аргыг нь зардлыг үүсгэхдээ шууд зааж өгсөн тул
+    // түүнийг туганд дарагдуулахгүй.
+    if (String(z.bodokhArga || "").trim().toLowerCase() === "тогтмол") {
+      return false;
+    }
     if (z.zaalt === true) return true;
     if (z.zardliinTurul === "Хувьсах") return true;
 
@@ -106,7 +117,12 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
       continue;
     }
 
-    let dun = z.dun || z.tariff || 0;
+    // Суурь хураамжийг ЗААВАЛ тооцно. Өмнө нь зөвхөн `dun`/`tariff`-ыг
+    // хардаг байсан тул «Тог цахилгаан» мэт `tariff: 0`, `suuriKhuraamj:
+    // 8000` зардал 0 төгрөгөөр бодогдож, нэхэмжлэхэд огт гарахгүй байв.
+    // (Тариф нь мөрөнд СТРИНГЭЭР хадгалагдсан байдаг тул Number-ээр авна.)
+    let dun =
+      Number(z.dun) || Number(z.tariff) || Number(z.suuriKhuraamj) || 0;
     if (prorateFactor !== 1) {
       dun = Math.round(dun * prorateFactor);
     }
