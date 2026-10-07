@@ -57,12 +57,12 @@ async function main() {
     argv.find((a, i) => !a.startsWith("--") && !tugiinUtguud.has(i)) ||
     "timetower";
 
-  console.log("=".repeat(85));
+  console.log("=".repeat(88));
   console.log(`🔎 TIMETOWER ЗАРДЛЫН ОНОШИЛГОО (9 ба 10-р сар, 7 зардал харьцуулалт)`);
-  console.log(`   Өгөгдлийн сан: ${baaziinNer}`);
-  console.log(`   Шалгах сарууд: ${targetSaruud.join(", ")}`);
-  console.log(`   Дэлгэрэнгүй жагсаалт: ${delgerengui ? "ТИЙМ" : "ҮГҮЙ (--delgerengui залгаж бүгдийг харж болно)"}`);
-  console.log("=".repeat(85));
+  console.log(`   Өгөгдлийн сан : ${baaziinNer}`);
+  console.log(`   Шалгах сарууд : ${targetSaruud.join(", ")}`);
+  console.log(`   Дэлгэрэнгүй   : ${delgerengui ? "ТИЙМ (бүх тоот хэвлэгдэнэ)" : "ҮГҮЙ (дээж тоотууд хэвлэгдэнэ, бүгдийг харах: --delgerengui)"}`);
+  console.log("=".repeat(88));
 
   const conn = await mongoose
     .createConnection(uriBase.replace("{db}", baaziinNer))
@@ -77,8 +77,8 @@ async function main() {
       .find({})
       .toArray();
 
-    console.log(`\n📌 1. СИСТЕМИЙН АШИГЛАЛТЫН ЗАРДЛУУД (Нийт: ${ashZardluud.length})`);
-    console.log("-".repeat(85));
+    console.log(`\n📌 1. СИСТЕМИЙН АШИГЛАЛТЫН ЗАРДЛУУД (ashiglaltiinZardluud: ${ashZardluud.length})`);
+    console.log("-".repeat(88));
     if (ashZardluud.length === 0) {
       console.log("⚠️  ashiglaltiinZardluud цуглуулга хоосон байна!");
     } else {
@@ -86,17 +86,17 @@ async function main() {
         "   " +
           "Нэр".padEnd(25) +
           "Төрөл".padEnd(16) +
-          "Тариф".padEnd(12) +
+          "Тариф/Дүн".padEnd(14) +
           "Заалт".padEnd(8) +
-          "Барилга"
+          "Барилгын ID"
       );
-      console.log("   " + "-".repeat(78));
+      console.log("   " + "-".repeat(82));
       for (const z of ashZardluud) {
         console.log(
           "   " +
             `«${z.ner}»`.padEnd(25) +
             String(z.turul || "—").padEnd(16) +
-            String(z.tariff ?? z.dun ?? "—").padEnd(12) +
+            String(z.tariff ?? z.dun ?? "—").padEnd(14) +
             (z.zaalt ? "ТИЙМ" : "—").padEnd(8) +
             String(z.barilgiinId || "Бүх барилга")
         );
@@ -111,7 +111,7 @@ async function main() {
           .filter(Boolean)
       ),
     ];
-    console.log(`\n   => Илэрсэн үндсэн зардлууд (${masterZardalNers.length}): [${masterZardalNers.join(", ")}]`);
+    console.log(`\n   => Үндсэн зардлын жагсаалт (${masterZardalNers.length}): [${masterZardalNers.join(", ")}]`);
 
     // ═════════════════════════════════════════════════════════════════════════
     // 2. БАЙГУУЛЛАГА БА БАРИЛГУУДЫН МЭДЭЭЛЭЛ
@@ -140,6 +140,8 @@ async function main() {
         barilgiinId: 1,
         orshinSuugchId: 1,
         zardluud: 1,
+        suuliinZaalt: 1,
+        umnukhZaalt: 1,
       })
       .toArray();
 
@@ -151,12 +153,12 @@ async function main() {
     }
 
     console.log(`\n📌 2. ИДЭВХТЭЙ ГЭРЭЭНИЙ МЭДЭЭЛЭЛ (Нийт: ${gereenuud.length}, Барилга: ${barilgiinGereeMap.size})`);
-    console.log("-".repeat(85));
+    console.log("-".repeat(88));
     for (const [bId, bGereenuud] of barilgiinGereeMap.entries()) {
       const bNer = barilgaMap.get(bId) || bGereenuud[0]?.bairNer || bId;
       console.log(`   🏢 Барилга: ${bNer} (ID: ${bId}) -> ${bGereenuud.length} идэвхтэй гэрээ`);
 
-      // Гэрээн дээрх zardluud дотор 7 зардал бүрэн байгаа эсэх
+      // Гэрээн дээрх zardluud дотор зардал бүрэн байгаа эсэх
       const zardalCountsInGeree = {};
       masterZardalNers.forEach((ner) => (zardalCountsInGeree[ner] = 0));
       let geree7Complete = 0;
@@ -176,7 +178,7 @@ async function main() {
         }
       }
 
-      console.log(`      Гэрээн дээрх тохиргоо (geree.zardluud):`);
+      console.log(`      Гэрээний тохиргоо (geree.zardluud):`);
       console.log(`      • ${geree7Complete}/${bGereenuud.length} гэрээ бүх ${masterZardalNers.length} зардлыг агуулж байна.`);
       masterZardalNers.forEach((mNer) => {
         const count = zardalCountsInGeree[mNer];
@@ -191,12 +193,39 @@ async function main() {
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 4. САР БҮРИЙН НЭХЭМЖЛЭХ БА LEDGER (guilgeeAvlaguud) ХАРЬЦУУЛАЛТ
+    // 4. ТООЛУУРЫН ЗААЛТЫН ТҮҮХ (zaaltUnshlalt)
+    // ═════════════════════════════════════════════════════════════════════════
+    console.log(`\n📌 3. ТООЛУУРЫН ЗААЛТЫН ШАЛГАЛТ (zaaltUnshlalt)`);
+    console.log("-".repeat(88));
+    const zaaltCountsByMonth = {};
+    for (const sar of targetSaruud) {
+      zaaltCountsByMonth[sar] = 0;
+    }
+    const allZaalt = await conn
+      .collection("zaaltUnshlalt")
+      .find({})
+      .project({ unshlaltiinOgnoo: 1, importOgnoo: 1, zaaltDun: 1, zoruu: 1 })
+      .toArray();
+
+    for (const z of allZaalt) {
+      const s = ubSar(z.unshlaltiinOgnoo || z.importOgnoo);
+      if (zaaltCountsByMonth[s] !== undefined) {
+        zaaltCountsByMonth[s] += 1;
+      }
+    }
+    for (const sar of targetSaruud) {
+      const count = zaaltCountsByMonth[sar] || 0;
+      const icon = count > 0 ? "✅" : "🚨 (0 БАЙНА — ЦАХИЛГААНЫ ЗААЛТ ОРООГҮЙ ТУЛ ДҮН БОДОГДООГҮЙ!)";
+      console.log(`   ${sar} сарын заалтын тоо (zaaltUnshlalt): ${count} ${icon}`);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // 5. САР БҮРИЙН НЭХЭМЖЛЭХ БА LEDGER (guilgeeAvlaguud) ХАРЬЦУУЛАЛТ
     // ═════════════════════════════════════════════════════════════════════════
     for (const sar of targetSaruud) {
-      console.log(`\n${"=".repeat(85)}`);
+      console.log(`\n${"=".repeat(88)}`);
       console.log(`🗓  САРЫН ОНОШИЛГОО: ${sar}`);
-      console.log("=".repeat(85));
+      console.log("=".repeat(88));
 
       // 1) Тухайн сарын нэхэмжлэхүүдийг татах
       const nekhAll = await conn
@@ -225,31 +254,7 @@ async function main() {
       }
 
       // 2) Тухайн сарын авлагын дэвтэр (guilgeeAvlaguud) татах
-      // Огноо нь тухайн сар БОЛОН эсвэл тухайн сарын нэхэмжлэхэд холбогдсон авлагууд
       const guilgeeAll = await conn
-        .collection("guilgeeAvlaguud")
-        .find({
-          dun: { $gt: 0 },
-          $or: [
-            { nekhemjlekhId: { $in: [...sarNekhIds] } },
-            // ubSar(ognoo) нь дараах filter-ээр орно
-          ],
-        })
-        .project({
-          _id: 1,
-          gereeniiId: 1,
-          nekhemjlekhId: 1,
-          ognoo: 1,
-          zardliinNer: 1,
-          tailbar: 1,
-          dun: 1,
-          toot: 1,
-          barilgiinId: 1,
-        })
-        .toArray();
-
-      // Мөн огноогоор нь тухайн сарын бусад авлагуудыг нэмж шалгана
-      const guilgeeByDate = await conn
         .collection("guilgeeAvlaguud")
         .find({
           dun: { $gt: 0 },
@@ -268,9 +273,10 @@ async function main() {
         .toArray();
 
       const mergedGuilgee = new Map(); // id -> doc
-      guilgeeAll.forEach((g) => mergedGuilgee.set(String(g._id), g));
-      guilgeeByDate.forEach((g) => {
-        if (ubSar(g.ognoo) === sar) {
+      guilgeeAll.forEach((g) => {
+        const isSarDate = ubSar(g.ognoo) === sar;
+        const isSarNekh = g.nekhemjlekhId && sarNekhIds.has(String(g.nekhemjlekhId));
+        if (isSarDate || isSarNekh) {
           mergedGuilgee.set(String(g._id), g);
         }
       });
@@ -290,7 +296,7 @@ async function main() {
       for (const [bId, bGereenuud] of barilgiinGereeMap.entries()) {
         const bNer = barilgaMap.get(bId) || bGereenuud[0]?.bairNer || bId;
         console.log(`\n   🏢 [${sar}] БАРИЛГА: ${bNer} (Нийт ${bGereenuud.length} идэвхтэй гэрээ)`);
-        console.log("   " + "-".repeat(80));
+        console.log("   " + "-".repeat(84));
 
         let totalBilledContracts = 0;
         let complete7Contracts = 0;
@@ -331,22 +337,20 @@ async function main() {
             ledgerZardalNames.add(tulkhuur(rawNer));
           }
 
-          // Нэхэмжлэхийн medeelel.zardluud доторхыг бас харна
-          const invZardalNames = new Set();
+          // Нэхэмжлэхийн medeelel.zardluud доторхыг бас нэмж харна
           for (const inv of invList) {
             const zArray = inv.medeelel?.zardluud || [];
             for (const z of zArray) {
-              invZardalNames.add(tulkhuur(z.ner || ""));
+              ledgerZardalNames.add(tulkhuur(z.ner || ""));
             }
           }
 
-          // Энэ айлд мастер 7 зардлаас аль нь дутуу байгааг шалгах
+          // Энэ айлд мастер зардлаас аль нь дутуу байгааг шалгах
           const missingInLedger = [];
           const presentInLedger = [];
 
           for (const mNer of masterZardalNers) {
             const key = tulkhuur(mNer);
-            // Яг таарсан эсвэл агуулсан эсэхийг уян хатан шалгах
             const hasLedger = [...ledgerZardalNames].some(
               (n) => n === key || n.includes(key) || key.includes(n)
             );
@@ -402,7 +406,7 @@ async function main() {
         // Хэрэв дутуу айлууд байвал жишээ болон дэлгэрэнгүй хэвлэх
         if (defectiveToots.length > 0) {
           const displayCount = delgerengui ? defectiveToots.length : Math.min(defectiveToots.length, 6);
-          console.log(`\n      ⚠️  Дутуу айлуудын жишээ (${displayCount}/${defectiveToots.length}):`);
+          console.log(`\n      ⚠️  Дутуу айлуудын жагсаалт (${displayCount}/${defectiveToots.length}):`);
           for (let i = 0; i < displayCount; i++) {
             const dt = defectiveToots[i];
             console.log(
@@ -421,33 +425,30 @@ async function main() {
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // 5. ШАЛТГААНЫ ДҮГНЭЛТ БА ТУСЛАМЖ
+    // 6. ШАЛТГААН БА ШИЙДВЭРЛЭХ АЛХМУУД
     // ═════════════════════════════════════════════════════════════════════════
-    console.log(`\n${"=".repeat(85)}`);
-    console.log(`🔎 ОНОШИЛГООНЫ ДҮГНЭЛТ БА АЛХМУУД`);
-    console.log("=".repeat(85));
+    console.log(`\n${"=".repeat(88)}`);
+    console.log(`🔎 ОНОШИЛГООНЫ ДҮГНЭЛТ БА ЗАСВАРЫН АЛХМУУД`);
+    console.log("=".repeat(88));
     console.log(`
-1. 9-р сарын «Баримт» дутуу байх магадлал:
-   - Хэрэв 9-р сард Баримт дутуу бол, ашиглалтын зардлаас «Баримт» түр устгагдсан эсвэл
-     гэрээний zardluud-аас арилж үүссэн байж болно.
-   - Засахдаа: node scripts/zardal_nemekh.js timetower Баримт 2026-09 [--tavikh]
+1. 9-р сарын «Баримт» дутагдсан шалтгаан ба засвар:
+   - Шаардлагатай бол «Баримт»-ыг нөхөх тушаал (dry-run):
+     node scripts/zardal_nemekh.js 6a9786569a202a8f8f859f94 Баримт 2026-09
+   - Бичихдээ:
+     node scripts/zardal_nemekh.js 6a9786569a202a8f8f859f94 Баримт 2026-09 --tavikh
 
-2. 10-р сарын «Цахилгаан» дутуу байх магадлал:
-   - Цахилгаан нь 'zaalt: true' тоолуур заалтаар бодогддог зардал юм.
-   - Хэрэв 10-р сарын заалт (zaaltUnshlalt) импортлогдоогүй, эсвэл umnukhZaalt == suuliinZaalt
-     бол zaaltDun нь 0 болж, invoiceService нь тэг дүнтэй заалтыг charges-д нэмэлгүй алгасдаг.
-   - Шалгах: zaaltUnshlalt цуглуулгад 10-р сарын цахилгааны заалт орсон эсэх.
-
-3. Нөхөн нэмэх зарчим:
-   - guilgeeAvlaguud (ledger) дээр дахин давхардахгүй байхаар шалгаж,
-   - invoice.medeelel.zardluud хуулбарыг нэгэн зэрэг нөхнө.
+2. 10-р сарын «Цахилгаан» дутагдсан шалтгаан ба засвар:
+   - Цахилгаан нь тоолуур заалтаар (zaalt: true) бодогддог. Хэрэв 10-р сарын
+     заалт zaaltUnshlalt цуглуулгад ороогүй бол дүн 0 болж, нэхэмжлэх болон
+     guilgeeAvlaguud-д Цахилгааны мөр нэмэгддэггүй.
+   - Заалтыг Excel-ээр оруулсны дараа, эсвэл суурь тариф/тооцооллоор нөхөх боломжтой.
 `);
 
   } finally {
     await conn.close();
   }
 
-  console.log("✅ Оношилгоо дууслаа.\n");
+  console.log("✅ Оношилгоо амжилттай дууслаа.\n");
 }
 
 main().catch((err) => {

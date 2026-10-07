@@ -8,7 +8,10 @@ function getKholboltByBaiguullagiinId(baiguullagiinId) {
   if (baiguullagiinId == null) return null;
   const { db } = require("zevbackv2");
   let kholbolt = db.kholboltuud.find(
-    (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+    (k) =>
+      String(k.baiguullagiinId) === String(baiguullagiinId) ||
+      k.baaziinNer === baiguullagiinId ||
+      k.kholbolt?.db?.databaseName === baiguullagiinId,
   );
   if (!kholbolt && typeof baiguullagiinId === "string") {
     const mongoose = require("mongoose");
@@ -19,7 +22,11 @@ function getKholboltByBaiguullagiinId(baiguullagiinId) {
         if (mongoose.Types.ObjectId.isValid(kId)) {
           return kId.equals(baiguullagiinObjectId);
         }
-        return String(kId) === String(baiguullagiinId);
+        return (
+          String(kId) === String(baiguullagiinId) ||
+          k.baaziinNer === baiguullagiinId ||
+          k.kholbolt?.db?.databaseName === baiguullagiinId
+        );
       });
     }
   }
