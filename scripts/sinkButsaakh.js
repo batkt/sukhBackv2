@@ -47,8 +47,27 @@ const argAvya = (ner) => {
   return i === -1 ? null : process.argv[i + 1];
 };
 
+const argOlon = (ner) =>
+  process.argv.reduce((ur, a, i) => (a === `--${ner}` ? [...ur, process.argv[i + 1]] : ur), []);
+
 const ORG = argAvya("org");
 const TSAG_ARG = argAvya("tsag");
+/**
+ * Буцаалтаас АЛГАСАХ нэхэмжлэх (дугаар эсвэл _id), давтаж өгч болно.
+ *
+ * Зардлын мөргүй байсан бүх нэхэмжлэх нь төлбөрийн баримт БИШ: тухайн айлын
+ * сарын нэхэмжлэх үүсэх үедээ дутуу боловсорч, хоосон үлдсэн байж болно.
+ * Тийм нэхэмжлэхийг буцаавал тэр айл тухайн сард ОГТ нэхэмжлэгдээгүй үлдэнэ.
+ */
+const ALAGSAKH = argOlon("alagsakh").map((s) => String(s).trim());
+/**
+ * ЗӨВХӨН эдгээр нэхэмжлэхийг буцаана (давтаж өгч болно).
+ *
+ * Нэхэмжлэхийн дугаар (`НЭХ-...`), гэрээний дугаар (`ГД-...`) эсвэл `_id`-аар
+ * тааруулна. Өгөөгүй бол илэрсэн БҮГДИЙГ буцаана. Хэсэгчлэн, болгоомжтой
+ * хийхэд зориулав — нэг хоёрыг нь буцааж шалгаад, дараа нь үлдсэнийг.
+ */
+const ZOVKHON = argOlon("zovkhon").map((s) => String(s).trim());
 const APPLY = process.argv.includes("--apply");
 
 if (!ORG || !TSAG_ARG) {
@@ -116,23 +135,61 @@ async function main() {
     (byNekh.get(id) || []).every((m) => new Date(m.createdAt) >= TSAG),
   );
 
-  const nekhMedeelel = await NekhModel.find({ _id: { $in: khuurmagNekh } })
-    .select({ nekhemjlekhiinDugaar: 1, ognoo: 1, gereeniiId: 1, toot: 1, niitTulbur: 1, tuluv: 1 })
+  const nekhMedeeleBukh = await NekhModel.find({ _id: { $in: khuurmagNekh } })
+    .select({
+      nekhemjlekhiinDugaar: 1, ognoo: 1, gereeniiId: 1, gereeniiDugaar: 1,
+      toot: 1, niitTulbur: 1, tuluv: 1,
+    })
     .lean();
-  const nekhMap = new Map(nekhMedeelel.map((n) => [String(n._id), n]));
 
-  const ustgakhMur = sinkiinMur.filter((m) => khuurmagNekh.includes(String(m.nekhemjlekhId)));
+  /** Нэхэмжлэхийг дугаар / гэрээний дугаар / _id-ийн алиар ч нэрлэж болно. */
+  const nerlesenUu = (n, jagsaalt) =>
+    jagsaalt.includes(String(n._id)) ||
+    jagsaalt.includes(String(n.nekhemjlekhiinDugaar || "")) ||
+    jagsaalt.includes(String(n.gereeniiDugaar || ""));
+
+  // `--zovkhon` өгсөн бол бусдыг нь бүгдийг алгасна.
+  const alagssan = nekhMedeeleBukh.filter((n) =>
+    ZOVKHON.length ? !nerlesenUu(n, ZOVKHON) : nerlesenUu(n, ALAGSAKH),
+  );
+  const alagssanId = new Set(alagssan.map((n) => String(n._id)));
+  const nekhMedeelel = nekhMedeeleBukh.filter((n) => !alagssanId.has(String(n._id)));
+  const butsaakhNekh = khuurmagNekh.filter((id) => !alagssanId.has(id));
+
+  if (ZOVKHON.length) {
+    // Нэрлэсэн зүйл нэг нь ч таараагүй бол бичих гэж оролдохоос өмнө зогсооно.
+    const taarsan = nekhMedeeleBukh.filter((n) => nerlesenUu(n, ZOVKHON));
+    const taaraagui = ZOVKHON.filter(
+      (z) => !nekhMedeeleBukh.some((n) => nerlesenUu(n, [z])),
+    );
+    if (taaraagui.length)
+      throw new Error(
+        "--zovkhon-д нэрлэсэн эдгээр нь илэрсэн жагсаалтад алга: " + taaraagui.join(", "),
+      );
+    console.log(`\nЗӨВХӨН эдгээрийг буцаана (--zovkhon): ${taarsan.length}`);
+  }
+  if (alagssan.length) {
+    console.log(`\nАлгасав: ${alagssan.length} нэхэмжлэх — хөндөхгүй, нэмэгдсэн зардал нь ҮЛДЭНЭ`);
+    alagssan.forEach((n) =>
+      console.log(
+        `   ∅ ${String(n.nekhemjlekhiinDugaar || n._id).padEnd(22)} ${new Date(n.ognoo).toISOString().slice(0, 10)}` +
+          `  тоот ${String(n.toot || "—").padEnd(6)} ${n.gereeniiDugaar || ""}`,
+      ),
+    );
+  }
+
+  const ustgakhMur = sinkiinMur.filter((m) => butsaakhNekh.includes(String(m.nekhemjlekhId)));
   const ustgakhDun = ustgakhMur.reduce((s, m) => s + m.dun, 0);
 
-  console.log(`\nХуурамчаар дүүргэгдсэн нэхэмжлэх: ${khuurmagNekh.length}`);
+  console.log(`\nБуцаагдах нэхэмжлэх: ${nekhMedeelel.length}`);
   nekhMedeelel
     .sort((a, b) => new Date(a.ognoo) - new Date(b.ognoo))
     .forEach((n) => {
       const mur = ustgakhMur.filter((m) => String(m.nekhemjlekhId) === String(n._id));
       console.log(
         `   • ${String(n.nekhemjlekhiinDugaar || n._id).padEnd(22)} ${new Date(n.ognoo).toISOString().slice(0, 10)}` +
-          `  тоот ${String(n.toot || "—").padEnd(6)} ${String(mur.length).padStart(3)} мөр  ` +
-          `${mun(mur.reduce((s, m) => s + m.dun, 0)).padStart(14)}  [${n.tuluv}]`,
+          `  тоот ${String(n.toot || "—").padEnd(6)} ${String(n.gereeniiDugaar || "—").padEnd(14)}` +
+          `${String(mur.length).padStart(3)} мөр  ${mun(mur.reduce((s, m) => s + m.dun, 0)).padStart(14)}  [${n.tuluv}]`,
       );
     });
 
@@ -154,7 +211,7 @@ async function main() {
   console.log(`✅ ${r.deletedCount} мөр устгав`);
 
   // Нэхэмжлэхийн толгой, задаргааг нөхөж тохируулна
-  for (const nekhId of khuurmagNekh) {
+  for (const nekhId of butsaakhNekh) {
     const mur = await LedgerModel.find({ nekhemjlekhId: nekhId, dun: { $gt: 0 } })
       .select({ zardliinNer: 1, tailbar: 1, dun: 1, zardliinTurul: 1, turul: 1 })
       .lean();
@@ -173,7 +230,7 @@ async function main() {
       },
     );
   }
-  console.log(`✅ ${khuurmagNekh.length} нэхэмжлэхийн дүнг сэргээв`);
+  console.log(`✅ ${butsaakhNekh.length} нэхэмжлэхийн дүнг сэргээв`);
 
   const gereenuud = [...new Set(ustgakhMur.map((m) => String(m.gereeniiId)).filter(Boolean))];
   for (const gid of gereenuud) await guilgeeService.syncInvoicesStatus(kholbolt, gid);
