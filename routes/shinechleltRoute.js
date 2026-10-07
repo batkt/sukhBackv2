@@ -5,64 +5,126 @@
  * ЯАГААД ТУСДАА ТӨГСГӨЛӨГ ВЭ: удирдлагын сервер нь бусад системийг
  * `cd ../<хавтас> && yarn update` гэж ЛОКАЛ ажиллуулдаг
  * (udirdlagaBack/routes/systemRoute.js). Гэтэл СӨХ нь ӨӨР сервер дээр
- * (amarhome) байрладаг тул тэр арга хүрэхгүй. E-Pharma-тай адил HTTP-ээр
- * дуудаж, шинэчлэлтийг ЭНД гүйцэтгэнэ.
+ * (amarhome) байрладаг тул тэр арга хүрэхгүй.
+ *
+ * ЯАГААД АСИНХРОН ВЭ: `npm i && npm run build` нь хэдэн минут үргэлжилнэ.
+ * Хүсэлтийг нээлттэй барьж хүлээвэл nginx-ийн `proxy_read_timeout`
+ * (анхдагчаар 60 секунд) таслаад 504 буцаадаг — ажил нь цаана үргэлжилж
+ * байхад удирдлагын самбар бүтэлгүйтсэн гэж харуулна. Иймд:
+ *   • POST нь ажлыг ЭХЛҮҮЛЭЭД шууд хариулна (202);
+ *   • GET нь явцыг хэлнэ — самбар үүнийг асууж байгаад төлвөө харуулна.
  *
  * АЮУЛГҮЙ БАЙДАЛ: энэ төгсгөлөг нь КОД татаж, үйлчилгээг ДАХИН АСААДАГ.
- * Иймд:
- *   • `SHINECHLELT_NUUTS` орчны хувьсагч ЗААВАЛ тохируулсан байх ёстой.
- *     Тохируулаагүй бол төгсгөлөг нь БҮРЭН хаалттай (503) — анхдагч нууц
- *     үг ОГТ байхгүй, учир нь тогтмол утга нь порт нээлттэй хэн бүхэнд
- *     прод серверийг дахин байрлуулах эрх өгнө.
- *   • Гүйцэтгэх ТУШААЛ нь мөн орчноос уншигдана. Код дотор `git pull`,
- *     `pm2 restart` гэж бичиж тогтоовол дев/прод хоёрын ялгаатай алхмыг
- *     таах болно.
+ *   • `SHINECHLELT_NUUTS` тохируулаагүй бол БҮРЭН хаалттай (503).
+ *     Анхдагч нууц үг ОГТ байхгүй — тогтмол утга нь порт нээлттэй хэн
+ *     бүхэнд прод серверийг дахин байрлуулах эрх өгнө.
+ *   • Гүйцэтгэх ТУШААЛ нь мөн орчноос уншигдана (дев/прод ялгаатай).
  *
  * Тохиргоо (tokhirgoo/tokhirgoo.env):
  *   SHINECHLELT_NUUTS=<урт санамсаргүй мөр>
- *   SHINECHLELT_BACK_TUSHAAL=cd /root/sukhBackv2 && git pull && npm i && pm2 restart amarSukhBack
- *   SHINECHLELT_FRONT_TUSHAAL=cd /root/sukhWeb && git pull && npm i && npm run build && pm2 restart sukhWeb
+ *   SHINECHLELT_BACK_TUSHAAL=cd /root/... && git pull && (setsid pm2 restart <app> >/dev/null 2>&1 &)
+ *   SHINECHLELT_FRONT_TUSHAAL=cd /root/... && git pull && npm i && npm run build && pm2 restart <app>
  */
 const express = require("express");
 const router = express.Router();
-const util = require("util");
-const exec = util.promisify(require("child_process").exec);
+const { exec } = require("child_process");
 
-// Шинэчлэлт нь татах + суулгах + дахин асаах тул удаан. Гэхдээ хязгааргүй
-// биш — гацсан тушаал процессыг үүрд барьж байх ёсгүй.
-const KHUGATSAA_MS = 10 * 60 * 1000;
+const KHUGATSAA_MS = 20 * 60 * 1000;
 const KHAMGIIN_IKH_GARALT = 20000;
 
-/** Гаралтыг таслаж, нууц утгыг задруулахгүй байхаар бэлтгэнэ. */
+/**
+ * Зориулт тус бүрийн СҮҮЛИЙН ажлын төлөв.
+ *
+ * Санах ойд хадгална — үйлчилгээ дахин асахад цэвэрлэгдэнэ. Энэ нь
+ * ЗӨВХӨН явцыг харуулах зориулалттай тул бааз хэрэггүй. (Бэкийг шинэчлэх
+ * нь өөрийгөө дахин асаадаг тул төлөв нь алга болно — доорх тайлбарыг үз.)
+ */
+const tuluvuud = {
+  back: null,
+  front: null,
+};
+
 function garaltBelge(utga) {
   const text = String(utga || "").trim();
   if (text.length <= KHAMGIIN_IKH_GARALT) return text;
   return text.slice(0, KHAMGIIN_IKH_GARALT) + "\n…(таслав)";
 }
 
-router.post("/shinechlelt", async (req, res) => {
+function nuutsZuvEsekh(req) {
   const nuuts = process.env.SHINECHLELT_NUUTS;
+  if (!nuuts) return { zuv: false, kod: 503, aldaa: "Төгсгөлөг идэвхжээгүй." };
+  const irsen = String(req.headers.authorization || "").replace(
+    /^Bearer\s+/i,
+    "",
+  );
+  if (irsen !== nuuts) return { zuv: false, kod: 401, aldaa: "Эрх хүрэхгүй." };
+  return { zuv: true };
+}
 
-  // Тохируулаагүй бол ХААЛТТАЙ. Анхдагч нууц үг БАЙХГҮЙ.
-  if (!nuuts) {
-    console.warn(
-      "⛔ [SHINECHLELT] SHINECHLELT_NUUTS тохируулаагүй тул төгсгөлөг хаалттай.",
-    );
-    return res.status(503).json({
-      success: false,
-      aldaa: "Шинэчлэлтийн төгсгөлөг идэвхжээгүй байна.",
-    });
-  }
+/** Ажлыг ард нь ажиллуулж, төлвийг шинэчилнэ. */
+function ajilEkhluulye(zoriult, tushaal) {
+  tuluvuud[zoriult] = {
+    zoriult,
+    tuluv: "ajillaj",
+    tushaal,
+    ekhelsen: new Date().toISOString(),
+    duussan: null,
+    stdout: "",
+    stderr: "",
+    aldaa: null,
+  };
 
-  const irsen = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
-  if (irsen !== nuuts) {
-    console.warn(
-      `⛔ [SHINECHLELT] буруу нууцаар хандлаа: ip=${req.ip} ua="${req.headers["user-agent"] || "-"}"`,
-    );
-    return res.status(401).json({ success: false, aldaa: "Эрх хүрэхгүй." });
+  console.log(`🚀 [SHINECHLELT] ${zoriult} эхэллээ: ${tushaal}`);
+
+  exec(
+    tushaal,
+    { timeout: KHUGATSAA_MS, maxBuffer: 1024 * 1024 * 10, shell: "/bin/bash" },
+    (aldaa, stdout, stderr) => {
+      const ur = tuluvuud[zoriult];
+      if (!ur) return;
+      ur.duussan = new Date().toISOString();
+      ur.stdout = garaltBelge(stdout);
+      ur.stderr = garaltBelge(stderr);
+
+      if (aldaa) {
+        ur.tuluv = "amjiltgui";
+        ur.aldaa = aldaa.killed
+          ? `${KHUGATSAA_MS / 60000} минутад багтаж дуусаагүй тул зогсоов.`
+          : aldaa.message;
+        console.error(`❌ [SHINECHLELT] ${zoriult} амжилтгүй: ${ur.aldaa}`);
+      } else {
+        ur.tuluv = "amjilttai";
+        console.log(`✅ [SHINECHLELT] ${zoriult} дууслаа.`);
+      }
+    },
+  );
+}
+
+router.post("/shinechlelt", (req, res) => {
+  const shalgalt = nuutsZuvEsekh(req);
+  if (!shalgalt.zuv) {
+    return res
+      .status(shalgalt.kod)
+      .json({ success: false, aldaa: shalgalt.aldaa });
   }
 
   const zoriult = String(req.body?.zoriult || "back").toLowerCase();
+  if (!Object.prototype.hasOwnProperty.call(tuluvuud, zoriult)) {
+    return res
+      .status(400)
+      .json({ success: false, aldaa: `Тодорхойгүй зориулт: ${zoriult}` });
+  }
+
+  // Зэрэг хоёр удаа ажиллуулахгүй — хоёр `git pull` зэрэг явбал хагас
+  // татагдсан код дээр build хийж мэднэ.
+  if (tuluvuud[zoriult]?.tuluv === "ajillaj") {
+    return res.status(409).json({
+      success: false,
+      aldaa: "Энэ шинэчлэлт аль хэдийн ажиллаж байна.",
+      tuluv: tuluvuud[zoriult],
+    });
+  }
+
   const tushaal =
     zoriult === "front"
       ? process.env.SHINECHLELT_FRONT_TUSHAAL
@@ -71,48 +133,45 @@ router.post("/shinechlelt", async (req, res) => {
   if (!tushaal) {
     return res.status(503).json({
       success: false,
-      aldaa: `"${zoriult}" зориултын тушаал (SHINECHLELT_${zoriult.toUpperCase()}_TUSHAAL) тохируулаагүй байна.`,
+      aldaa: `SHINECHLELT_${zoriult.toUpperCase()}_TUSHAAL тохируулаагүй байна.`,
     });
   }
 
-  console.log(`🚀 [SHINECHLELT] ${zoriult} эхэллээ: ${tushaal}`);
+  ajilEkhluulye(zoriult, tushaal);
 
-  try {
-    const { stdout, stderr } = await exec(tushaal, {
-      timeout: KHUGATSAA_MS,
-      maxBuffer: 1024 * 1024 * 10,
-      shell: "/bin/bash",
-    });
+  // 202 — хүлээн авсан, ажиллаж байна. Үр дүнг GET-ээр асууна.
+  return res.status(202).json({
+    success: true,
+    ajillaj: true,
+    tuluv: tuluvuud[zoriult],
+  });
+});
 
-    const garalt = garaltBelge(stdout);
-    const aldaaGaralt = garaltBelge(stderr);
-
-    // `git pull` нь "Already up to date." гэж ХЭВИЙН гардаг — амжилтгүй биш.
-    console.log(`✅ [SHINECHLELT] ${zoriult} дууслаа.\n${garalt}`);
-    if (aldaaGaralt) console.warn(`⚠️ [SHINECHLELT] stderr:\n${aldaaGaralt}`);
-
-    return res.json({
-      success: true,
-      zoriult,
-      stdout: garalt,
-      stderr: aldaaGaralt,
-    });
-  } catch (aldaa) {
-    // Унасан тушаалыг АМЖИЛТТАЙ гэж харуулахгүй — удирдлагын самбарт
-    // яг юу болсныг харуулахын тулд гаралтыг нь буцаана.
-    console.error(
-      `❌ [SHINECHLELT] ${zoriult} амжилтгүй: ${aldaa.message}\n${garaltBelge(aldaa.stdout)}\n${garaltBelge(aldaa.stderr)}`,
-    );
-    return res.status(500).json({
-      success: false,
-      zoriult,
-      aldaa: aldaa.killed
-        ? `Шинэчлэлт ${KHUGATSAA_MS / 60000} минутад багтаж дуусаагүй тул зогсоов.`
-        : aldaa.message,
-      stdout: garaltBelge(aldaa.stdout),
-      stderr: garaltBelge(aldaa.stderr),
-    });
+router.get("/shinechleltTuluv", (req, res) => {
+  const shalgalt = nuutsZuvEsekh(req);
+  if (!shalgalt.zuv) {
+    return res
+      .status(shalgalt.kod)
+      .json({ success: false, aldaa: shalgalt.aldaa });
   }
+  return res.json({ success: true, tuluvuud });
+});
+
+/**
+ * НИЙТЭД нээлттэй товч төлөв — amarhome вэб өөрөө «Шинэчилж байна»
+ * мэдэгдлээ харуулахдаа үүнийг асууна.
+ *
+ * Нууц ШААРДАХГҮЙ: энэ нь зөвхөн «одоо шинэчлэл явж байна уу» гэдгийг
+ * хэлнэ. Тушаал, гаралт, алдааны мөр ОГТ буцаахгүй — тэдгээр нь серверийн
+ * зам, багцын мэдээлэл задруулж мэднэ.
+ */
+router.get("/shinechleltAjillajBaina", (req, res) => {
+  const ajillaj = Object.values(tuluvuud).some(
+    (t) => t?.tuluv === "ajillaj",
+  );
+  // Завсрын кэш энэ хариуг хадгалвал мэдэгдэл гацна.
+  res.set("Cache-Control", "no-store");
+  res.json({ ajillaj });
 });
 
 module.exports = router;
