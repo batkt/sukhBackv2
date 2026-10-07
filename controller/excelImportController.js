@@ -4094,6 +4094,197 @@ exports.generateTulultTemplate = asyncHandler(async (req, res, next) => {
 });
 
 /**
+ * Төлөлтийн Excel-ийг задалж, мөр бүрийг ГЭРЭЭТЭЙ тааруулна.
+ *
+ * Урьдчилан харах ба бодит импорт ХОЁУЛАА үүнийг дууддаг. Эс бөгөөс
+ * хоёр газар тус тусдаа задлалт/тааруулалт бичигдэж, хэрэглэгчийн харсан
+ * зураг нь бодит үр дүнгээс зөрөх эрсдэлтэй.
+ */
+async function tulultMuruudBelye({ file, baiguullagiinId, barilgiinId, kholbolt }) {
+  const workbook = XLSX.read(file.buffer, { type: "buffer" });
+  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+  const allRows = XLSX.utils.sheet_to_json(worksheet, {
+    raw: false,
+    header: 1,
+  });
+  const headerRow = allRows[0] || [];
+
+  // Загварын 2-р мөр тайлбар/хоосон байж болно — өгөгдөлтэй эсэхээр шийднэ.
+  const secondRow = allRows[1];
+  const isSecondRowEmpty =
+    !secondRow ||
+    !secondRow.some((c) => c !== undefined && c !== null && c !== "");
+  const startIndex = isSecondRowEmpty ? 2 : 1;
+
+  const GereeModel = Geree(kholbolt);
+  const muruud = [];
+  let khooson = 0;
+
+  for (let i = startIndex; i < allRows.length; i++) {
+    const r = allRows[i];
+    if (!r || !r.some((c) => c !== undefined && c !== null && c !== "")) {
+      continue;
+    }
+
+    const row = {};
+    headerRow.forEach((key, idx) => {
+      if (key) row[key] = r[idx] !== undefined ? r[idx] : "";
+    });
+
+    // Excel-ийн мөрийн дугаар (1-ээс эхэлсэн) — алдааг нүдээр олоход.
+    const rowNumber = i + 1;
+
+    const tulultRaw = row["Төлөлт"];
+    const khoosonMur =
+      tulultRaw === undefined ||
+      tulultRaw === null ||
+      String(tulultRaw).trim() === "";
+    if (khoosonMur) {
+      khooson += 1;
+      continue;
+    }
+
+    const utas = row["Утас"]?.toString().trim();
+    const gereeniiDugaar = row["Гэрээний дугаар"]?.toString().trim();
+    const toot = row["Тоот"]?.toString().trim();
+    const tailbarNud = row["Тайлбар"]?.toString().trim();
+    const ner = row["Нэр"]?.toString().trim();
+    const amount = parseExcelNumber(tulultRaw);
+
+    const mur = {
+      rowNumber,
+      ner: ner || "",
+      gereeniiDugaar: gereeniiDugaar || "",
+      toot: toot || "",
+      dun: isNaN(amount) ? 0 : Math.abs(amount),
+      tailbar: tailbarNud || "",
+      geree: null,
+      aldaa: null,
+    };
+
+    if (isNaN(amount) || amount === 0) {
+      mur.aldaa = "Дүн буруу эсвэл 0 байна";
+      muruud.push(mur);
+      continue;
+    }
+
+    const query = { baiguullagiinId: String(baiguullagiinId) };
+    if (barilgiinId) query.barilgiinId = String(barilgiinId);
+
+    const orConditions = [];
+    if (utas) orConditions.push({ utas });
+    if (gereeniiDugaar) orConditions.push({ gereeniiDugaar });
+    if (toot) orConditions.push({ toot });
+
+    if (!orConditions.length) {
+      mur.aldaa = "Утас, Гэрээний дугаар, эсвэл Тоот-ын аль нэгийг бөглөнө үү";
+      muruud.push(mur);
+      continue;
+    }
+    query.$or = orConditions;
+
+    const geree = await GereeModel.findOne(query).lean();
+    if (!geree) {
+      mur.aldaa = "Гэрээ олдсонгүй (Утас/Дугаар/Тоот таарахгүй байна)";
+      muruud.push(mur);
+      continue;
+    }
+
+    mur.geree = geree;
+    muruud.push(mur);
+  }
+
+  return { muruud, khooson };
+}
+
+/**
+ * УРЬДЧИЛАН ХАРАХ — юу ч бичихгүй.
+ *
+ * Мөр бүрийн ӨМНӨХ ба ТӨЛӨЛТИЙН ДАРААХ үлдэгдлийг буцаана. Үлдэгдлийг
+ * `guilgeeService.getBalance`-аар авна — энэ нь авлагын дэвтрийн нийлбэр
+ * бөгөөд хуудасны «Үлдэгдэл» баганатай ижил эх сурвалж.
+ */
+exports.uriidchlekhTulultExcel = asyncHandler(async (req, res, next) => {
+  try {
+    const { db } = require("zevbackv2");
+    const guilgeeService = require("../services/guilgeeService");
+    const { baiguullagiinId, barilgiinId } = req.body;
+
+    if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
+    if (!req.file) throw new aldaa("Excel файл оруулах");
+
+    const kholbolt = db.kholboltuud.find(
+      (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
+    );
+    if (!kholbolt) throw new aldaa("Холболт олдсонгүй");
+
+    const { muruud, khooson } = await tulultMuruudBelye({
+      file: req.file,
+      baiguullagiinId,
+      barilgiinId,
+      kholbolt,
+    });
+
+    // Нэг гэрээ олон мөрт давтагдаж болно — үлдэгдлийг НЭГ удаа уншаад
+    // мөр дараалан хасаж явбал эцсийн үлдэгдэл зөв гарна.
+    const uldegdelSanakh = new Map();
+
+    const ur = [];
+    for (const m of muruud) {
+      if (!m.geree) {
+        ur.push({
+          rowNumber: m.rowNumber,
+          ner: m.ner,
+          gereeniiDugaar: m.gereeniiDugaar,
+          toot: m.toot,
+          dun: m.dun,
+          tailbar: m.tailbar,
+          aldaa: m.aldaa,
+          umnukhUldegdel: null,
+          shineUldegdel: null,
+        });
+        continue;
+      }
+
+      const tulkhuur = String(m.geree._id);
+      if (!uldegdelSanakh.has(tulkhuur)) {
+        const uldegdel = await guilgeeService.getBalance(kholbolt, {
+          gereeniiId: tulkhuur,
+        });
+        uldegdelSanakh.set(tulkhuur, Number(uldegdel) || 0);
+      }
+
+      const umnukh = uldegdelSanakh.get(tulkhuur);
+      const shine = umnukh - m.dun;
+      uldegdelSanakh.set(tulkhuur, shine);
+
+      ur.push({
+        rowNumber: m.rowNumber,
+        // Гэрээнээс олдсон НЭРИЙГ давуу болгоно — Excel дээр гараар
+        // өөрчилсөн байж болно.
+        ner: m.ner || "",
+        gereeniiDugaar: m.geree.gereeniiDugaar || m.gereeniiDugaar,
+        toot: m.geree.toot || m.toot,
+        dun: m.dun,
+        tailbar: m.tailbar || `Төлөлт - ${m.geree.toot || ""} тоот`,
+        aldaa: null,
+        umnukhUldegdel: umnukh,
+        shineUldegdel: shine,
+      });
+    }
+
+    res.json({
+      success: true,
+      khooson,
+      niitDun: ur.reduce((d, m) => d + (m.aldaa ? 0 : m.dun), 0),
+      muruud: ur,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * ТӨЛӨЛТИЙГ Excel-ээр бүртгэнэ — нэг файлд олон тоот.
  *
  * Авлага нэмдэг `importInitialBalanceFromExcel`-ээс ялгаатай нь мөр бүрийг
@@ -4114,42 +4305,24 @@ exports.importTulultFromExcel = asyncHandler(async (req, res, next) => {
     if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон");
     if (!req.file) throw new aldaa("Excel файл оруулах");
 
-    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-    const allRows = XLSX.utils.sheet_to_json(worksheet, {
-      raw: false,
-      header: 1,
-    });
-    const headerRow = allRows[0] || [];
-
-    // Загварын 2-р мөр тайлбар/хоосон байж болно — өгөгдөлтэй эсэхээр шийднэ.
-    const secondRow = allRows[1];
-    const isSecondRowEmpty =
-      !secondRow ||
-      !secondRow.some((c) => c !== undefined && c !== null && c !== "");
-    const startIndex = isSecondRowEmpty ? 2 : 1;
-
-    const dataRows = allRows
-      .slice(startIndex)
-      .filter((r) => r.some((c) => c !== undefined && c !== null && c !== ""));
-    const data = dataRows.map((r) => {
-      const obj = {};
-      headerRow.forEach((key, idx) => {
-        if (key) obj[key] = r[idx] !== undefined ? r[idx] : "";
-      });
-      return obj;
-    });
-
-    if (!data.length) throw new aldaa("Excel хоосон");
-
     const tukhainBaaziinKholbolt = db.kholboltuud.find(
       (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
     );
     if (!tukhainBaaziinKholbolt) throw new aldaa("Холболт олдсонгүй");
 
-    const GereeModel = Geree(tukhainBaaziinKholbolt);
+    const { muruud, khooson } = await tulultMuruudBelye({
+      file: req.file,
+      baiguullagiinId,
+      barilgiinId,
+      kholbolt: tukhainBaaziinKholbolt,
+    });
 
-    const results = { success: [], failed: [], skipped: 0, total: data.length };
+    const results = {
+      success: [],
+      failed: [],
+      skipped: khooson,
+      total: muruud.length + khooson,
+    };
 
     let importOgnoo = new Date();
     if (ognoo) {
@@ -4157,63 +4330,14 @@ exports.importTulultFromExcel = asyncHandler(async (req, res, next) => {
       if (!isNaN(parsed.getTime())) importOgnoo = parsed;
     }
 
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i];
-      const rowNumber = i + 2;
+    for (const m of muruud) {
+      if (m.aldaa || !m.geree) {
+        results.failed.push({ row: m.rowNumber, reason: m.aldaa });
+        continue;
+      }
 
       try {
-        const utas = row["Утас"]?.toString().trim();
-        const gereeniiDugaar = row["Гэрээний дугаар"]?.toString().trim();
-        const toot = row["Тоот"]?.toString().trim();
-        const tulultRaw = row["Төлөлт"];
-        const tailbarNud = row["Тайлбар"]?.toString().trim();
-        const amount = parseExcelNumber(tulultRaw);
-
-        // Бөглөөгүй мөр нь алдаа БИШ — загвар бүх гэрээгээр дүүргэгдэж ирдэг.
-        const khooson =
-          tulultRaw === undefined ||
-          tulultRaw === null ||
-          String(tulultRaw).trim() === "";
-        if (khooson) {
-          results.skipped += 1;
-          continue;
-        }
-
-        if (isNaN(amount) || amount === 0) {
-          results.failed.push({
-            row: rowNumber,
-            reason: "Дүн буруу эсвэл 0 байна",
-          });
-          continue;
-        }
-
-        const query = { baiguullagiinId: String(baiguullagiinId) };
-        if (barilgiinId) query.barilgiinId = String(barilgiinId);
-
-        const orConditions = [];
-        if (utas) orConditions.push({ utas });
-        if (gereeniiDugaar) orConditions.push({ gereeniiDugaar });
-        if (toot) orConditions.push({ toot });
-
-        if (!orConditions.length) {
-          results.failed.push({
-            row: rowNumber,
-            reason:
-              "Утас, Гэрээний дугаар, эсвэл Тоот-ын аль нэгийг бөглөнө үү",
-          });
-          continue;
-        }
-        query.$or = orConditions;
-
-        const geree = await GereeModel.findOne(query).lean();
-        if (!geree) {
-          results.failed.push({
-            row: rowNumber,
-            reason: "Гэрээ олдсонгүй (Утас/Дугаар/Тоот таарахгүй байна)",
-          });
-          continue;
-        }
-
+        const geree = m.geree;
         const urDun = await guilgeeService.recordPayment(
           tukhainBaaziinKholbolt,
           {
@@ -4226,8 +4350,8 @@ exports.importTulultFromExcel = asyncHandler(async (req, res, next) => {
             toot: geree.toot || "",
             ognoo: importOgnoo,
             // Төлөлт нь дэвтэр дээр СӨРӨГ мөр (controller/tulbur.js-тэй ижил).
-            dun: -Math.abs(amount),
-            tailbar: tailbarNud || `Төлөлт - ${geree.toot || ""} тоот`,
+            dun: -Math.abs(m.dun),
+            tailbar: m.tailbar || `Төлөлт - ${geree.toot || ""} тоот`,
             source: "gar",
             guilgeeKhiisenAjiltniiNer:
               req.body.nevtersenAjiltniiToken?.ner || "System",
@@ -4238,21 +4362,21 @@ exports.importTulultFromExcel = asyncHandler(async (req, res, next) => {
 
         if (!urDun?.success) {
           results.failed.push({
-            row: rowNumber,
+            row: m.rowNumber,
             reason: urDun?.error || "Төлөлт бүртгэхэд алдаа",
           });
           continue;
         }
 
         results.success.push({
-          row: rowNumber,
+          row: m.rowNumber,
           gereeniiDugaar: geree.gereeniiDugaar,
           toot: geree.toot,
-          dun: Math.abs(amount),
+          dun: m.dun,
           davkhardsan: urDun.alreadyExists === true,
         });
       } catch (rowAldaa) {
-        results.failed.push({ row: rowNumber, reason: rowAldaa.message });
+        results.failed.push({ row: m.rowNumber, reason: rowAldaa.message });
       }
     }
 

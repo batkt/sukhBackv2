@@ -25,6 +25,7 @@ const {
   importInitialBalanceFromExcel,
   generateTulultTemplate,
   importTulultFromExcel,
+  uriidchlekhTulultExcel,
 } = require("../controller/excelImportController");
 const {
   tsakhilgaanExcelTemplateAvya,
@@ -98,6 +99,14 @@ router.post(
   uploadFile.single("file"),
   tokenShalgakh,
   importTulultFromExcel,
+);
+
+// Урьдчилан харах — импорттой ИЖИЛ задлалт/тааруулалт, зөвхөн уншина.
+router.post(
+  "/uriidchlekhTulultExcel",
+  uploadFile.single("file"),
+  tokenShalgakh,
+  uriidchlekhTulultExcel,
 );
 
 
