@@ -64,6 +64,7 @@ const aiTuslakhRoute = require("./routes/aiTuslakhRoute");
 const neeyeRoute = require("./routes/neeyeRoute");
 const urgatsRoute = require("./routes/urgatsRoute");
 const gerBuliinGishuunRoute = require("./routes/gerBuliinGishuunRoute");
+const shinechleltRoute = require("./routes/shinechleltRoute");
 const gishuuniiKhandalt = require("./middleware/gishuuniiKhandalt");
 
 
@@ -342,6 +343,10 @@ const serveMedegdelImage = (req, res, next) => {
     return res.status(403).json({ success: false, message: "Зочны эрхээр энэ үйлдлийг хийх боломжгүй." });
   });
 }
+// Алсын шинэчлэлт — хэрэглэгчийн токен БИШ, тусдаа нууцаар хамгаалагдсан
+// тул гишүүний эрхийн шалгуураас ӨМНӨ холбоно.
+app.use(shinechleltRoute);
+
 app.use(gishuuniiKhandalt);
 app.use(gerBuliinGishuunRoute);
 
