@@ -166,12 +166,27 @@ router.get("/shinechleltTuluv", (req, res) => {
  * зам, багцын мэдээлэл задруулж мэднэ.
  */
 router.get("/shinechleltAjillajBaina", (req, res) => {
-  const ajillaj = Object.values(tuluvuud).some(
-    (t) => t?.tuluv === "ajillaj",
-  );
+  const zoriultuud = {
+    back: tuluvuud.back?.tuluv === "ajillaj",
+    front: tuluvuud.front?.tuluv === "ajillaj",
+  };
+
+  // `ajillaj` нь «САЙТЫГ хаах шаардлагатай юу» гэсэн утгатай — «ямар
+  // нэг ажил явж байна уу» гэсэн утгатай БИШ.
+  //
+  // ФРОНТЫН шинэчлэлт нь build-аа ТУСДАА хавтсанд хийдэг тул тэр 7
+  // минутын турш сайт БҮРЭН ХЭВИЙН ажиллана. Хаах цорын ганц агшин нь
+  // `pm2 restart`-ын хэдэн секунд бөгөөд тэр үед вэб сервер өөрөө
+  // унтарсан байдаг — энэ төгсгөлөг ч хариулахгүй. Тэр хэдэн секундийг
+  // nginx-ийн error_page (deploy/shinechlelt.html) хаана.
+  //
+  // Харин БЭКИЙН шинэчлэлт нь sukhBackv2-ыг өөрийг нь дахин асаадаг тул
+  // API үнэхээр алга болно — тэнд л хаах нь зөв.
+  const ajillaj = zoriultuud.back;
+
   // Завсрын кэш энэ хариуг хадгалвал мэдэгдэл гацна.
   res.set("Cache-Control", "no-store");
-  res.json({ ajillaj });
+  res.json({ ajillaj, zoriultuud });
 });
 
 module.exports = router;
