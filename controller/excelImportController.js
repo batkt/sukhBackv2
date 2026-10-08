@@ -3585,9 +3585,13 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
     const songosonZardal = String(req.body.zardliinNer || "").trim();
     const songosonZardliinTurul = String(req.body.zardliinTurul || "").trim();
     const ekhniiNer = songosonZardal || "Эхний үлдэгдэл";
+    // Хуулга дээр ЗАРДЛЫН НЭР нь эхэндээ байх ёстой — өмнө нь мөр бүр
+    // «Excel-ээр оруулсан эхний үлдэгдэл (...)» гэж эхэлдэг байсан тул
+    // жагсаалт харахад бүгд ижил харагдаж, ямар зардал болох нь
+    // хаалтны дотор, мөрийн сүүлд нуугдаж байв.
     const ekhniiTailbar = songosonZardal
-      ? `Excel-ээр оруулсан эхний үлдэгдэл (${songosonZardal})`
-      : "Excel-ээр оруулсан эхний үлдэгдэл";
+      ? `${songosonZardal} (excel)`
+      : "Эхний үлдэгдэл (excel)";
 
     if (!baiguullagiinId) {
       throw new aldaa("Байгууллагын ID хоосон");
