@@ -4094,6 +4094,25 @@ exports.generateTulultTemplate = asyncHandler(async (req, res, next) => {
 });
 
 /**
+ * Төлөлтийн тайлбарыг бэлдэх — Excel-ээр оруулсан төлөлтийг ялгахын
+ * тулд тайлбарын ард «/excel/» залгана.
+ */
+function formatTulultTailbar(tailbar, toot) {
+  const tootText = toot ? `${toot} тоот` : "";
+  const suuri =
+    tailbar && String(tailbar).trim()
+      ? String(tailbar).trim()
+      : tootText
+        ? `Төлөлт - ${tootText}`
+        : "Төлөлт";
+
+  if (suuri.includes("/excel/")) {
+    return suuri;
+  }
+  return `${suuri} /excel/`;
+}
+
+/**
  * Төлөлтийн Excel-ийг задалж, мөр бүрийг ГЭРЭЭТЭЙ тааруулна.
  *
  * Урьдчилан харах ба бодит импорт ХОЁУЛАА үүнийг дууддаг. Эс бөгөөс
@@ -4238,7 +4257,7 @@ exports.uriidchlekhTulultExcel = asyncHandler(async (req, res, next) => {
           gereeniiDugaar: m.gereeniiDugaar,
           toot: m.toot,
           dun: m.dun,
-          tailbar: m.tailbar,
+          tailbar: formatTulultTailbar(m.tailbar, m.toot),
           aldaa: m.aldaa,
           umnukhUldegdel: null,
           shineUldegdel: null,
@@ -4266,7 +4285,7 @@ exports.uriidchlekhTulultExcel = asyncHandler(async (req, res, next) => {
         gereeniiDugaar: m.geree.gereeniiDugaar || m.gereeniiDugaar,
         toot: m.geree.toot || m.toot,
         dun: m.dun,
-        tailbar: m.tailbar || `Төлөлт - ${m.geree.toot || ""} тоот`,
+        tailbar: formatTulultTailbar(m.tailbar, m.geree.toot || m.toot),
         aldaa: null,
         umnukhUldegdel: umnukh,
         shineUldegdel: shine,
@@ -4351,7 +4370,7 @@ exports.importTulultFromExcel = asyncHandler(async (req, res, next) => {
             ognoo: importOgnoo,
             // Төлөлт нь дэвтэр дээр СӨРӨГ мөр (controller/tulbur.js-тэй ижил).
             dun: -Math.abs(m.dun),
-            tailbar: m.tailbar || `Төлөлт - ${geree.toot || ""} тоот`,
+            tailbar: formatTulultTailbar(m.tailbar, geree.toot || m.toot),
             source: "gar",
             guilgeeKhiisenAjiltniiNer:
               req.body.nevtersenAjiltniiToken?.ner || "System",
