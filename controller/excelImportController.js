@@ -3396,20 +3396,18 @@ exports.generateInitialBalanceTemplate = asyncHandler(
         { header: "Орц", key: "orts", width: 8 },
         { header: "Давхар", key: "davkhar", width: 10 },
         { header: "Тоот", key: "toot", width: 12 },
+        { header: "Эхний үлдэгдэл", key: "ekhniiUldegdel", width: 18 },
       ];
 
-      const expenseColumns = songosonZardluud.map((ner) => ({
-        header: ner,
-        key: ner,
-        width: Math.max(18, ner.length + 4),
-      }));
+      const expenseColumns = songosonZardluud
+        .filter((ner) => ner !== "Эхний үлдэгдэл")
+        .map((ner) => ({
+          header: ner,
+          key: ner,
+          width: Math.max(18, ner.length + 4),
+        }));
 
-      worksheet.columns = [
-        ...baseColumns,
-        ...(expenseColumns.length > 0
-          ? expenseColumns
-          : [{ header: "Эхний үлдэгдэл", key: "ekhniiUldegdel", width: 18 }]),
-      ];
+      worksheet.columns = [...baseColumns, ...expenseColumns];
 
       // Style header (Row 1)
       const headerRow = worksheet.getRow(1);
@@ -3429,17 +3427,38 @@ exports.generateInitialBalanceTemplate = asyncHandler(
         texts: [
           {
             font: { bold: true, size: 10, name: "Calibri" },
-            text: expenseColumns.length > 0 ? "ЗАРДЛЫН ДҮНГҮҮД\n" : "ЗӨВХӨН ЭНЭ БАГАНЫГ БӨГЛӨНӨ\n",
+            text: "ҮНДСЭН ЭХНИЙ ҮЛДЭГДЭЛ\n",
           },
           {
             font: { size: 10, name: "Calibri" },
-            text: expenseColumns.length > 0
-              ? "Тарифын дагуу дүнг автоматаар бэлтгэсэн. Хүсвэл дүнг өөрчлөх боломжтой.\nҮлдэгдэлгүй тоотын мөрийг хоосон орхиж болно."
-              : "Бусад багана нь системээс бэлдэгдсэн — өөрчлөх шаардлагагүй.\nҮлдэгдэлгүй тоотын мөрийг хоосон орхивол алгасана.",
+            text:
+              "Өмнөх хугацааны нийт үлдэгдлийг энд бичнэ.\n" +
+              "Үлдэгдэлгүй тоотын мөрийг хоосон орхино.",
           },
         ],
         margins: { insetmode: "custom", inset: [0.13, 0.13, 0.25, 0.25] },
       };
+
+      if (expenseColumns.length > 0) {
+        expenseColumns.forEach((colDef, idx) => {
+          const colCell = worksheet.getRow(1).getCell(8 + idx);
+          if (colCell) {
+            colCell.note = {
+              texts: [
+                {
+                  font: { bold: true, size: 10, name: "Calibri" },
+                  text: `${colDef.header}\n`,
+                },
+                {
+                  font: { size: 10, name: "Calibri" },
+                  text: "Тарифын дагуу автоматаар бэлтгэсэн. Хүсвэл дүнг өөрчилж болно.",
+                },
+              ],
+              margins: { insetmode: "custom", inset: [0.13, 0.13, 0.25, 0.25] },
+            };
+          }
+        });
+      }
 
       // Гэрээнүүдийг урьдчилан бөглөнө — хэрэглэгч зөвхөн дүнг бичнэ.
       // ID ирээгүй бол (хуучин дуудлага) хоосон загвар буцаана.
@@ -3499,42 +3518,43 @@ exports.generateInitialBalanceTemplate = asyncHandler(
               orts: geree.orts || "",
               davkhar: geree.davkhar || "",
               toot: geree.toot || "",
+              ekhniiUldegdel: "",
             };
 
             if (expenseColumns.length > 0) {
-              songosonZardluud.forEach((zardalNer) => {
-                const inGeree = (geree.zardluud || []).find((z) => z && z.ner === zardalNer);
-                const inBuilding = buildingZardluud.find((z) => z && z.ner === zardalNer);
+              songosonZardluud
+                .filter((ner) => ner !== "Эхний үлдэгдэл")
+                .forEach((zardalNer) => {
+                  const inGeree = (geree.zardluud || []).find((z) => z && z.ner === zardalNer);
+                  const inBuilding = buildingZardluud.find((z) => z && z.ner === zardalNer);
 
-                let defaultDun = 0;
-                if (inGeree) {
-                  defaultDun = inGeree.tariff || inGeree.dun || inGeree.tulukhDun || inGeree.suuriKhuraamj || 0;
-                } else if (inBuilding) {
-                  defaultDun = inBuilding.tariff || inBuilding.dun || inBuilding.suuriKhuraamj || 0;
-                }
+                  let defaultDun = 0;
+                  if (inGeree) {
+                    defaultDun = inGeree.tariff || inGeree.dun || inGeree.tulukhDun || inGeree.suuriKhuraamj || 0;
+                  } else if (inBuilding) {
+                    defaultDun = inBuilding.tariff || inBuilding.dun || inBuilding.suuriKhuraamj || 0;
+                  }
 
-                rowData[zardalNer] = defaultDun > 0 ? defaultDun : "";
-              });
-            } else {
-              rowData.ekhniiUldegdel = "";
+                  rowData[zardalNer] = defaultDun > 0 ? defaultDun : "";
+                });
             }
 
             worksheet.addRow(rowData);
           });
 
+          worksheet.getColumn("ekhniiUldegdel").numFmt = "#,##0.00";
+          worksheet.getColumn("ekhniiUldegdel").alignment = {
+            horizontal: "right",
+          };
+
           if (expenseColumns.length > 0) {
-            songosonZardluud.forEach((zardalNer) => {
-              const col = worksheet.getColumn(zardalNer);
+            expenseColumns.forEach((colDef) => {
+              const col = worksheet.getColumn(colDef.key);
               if (col) {
                 col.numFmt = "#,##0.00";
                 col.alignment = { horizontal: "right" };
               }
             });
-          } else {
-            worksheet.getColumn("ekhniiUldegdel").numFmt = "#,##0.00";
-            worksheet.getColumn("ekhniiUldegdel").alignment = {
-              horizontal: "right",
-            };
           }
         }
       }
@@ -3723,10 +3743,20 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
           rowSavedAmount += amount;
 
           const isGeneral = colName === "Эхний үлдэгдэл";
-          const zardalNer = isGeneral ? (songosonZardal || "Эхний үлдэгдэл") : colName;
-          const zardalTailbar = isGeneral
-            ? (songosonZardal ? `Excel-ээр оруулсан эхний үлдэгдэл (${songosonZardal})` : "Excel-ээр оруулсан эхний үлдэгдэл")
-            : `Excel-ээр оруулсан эхний үлдэгдэл (${colName})`;
+          const zardalNer =
+            isGeneral && expenseColHeaders.length === 1
+              ? (songosonZardal || "Эхний үлдэгдэл")
+              : isGeneral
+                ? "Эхний үлдэгдэл"
+                : colName;
+          const zardalTailbar =
+            isGeneral && expenseColHeaders.length === 1
+              ? (songosonZardal
+                  ? `Excel-ээр оруулсан эхний үлдэгдэл (${songosonZardal})`
+                  : "Excel-ээр оруулсан эхний үлдэгдэл")
+              : isGeneral
+                ? "Excel-ээр оруулсан эхний үлдэгдэл"
+                : `Excel-ээр оруулсан эхний үлдэгдэл (${colName})`;
 
           // Create initial balance record
           const newAvlaga = new GuilgeeAvlaguudTulukhModel({
