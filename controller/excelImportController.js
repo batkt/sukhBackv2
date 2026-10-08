@@ -3302,98 +3302,113 @@ exports.importTootBurtgelFromExcel = asyncHandler(async (req, res, next) => {
   }
 });
 
-
-/**
- * Гэрээ бүрийн ЭЗЭМШИГЧИЙН нэр/утсыг олж `gereeniiId → {ner, utas}` болгоно.
- *
- * ЯАГААД: гэрээний эзэн нь ОРШИН СУУГЧ эсвэл ХАРИЛЦАГЧ (байгууллага)
- * байж болно. Excel-ийн загварууд зөвхөн `orshinSuugchId`-аар хайдаг
- * байсан тул харилцагчийн эзэмшлийн тоотуудын «Нэр» багана ХООСОН
- * гардаг байв.
- *
- * Оршин суугчийг ЭХЭЛЖ харна — ингэснээр өмнө нь зөв гарч байсан мөрүүд
- * хэвээр үлдэж, зөвхөн хоосон байсан нь нөхөгдөнө.
- */
-async function ezemshigchdiigOloy(gereenuud) {
-  const { db } = require("zevbackv2");
-  const Khariltsagch = require("../models/khariltsagch");
-
-  const orshinSuugchiinIdnuud = [
-    ...new Set(gereenuud.map((g) => g.orshinSuugchId).filter(Boolean)),
-  ];
-  const khariltsagchiinIdnuud = [
-    ...new Set(gereenuud.map((g) => g.khariltsagchId).filter(Boolean)),
-  ];
-
-  const [orshinSuugchid, khariltsagchid] = await Promise.all([
-    orshinSuugchiinIdnuud.length
-      ? OrshinSuugch(db.erunkhiiKholbolt)
-          .find({ _id: { $in: orshinSuugchiinIdnuud } })
-          .select("_id ovog ner utas")
-          .lean()
-      : [],
-    khariltsagchiinIdnuud.length
-      ? Khariltsagch(db.erunkhiiKholbolt)
-          .find({ _id: { $in: khariltsagchiinIdnuud } })
-          .select("_id ovog ner utas")
-          .lean()
-      : [],
-  ]);
-
-  const orshinSuugchMap = new Map(
-    orshinSuugchid.map((o) => [String(o._id), o]),
-  );
-  const khariltsagchMap = new Map(
-    khariltsagchid.map((k) => [String(k._id), k]),
-  );
-
-  const utasAvya = (e) =>
-    Array.isArray(e?.utas) ? e.utas[0] : e?.utas || "";
-
-  const ur = new Map();
-  for (const g of gereenuud) {
-    const orshinSuugch = g.orshinSuugchId
-      ? orshinSuugchMap.get(String(g.orshinSuugchId))
-      : null;
-    const khariltsagch = g.khariltsagchId
-      ? khariltsagchMap.get(String(g.khariltsagchId))
-      : null;
-
-    // Харилцагч нь байгууллага ч, хүн ч байж болно — овогтой бол хамт.
-    const khariltsagchiinNer = [khariltsagch?.ovog, khariltsagch?.ner]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-
-    ur.set(String(g._id), {
-      ner: orshinSuugch?.ner || khariltsagchiinNer || "",
-      utas:
-        (Array.isArray(g.utas) ? g.utas[0] : g.utas) ||
-        utasAvya(orshinSuugch) ||
-        utasAvya(khariltsagch) ||
-        "",
-    });
-  }
-
-  return ur;
-}
+
+/**
+ * Гэрээ бүрийн ЭЗЭМШИГЧИЙН нэр/утсыг олж `gereeniiId → {ner, utas}` болгоно.
+ *
+ * ЯАГААД: гэрээний эзэн нь ОРШИН СУУГЧ эсвэл ХАРИЛЦАГЧ (байгууллага)
+ * байж болно. Excel-ийн загварууд зөвхөн `orshinSuugchId`-аар хайдаг
+ * байсан тул харилцагчийн эзэмшлийн тоотуудын «Нэр» багана ХООСОН
+ * гардаг байв.
+ *
+ * Оршин суугчийг ЭХЭЛЖ харна — ингэснээр өмнө нь зөв гарч байсан мөрүүд
+ * хэвээр үлдэж, зөвхөн хоосон байсан нь нөхөгдөнө.
+ */
+async function ezemshigchdiigOloy(gereenuud) {
+  const { db } = require("zevbackv2");
+  const Khariltsagch = require("../models/khariltsagch");
+
+  const orshinSuugchiinIdnuud = [
+    ...new Set(gereenuud.map((g) => g.orshinSuugchId).filter(Boolean)),
+  ];
+  const khariltsagchiinIdnuud = [
+    ...new Set(gereenuud.map((g) => g.khariltsagchId).filter(Boolean)),
+  ];
+
+  const [orshinSuugchid, khariltsagchid] = await Promise.all([
+    orshinSuugchiinIdnuud.length
+      ? OrshinSuugch(db.erunkhiiKholbolt)
+          .find({ _id: { $in: orshinSuugchiinIdnuud } })
+          .select("_id ovog ner utas")
+          .lean()
+      : [],
+    khariltsagchiinIdnuud.length
+      ? Khariltsagch(db.erunkhiiKholbolt)
+          .find({ _id: { $in: khariltsagchiinIdnuud } })
+          .select("_id ovog ner utas")
+          .lean()
+      : [],
+  ]);
+
+  const orshinSuugchMap = new Map(
+    orshinSuugchid.map((o) => [String(o._id), o]),
+  );
+  const khariltsagchMap = new Map(
+    khariltsagchid.map((k) => [String(k._id), k]),
+  );
+
+  const utasAvya = (e) =>
+    Array.isArray(e?.utas) ? e.utas[0] : e?.utas || "";
+
+  const ur = new Map();
+  for (const g of gereenuud) {
+    const orshinSuugch = g.orshinSuugchId
+      ? orshinSuugchMap.get(String(g.orshinSuugchId))
+      : null;
+    const khariltsagch = g.khariltsagchId
+      ? khariltsagchMap.get(String(g.khariltsagchId))
+      : null;
+
+    // Харилцагч нь байгууллага ч, хүн ч байж болно — овогтой бол хамт.
+    const khariltsagchiinNer = [khariltsagch?.ovog, khariltsagch?.ner]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    ur.set(String(g._id), {
+      ner: orshinSuugch?.ner || khariltsagchiinNer || "",
+      utas:
+        (Array.isArray(g.utas) ? g.utas[0] : g.utas) ||
+        utasAvya(orshinSuugch) ||
+        utasAvya(khariltsagch) ||
+        "",
+    });
+  }
+
+  return ur;
+}
 exports.generateInitialBalanceTemplate = asyncHandler(
   async (req, res, next) => {
     try {
       const { db } = require("zevbackv2");
       const { baiguullagiinId, barilgiinId } = req.body || {};
+      const songosonZardluud = Array.isArray(req.body?.zardluud)
+        ? req.body.zardluud.map(String).map((s) => s.trim()).filter(Boolean)
+        : (req.body?.zardal ? [String(req.body.zardal).trim()] : []);
 
       const workbook = new excel.Workbook();
       const worksheet = workbook.addWorksheet("Эхний үлдэгдэл");
 
-      worksheet.columns = [
+      const baseColumns = [
         { header: "Нэр", key: "ner", width: 24 },
         { header: "Гэрээний дугаар", key: "gereeniiDugaar", width: 22 },
         { header: "Утас", key: "utas", width: 16 },
         { header: "Орц", key: "orts", width: 8 },
         { header: "Давхар", key: "davkhar", width: 10 },
         { header: "Тоот", key: "toot", width: 12 },
-        { header: "Эхний үлдэгдэл", key: "ekhniiUldegdel", width: 18 },
+      ];
+
+      const expenseColumns = songosonZardluud.map((ner) => ({
+        header: ner,
+        key: ner,
+        width: Math.max(18, ner.length + 4),
+      }));
+
+      worksheet.columns = [
+        ...baseColumns,
+        ...(expenseColumns.length > 0
+          ? expenseColumns
+          : [{ header: "Эхний үлдэгдэл", key: "ekhniiUldegdel", width: 18 }]),
       ];
 
       // Style header (Row 1)
@@ -3409,19 +3424,18 @@ exports.generateInitialBalanceTemplate = asyncHandler(
       });
       headerRow.commit();
 
-      // «Эхний үлдэгдэл» баганыг л бөглөнө гэдгийг тодруулна.
       const uldegdelGarchig = worksheet.getCell("G1");
       uldegdelGarchig.note = {
         texts: [
           {
             font: { bold: true, size: 10, name: "Calibri" },
-            text: "ЗӨВХӨН ЭНЭ БАГАНЫГ БӨГЛӨНӨ\n",
+            text: expenseColumns.length > 0 ? "ЗАРДЛЫН ДҮНГҮҮД\n" : "ЗӨВХӨН ЭНЭ БАГАНЫГ БӨГЛӨНӨ\n",
           },
           {
             font: { size: 10, name: "Calibri" },
-            text:
-              "Бусад багана нь системээс бэлдэгдсэн — өөрчлөх шаардлагагүй.\n" +
-              "Үлдэгдэлгүй тоотын мөрийг хоосон орхивол алгасана.",
+            text: expenseColumns.length > 0
+              ? "Тарифын дагуу дүнг автоматаар бэлтгэсэн. Хүсвэл дүнг өөрчлөх боломжтой.\nҮлдэгдэлгүй тоотын мөрийг хоосон орхиж болно."
+              : "Бусад багана нь системээс бэлдэгдсэн — өөрчлөх шаардлагагүй.\nҮлдэгдэлгүй тоотын мөрийг хоосон орхивол алгасана.",
           },
         ],
         margins: { insetmode: "custom", inset: [0.13, 0.13, 0.25, 0.25] },
@@ -3431,7 +3445,7 @@ exports.generateInitialBalanceTemplate = asyncHandler(
       // ID ирээгүй бол (хуучин дуудлага) хоосон загвар буцаана.
       if (baiguullagiinId) {
         const Geree = require("../models/geree");
-        const OrshinSuugch = require("../models/orshinSuugch");
+        const AshiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
 
         const kholbolt = db.kholboltuud.find(
           (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
@@ -3447,9 +3461,23 @@ exports.generateInitialBalanceTemplate = asyncHandler(
           const gereenuud = await Geree(kholbolt)
             .find(shuult)
             .select(
-              "gereeniiDugaar toot davkhar orts utas orshinSuugchId khariltsagchId",
+              "gereeniiDugaar toot davkhar orts utas orshinSuugchId khariltsagchId zardluud",
             )
             .lean();
+
+          let buildingZardluud = [];
+          if (expenseColumns.length > 0) {
+            try {
+              buildingZardluud = await AshiglaltiinZardluud(kholbolt)
+                .find({
+                  baiguullagiinId: String(baiguullagiinId),
+                  ...(barilgiinId ? { barilgiinId: String(barilgiinId) } : {}),
+                })
+                .lean();
+            } catch (err) {
+              console.error("[generateInitialBalanceTemplate] Error fetching building zardluud:", err);
+            }
+          }
 
           const ezemshigchid = await ezemshigchdiigOloy(gereenuud);
 
@@ -3464,21 +3492,50 @@ exports.generateInitialBalanceTemplate = asyncHandler(
           gereenuud.sort(tootoorEmbekh).forEach((geree) => {
             const ezen = ezemshigchid.get(String(geree._id)) || {};
 
-            worksheet.addRow({
+            const rowData = {
               ner: ezen.ner || "",
               gereeniiDugaar: geree.gereeniiDugaar || "",
               utas: ezen.utas || "",
               orts: geree.orts || "",
               davkhar: geree.davkhar || "",
               toot: geree.toot || "",
-              ekhniiUldegdel: "",
-            });
+            };
+
+            if (expenseColumns.length > 0) {
+              songosonZardluud.forEach((zardalNer) => {
+                const inGeree = (geree.zardluud || []).find((z) => z && z.ner === zardalNer);
+                const inBuilding = buildingZardluud.find((z) => z && z.ner === zardalNer);
+
+                let defaultDun = 0;
+                if (inGeree) {
+                  defaultDun = inGeree.tariff || inGeree.dun || inGeree.tulukhDun || inGeree.suuriKhuraamj || 0;
+                } else if (inBuilding) {
+                  defaultDun = inBuilding.tariff || inBuilding.dun || inBuilding.suuriKhuraamj || 0;
+                }
+
+                rowData[zardalNer] = defaultDun > 0 ? defaultDun : "";
+              });
+            } else {
+              rowData.ekhniiUldegdel = "";
+            }
+
+            worksheet.addRow(rowData);
           });
 
-          worksheet.getColumn("ekhniiUldegdel").numFmt = "#,##0.00";
-          worksheet.getColumn("ekhniiUldegdel").alignment = {
-            horizontal: "right",
-          };
+          if (expenseColumns.length > 0) {
+            songosonZardluud.forEach((zardalNer) => {
+              const col = worksheet.getColumn(zardalNer);
+              if (col) {
+                col.numFmt = "#,##0.00";
+                col.alignment = { horizontal: "right" };
+              }
+            });
+          } else {
+            worksheet.getColumn("ekhniiUldegdel").numFmt = "#,##0.00";
+            worksheet.getColumn("ekhniiUldegdel").alignment = {
+              horizontal: "right",
+            };
+          }
         }
       }
 
@@ -3576,6 +3633,31 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
       }
     }
 
+    const metaHeaders = new Set([
+      "Нэр",
+      "Гэрээний дугаар",
+      "Утас",
+      "Орц",
+      "Давхар",
+      "Тоот",
+      "Тайлбар",
+      "Огноо",
+      "ognoo",
+      "toot",
+      "utas",
+      "ner",
+      "orts",
+      "davkhar",
+    ]);
+
+    const expenseColHeaders = headerRowIB
+      .map((h) => String(h || "").trim())
+      .filter((h) => h && !metaHeaders.has(h));
+
+    if (expenseColHeaders.length === 0) {
+      expenseColHeaders.push("Эхний үлдэгдэл");
+    }
+
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
       const rowNumber = i + 2;
@@ -3584,32 +3666,9 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
         const utas = row["Утас"]?.toString().trim();
         const gereeniiDugaar = row["Гэрээний дугаар"]?.toString().trim();
         const toot = row["Тоот"]?.toString().trim();
-        const uldegdelRaw = row["Эхний үлдэгдэл"];
-        const amount = parseExcelNumber(uldegdelRaw);
 
         // Handle date using the importOgnoo from request body
         let rowOgnoo = importOgnoo;
-
-        // Хоосон орхисон мөрийг чимээгүй алгасана — дүүргэсэн загвар дээр
-        // эдгээр нь дийлэнх байх тул "алдаа" гэж жагсаавал жинхэнэ алдаа нь
-        // дунд нь алга болно.
-        const uldegdelKhooson =
-          uldegdelRaw === undefined ||
-          uldegdelRaw === null ||
-          String(uldegdelRaw).trim() === "";
-
-        if (uldegdelKhooson) {
-          results.skipped += 1;
-          continue;
-        }
-
-        if (isNaN(amount) || amount === 0) {
-          results.failed.push({
-            row: rowNumber,
-            reason: "Дүн буруу эсвэл 0 байна",
-          });
-          continue;
-        }
 
         // Find Geree
         let query = { baiguullagiinId: String(baiguullagiinId) };
@@ -3642,118 +3701,129 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
           continue;
         }
 
-        // Create initial balance record
-        const newAvlaga = new GuilgeeAvlaguudTulukhModel({
-          baiguullagiinId: String(baiguullagiinId),
-          baiguullagiinNer: geree.baiguullagiinNer,
-          barilgiinId: geree.barilgiinId,
-          gereeniiId: geree._id.toString(),
-          gereeniiDugaar: geree.gereeniiDugaar,
-          orshinSuugchId: geree.orshinSuugchId,
-          ognoo: rowOgnoo,
-          dun: amount,
-          turul: "avlaga",
+        let rowSavedAmount = 0;
+        let rowHasAnyValue = false;
 
-          zardliinNer: ekhniiNer,
-          ...(songosonZardliinTurul ? { zardliinTurul: songosonZardliinTurul } : {}),
-          ekhniiUldegdelEsekh: true,
-          source: "gar",
-          tailbar: ekhniiTailbar,
-          guilgeeKhiisenAjiltniiNer:
-            req.body.nevtersenAjiltniiToken?.ner || "System",
-          guilgeeKhiisenAjiltniiId: req.body.nevtersenAjiltniiToken?.id || null,
-        });
+        for (const colName of expenseColHeaders) {
+          const valRaw = row[colName];
+          if (
+            valRaw === undefined ||
+            valRaw === null ||
+            String(valRaw).trim() === ""
+          ) {
+            continue;
+          }
 
-        await newAvlaga.save();
+          const amount = parseExcelNumber(valRaw);
+          if (isNaN(amount) || amount === 0) {
+            continue;
+          }
 
+          rowHasAnyValue = true;
+          rowSavedAmount += amount;
 
-        // Note: globalUldegdel on Geree is decommissioned. 
-        // Balances are now tracked solely in GuilgeeAvlaguud.
+          const isGeneral = colName === "Эхний үлдэгдэл";
+          const zardalNer = isGeneral ? (songosonZardal || "Эхний үлдэгдэл") : colName;
+          const zardalTailbar = isGeneral
+            ? (songosonZardal ? `Excel-ээр оруулсан эхний үлдэгдэл (${songosonZardal})` : "Excel-ээр оруулсан эхний үлдэгдэл")
+            : `Excel-ээр оруулсан эхний үлдэгдэл (${colName})`;
 
-        // Also update any existing UNPAID invoices for this contract to include
-        // the initial balance. Without this, invoices created before the initial
-        // balance import would show a lower amount than actually owed.
-        try {
-          const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
-          const NekhemjlekhModel = NekhemjlekhiinTuukh(tukhainBaaziinKholbolt);
-
-          const unpaidInvoices = await NekhemjlekhModel.find({
-            gereeniiId: geree._id.toString(),
+          // Create initial balance record
+          const newAvlaga = new GuilgeeAvlaguudTulukhModel({
             baiguullagiinId: String(baiguullagiinId),
-            tuluv: { $nin: ["Төлсөн", "Хүчингүй"] },
-          }).lean();
+            baiguullagiinNer: geree.baiguullagiinNer,
+            barilgiinId: geree.barilgiinId,
+            gereeniiId: geree._id.toString(),
+            gereeniiDugaar: geree.gereeniiDugaar,
+            orshinSuugchId: geree.orshinSuugchId,
+            ognoo: rowOgnoo,
+            dun: amount,
+            turul: "avlaga",
 
-          for (const invoice of unpaidInvoices) {
-            const currentNiitTulbur = invoice.niitTulbur || 0;
-            const currentUldegdel = invoice.uldegdel || 0;
-            const newNiitTulbur = currentNiitTulbur + amount;
-            const newUldegdel = currentUldegdel + amount;
+            zardliinNer: zardalNer,
+            ...(songosonZardliinTurul ? { zardliinTurul: songosonZardliinTurul } : {}),
+            ekhniiUldegdelEsekh: true,
+            source: "gar",
+            tailbar: zardalTailbar,
+            guilgeeKhiisenAjiltniiNer:
+              req.body.nevtersenAjiltniiToken?.ner || "System",
+            guilgeeKhiisenAjiltniiId: req.body.nevtersenAjiltniiToken?.id || null,
+          });
 
-            // Update the "Эхний үлдэгдэл" row inside medeelel.zardluud
-            let hasEkhniiLine = false;
-            const zardluud = (invoice.medeelel?.zardluud || []).map((z) => {
-              // Зардал сонгосон бол тэр нэртэй эхний үлдэгдлийн мөрөнд л нэмнэ
-              const tokhirokh = songosonZardal
-                ? z.isEkhniiUldegdel && z.ner === ekhniiNer
-                : z.isEkhniiUldegdel || z.ner === "Эхний үлдэгдэл";
-              if (!hasEkhniiLine && tokhirokh) {
-                hasEkhniiLine = true;
-                return {
-                  ...z,
-                  tariff: (z.tariff || 0) + amount,
-                  dun: (z.dun || 0) + amount,
-                  tailbar: ekhniiTailbar,
-                };
+          await newAvlaga.save();
+
+          // Also update any existing UNPAID invoices for this contract to include the initial balance
+          try {
+            const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+            const NekhemjlekhModel = NekhemjlekhiinTuukh(tukhainBaaziinKholbolt);
+
+            const unpaidInvoices = await NekhemjlekhModel.find({
+              gereeniiId: geree._id.toString(),
+              baiguullagiinId: String(baiguullagiinId),
+              tuluv: { $nin: ["Төлсөн", "Хүчингүй"] },
+            }).lean();
+
+            for (const invoice of unpaidInvoices) {
+              const currentNiitTulbur = invoice.niitTulbur || 0;
+              const currentUldegdel = invoice.uldegdel || 0;
+              const newNiitTulbur = currentNiitTulbur + amount;
+              const newUldegdel = currentUldegdel + amount;
+
+              let hasEkhniiLine = false;
+              const zardluud = (invoice.medeelel?.zardluud || []).map((z) => {
+                const tokhirokh = zardalNer
+                  ? z.isEkhniiUldegdel && z.ner === zardalNer
+                  : z.isEkhniiUldegdel || z.ner === "Эхний үлдэгдэл";
+                if (!hasEkhniiLine && tokhirokh) {
+                  hasEkhniiLine = true;
+                  return {
+                    ...z,
+                    tariff: (z.tariff || 0) + amount,
+                    dun: (z.dun || 0) + amount,
+                    tailbar: zardalTailbar,
+                  };
+                }
+                return z;
+              });
+
+              if (!hasEkhniiLine) {
+                zardluud.push({
+                  ner: zardalNer,
+                  zardliinTurul: songosonZardliinTurul || "Авлага",
+                  dun: amount,
+                  tariff: amount,
+                  tulukhDun: amount,
+                  isEkhniiUldegdel: true,
+                  tailbar: zardalTailbar,
+                });
               }
-              return z;
-            });
-            // If invoice doesn't already have an opening-balance zardal row,
-            // append one so manual send/sync won't "lose" imported opening balance.
-            if (!hasEkhniiLine) {
-              zardluud.push({
-                ner: ekhniiNer,
-                zardliinTurul: songosonZardliinTurul || "Авлага",
-                dun: amount,
-                tariff: amount,
-                tulukhDun: amount,
-                isEkhniiUldegdel: true,
-                tailbar: ekhniiTailbar,
+
+              await NekhemjlekhModel.findByIdAndUpdate(invoice._id, {
+                $set: {
+                  niitTulbur: newNiitTulbur,
+                  niitTulburOriginal:
+                    (invoice.niitTulburOriginal || invoice.niitTulbur || 0) + amount,
+                  "medeelel.zardluud": zardluud,
+                },
               });
             }
-
-            await NekhemjlekhModel.findByIdAndUpdate(invoice._id, {
-              $set: {
-                niitTulbur: newNiitTulbur,
-                niitTulburOriginal:
-                  (invoice.niitTulburOriginal || invoice.niitTulbur || 0) + amount,
-                // uldegdel and ekhniiUldegdel removed
-                "medeelel.zardluud": zardluud,
-              },
-            });
-          }
-          // Keep contract balance and invoice balances in sync after import.
-          try {
-            const NekhemjlekhiinTuukhModel = require("../models/nekhemjlekhiinTuukh");
-            const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-          } catch (recalcError) {
+          } catch (invoiceUpdateError) {
             console.error(
-              "Error recalculating globalUldegdel after initial balance import:",
-              recalcError,
+              "Error updating unpaid invoices with initial balance:",
+              invoiceUpdateError,
             );
           }
-        } catch (invoiceUpdateError) {
-          // Non-fatal: log but don't fail the import
-          console.error(
-            "Error updating unpaid invoices with initial balance:",
-            invoiceUpdateError,
-          );
         }
 
-        results.success.push({
-          row: rowNumber,
-          gereeniiDugaar: geree.gereeniiDugaar,
-          amount: amount,
-        });
+        if (!rowHasAnyValue) {
+          results.skipped += 1;
+        } else {
+          results.success.push({
+            row: rowNumber,
+            gereeniiDugaar: geree.gereeniiDugaar,
+            amount: rowSavedAmount,
+          });
+        }
       } catch (rowError) {
         results.failed.push({
           row: rowNumber,
