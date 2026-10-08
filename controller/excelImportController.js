@@ -3991,6 +3991,7 @@ exports.generateTulultTemplate = asyncHandler(async (req, res, next) => {
     const worksheet = workbook.addWorksheet("Төлөлт");
 
     worksheet.columns = [
+      { header: "Огноо", key: "ognoo", width: 14 },
       { header: "Нэр", key: "ner", width: 24 },
       { header: "Гэрээний дугаар", key: "gereeniiDugaar", width: 22 },
       { header: "Утас", key: "utas", width: 16 },
@@ -4012,7 +4013,27 @@ exports.generateTulultTemplate = asyncHandler(async (req, res, next) => {
     });
     headerRow.commit();
 
-    const tulultGarchig = worksheet.getCell("F1");
+    worksheet.getColumn("ognoo").numFmt = "yyyy-mm-dd";
+    worksheet.getColumn("ognoo").alignment = { horizontal: "center" };
+    worksheet.getColumn("tulult").numFmt = "#,##0.00";
+    worksheet.getColumn("tulult").alignment = { horizontal: "right" };
+
+    const ognooGarchig = worksheet.getCell("A1");
+    ognooGarchig.note = {
+      texts: [
+        {
+          font: { bold: true, size: 10, name: "Calibri" },
+          text: "ТӨЛӨЛТИЙН ОГНОО (YYYY-MM-DD)\n",
+        },
+        {
+          font: { size: 10, name: "Calibri" },
+          text: "Огноог хүсвэл өөрчилж болно. Хоосон орхивол импортын огноогоор бүртгэгдэнэ.",
+        },
+      ],
+      margins: { insetmode: "custom", inset: [0.13, 0.13, 0.25, 0.25] },
+    };
+
+    const tulultGarchig = worksheet.getCell("G1");
     tulultGarchig.note = {
       texts: [
         {
@@ -4058,10 +4079,12 @@ exports.generateTulultTemplate = asyncHandler(async (req, res, next) => {
           return String(a.toot || "").localeCompare(String(b.toot || ""));
         };
 
+        const onoodor = new Date();
         gereenuud.sort(tootoorEmbekh).forEach((geree) => {
           const ezen = ezemshigchid.get(String(geree._id)) || {};
 
           worksheet.addRow({
+            ognoo: onoodor,
             ner: ezen.ner || "",
             gereeniiDugaar: geree.gereeniiDugaar || "",
             utas: ezen.utas || "",
@@ -4071,9 +4094,6 @@ exports.generateTulultTemplate = asyncHandler(async (req, res, next) => {
             tailbar: "",
           });
         });
-
-        worksheet.getColumn("tulult").numFmt = "#,##0.00";
-        worksheet.getColumn("tulult").alignment = { horizontal: "right" };
       }
     }
 
@@ -4092,6 +4112,38 @@ exports.generateTulultTemplate = asyncHandler(async (req, res, next) => {
     next(error);
   }
 });
+
+/**
+ * Helper to parse dates from Excel (Date objects, serial numbers, strings)
+ * @param {any} val - Value from Excel cell
+ * @returns {Date|null} - Parsed Date or null
+ */
+function parseExcelDate(val) {
+  if (val === undefined || val === null || val === "") return null;
+  if (val instanceof Date && !isNaN(val.getTime())) return val;
+  if (typeof val === "number") {
+    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const s = val.toString().trim();
+  if (!s) return null;
+
+  const iso = new Date(s.replace(" ", "T"));
+  if (!isNaN(iso.getTime())) return iso;
+
+  const parts = s.split(/[-/.]/).map((p) => p.trim());
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      if (!isNaN(d.getTime())) return d;
+    }
+    if (parts[2].length === 4) {
+      const d = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+      if (!isNaN(d.getTime())) return d;
+    }
+  }
+  return null;
+}
 
 /**
  * Төлөлтийн тайлбарыг бэлдэх — Excel-ээр оруулсан төлөлтийг ялгахын
@@ -4163,15 +4215,18 @@ async function tulultMuruudBelye({ file, baiguullagiinId, barilgiinId, kholbolt 
       continue;
     }
 
+    const ognooRaw = row["Огноо"];
     const utas = row["Утас"]?.toString().trim();
     const gereeniiDugaar = row["Гэрээний дугаар"]?.toString().trim();
     const toot = row["Тоот"]?.toString().trim();
     const tailbarNud = row["Тайлбар"]?.toString().trim();
     const ner = row["Нэр"]?.toString().trim();
     const amount = parseExcelNumber(tulultRaw);
+    const parsedOgnoo = parseExcelDate(ognooRaw);
 
     const mur = {
       rowNumber,
+      ognoo: parsedOgnoo,
       ner: ner || "",
       gereeniiDugaar: gereeniiDugaar || "",
       toot: toot || "",
@@ -4253,6 +4308,7 @@ exports.uriidchlekhTulultExcel = asyncHandler(async (req, res, next) => {
       if (!m.geree) {
         ur.push({
           rowNumber: m.rowNumber,
+          ognoo: m.ognoo,
           ner: m.ner,
           gereeniiDugaar: m.gereeniiDugaar,
           toot: m.toot,
@@ -4279,6 +4335,7 @@ exports.uriidchlekhTulultExcel = asyncHandler(async (req, res, next) => {
 
       ur.push({
         rowNumber: m.rowNumber,
+        ognoo: m.ognoo,
         // Гэрээнээс олдсон НЭРИЙГ давуу болгоно — Excel дээр гараар
         // өөрчилсөн байж болно.
         ner: m.ner || "",
@@ -4367,7 +4424,7 @@ exports.importTulultFromExcel = asyncHandler(async (req, res, next) => {
             gereeniiDugaar: geree.gereeniiDugaar || "",
             orshinSuugchId: geree.orshinSuugchId || "",
             toot: geree.toot || "",
-            ognoo: importOgnoo,
+            ognoo: m.ognoo || importOgnoo,
             // Төлөлт нь дэвтэр дээр СӨРӨГ мөр (controller/tulbur.js-тэй ижил).
             dun: -Math.abs(m.dun),
             tailbar: formatTulultTailbar(m.tailbar, geree.toot || m.toot),
