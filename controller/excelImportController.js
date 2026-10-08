@@ -4045,7 +4045,7 @@ exports.generateTulultTemplate = asyncHandler(async (req, res, next) => {
           text:
             "Бусад багана нь системээс бэлдэгдсэн — өөрчлөх шаардлагагүй.\n" +
             "Төлөлтгүй тоотын мөрийг хоосон орхивол алгасана.\n" +
-            "«Тайлбар» нь сонголттой — хоосон бол тоотоор автоматаар бичнэ.",
+            "«Тайлбар» нь сонголттой — хоосон бол «Төлөлт /excel/» гэж бичнэ.",
         },
       ],
       margins: { insetmode: "custom", inset: [0.13, 0.13, 0.25, 0.25] },
@@ -4147,16 +4147,13 @@ function parseExcelDate(val) {
 
 /**
  * Төлөлтийн тайлбарыг бэлдэх — Excel-ээр оруулсан төлөлтийг ялгахын
- * тулд тайлбарын ард «/excel/» залгана.
+ * тулд тайлбарын ард «/excel/» залгана. Хоосон бол «Төлөлт /excel/».
  */
-function formatTulultTailbar(tailbar, toot) {
-  const tootText = toot ? `${toot} тоот` : "";
+function formatTulultTailbar(tailbar) {
   const suuri =
     tailbar && String(tailbar).trim()
       ? String(tailbar).trim()
-      : tootText
-        ? `Төлөлт - ${tootText}`
-        : "Төлөлт";
+      : "Төлөлт";
 
   if (suuri.includes("/excel/")) {
     return suuri;
@@ -4313,7 +4310,7 @@ exports.uriidchlekhTulultExcel = asyncHandler(async (req, res, next) => {
           gereeniiDugaar: m.gereeniiDugaar,
           toot: m.toot,
           dun: m.dun,
-          tailbar: formatTulultTailbar(m.tailbar, m.toot),
+          tailbar: formatTulultTailbar(m.tailbar),
           aldaa: m.aldaa,
           umnukhUldegdel: null,
           shineUldegdel: null,
@@ -4342,7 +4339,7 @@ exports.uriidchlekhTulultExcel = asyncHandler(async (req, res, next) => {
         gereeniiDugaar: m.geree.gereeniiDugaar || m.gereeniiDugaar,
         toot: m.geree.toot || m.toot,
         dun: m.dun,
-        tailbar: formatTulultTailbar(m.tailbar, m.geree.toot || m.toot),
+        tailbar: formatTulultTailbar(m.tailbar),
         aldaa: null,
         umnukhUldegdel: umnukh,
         shineUldegdel: shine,
@@ -4427,7 +4424,7 @@ exports.importTulultFromExcel = asyncHandler(async (req, res, next) => {
             ognoo: m.ognoo || importOgnoo,
             // Төлөлт нь дэвтэр дээр СӨРӨГ мөр (controller/tulbur.js-тэй ижил).
             dun: -Math.abs(m.dun),
-            tailbar: formatTulultTailbar(m.tailbar, geree.toot || m.toot),
+            tailbar: formatTulultTailbar(m.tailbar),
             source: "gar",
             guilgeeKhiisenAjiltniiNer:
               req.body.nevtersenAjiltniiToken?.ner || "System",
