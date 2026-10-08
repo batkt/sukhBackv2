@@ -358,6 +358,10 @@ const serveMedegdelImage = (req, res, next) => {
 // тул гишүүний эрхийн шалгуураас ӨМНӨ холбоно.
 app.use(shinechleltRoute);
 
+// Нэг эрхээр нэг л төхөөрөмж. Шинэчлэлтийн замаас ХОЙШ (тэр нь өөрийн
+// нууцтай), бусад бүх замаас ӨМНӨ байрлана.
+app.use(require("./middleware/negSession"));
+
 app.use(gishuuniiKhandalt);
 app.use(gerBuliinGishuunRoute);
 
