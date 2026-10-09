@@ -457,6 +457,11 @@ router.get("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
     // Residents MUST be in erunkhiiKholbolt
     let kholbolt = db.erunkhiiKholbolt;
 
+    const delgerenguiEsekh =
+      req.query.delgerengui === "true" || req.query.delgerengui === "1";
+    let buhGeree = [];
+    let tenantKholbolt = null;
+
     const result = await khariltsagch(kholbolt).findById(req.params.id);
     if (result != null) {
       result.key = result._id;
@@ -466,6 +471,7 @@ router.get("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
         const tukhainBaaziinKholbolt = db.kholboltuud.find(
           (k) => String(k.baiguullagiinId) === String(baiguullagiinId),
         );
+        tenantKholbolt = tukhainBaaziinKholbolt || null;
 
         if (tukhainBaaziinKholbolt) {
           try {
@@ -475,6 +481,7 @@ router.get("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
             const allGerees = await GereeModel.find({
               khariltsagchId: result._id.toString(),
             }).lean();
+            buhGeree = allGerees;
 
             const activeGereeIds = allGerees.map((g) => g._id.toString());
             const activeGereeObjectIds = activeGereeIds.map(id => {
@@ -558,6 +565,73 @@ router.get("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
         }
       }
     }
+
+    if (result != null && delgerenguiEsekh) {
+      const khariu =
+        typeof result.toObject === "function"
+          ? result.toObject({ virtuals: true })
+          : { ...result };
+
+      if (Array.isArray(result.toots) && Array.isArray(khariu.toots)) {
+        result.toots.forEach((t, i) => {
+          if (khariu.toots[i] && t.uldegdel !== undefined)
+            khariu.toots[i].uldegdel = t.uldegdel;
+        });
+      }
+      khariu.gereenuud = buhGeree;
+
+      try {
+        const OrshinSuugch = require("../models/orshinSuugch");
+        let gishuud = await OrshinSuugch(kholbolt)
+          .find({ undsenId: String(result._id) })
+          .select("ner ovog utas mail gishuuniiKholboo gishuuniiTuluv gishuuniiErkh gishuunUrisenOgnoo gishuunBatalgaajsanOgnoo")
+          .lean();
+        if ((!gishuud || gishuud.length === 0) && kholbolt !== db.erunkhiiKholbolt) {
+          gishuud = await OrshinSuugch(db.erunkhiiKholbolt)
+            .find({ undsenId: String(result._id) })
+            .select("ner ovog utas mail gishuuniiKholboo gishuuniiTuluv gishuuniiErkh gishuunUrisenOgnoo gishuunBatalgaajsanOgnoo")
+            .lean();
+        }
+        khariu.gerBuliinGishuud = gishuud || [];
+      } catch (e) {
+        khariu.gerBuliinGishuud = [];
+      }
+
+      try {
+        const { ezniiMashiniiBichleguudOlya } = require("../utils/mashinBurtgel");
+        khariu.mashinuud = await ezniiMashiniiBichleguudOlya({
+          erunkhiiKholbolt: db.erunkhiiKholbolt,
+          tukhainBaaziinKholbolt: tenantKholbolt,
+          baiguullagiinId: req.query.baiguullagiinId || result.baiguullagiinId,
+          ezemshigchiinId: result._id,
+        });
+      } catch (e) {
+        khariu.mashinuud = [];
+      }
+
+      if (tenantKholbolt) {
+        try {
+          const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud")(tenantKholbolt);
+          const buhGuilgee = await GuilgeeAvlaguud.find({
+            $or: [
+              { khariltsagchId: String(result._id) },
+              { orshinSuugchId: String(result._id) },
+            ],
+          })
+            .select("ognoo dun turul toot gereeniiDugaar tulukhDun tulsunDun")
+            .sort({ ognoo: -1 })
+            .lean();
+          khariu.suuliinGuilgeenuud = buhGuilgee.slice(0, 50);
+          khariu.guilgeeniiNiitToo = buhGuilgee.length;
+        } catch (e) {
+          khariu.suuliinGuilgeenuud = [];
+          khariu.guilgeeniiNiitToo = 0;
+        }
+      }
+
+      return res.send(khariu);
+    }
+
     res.send(result);
   } catch (error) {
     next(error);

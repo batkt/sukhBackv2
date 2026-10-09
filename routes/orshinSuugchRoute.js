@@ -666,6 +666,10 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
         if (result) kholbolt = tenantKholbolt;
       }
     }
+    if (!result) {
+      const Khariltsagch = require("../models/khariltsagch");
+      result = await Khariltsagch(db.erunkhiiKholbolt).findById(req.params.id);
+    }
     // Дэлгэрэнгүй горим: оршин суугчтай холбоотой БҮХ мэдээллийг нэг
     // дуудалтаар буцаана (вебийн "нүд" товч, аппын дэлгэрэнгүй дэлгэц).
     // Заавал opt-in — эс тэгвээс жагсаалт татдаг бусад дуудагчид дээр
@@ -691,7 +695,10 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
 
             // Fetch all contracts for this resident to map to specific units
             const allGerees = await GereeModel.find({
-              orshinSuugchId: result._id.toString(),
+              $or: [
+                { orshinSuugchId: result._id.toString() },
+                { khariltsagchId: result._id.toString() },
+              ],
             }).lean();
             buhGeree = allGerees;
 
@@ -837,7 +844,10 @@ router.get("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
           // Эрсдлийн үнэлгээнд БҮХ түүх хэрэгтэй (өрийн насыг тооцоход), харин
           // дэлгэц дээр сүүлийн 50-г л харуулна.
           const buhGuilgee = await GuilgeeAvlaguud.find({
-            orshinSuugchId: String(result._id),
+            $or: [
+              { orshinSuugchId: String(result._id) },
+              { khariltsagchId: String(result._id) },
+            ],
           })
             .select("ognoo dun turul toot gereeniiDugaar tulukhDun tulsunDun")
             .sort({ ognoo: -1 })
