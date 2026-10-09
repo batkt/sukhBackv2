@@ -868,7 +868,9 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
     }
 
     // Sanitize ezemshigchiinUtas to be a string
-    const phoneString = Array.isArray(ezemshigchiinUtas) ? ezemshigchiinUtas[0] : String(ezemshigchiinUtas).trim();
+    const phoneString = Array.isArray(ezemshigchiinUtas)
+      ? String(ezemshigchiinUtas[0] || "").trim()
+      : String(ezemshigchiinUtas || "").trim();
 
     // Map root-level fields to orshinSuugchMedeelel if missing (Support various App payloads)
     if (orshinSuugchMedeelel) {
@@ -1048,6 +1050,12 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
           orshinSuugchResult = await OrshinSuugch(db.erunkhiiKholbolt).findById(
             residentData._id
           );
+          if (!orshinSuugchResult) {
+            const Khariltsagch = require("../models/khariltsagch");
+            orshinSuugchResult = await Khariltsagch(db.erunkhiiKholbolt).findById(
+              residentData._id
+            );
+          }
         } else if (isResidentType) {
           const query = { utas: phoneString };
           if (baiguullagiinId) query.baiguullagiinId = String(baiguullagiinId);
@@ -1115,57 +1123,66 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
           }
         } else if (isCustomerType) {
           const Khariltsagch = require("../models/khariltsagch");
-          let khariltsagchResult = await Khariltsagch(
-            db.erunkhiiKholbolt
-          ).findOne({
-            utas: phoneString,
-            ...(baiguullagiinId
-              ? { baiguullagiinId: String(baiguullagiinId) }
-              : {}),
-          });
-
-          if (!khariltsagchResult) {
+          let khariltsagchResult = null;
+          if (ezemshigchiinId) {
             khariltsagchResult = await Khariltsagch(
               db.erunkhiiKholbolt
-            ).findOne({ utas: phoneString });
+            ).findById(ezemshigchiinId);
           }
 
-          if (!khariltsagchResult) {
+          if (!khariltsagchResult && phoneString) {
+            khariltsagchResult = await Khariltsagch(
+              db.erunkhiiKholbolt
+            ).findOne({
+              utas: phoneString,
+              ...(baiguullagiinId
+                ? { baiguullagiinId: String(baiguullagiinId) }
+                : {}),
+            });
+
+            if (!khariltsagchResult) {
+              khariltsagchResult = await Khariltsagch(
+                db.erunkhiiKholbolt
+              ).findOne({ utas: phoneString });
+            }
+          }
+
+          if (!khariltsagchResult && phoneString) {
             // Мөн OrshinSuugch цуглуулгад байгаа эсэхийг шалгана
             orshinSuugchResult = await OrshinSuugch(
               db.erunkhiiKholbolt
             ).findOne({ utas: phoneString });
+          }
 
-            if (!orshinSuugchResult) {
-              // Бүртгэлгүй харилцагч бол автоматаар бүртгэнэ
-              console.log(
-                `ℹ️ [ZOCHIN_HADGALYA] Unregistered customer detected for phone ${phoneString}. Auto-creating khariltsagch...`
-              );
-              const newKhariltsagch = new (Khariltsagch(db.erunkhiiKholbolt))({
-                ner:
-                  orshinSuugchMedeelel.ner ||
-                  req.body.ezemshigchiinNer ||
-                  "Харилцагч",
-                ovog: orshinSuugchMedeelel.ovog || "",
-                utas: phoneString,
-                toot:
-                  orshinSuugchMedeelel.ezenToot ||
-                  req.body.ezemshigchiinTalbainDugaar ||
-                  "-",
-                baiguullagiinId: baiguullagiinId
-                  ? String(baiguullagiinId)
-                  : undefined,
-                barilgiinId: barilgiinId ? String(barilgiinId) : undefined,
-                turul: "Харилцагч",
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              });
-              khariltsagchResult = await newKhariltsagch.save();
-              console.log(
-                `✅ [ZOCHIN_HADGALYA] Auto-registered customer ID:`,
-                khariltsagchResult?._id
-              );
-            }
+          if (!khariltsagchResult && !orshinSuugchResult) {
+            // Бүртгэлгүй харилцагч бол автоматаар бүртгэнэ
+            console.log(
+              `ℹ️ [ZOCHIN_HADGALYA] Unregistered customer detected. Auto-creating khariltsagch...`
+            );
+            const newKhariltsagch = new (Khariltsagch(db.erunkhiiKholbolt))({
+              ner:
+                orshinSuugchMedeelel.ner ||
+                req.body.ezemshigchiinNer ||
+                "Харилцагч",
+              ovog: orshinSuugchMedeelel.ovog || "",
+              utas: phoneString || "",
+              toot:
+                orshinSuugchMedeelel.ezenToot ||
+                req.body.ezemshigchiinTalbainDugaar ||
+                "-",
+              baiguullagiinId: baiguullagiinId
+                ? String(baiguullagiinId)
+                : undefined,
+              barilgiinId: barilgiinId ? String(barilgiinId) : undefined,
+              turul: "Харилцагч",
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+            khariltsagchResult = await newKhariltsagch.save();
+            console.log(
+              `✅ [ZOCHIN_HADGALYA] Auto-registered customer ID:`,
+              khariltsagchResult?._id
+            );
           }
 
           if (khariltsagchResult) {
