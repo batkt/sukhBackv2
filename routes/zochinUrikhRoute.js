@@ -1124,10 +1124,15 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
         } else if (isCustomerType) {
           const Khariltsagch = require("../models/khariltsagch");
           let khariltsagchResult = null;
-          if (ezemshigchiinId) {
+          const targetCustId =
+            ezemshigchiinId ||
+            orshinSuugchMedeelel?._id ||
+            req.body.khariltsagchMedeelel?._id;
+
+          if (targetCustId) {
             khariltsagchResult = await Khariltsagch(
               db.erunkhiiKholbolt
-            ).findById(ezemshigchiinId);
+            ).findById(targetCustId);
           }
 
           if (!khariltsagchResult && phoneString) {
@@ -1145,6 +1150,22 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
                 db.erunkhiiKholbolt
               ).findOne({ utas: phoneString });
             }
+          }
+
+          // Нэр болон байгууллагаар шалгах — утасгүй эсвэл өөр утсаар бүртгэх үед давхар харилцагч үүсэхээс сэргийлнэ
+          const custNer = (orshinSuugchMedeelel?.ner || req.body.ezemshigchiinNer || "").trim();
+          if (!khariltsagchResult && custNer && baiguullagiinId) {
+            const nameQuery = {
+              ner: new RegExp(`^${custNer.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+              baiguullagiinId: String(baiguullagiinId),
+            };
+            if (barilgiinId) {
+              nameQuery.$or = [
+                { barilgiinId: String(barilgiinId) },
+                { "toots.barilgiinId": String(barilgiinId) },
+              ];
+            }
+            khariltsagchResult = await Khariltsagch(db.erunkhiiKholbolt).findOne(nameQuery);
           }
 
           if (!khariltsagchResult && phoneString) {
@@ -1187,6 +1208,12 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
 
           if (khariltsagchResult) {
             orshinSuugchResult = khariltsagchResult;
+            if (phoneString && !khariltsagchResult.utas) {
+              khariltsagchResult.utas = phoneString;
+              await Khariltsagch(db.erunkhiiKholbolt).findByIdAndUpdate(khariltsagchResult._id, {
+                utas: phoneString,
+              });
+            }
           }
         } else {
           // Бусад төрөл: Ажилтан, Дотоод, СӨХ гэх мэт

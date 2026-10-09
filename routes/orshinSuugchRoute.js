@@ -48,7 +48,12 @@ const {
   massUpdateOrshinSuugchKwt,
 } = require("../controller/orshinSuugch");
 const aldaa = require("../components/aldaa");
-const { tootNer, ezemshigchNer, olsonToot } = require("../utils/tootTailbar");
+const {
+  tootNer,
+  ezemshigchNer,
+  olsonToot,
+  shalgakhTootDavkhardal,
+} = require("../utils/tootTailbar");
 const session = require("../models/session");
 const multer = require("multer");
 const {
@@ -917,89 +922,35 @@ router.post("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
       }
     }
     const orts = req.body.orts ? String(req.body.orts).trim() : "";
-    if (toot && (barilgiinId || baiguullagiinId)) {
-      const turul = req.body.turul || req.body.units?.[0]?.turul || req.body.toots?.[0]?.turul || "Орон сууц";
-      const isGarage = turul === "Гараж" || turul === "Зогсоол";
-      const isStorage = turul === "Агуулах";
-      const isApt = !isGarage && !isStorage;
+    // Давхардлыг бүх тоот/нэгжүүдээр OrshinSuugch болон Khariltsagch цуглуулгаас шалгана
+    const unitsToCheck =
+      Array.isArray(req.body.toots) && req.body.toots.length > 0
+        ? req.body.toots
+        : toot
+          ? [
+              {
+                toot,
+                davkhar,
+                orts,
+                turul: req.body.turul || "Орон сууц",
+                barilgiinId,
+              },
+            ]
+          : [];
 
-      const orConditions = [];
-      if (barilgiinId) {
-        if (isApt) {
-          const baseMatch = { toot, barilgiinId };
-          const baseTootMatch = {
-            toot,
-            barilgiinId,
-            turul: { $nin: ["Гараж", "Зогсоол", "Агуулах"] },
-          };
-          if (davkhar) {
-            baseMatch.davkhar = davkhar;
-            baseTootMatch.davkhar = davkhar;
-          }
-          if (orts) {
-            baseMatch.orts = orts;
-            baseTootMatch.orts = orts;
-          }
-          orConditions.push(baseMatch);
-          orConditions.push({ toots: { $elemMatch: baseTootMatch } });
-          orConditions.push({
-            barilgiinId,
-            toots: {
-              $elemMatch: {
-                toot,
-                turul: { $nin: ["Гараж", "Зогсоол", "Агуулах"] },
-                ...(davkhar ? { davkhar } : {}),
-                ...(orts ? { orts } : {}),
-              },
-            },
-          });
-        } else if (isGarage) {
-          const garageElem = {
-            toot,
-            barilgiinId,
-            turul: { $in: ["Гараж", "Зогсоол"] },
-            ...(davkhar ? { davkhar } : {}),
-          };
-          orConditions.push({ toots: { $elemMatch: garageElem } });
-          orConditions.push({
-            barilgiinId,
-            toots: {
-              $elemMatch: {
-                toot,
-                turul: { $in: ["Гараж", "Зогсоол"] },
-                ...(davkhar ? { davkhar } : {}),
-              },
-            },
-          });
-        } else if (isStorage) {
-          const storageElem = {
-            toot,
-            barilgiinId,
-            turul: "Агуулах",
-            ...(davkhar ? { davkhar } : {}),
-          };
-          orConditions.push({ toots: { $elemMatch: storageElem } });
-          orConditions.push({
-            barilgiinId,
-            toots: {
-              $elemMatch: {
-                toot,
-                turul: "Агуулах",
-                ...(davkhar ? { davkhar } : {}),
-              },
-            },
-          });
-        }
-      }
-      if (orConditions.length > 0) {
-        const existing = await OrshinSuugchModel.findOne({ $or: orConditions });
-        if (existing) {
-          const ezen = ezemshigchNer(existing, { orsonSuutsToot: false });
-          return res.status(400).json({
-            success: false,
-            aldaa: `${tootNer(olsonToot(existing, { toot, barilgiinId, orts, davkhar }))} дээр${ezen ? ` ${ezen}` : ""} оршин суугч аль хэдийн бүртгэгдсэн байна. Өөр тоот сонгох, эсвэл эхлээд тухайн оршин суугчийн гэрээг цуцлаад дахин оролдоно уу.`,
-          });
-        }
+    if (unitsToCheck.length > 0) {
+      const conflict = await shalgakhTootDavkhardal({
+        tootsToCheck: unitsToCheck,
+        currentOrshinSuugchId: null,
+        baiguullagiinId,
+        barilgiinId,
+        erunkhiiKholbolt: db.erunkhiiKholbolt,
+      });
+      if (conflict.hasConflict) {
+        return res.status(400).json({
+          success: false,
+          aldaa: conflict.message,
+        });
       }
     }
 
@@ -1231,108 +1182,49 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
       }
     }
 
-    // Prevent duplicate toot when updating: check if new toot+barilgiinId is already taken by another resident
-    const updateToot = req.body.toot ? String(req.body.toot).trim() : null;
-    const updateDavkhar = req.body.davkhar
-      ? String(req.body.davkhar).trim()
-      : null;
+    // Prevent duplicate toot when updating: check if new toot+barilgiinId is already taken by another resident or client
     const updateBarilgiinId = req.body.barilgiinId
       ? String(req.body.barilgiinId)
-      : null;
+      : oldDoc?.barilgiinId
+        ? String(oldDoc.barilgiinId)
+        : "";
     const updateBaiguullagiinId = req.body.baiguullagiinId
       ? String(req.body.baiguullagiinId)
-      : null;
-    if (updateToot && (updateBarilgiinId || updateBaiguullagiinId)) {
-      const updateTurul = req.body.turul || req.body.units?.[0]?.turul || req.body.toots?.[0]?.turul || "Орон сууц";
-      const isGarage = updateTurul === "Гараж" || updateTurul === "Зогсоол";
-      const isStorage = updateTurul === "Агуулах";
-      const isApt = !isGarage && !isStorage;
+      : oldDoc?.baiguullagiinId
+        ? String(oldDoc.baiguullagiinId)
+        : "";
 
-      const updateOrts = req.body.orts ? String(req.body.orts).trim() : null;
-      const OrshinSuugchModel = OrshinSuugch(db.erunkhiiKholbolt);
-      const orConditions = [];
+    const unitsToCheckPut =
+      Array.isArray(req.body.toots) && req.body.toots.length > 0
+        ? req.body.toots
+        : req.body.toot
+          ? [
+              {
+                toot: String(req.body.toot).trim(),
+                davkhar: req.body.davkhar ? String(req.body.davkhar).trim() : "",
+                orts: req.body.orts ? String(req.body.orts).trim() : "",
+                turul: req.body.turul || "Орон сууц",
+                barilgiinId: updateBarilgiinId,
+              },
+            ]
+          : [];
 
-      if (updateBarilgiinId) {
-        if (isApt) {
-          const baseMatch = { toot: updateToot, barilgiinId: updateBarilgiinId };
-          const baseTootMatch = {
-            toot: updateToot,
-            barilgiinId: updateBarilgiinId,
-            turul: { $nin: ["Гараж", "Зогсоол", "Агуулах"] },
-          };
-          if (updateDavkhar) {
-            baseMatch.davkhar = updateDavkhar;
-            baseTootMatch.davkhar = updateDavkhar;
-          }
-          if (updateOrts) {
-            baseMatch.orts = updateOrts;
-            baseTootMatch.orts = updateOrts;
-          }
-          orConditions.push(baseMatch);
-          orConditions.push({ toots: { $elemMatch: baseTootMatch } });
-          orConditions.push({
-            barilgiinId: updateBarilgiinId,
-            toots: {
-              $elemMatch: {
-                toot: updateToot,
-                turul: { $nin: ["Гараж", "Зогсоол", "Агуулах"] },
-                ...(updateDavkhar ? { davkhar: updateDavkhar } : {}),
-                ...(updateOrts ? { orts: updateOrts } : {}),
-              },
-            },
-          });
-        } else if (isGarage) {
-          const garageElem = {
-            toot: updateToot,
-            barilgiinId: updateBarilgiinId,
-            turul: { $in: ["Гараж", "Зогсоол"] },
-            ...(updateDavkhar ? { davkhar: updateDavkhar } : {}),
-          };
-          orConditions.push({ toots: { $elemMatch: garageElem } });
-          orConditions.push({
-            barilgiinId: updateBarilgiinId,
-            toots: {
-              $elemMatch: {
-                toot: updateToot,
-                turul: { $in: ["Гараж", "Зогсоол"] },
-                ...(updateDavkhar ? { davkhar: updateDavkhar } : {}),
-              },
-            },
-          });
-        } else if (isStorage) {
-          const storageElem = {
-            toot: updateToot,
-            barilgiinId: updateBarilgiinId,
-            turul: "Агуулах",
-            ...(updateDavkhar ? { davkhar: updateDavkhar } : {}),
-          };
-          orConditions.push({ toots: { $elemMatch: storageElem } });
-          orConditions.push({
-            barilgiinId: updateBarilgiinId,
-            toots: {
-              $elemMatch: {
-                toot: updateToot,
-                turul: "Агуулах",
-                ...(updateDavkhar ? { davkhar: updateDavkhar } : {}),
-              },
-            },
-          });
-        }
-      }
-      if (orConditions.length > 0) {
-        const existing = await OrshinSuugchModel.findOne({
-          _id: { $ne: req.params.id },
-          $or: orConditions,
+    if (unitsToCheckPut.length > 0) {
+      const conflict = await shalgakhTootDavkhardal({
+        tootsToCheck: unitsToCheckPut,
+        currentOrshinSuugchId: req.params.id,
+        baiguullagiinId: updateBaiguullagiinId,
+        barilgiinId: updateBarilgiinId,
+        erunkhiiKholbolt: db.erunkhiiKholbolt,
+      });
+      if (conflict.hasConflict) {
+        return res.status(400).json({
+          success: false,
+          aldaa: conflict.message,
         });
-        if (existing) {
-          const ezen = ezemshigchNer(existing, { orsonSuutsToot: false });
-          return res.status(400).json({
-            success: false,
-            aldaa: `${tootNer(olsonToot(existing, { toot: updateToot, barilgiinId: updateBarilgiinId, orts: updateOrts, davkhar: updateDavkhar }))} дээр${ezen ? ` ${ezen}` : ""} оршин суугч аль хэдийн бүртгэгдсэн байна. Өөр тоот сонгох, эсвэл эхлээд тухайн оршин суугчийн гэрээг цуцлаад дахин оролдоно уу.`,
-          });
-        }
       }
     }
+
 
     if (req.body.ner !== undefined) {
       const trimmedNer = String(req.body.ner || "").trim();

@@ -20,7 +20,12 @@ const {
   khariltsagchOorooUstgakh,
 } = require("../controller/khariltsagch");
 const aldaa = require("../components/aldaa");
-const { tootNer, ezemshigchNer, olsonToot } = require("../utils/tootTailbar");
+const {
+  tootNer,
+  ezemshigchNer,
+  olsonToot,
+  shalgakhTootDavkhardal,
+} = require("../utils/tootTailbar");
 const {
   khariltsagchAdminUstgakh,
 } = require("../controller/khariltsagchAdminUstgakh");
@@ -702,38 +707,36 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
       }
     }
     const orts = req.body.orts ? String(req.body.orts).trim() : "";
-    if (toot && (barilgiinId || baiguullagiinId)) {
-      const turul = req.body.turul || req.body.units?.[0]?.turul || req.body.toots?.[0]?.turul || "Орон сууц";
-      const orConditions = [];
-      const baseMatch = { toot, turul };
-      const baseTootMatch = { toot, turul };
-      if (davkhar) {
-        baseMatch.davkhar = davkhar;
-        baseTootMatch.davkhar = davkhar;
-      }
-      if (orts) {
-        baseMatch.orts = orts;
-        baseTootMatch.orts = orts;
-      }
-      if (barilgiinId) {
-        orConditions.push({ ...baseMatch, barilgiinId });
-        orConditions.push({
-          barilgiinId,
-          toots: { $elemMatch: baseTootMatch },
+
+    // Давхардлыг бүх тоот/нэгжүүдээр OrshinSuugch болон Khariltsagch цуглуулгаас шалгана
+    const unitsToCheck =
+      Array.isArray(req.body.toots) && req.body.toots.length > 0
+        ? req.body.toots
+        : toot
+          ? [
+              {
+                toot,
+                davkhar,
+                orts,
+                turul: req.body.turul || "Орон сууц",
+                barilgiinId,
+              },
+            ]
+          : [];
+
+    if (unitsToCheck.length > 0) {
+      const conflict = await shalgakhTootDavkhardal({
+        tootsToCheck: unitsToCheck,
+        currentKhariltsagchId: null,
+        baiguullagiinId,
+        barilgiinId,
+        erunkhiiKholbolt: db.erunkhiiKholbolt,
+      });
+      if (conflict.hasConflict) {
+        return res.status(400).json({
+          success: false,
+          aldaa: conflict.message,
         });
-        orConditions.push({
-          toots: { $elemMatch: { ...baseTootMatch, barilgiinId } },
-        });
-      }
-      if (orConditions.length > 0) {
-        const existing = await khariltsagchModel.findOne({ $or: orConditions });
-        if (existing) {
-          const ezen = ezemshigchNer(existing) || "өөр харилцагч";
-          return res.status(400).json({
-            success: false,
-            aldaa: `${tootNer(olsonToot(existing, { toot, barilgiinId, orts, davkhar }))} ${ezen}-д идэвхтэй бүртгэлтэй байна. Сул дугаар сонгох эсвэл өмнөх эзэмшигчээс салгаад дахин оролдоно уу.`,
-          });
-        }
       }
     }
 
@@ -1034,56 +1037,46 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
       }
     }
 
-    // Prevent duplicate toot when updating: check if new toot+barilgiinId is already taken by another resident
-    const updateToot = req.body.toot ? String(req.body.toot).trim() : null;
-    const updateDavkhar = req.body.davkhar
-      ? String(req.body.davkhar).trim()
-      : null;
+    // Prevent duplicate toot when updating: check if new toot+barilgiinId is already taken by another resident or client
     const updateBarilgiinId = req.body.barilgiinId
       ? String(req.body.barilgiinId)
-      : null;
+      : oldDoc?.barilgiinId
+        ? String(oldDoc.barilgiinId)
+        : "";
     const updateBaiguullagiinId = req.body.baiguullagiinId
       ? String(req.body.baiguullagiinId)
-      : null;
-    if (updateToot && (updateBarilgiinId || updateBaiguullagiinId)) {
-      const updateTurul = req.body.turul || req.body.units?.[0]?.turul || req.body.toots?.[0]?.turul || "Орон сууц";
-      const updateOrts = req.body.orts ? String(req.body.orts).trim() : null;
-      const khariltsagchModel = khariltsagch(db.erunkhiiKholbolt);
-      const orConditions = [];
-      const baseMatch = { toot: updateToot, turul: updateTurul };
-      const baseTootMatch = { toot: updateToot, turul: updateTurul };
-      if (updateDavkhar) {
-        baseMatch.davkhar = updateDavkhar;
-        baseTootMatch.davkhar = updateDavkhar;
-      }
-      if (updateOrts) {
-        baseMatch.orts = updateOrts;
-        baseTootMatch.orts = updateOrts;
-      }
-      if (updateBarilgiinId) {
-        orConditions.push({ ...baseMatch, barilgiinId: updateBarilgiinId });
-        orConditions.push({
-          barilgiinId: updateBarilgiinId,
-          toots: { $elemMatch: baseTootMatch },
+      : oldDoc?.baiguullagiinId
+        ? String(oldDoc.baiguullagiinId)
+        : "";
+
+    const unitsToCheckPut =
+      Array.isArray(req.body.toots) && req.body.toots.length > 0
+        ? req.body.toots
+        : req.body.toot
+          ? [
+              {
+                toot: String(req.body.toot).trim(),
+                davkhar: req.body.davkhar ? String(req.body.davkhar).trim() : "",
+                orts: req.body.orts ? String(req.body.orts).trim() : "",
+                turul: req.body.turul || "Орон сууц",
+                barilgiinId: updateBarilgiinId,
+              },
+            ]
+          : [];
+
+    if (unitsToCheckPut.length > 0) {
+      const conflict = await shalgakhTootDavkhardal({
+        tootsToCheck: unitsToCheckPut,
+        currentKhariltsagchId: req.params.id,
+        baiguullagiinId: updateBaiguullagiinId,
+        barilgiinId: updateBarilgiinId,
+        erunkhiiKholbolt: db.erunkhiiKholbolt,
+      });
+      if (conflict.hasConflict) {
+        return res.status(400).json({
+          success: false,
+          aldaa: conflict.message,
         });
-        orConditions.push({
-          toots: {
-            $elemMatch: { ...baseTootMatch, barilgiinId: updateBarilgiinId },
-          },
-        });
-      }
-      if (orConditions.length > 0) {
-        const existing = await khariltsagchModel.findOne({
-          _id: { $ne: req.params.id },
-          $or: orConditions,
-        });
-        if (existing) {
-          const ezen = ezemshigchNer(existing) || "өөр харилцагч";
-          return res.status(400).json({
-            success: false,
-            aldaa: `${tootNer(olsonToot(existing, { toot: updateToot, barilgiinId: updateBarilgiinId, orts: updateOrts, davkhar: updateDavkhar }))} ${ezen}-д идэвхтэй бүртгэлтэй байна. Сул дугаар сонгох эсвэл өмнөх эзэмшигчээс салгаад дахин оролдоно уу.`,
-          });
-        }
       }
     }
 
