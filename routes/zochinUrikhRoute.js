@@ -352,6 +352,19 @@ router.delete("/ezenUrisanMashin/:id", tokenShalgakh, async (req, res, next) => 
   }
 });
 
+/**
+ * Endpoint to trigger cleanup of waiting invitations older than 12 hours
+ */
+router.post("/zochin/cleanupWaitingList", tokenShalgakh, async (req, res, next) => {
+  try {
+    const { zochinWaitingCleanup } = require("../services/zochinWaitingCleanupService");
+    const result = await zochinWaitingCleanup(req.app.get("socketio"), 12);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+});
+
 crud(router, "ezenUrisanMashin", EzenUrisanMashin, UstsanBarimt);
 
 // Харилцагчийн мэдээллийг шинээр хадгалах буюу засварлах функц

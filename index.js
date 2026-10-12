@@ -778,8 +778,26 @@ if (
     }
   );
 
+  // 12-hour cron job to auto-delete guest invitations on waiting list older than 12 hours
+  cron.schedule(
+    "0 */12 * * *",
+    async function () {
+      try {
+        console.log("⏰ [CRON] 12-hour waiting list cleanup triggered");
+        const { zochinWaitingCleanup } = require("./services/zochinWaitingCleanupService");
+        await zochinWaitingCleanup(app.get("socketio"), 12);
+      } catch (cleanupErr) {
+        console.error("❌ [CRON] Waiting list cleanup error:", cleanupErr.message);
+      }
+    },
+    {
+      scheduled: true,
+      timezone: "Asia/Ulaanbaatar",
+    }
+  );
+
   console.log(
-    "🕐 [CRON] Schedules enabled on Instance 0: 16:20 (Invoices), 07:20 (Parking Archive), and 5-min auto-CGW",
+    "🕐 [CRON] Schedules enabled on Instance 0: 16:20 (Invoices), 07:20 (Parking Archive), 5-min auto-CGW, and 12-hour waiting list cleanup",
   );
 } else {
   console.log(
