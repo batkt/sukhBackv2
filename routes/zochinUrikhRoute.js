@@ -1824,9 +1824,32 @@ router.post("/ezenUrisanTuukh", tokenShalgakh, async (req, res, next) => {
         // Active if inside (no exit time)
         const isInside = !lastTsag.garsanTsag && !itemObj.garakhTsag;
 
+        /* ─── УРИЛГАТАЙ ЗОЧЛОЛТ МӨН ҮҮ ───────────────────────────────────
+         *
+         * Дээрх хайлт нь урилгын дугаараар БОЛОН машины ДУГААРААР хайдаг.
+         * Дугаараар хайх нь нэг удаа уригдсан машины ДАРАА ҮЕИЙН бүх
+         * зочлолтыг — урилгагүй, жирийн төлбөртэй ирэлтийг нь хүртэл —
+         * оршин суугчийн түүх рүү татаж оруулдаг.
+         *
+         * Жинхэнэ урилгатай зочлолт дээр SDK нь `urisanMashin._id`-г
+         * бөглөдөг. Тэр байхгүй бол энэ нь зүгээр нэг үйлчлүүлэгч.
+         *
+         * ЧУХАЛ: доорх `urisanMashin = {}` мөр нь хоосон обьект үүсгэдэг
+         * тул ДАРАА нь шалгаж болохгүй — ЭНД, өмнө нь тогтооно.
+         */
+        const urilgatai = !!(itemObj.urisanMashin && itemObj.urisanMashin._id);
+
+        if (!urilgatai) {
+          // Оршин суугчийн түүхэнд ОРУУЛАХГҮЙ — энэ зочлолтыг тэр уриагүй.
+          continue;
+        }
+
         if (!itemObj.urisanMashin) {
           itemObj.urisanMashin = {};
         }
+
+        // Вэб талтай ижил нэршил — апп дээр бүгд «Зочин» болж харагдахгүй.
+        itemObj.turul = urilgatai ? "Зочин" : "Үйлчлүүлэгч";
 
         if (isInside) {
           itemObj.urisanMashin.tuluv = 1; // Active
@@ -1919,7 +1942,11 @@ router.post("/ezenUrisanTuukh", tokenShalgakh, async (req, res, next) => {
             baiguullagiinId: mur.baiguullagiinId,
             barilgiinId: mur.barilgiinId,
             mashiniiDugaar: mur.mashiniiDugaar,
-            turul: "Зочин",
+            // Урилгатай эсэхээр нь ялгана — өмнө нь бүх мөрд «Зочин» гэж
+            // ХАТУУ бичигддэг байсан тул апп дээр урилгагүй жирийн
+            // үйлчлүүлэгч ч «Зочин» болж харагддаг байв. Вэб тал нь
+            // `parkingRoute.js`-д ижил дүрмээр зөв ялгадаг.
+            turul: mur.urilgiinId ? "Зочин" : "Үйлчлүүлэгч",
             tureesEsekh: true,
             niitDun: mur.niitDun || 0,
             garakhTsag: mur.garsanTsag,
