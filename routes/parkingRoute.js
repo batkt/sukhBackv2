@@ -1226,6 +1226,41 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
             .lean();
           const tuukh0 = sambariinMur?.tuukh?.[0];
           const garsan = tuukh0?.tsagiinTuukh?.[0]?.garsanTsag;
+
+          /* ─── ЗОЧИН ГАРАХАД ЭЗЭНД НЬ МЭДЭГДЭХ ──────────────────────────
+           *
+           * `sukhParking-v1`-ийн `sdkData` нь гарах мэдэгдлийн callback-ыг
+           * ЗӨВХӨН `mashin` коллекцид бүртгэлтэй машин дээр дууддаг
+           * (sdkService: `if (mashin?.dugaar) callback(...)`). Зочны машин
+           * тэнд байдаггүй — `EzenUrisanMashin` дээр байдаг — тул гарах
+           * мэдэгдэл хэзээ ч илгээгддэггүй байв. Орох нь дээрх
+           * `pendingZochin` замаар тусад нь боловсруулагддаг тул ажилладаг.
+           *
+           * Тиймээс зочны гарахыг энд өөрсдөө мэдэгдэнэ. Хүлээн авагч нь
+           * машины эзэн БИШ, УРЬСАН оршин суугч.
+           */
+          if (garsan) {
+            try {
+              const urisan = sambariinMur.urisanMashin;
+              const urigchId = urisan?.ezemshigchiinId || urisan?.ezenId;
+              // Энэ endpoint нэг гарах үйлдэлд олон удаа дуудагдаж болох
+              // тул зөвхөн САЯХАН гарсан үед мэдэгдэнэ — эс бөгөөс оршин
+              // суугч ижил мэдэгдлийг дахин дахин авна.
+              const sayakhan = Date.now() - new Date(garsan).getTime() < 2 * 60 * 1000;
+              if (urigchId && sayakhan) {
+                await medegdel(sambariinMur, String(urigchId));
+                console.log(
+                  `📢 [ZOGSOOL] Зочин гарлаа — эзэнд мэдэгдэв: ${req.body.mashiniiDugaar} → ${urigchId}`,
+                );
+              }
+            } catch (medegdeliinAldaa) {
+              console.error(
+                "⚠️ [ZOGSOOL] Зочин гарах мэдэгдэл илгээхэд алдаа:",
+                medegdeliinAldaa.message,
+              );
+            }
+          }
+
           if (garsan) {
             // `tulukhDun` нь төлбөр хийгдмэгц 0 болдог тул үлдэгдэл
             // байхгүй бол ТӨЛСӨН дүнг харуулна.
