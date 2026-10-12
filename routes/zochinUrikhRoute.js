@@ -246,9 +246,53 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
             `(гарсан ${new Date(duussanZochlolt.garsanTsag).toISOString()}) — шинэ урилга зөвшөөрнө`,
         );
       } else {
-        return res.status(400).json({
-          success: false,
-          message: `Энэ ${plate} дугаартай машин аль хэдийн хүлээлгэнд байна`
+        // OVERRIDE: Хүлээлгэнд байгаа урилгыг шинэ мэдээллээр дарж шинэчилнэ
+        existingPending.barilgiinId = quotaInfo.barilgiinId || barilgiinId ? String(quotaInfo.barilgiinId || barilgiinId) : existingPending.barilgiinId;
+        existingPending.ezenId = String(residentId);
+        existingPending.ezemshigchiinId = String(residentId);
+        existingPending.ezemshigchiinNer = req.body.ezemshigchiinNer || existingPending.ezemshigchiinNer || "";
+        existingPending.ezemshigchiinRegister = req.body.ezemshigchiinRegister || existingPending.ezemshigchiinRegister || "";
+        existingPending.ezemshigchiinUtas = req.body.ezemshigchiinUtas || existingPending.ezemshigchiinUtas || "";
+        existingPending.urisanMashiniiDugaar = plate;
+        existingPending.davtamjiinTurul = quotaInfo.effectiveType;
+        existingPending.zochinErkhiinToo = quotaInfo.effectiveTotal;
+        existingPending.tusBurUneguiMinut = quotaInfo.effectiveMinutes;
+        existingPending.tuluv = 0;
+        existingPending.ognoo = new Date();
+        existingPending.createdAt = new Date();
+        existingPending.updatedAt = new Date();
+
+        const savedDoc = await existingPending.save();
+        console.log(`ℹ️ [ZOCHIN] ${plate}: хүлээлгэнд байсан урилгыг шинэ мэдээллээр дарж шинэчлэв`);
+
+        const zuvshuurugdsunTulburiinTurul =
+          req.body.tulburiinTurul === "ezen" && quotaInfo.nekhemjlekhEsekh
+            ? "ezen"
+            : "zochin";
+
+        await zochinTureesSyncService.urilgaSynclii(savedDoc, {
+          kholbolt: tukhainBaaziinKholbolt,
+          tulburiinTurul: zuvshuurugdsunTulburiinTurul,
+          gereeniiId: req.body.gereeniiId,
+        });
+
+        try {
+          const io = req.app.get("socketio");
+          if (io) {
+            io.emit(`orshinSuugch${residentId}`, {
+              type: "ZOCHIN_URI",
+              message: "Зочны урилга шинэчлэгдлээ",
+              data: savedDoc,
+            });
+          }
+        } catch (socketErr) {
+          console.error("Socket emit error on ezenUrisanMashin override:", socketErr);
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: "Зочны урилга амжилттай шинэчлэгдлээ",
+          data: savedDoc,
         });
       }
     }
