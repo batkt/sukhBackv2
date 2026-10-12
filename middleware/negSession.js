@@ -72,6 +72,23 @@ async function negSession(req, res, next) {
     const ajiltanId = payload?.id;
     if (!ajiltanId || ajiltanId === "zochin") return next();
 
+    /* ─── МАШИН (SERVICE) ТОКЕНЫГ ХААХГҮЙ ────────────────────────────────
+     *
+     * Хаалганы ажиллагч (gate worker), гүүр зэрэг нь ХҮНИЙ төхөөрөмж биш —
+     * `khugatsaaguiTokenUusgeye`-ээр үүсгэсэн ХУГАЦААГҮЙ токеноор ажилладаг.
+     * Тэд дахин нэвтэрч чаддаггүй.
+     *
+     * Админ вэбээс ижил эрхээр нэвтрэхэд `sessionUusgekh` нь өмнөх бүх
+     * session-ийг идэвхгүй болгодог тул ажиллагчийн токен «өөр
+     * төхөөрөмжийнх» болж 401 авдаг байв — үр дүнд нь ХААЛГА ЗОГСОНО
+     * (PLATE GIVE UP, машин оруулахгүй).
+     *
+     * Хүний нэвтрэлт бүр `exp`-тэй (12 цаг / 7 хоног) байдаг тул `exp`
+     * байхгүй нь сервисийн токен гэсэн найдвартай шинж. Хүний «нэг
+     * төхөөрөмж» бодлого ХЭВЭЭРЭЭ үлдэнэ.
+     */
+    if (!payload.exp) return next();
+
     const sanasan = sanakhAvya(token);
     if (sanasan === true) return next();
     if (sanasan === false) {
