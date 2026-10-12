@@ -142,15 +142,51 @@ router.post("/zochin/zogsool/webhook", async (req, res, next) => {
       suuriData.niitDun = Number(niitDun) || 0;
     }
 
-    // Идемпотент: ижил session дахин ирвэл шинэчилнэ
-    let tuukh = await TuukhModel.findOneAndUpdate(
-      {
-        baiguullagiinId: String(amarSukhBaiguullagiinId),
-        uilchluulegchId: String(uilchluulegchId),
-      },
-      { $set: suuriData },
-      { upsert: true, new: true }
-    );
+    /* ─── ЗОЧЛОЛТ ТУТАМД НЭГ МӨР ─────────────────────────────────────────
+     *
+     * `uilchluulegchId` нь МАШИН тутамд нэг байдаг (түрээс талын
+     * `Uilchluulegch._id`) тул түүгээр upsert хийвэл хоёр дахь зочлолт
+     * эхнийхийгээ дарж бичнэ. Оронд нь зочлолтыг дараах дарааллаар олно:
+     *
+     *   1. Ижил `orsonTsag`-тай мөр — webhook дахин илгээгдсэн (replay)
+     *      тохиолдолд яг тэр зочлолтоо олж шинэчилнэ.
+     *   2. НЭЭЛТТЭЙ мөр (`garsanTsag` байхгүй) — явагдаж буй зочлолт.
+     *   3. Аль нь ч алга бол ШИНЭ зочлолт — шинэ мөр үүснэ.
+     *
+     * Ингэснээр түрээс талаас зочлолт тус бүрийн тогтвортой дугаар ирэх
+     * шаардлагагүй — төлөв өөрөө л хангалттай.
+     */
+    const orsonTsagDate = orsonTsag ? new Date(orsonTsag) : null;
+    const undsenShuult = {
+      baiguullagiinId: String(amarSukhBaiguullagiinId),
+      uilchluulegchId: String(uilchluulegchId),
+    };
+
+    let tuukh = null;
+    if (orsonTsagDate && !Number.isNaN(orsonTsagDate.getTime())) {
+      tuukh = await TuukhModel.findOne({ ...undsenShuult, orsonTsag: orsonTsagDate });
+    }
+    if (!tuukh) {
+      tuukh = await TuukhModel.findOne({
+        ...undsenShuult,
+        $or: [{ garsanTsag: { $exists: false } }, { garsanTsag: null }],
+      }).sort({ orsonTsag: -1, createdAt: -1 });
+    }
+
+    if (tuukh) {
+      tuukh = await TuukhModel.findByIdAndUpdate(
+        tuukh._id,
+        { $set: suuriData },
+        { new: true },
+      );
+    } else {
+      // Гарах мэдэгдэл ирсэн ч нээлттэй зочлолт алга бол (орох webhook
+      // алдагдсан) хаалттай мөрийг нь шинээр үүсгэнэ — мэдээлэл алдагдахгүй.
+      tuukh = await TuukhModel.create(suuriData);
+      console.log(
+        `🆕 [ZOCHIN-WEBHOOK] Шинэ зочлолт бүртгэв: ${mashiniiDugaar} (${turul})`,
+      );
+    }
 
     let billId = null;
     let payType = null;
@@ -220,6 +256,28 @@ router.post("/zochin/zogsool/webhook", async (req, res, next) => {
           }
         }
       }
+    }
+
+    /* ─── УРИЛГЫН ТӨЛӨВ ──────────────────────────────────────────────────
+     *
+     * `EzenUrisanMashin.tuluv`: 0 = хүлээлгэ, 1 = зогсоол дээр, 2 = дууссан.
+     *
+     * Өмнө нь 0 → 1 л болдог байсан бөгөөд ГАРАХ үед хаагддаггүй байв.
+     * Хүлээлгийн жагсаалт нь `tuluv == 0`-оор шүүдэг тул урилга орсныхоо
+     * дараа жагсаалтаас бүрмөсөн алга болж, дахиад хэзээ ч хаагддаггүй —
+     * квот, жагсаалт хоёр аажмаар бодит байдлаасаа салдаг.
+     */
+    if (tuukh.urilgiinId) {
+      const shineTuluv = turul === "garakh" ? 2 : 1;
+      const { EzenUrisanMashin } = require("sukhParking-v1");
+      await EzenUrisanMashin(kholbolt)
+        .updateOne({ _id: tuukh.urilgiinId }, { $set: { tuluv: shineTuluv } })
+        .catch((err) =>
+          console.error(
+            "⚠️ [ZOCHIN-WEBHOOK] Урилгын төлөв шинэчлэхэд алдаа:",
+            err.message,
+          ),
+        );
     }
 
     // Оршин суугчид мэдэгдэх (алдаа гарсан ч webhook-ийг унагахгүй)

@@ -60,10 +60,33 @@ const zochinZogsooliinTuukhSchema = new Schema(
   { timestamps: true }
 );
 
-zochinZogsooliinTuukhSchema.index(
-  { baiguullagiinId: 1, uilchluulegchId: 1 },
-  { unique: true }
-);
+/* ─── ИНДЕКС: НЭГ МӨР = НЭГ ЗОЧЛОЛТ ────────────────────────────────────────
+ *
+ * Өмнө нь `{baiguullagiinId, uilchluulegchId}` дээр UNIQUE индекс байв.
+ * Гэтэл `uilchluulegchId` нь түрээс талын `Uilchluulegch._id` — тэр нь
+ * МАШИН тутамд НЭГ бичлэг бөгөөд зочлолт бүрийг дотроо `tuukh[].tsagiinTuukh[]`
+ * массивт хуримтлуулдаг. Өөрөөр хэлбэл ИЖИЛ машины бүх зочлолт ижил
+ * `uilchluulegchId`-тай ирдэг.
+ *
+ * Үүний улмаас:
+ *   • хоёр дахь зочлолт эхнийхийг нь ДАРЖ бичиж, түүх алга болдог;
+ *   • орох үед `garsanTsag` цэвэрлэгддэггүй тул `dotor = !garsanTsag` нь
+ *     худал болж, зогсоол дээр байгаа машин «гарсан» гэж харагддаг;
+ *   • `guilgeeniiId` нь өмнөх зочлолтоос үлддэг тул ХОЁР ДАХЬ зочлолт
+ *     хэзээ ч нэхэмжлэгддэггүй.
+ *
+ * Одоо зочлолт бүр ТУСДАА мөр болно. Unique индекс байхгүй — давхардлаас
+ * `zochinZogsoolRoute`-ийн нээлттэй мөр хайх логик хамгаална (replay ирвэл
+ * нээлттэй/ижил `orsonTsag`-тай мөрөө олж шинэчилнэ, шинээр үүсгэхгүй).
+ *
+ * ХУУЧИН UNIQUE ИНДЕКСИЙГ ГАРААР УСТГАНА:
+ *   node scripts/zochinTuukhIndexZasvar.js --apply
+ */
+zochinZogsooliinTuukhSchema.index({
+  baiguullagiinId: 1,
+  uilchluulegchId: 1,
+  orsonTsag: -1,
+});
 zochinZogsooliinTuukhSchema.index({ orshinSuugchId: 1, createdAt: -1 });
 zochinZogsooliinTuukhSchema.index({ gereeniiId: 1, createdAt: -1 });
 
