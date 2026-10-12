@@ -204,8 +204,72 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
 
     const EzenUrisanMashinModel = require("sukhParking-v1").EzenUrisanMashin;
 
-    // Check for duplicate pending invitation for exact same plate
     const orgId = String(quotaInfo.baiguullagiinId || baiguullagiinId);
+    const plateRegex = new RegExp(`^\\s*${plate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i");
+
+    // ШАЛГАЛТ: Зогсоолд аль хэдийн орсон (идэвхтэй байгаа) машиныг урихыг хориглоно
+    let isInside = false;
+
+    // 1. Локал зогсоолын систем (Uilchluulegch) дээр машин одоо зогсоол дотор байгаа эсэх
+    try {
+      const latestUilchluulegch = await Uilchluulegch(tukhainBaaziinKholbolt, true)
+        .findOne({
+          baiguullagiinId: orgId,
+          mashiniiDugaar: plateRegex,
+        })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      if (latestUilchluulegch) {
+        const tuukh = latestUilchluulegch.tuukh || [];
+        const lastTuukh = tuukh[tuukh.length - 1] || tuukh[0];
+        const tsagiinTuukh = lastTuukh?.tsagiinTuukh || [];
+        const lastTsag = tsagiinTuukh[tsagiinTuukh.length - 1] || tsagiinTuukh[0];
+        const orsonTsag = lastTsag?.orsonTsag;
+        const garsanTsag =
+          lastTsag?.garsanTsag ||
+          lastTuukh?.garsanTsag ||
+          latestUilchluulegch.garakhTsag;
+        if (orsonTsag && !garsanTsag) {
+          isInside = true;
+        }
+      }
+    } catch (checkErr) {
+      console.warn("Uilchluulegch isInside check warning:", checkErr.message);
+    }
+
+    // 2. Түрээсийн зогсоол (ZochinZogsooliinTuukh) дээр машин одоо зогсоол дотор байгаа эсэх
+    if (!isInside) {
+      try {
+        const activeZochin = await ZochinZogsooliinTuukh(tukhainBaaziinKholbolt)
+          .findOne({
+            baiguullagiinId: orgId,
+            mashiniiDugaar: plateRegex,
+            orsonTsag: { $exists: true, $ne: null },
+            $or: [
+              { garsanTsag: { $exists: false } },
+              { garsanTsag: null },
+            ],
+          })
+          .sort({ createdAt: -1 })
+          .lean();
+
+        if (activeZochin) {
+          isInside = true;
+        }
+      } catch (checkErr) {
+        console.warn("ZochinZogsooliinTuukh isInside check warning:", checkErr.message);
+      }
+    }
+
+    if (isInside) {
+      return res.status(400).json({
+        success: false,
+        message: "Тухайн машин зогсоолд орсон байна.",
+      });
+    }
+
+    // Check for duplicate pending invitation for exact same plate
     const existingPending = await EzenUrisanMashinModel(tukhainBaaziinKholbolt).findOne({
       baiguullagiinId: orgId,
       urisanMashiniiDugaar: plate,
@@ -339,6 +403,21 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
       tulburiinTurul: zuvshuurugdsunTulburiinTurul,
       gereeniiId: req.body.gereeniiId,
     });
+
+    if (
+      tureesKhariu &&
+      !tureesKhariu.success &&
+      (tureesKhariu.status === 409 ||
+        (tureesKhariu.message && tureesKhariu.message.includes("зогсоолд орсон")))
+    ) {
+      await EzenUrisanMashinModel(tukhainBaaziinKholbolt)
+        .deleteOne({ _id: savedDoc._id })
+        .catch(() => null);
+      return res.status(400).json({
+        success: false,
+        message: "Тухайн машин зогсоолд орсон байна.",
+      });
+    }
 
     // Socket Emit to resident channel
     try {
