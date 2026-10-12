@@ -396,21 +396,49 @@ const qpaycallbackGadaaStickerHandler = async (req, res, next) => {
         );
       }
     }
+    let vehicleTurul = "Үйлчлүүлэгч";
+    let residentId = null;
     try {
-      const { Uilchluulegch } = require("sukhParking-v1");
+      const { Uilchluulegch, EzenUrisanMashin } = require("sukhParking-v1");
       if (qpayObject?.zogsoolUilchluulegch?.uId) {
         const oldsonMashin = await Uilchluulegch(kholbolt, true).findById(
           qpayObject.zogsoolUilchluulegch.uId,
         );
         const garsanKhaalga = oldsonMashin?.tuukh?.[0]?.garsanKhaalga;
         if (garsanKhaalga) req.params.cameraIP = garsanKhaalga;
+
+        if (oldsonMashin?.turul === "Зочин" || oldsonMashin?.urisanMashin) {
+          vehicleTurul = "Зочин";
+          const urilgaId = oldsonMashin.urisanMashin?._id;
+          if (urilgaId) {
+            const urilga = await EzenUrisanMashin(kholbolt).findById(urilgaId);
+            if (urilga) {
+              urilga.tuluv = 2;
+              await urilga.save().catch(() => null);
+              residentId = urilga.ezenId || urilga.ezemshigchiinId;
+            }
+          }
+        }
+      }
+      if (!residentId && req.params.mashiniiDugaar) {
+        const urilga = await EzenUrisanMashin(kholbolt).findOne({
+          urisanMashiniiDugaar: req.params.mashiniiDugaar,
+          tuluv: { $in: [0, 1] },
+        });
+        if (urilga) {
+          vehicleTurul = "Зочин";
+          urilga.tuluv = 2;
+          await urilga.save().catch(() => null);
+          residentId = urilga.ezenId || urilga.ezemshigchiinId;
+        }
       }
     } catch (khaalgaAldaa) {
       console.warn(
-        "⚠️ [QPAY CALLBACK GADAA] гарсан хаалга уншиж чадсангүй:",
+        "⚠️ [QPAY CALLBACK GADAA] мэдээлэл уншихад алдаа:",
         khaalgaAldaa.message,
       );
     }
+    const barilgiinId = req.params.barilgiinId || qpayObject.salbariinId;
     if (
       !!req.params.mashiniiDugaar &&
       !!req.params.cameraIP &&
@@ -418,16 +446,48 @@ const qpaycallbackGadaaStickerHandler = async (req, res, next) => {
     ) {
       const io = req.app.get("socketio");
       if (io) {
+        // 1. Вэб дэлгэцэнд мэдэгдэх
         io.emit(
           `qpayMobileSdk${req.params.baiguullagiinId}${req.params.cameraIP}`,
           {
+            baiguullagiinId: req.params.baiguullagiinId,
             khaalgaTurul: "Гарах",
-            turul: "qpayMobile",
+            turul: vehicleTurul === "Зочин" ? "zochinMobile" : "qpayMobile",
             mashiniiDugaar: req.params.mashiniiDugaar,
             cameraIP: req.params.cameraIP,
-            uilchluulegchiinId: qpayObject.zogsoolUilchluulegch.uId,
+            uilchluulegchiinId: qpayObject.zogsoolUilchluulegch?.uId,
           },
         );
+
+        // 2. Зочин бол оршин суугчийн апп руу бодит цагт мэдэгдэх
+        if (residentId) {
+          io.emit(`orshinSuugch${residentId}`, {
+            type: "zochinUrikh.updated",
+            title: "Зочин гарлаа",
+            message: `${req.params.mashiniiDugaar} дугаартай зочны машин төлбөрөө төлөөд зогсоолоос гарлаа.`,
+            mashiniiDugaar: req.params.mashiniiDugaar,
+            tuluv: 2,
+          });
+          io.emit(`orshinSuugch${residentId}`, {
+            type: "ZOCHIN_GARSAN",
+            message: `Зочин ${req.params.mashiniiDugaar} зогсоолоос гарлаа`,
+            mashiniiDugaar: req.params.mashiniiDugaar,
+          });
+        }
+
+        // 3. Локал хаалганы worker/төхөөрөмж рүү шууд "execute-open" команд илгээж хаалгыг нээх
+        if (barilgiinId) {
+          const { v4: uuidv4 } = require("uuid");
+          io.to(`gate-room-${barilgiinId}`).emit("execute-open", {
+            ip: req.params.cameraIP,
+            plate: req.params.mashiniiDugaar,
+            commandId: uuidv4(),
+            turul: vehicleTurul,
+          });
+          console.log(
+            `🚪 [QPAY CALLBACK GADAA] execute-open emitted to gate-room-${barilgiinId} for ${req.params.mashiniiDugaar} (${vehicleTurul}) at ${req.params.cameraIP}`,
+          );
+        }
       }
     }
     console.log("✅ [QPAY CALLBACK GADAA] marked paid", {
