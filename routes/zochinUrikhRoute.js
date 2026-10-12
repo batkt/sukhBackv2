@@ -1814,6 +1814,16 @@ router.post("/ezenUrisanTuukh", tokenShalgakh, async (req, res, next) => {
       const activeInvitationIds = new Set();
       const processedJagsaalt = [];
 
+      // Дугаар → тэр машин дээрх урилгууд. Зочлолт нь урилгатай юу гэдгийг
+      // шийдэхэд хэрэглэнэ (SDK холбоогүй байх үеийн нөөц шалгуур).
+      const urilgaDugaaraar = new Map();
+      for (const e of ezenJagsaalt) {
+        const p = (e.urisanMashiniiDugaar || "").toString().trim().toUpperCase();
+        if (!p) continue;
+        if (!urilgaDugaaraar.has(p)) urilgaDugaaraar.set(p, []);
+        urilgaDugaaraar.get(p).push(e);
+      }
+
       for (const item of jagsaalt) {
         const itemObj = item.toObject ? item.toObject() : item;
         const tuukh = itemObj.tuukh || [];
@@ -1839,7 +1849,20 @@ router.post("/ezenUrisanTuukh", tokenShalgakh, async (req, res, next) => {
          */
         const urilgatai = !!(itemObj.urisanMashin && itemObj.urisanMashin._id);
 
-        if (!urilgatai) {
+        /* Машин ДӨНГӨЖ орох үед SDK нь `urisanMashin`-г хараахан холбоогүй
+         * байж болно. Зөвхөн `_id`-гаар шүүвэл тэр зочлолт жагсаалтад ОГТ
+         * гарахгүй — «орлоо» гэсэн мэдэгдэл ирсэн ч дэлгэц хоосон хэвээр
+         * үлдэнэ.
+         *
+         * Тиймээс нөөц шалгуур: тухайн дугаар дээр ХЭРЭГЛЭГДЭЭГҮЙ
+         * (tuluv ≠ 2) урилга байвал энэ зочлолт түүнийх гэж үзнэ.
+         * Бүх урилга нь аль хэдийн хаагдсан бол энэ нь урилгагүй ирэлт. */
+        const murniiDugaar = (itemObj.mashiniiDugaar || "").toString().trim().toUpperCase();
+        const nelttUrilgatai = (urilgaDugaaraar.get(murniiDugaar) || []).some(
+          (u) => Number(u.tuluv) !== 2,
+        );
+
+        if (!urilgatai && !nelttUrilgatai) {
           // Оршин суугчийн түүхэнд ОРУУЛАХГҮЙ — энэ зочлолтыг тэр уриагүй.
           continue;
         }
@@ -1849,7 +1872,10 @@ router.post("/ezenUrisanTuukh", tokenShalgakh, async (req, res, next) => {
         }
 
         // Вэб талтай ижил нэршил — апп дээр бүгд «Зочин» болж харагдахгүй.
-        itemObj.turul = urilgatai ? "Зочин" : "Үйлчлүүлэгч";
+        // Дээрх шүүлтээр урилгагүй мөр аль хэдийн хасагдсан тул эндэх бүх
+        // мөр зочных. `nelttUrilgatai`-г мөн тооцсоноор машин ДӨНГӨЖ орж,
+        // SDK хараахан холбоогүй байхад ч «Зочин» гэж зөв бичигдэнэ.
+        itemObj.turul = urilgatai || nelttUrilgatai ? "Зочин" : "Үйлчлүүлэгч";
 
         if (isInside) {
           itemObj.urisanMashin.tuluv = 1; // Active
