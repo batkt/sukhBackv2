@@ -355,6 +355,27 @@ router.delete("/ezenUrisanMashin/:id", tokenShalgakh, async (req, res, next) => 
 
     const residentId = doc.ezenId || doc.ezemshigchiinId;
 
+    /* ─── АШИГЛАГДСАН УРИЛГЫГ УСТГАХГҮЙ ──────────────────────────────────
+     *
+     * Урилга нь зөвхөн ХҮЛЭЭЛГЭ (`tuluv: 0`) төлөвт байхад л цуцлагдана.
+     * Машин орсон (1) эсвэл гарсан (2) бол тэр урилга зочлолтын түүх,
+     * төлбөрийн бичилттэй холбогдсон байна — устгавал тэдгээр нь эзэнгүй
+     * үлдэж, квотын тооцоо ч буруу болно.
+     *
+     * Апп дээр ч ижил хориг тавьсан боловч энэ нь ҮНДСЭН хамгаалалт:
+     * шууд API руу хандахад ч үйлчилнэ.
+     */
+    if (Number(doc.tuluv) !== 0) {
+      return res.status(409).json({
+        success: false,
+        message:
+          Number(doc.tuluv) === 1
+            ? "Машин зогсоол дээр байгаа тул урилгыг цуцлах боломжгүй."
+            : "Энэ урилга аль хэдийн ашиглагдсан тул цуцлах боломжгүй.",
+        tuluv: doc.tuluv,
+      });
+    }
+
     // Түрээсийн зогсоол дээр цуцлах. Машин зогсоол дээр байвал түрээс тал
     // 409 буцаана - тэр үед АмарСүх дээрээс ч устгахгүй, эс тэгвэл гарах
     // болон төлбөрийн логик тасалдана.
@@ -1845,13 +1866,35 @@ router.post("/ezenUrisanTuukh", tokenShalgakh, async (req, res, next) => {
           .sort({ createdAt: -1 })
           .lean();
 
-        // Нэг машин хоёр системд зэрэг байвал давхардуулахгүй - АмарСүхийн
-        // өөрийн session нь эрхэм.
-        const durdegdsenDugaaruud = new Set(
-          jagsaalt
-            .map((j) => (j.mashiniiDugaar || "").toString().trim().toUpperCase())
-            .filter(Boolean),
-        );
+        /* ─── ДАВХАРДЛЫГ ЗОЧЛОЛТООР НЬ ШҮҮНЭ ──────────────────────────────
+         *
+         * Зорилго нь: нэг машин ХОЁР системд зэрэг бүртгэгдсэн бол НЭГ
+         * удаа харуулах. Гэтэл өмнө нь зөвхөн ДУГААРААР шүүдэг байв —
+         * тухайн машины хамгийн сүүлийн зочлолт нэмэгдээд, өмнөх БҮХ
+         * зочлолт нь «аль хэдийн дурдагдсан» гэж хаягддаг байлаа.
+         *
+         * (Урьд нь машин тутамд ганц мөр байсан тул энэ нь мэдэгдэхгүй
+         * байсан. Зочлолт бүр тусдаа мөр болсон одоо энэ нь түүхийг шууд
+         * таслана.)
+         *
+         * Тиймээс дугаар + ОРСОН ЦАГ-аар нь танина: ижил зочлолт давхар
+         * орохгүй, өөр зочлолтууд бүгд харагдана. Орсон цаггүй хуучин
+         * бичлэгийн хувьд дугаараараа л жишигдэнэ.
+         */
+        const vizitTulkhuur = (dugaar, orsonTsag) => {
+          const t = orsonTsag ? new Date(orsonTsag) : null;
+          return `${dugaar}|${t && !Number.isNaN(t.getTime()) ? t.toISOString() : ""}`;
+        };
+
+        const durdegdsenVizit = new Set();
+        for (const j of jagsaalt) {
+          const dugaar = (j.mashiniiDugaar || "").toString().trim().toUpperCase();
+          if (!dugaar) continue;
+          const suuliinTuukh = (j.tuukh || [])[(j.tuukh || []).length - 1] || {};
+          const tsaguud = suuliinTuukh.tsagiinTuukh || [];
+          const suuliinTsag = tsaguud[tsaguud.length - 1] || {};
+          durdegdsenVizit.add(vizitTulkhuur(dugaar, suuliinTsag.orsonTsag));
+        }
 
         const urilgaMap = new Map(
           ezenJagsaalt.map((e) => [String(e._id), e]),
@@ -1859,8 +1902,10 @@ router.post("/ezenUrisanTuukh", tokenShalgakh, async (req, res, next) => {
 
         for (const mur of zogsooliinMuruud) {
           const dugaar = (mur.mashiniiDugaar || "").trim().toUpperCase();
-          if (!dugaar || durdegdsenDugaaruud.has(dugaar)) continue;
-          durdegdsenDugaaruud.add(dugaar);
+          if (!dugaar) continue;
+          const tulkhuur = vizitTulkhuur(dugaar, mur.orsonTsag);
+          if (durdegdsenVizit.has(tulkhuur)) continue;
+          durdegdsenVizit.add(tulkhuur);
 
           const urilga = mur.urilgiinId
             ? urilgaMap.get(String(mur.urilgiinId))

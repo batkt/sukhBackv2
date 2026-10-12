@@ -173,6 +173,51 @@ router.post("/zochin/zogsool/webhook", async (req, res, next) => {
       }).sort({ orsonTsag: -1, createdAt: -1 });
     }
 
+    /* ─── УРИЛГАГҮЙ ДАХИН ИРЭЛТ ──────────────────────────────────────────
+     *
+     * Нэг удаа уригдсан машин ХЭРЭГЛЭГДСЭН урилгатайгаа түрээс тал дээр
+     * холбоотой хэвээр үлддэг. Тиймээс тэр машин дараа нь УРИЛГАГҮЙ
+     * (жирийн төлбөртэй зочин болж) ороход түрээс ижил
+     * `amarSukhUrilgiinId`-г дахин илгээдэг. Үүнийг шалгалтгүй хүлээвэл:
+     *
+     *   • тэр зочлолт оршин суугчийн түүхэнд буруугаар бичигдэнэ;
+     *   • хэрэглэгдсэн урилга `tuluv: 2`-оос 1 рүү буцаж «нээгдэнэ»;
+     *   • хамгийн муу нь — `tulburiinTurul: "ezen"` ирвэл оршин суугч
+     *     ӨӨРИЙН уриагүй машины төлбөрийг нэхэмжлэлдээ авна.
+     *
+     * Иймд ШИНЭ зочлолт эхлэхэд урилга нь аль хэдийн хаагдсан (tuluv: 2)
+     * эсэхийг шалгаад, хаагдсан бол холбоосыг нь таслана. Явагдаж буй
+     * зочлолт нь мөрийнхөө холбоосыг л өвлөнө.
+     */
+    let urilgagui = false;
+    if (!tuukh) {
+      if (amarSukhUrilgiinId) {
+        const { EzenUrisanMashin } = require("sukhParking-v1");
+        const urilga = await EzenUrisanMashin(kholbolt)
+          .findById(String(amarSukhUrilgiinId))
+          .select({ tuluv: 1 })
+          .lean()
+          .catch(() => null);
+        if (urilga && Number(urilga.tuluv) === 2) urilgagui = true;
+      }
+    } else if (!tuukh.urilgiinId) {
+      // Урилгагүй эхэлсэн зочлолт — гарах үед ч урилгатай болгохгүй.
+      urilgagui = true;
+    }
+
+    if (urilgagui) {
+      delete suuriData.urilgiinId;
+      suuriData.orshinSuugchId = undefined;
+      suuriData.gereeniiId = undefined;
+      suuriData.toot = undefined;
+      // Оршин суугчийн нэхэмжлэхэд ХЭЗЭЭ Ч бичигдэхгүй.
+      suuriData.tulburiinTurul = "zochin";
+      console.log(
+        `ℹ️ [ZOCHIN-WEBHOOK] ${mashiniiDugaar}: урилга хэрэглэгдсэн/байхгүй — ` +
+          `энэ зочлолтыг оршин суугчид холбохгүй`,
+      );
+    }
+
     if (tuukh) {
       tuukh = await TuukhModel.findByIdAndUpdate(
         tuukh._id,
@@ -194,6 +239,9 @@ router.post("/zochin/zogsool/webhook", async (req, res, next) => {
     if (
       turul === "garakh" &&
       tulburiinTurul === "ezen" &&
+      // Урилгагүй зочлолтыг оршин суугчийн нэхэмжлэхэд ОГТ бичихгүй —
+      // тэр машиныг энэ удаад хэн ч уриагүй.
+      !urilgagui &&
       Number(tulukhDun) > 0
     ) {
       // Аль хэдийн авлага үүсгэсэн бол дахин үүсгэхгүй (давхар бичилтээс хамгаална)
@@ -267,7 +315,9 @@ router.post("/zochin/zogsool/webhook", async (req, res, next) => {
      * дараа жагсаалтаас бүрмөсөн алга болж, дахиад хэзээ ч хаагддаггүй —
      * квот, жагсаалт хоёр аажмаар бодит байдлаасаа салдаг.
      */
-    {
+    // Урилгагүй зочлолт нь ямар ч урилгын төлвийг хөдөлгөхгүй — эс бөгөөс
+    // хэрэглэгдсэн урилга `2`-оос `1` рүү буцаж «нээгдэнэ».
+    if (!urilgagui) {
       const shineTuluv = turul === "garakh" ? 2 : 1;
       const { EzenUrisanMashin } = require("sukhParking-v1");
 
