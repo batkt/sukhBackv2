@@ -205,17 +205,52 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
     const EzenUrisanMashinModel = require("sukhParking-v1").EzenUrisanMashin;
 
     // Check for duplicate pending invitation for exact same plate
+    const orgId = String(quotaInfo.baiguullagiinId || baiguullagiinId);
     const existingPending = await EzenUrisanMashinModel(tukhainBaaziinKholbolt).findOne({
-      baiguullagiinId: String(quotaInfo.baiguullagiinId || baiguullagiinId),
+      baiguullagiinId: orgId,
       urisanMashiniiDugaar: plate,
       tuluv: 0
     });
 
     if (existingPending) {
-      return res.status(400).json({
-        success: false,
-        message: `Энэ ${plate} дугаартай машин аль хэдийн хүлээлгэнд байна`
-      });
+      /* ─── ХЭРЭГЛЭГДСЭН УРИЛГЫГ ӨӨРӨӨ ХААНА ────────────────────────────
+       *
+       * Урилгын төлөв өмнө нь ГАРАХ үед хаагддаггүй байсан тул машин орж
+       * гараад ч `tuluv: 0` хэвээр үлддэг. Тэр нь «аль хэдийн хүлээлгэнд
+       * байна» гэж дараагийн урилгыг хаадаг — машин нь аль хэдийн явчихсан
+       * атал эзэн нь дахиж урьж чаддаггүй.
+       *
+       * Иймд зүгээр хориглохын оронд урилга ҮНЭХЭЭР хүлээлгэнд байгаа
+       * эсэхийг шалгана: урилга үүссэнээс хойш тэр машин орж гарсан
+       * (ДУУССАН) зочлолттой бол урилга нь хэрэглэгдсэн гэсэн үг —
+       * хаагаад шинийг нь зөвшөөрнө.
+       */
+      const urilgiinOgnoo = existingPending.createdAt || existingPending.ognoo;
+      const duussanZochlolt = await ZochinZogsooliinTuukh(tukhainBaaziinKholbolt)
+        .findOne({
+          baiguullagiinId: orgId,
+          mashiniiDugaar: new RegExp(`^\\s*${plate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i"),
+          garsanTsag: { $exists: true, $ne: null },
+          ...(urilgiinOgnoo ? { orsonTsag: { $gte: new Date(urilgiinOgnoo) } } : {}),
+        })
+        .sort({ garsanTsag: -1 })
+        .lean()
+        .catch(() => null);
+
+      if (duussanZochlolt) {
+        await EzenUrisanMashinModel(tukhainBaaziinKholbolt)
+          .updateOne({ _id: existingPending._id }, { $set: { tuluv: 2 } })
+          .catch(() => null);
+        console.log(
+          `ℹ️ [ZOCHIN] ${plate}: өмнөх урилга хэрэглэгдсэн байсныг хаалаа ` +
+            `(гарсан ${new Date(duussanZochlolt.garsanTsag).toISOString()}) — шинэ урилга зөвшөөрнө`,
+        );
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: `Энэ ${plate} дугаартай машин аль хэдийн хүлээлгэнд байна`
+        });
+      }
     }
 
     const newDoc = new (EzenUrisanMashinModel(tukhainBaaziinKholbolt))({

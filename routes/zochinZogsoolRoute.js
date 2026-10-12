@@ -267,11 +267,26 @@ router.post("/zochin/zogsool/webhook", async (req, res, next) => {
      * дараа жагсаалтаас бүрмөсөн алга болж, дахиад хэзээ ч хаагддаггүй —
      * квот, жагсаалт хоёр аажмаар бодит байдлаасаа салдаг.
      */
-    if (tuukh.urilgiinId) {
+    {
       const shineTuluv = turul === "garakh" ? 2 : 1;
       const { EzenUrisanMashin } = require("sukhParking-v1");
+
+      // Урилгын дугаар ирээгүй бол ДУГААРААР нь олно — эс бөгөөс тэр урилга
+      // `tuluv: 0` хэвээр үлдэж, дараагийн урилгыг «хүлээлгэнд байна» гэж
+      // хаана.
+      const urilgiinShuult = tuukh.urilgiinId
+        ? { _id: tuukh.urilgiinId }
+        : {
+            baiguullagiinId: String(amarSukhBaiguullagiinId),
+            urisanMashiniiDugaar: new RegExp(
+              `^\\s*${String(mashiniiDugaar).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`,
+              "i",
+            ),
+            tuluv: { $in: [0, 1] },
+          };
+
       await EzenUrisanMashin(kholbolt)
-        .updateOne({ _id: tuukh.urilgiinId }, { $set: { tuluv: shineTuluv } })
+        .updateOne(urilgiinShuult, { $set: { tuluv: shineTuluv } }, { sort: { createdAt: -1 } })
         .catch((err) =>
           console.error(
             "⚠️ [ZOCHIN-WEBHOOK] Урилгын төлөв шинэчлэхэд алдаа:",
