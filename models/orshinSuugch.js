@@ -84,7 +84,28 @@ const orshinSuugchSchema = new Schema(
     zurgiinId: String,
     nevtrekhNer: String,
     duureg: String, // Keep for backward compatibility
-    horoo: String, // Keep for backward compatibility
+    /**
+     * Хороо — ТЕКСТ байх ёстой (хойшхи нийцтэй байдал).
+     *
+     * Гэвч баазад `{ ner, kod }` гэсэн ОБЪЕКТААР хадгалагдсан хуучин
+     * баримтууд байдаг. `String` төрөлд тэдгээр нь `save()` дээр «Cast to
+     * string failed» болж БүХЭЛ баримтын хадгалалтыг зогсоодог —
+     * улмаар тэр хэрэглэгч НЭВТРЭЖ ЧАДАХГҮЙ болдог (нэвтрэх үед сессийн
+     * id бичихээр `save()` дууддаг).
+     *
+     * Иймээс төрлийг `Mixed` болгож хуучин баримт ачаалахад унахгүй
+     * болгоод, setter-ээр ШИНЭ бичилт бүрийг текст рүү хӘРВҮҮЛНЭ.
+     * (setter нь hydrate дээр ажилладаггүй тул хоёуланг нь хэрэгтэй.)
+     */
+    horoo: {
+      type: Schema.Types.Mixed,
+      set: (utga) => {
+        if (!utga) return "";
+        if (typeof utga === "string") return utga;
+        if (typeof utga === "object") return utga.ner || utga.kod || "";
+        return String(utga);
+      },
+    },
     soh: String, // Keep for backward compatibility
     orts: String, // Web only field, keep for backward compatibility
     tailbar: String,

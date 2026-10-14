@@ -94,7 +94,21 @@ const khariltsagchSchema = new Schema(
     zurgiinId: String,
     nevtrekhNer: String,
     duureg: String, // Keep for backward compatibility
-    horoo: String, // Keep for backward compatibility
+    /**
+     * `orshinSuugch`-тай ижил асуудал: баазад `{ ner, kod }` объектаар
+     * хадгалагдсан хуучин баримт `String` төрөлд «Cast to string failed»
+     * болж бүхэл баримтын `save()`-ыг зогсоодог. `Mixed` + setter нь
+     * хуучныг ачаалж, шинийг текст рүү хөрвүүлнэ.
+     */
+    horoo: {
+      type: Schema.Types.Mixed,
+      set: (utga) => {
+        if (!utga) return "";
+        if (typeof utga === "string") return utga;
+        if (typeof utga === "object") return utga.ner || utga.kod || "";
+        return String(utga);
+      },
+    },
     soh: String, // Keep for backward compatibility
     orts: String, // Web only field, keep for backward compatibility
     tailbar: String,
