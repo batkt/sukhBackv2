@@ -110,6 +110,42 @@ async function shalgakhTootDavkhardal({
     return { hasConflict: false };
   }
 
+  /**
+   * Нэг ХҮСЭЛТ дотроо давхардсан нэгж. Доорх шалгалтууд нь зөвхөн ӨӨР
+   * бичлэгтэй тулгадаг (`_id: { $ne: ... }`) тул маягт/Excel/API нэг
+   * гаражийг хоёр удаа илгээхэд юу ч саатуулдаггүй байв — тэр нь шууд
+   * давхардсан тоот болж хадгалагддаг.
+   */
+  const kharsanNegj = new Map();
+  for (const item of tootsToCheck) {
+    const rawToot = String(item.toot || "").trim();
+    if (!rawToot) continue;
+    const bId = String(item.barilgiinId || barilgiinId || "").trim();
+    {
+      // «Гараж»/«Зогсоол» нь ижил төрөл, `40`/`040` нь ижил дугаар,
+      // `B1`/`в1`/`-1` нь ижил давхар тул түлхүүрийг хэвшүүлнэ.
+      const turulT = turulNer(item.turul);
+      const davkharT = String(item.davkhar || "")
+        .replace(/\s*давхар\s*/gi, "")
+        .replace(/^[вВ]/, "B")
+        .replace(/^-/, "B")
+        .replace(/^B-/, "B")
+        .trim()
+        .toUpperCase();
+      const tootT = rawToot.toLowerCase().replace(/^0+(?=\d)/, "");
+      const bairlal =
+        turulT === "Орон сууц" ? String(item.orts || "").trim() : davkharT;
+      const tulkhuur = `${turulT}|${bId}|${bairlal}|${tootT}`;
+      if (kharsanNegj.has(tulkhuur)) {
+        return {
+          hasConflict: true,
+          message: `${tootNer(item)} хоёр удаа орсон байна. Давхардсаныг нь хасна уу.`,
+        };
+      }
+      kharsanNegj.set(tulkhuur, true);
+    }
+  }
+
   const OrshinSuugchModel = require("../models/orshinSuugch")(erunkhiiKholbolt);
   const KhariltsagchModel = require("../models/khariltsagch")(erunkhiiKholbolt);
 
