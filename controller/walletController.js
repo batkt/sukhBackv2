@@ -680,11 +680,21 @@ exports.walletBillingRemove = asyncHandler(async (req, res, next) => {
 
         // A. Match by billing info from API (if we successfully fetched it)
         if (!shouldRemove && billingToRemove) {
+          // ХОЁР тал нь ХООСОН биш байж байж таарна. Өмнө нь `|| ""`-ийн
+          // улмаас bairId/doorNo аль нь ч байхгүй үед `"" === ""` болж БҮХ
+          // WALLET_API тоот таарч, нэг хаяг салгахад бусад нь ч хамт
+          // салгагддаг байв.
+          const tBairId = String(t.walletBairId || "").trim();
+          const tDoorNo = String(t.walletDoorNo || "").trim();
+          const rBairId = String(billingToRemove.bairId || "").trim();
+          const rDoorNo = String(billingToRemove.doorNo || "").trim();
           const matchByAddress =
-            String(t.walletBairId || "") ===
-              String(billingToRemove.bairId || "") &&
-            String(t.walletDoorNo || "") ===
-              String(billingToRemove.doorNo || "");
+            !!tBairId &&
+            !!tDoorNo &&
+            !!rBairId &&
+            !!rDoorNo &&
+            tBairId === rBairId &&
+            tDoorNo === rDoorNo;
           const matchByCustomer =
             billingToRemove.customerId &&
             String(t.walletCustomerId || "") ===
@@ -705,7 +715,15 @@ exports.walletBillingRemove = asyncHandler(async (req, res, next) => {
                   // "БГД 20-р хороо 12-р байр" and "48"
                   const cleanCustomerAddress = String(billingToRemove.customerAddress).replace(/\s+/g, '').toLowerCase();
                   const cleanBName = String(bName).replace(/\s+/g, '').toLowerCase();
-                  if (cleanCustomerAddress.includes(cleanBName) && cleanCustomerAddress.includes(String(t.walletDoorNo))) {
+                  // `includes("")` нь ҮРГЭЛЖ үнэн тул тоотгүй бичлэг бүр
+                  // таарч, буруугаар салгагддаг байв.
+                  const tootText = String(t.walletDoorNo || "").trim().toLowerCase();
+                  if (
+                     !!cleanBName &&
+                     !!tootText &&
+                     cleanCustomerAddress.includes(cleanBName) &&
+                     cleanCustomerAddress.includes(tootText)
+                  ) {
                      shouldRemove = true;
                   }
                }
