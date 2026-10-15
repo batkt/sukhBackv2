@@ -1599,8 +1599,90 @@ router.post("/qpayGargaya", tokenShalgakh, tulukhErkhShalgaya, async (req, res, 
               Array.isArray(targetSalbar.bank_accounts) &&
               targetSalbar.bank_accounts.length > 0
             ) {
-              // Use the first bank account from this salbar
-              const bankAccount = targetSalbar.bank_accounts[0];
+              // 1. Check if this payment is for parking/garage
+              const isZogsoolTulbur =
+                req.body.turul === "QRGadaa" ||
+                Boolean(req.body.zogsooliinId) ||
+                req.body.angilal === "zogsool" ||
+                req.body.angilal === "Зогсоол" ||
+                req.body.angilal === "Гараж";
+
+              let parkingDansCandidate = req.body.dansniiDugaar || null;
+
+              // If parking payment and no dansniiDugaar passed, look up from Parking collection
+              if (isZogsoolTulbur && !parkingDansCandidate) {
+                try {
+                  const { Parking } = require("sukhParking-v1");
+                  const parkingQuery = req.body.zogsooliinId
+                    ? { _id: req.body.zogsooliinId }
+                    : {
+                        baiguullagiinId: String(req.body.baiguullagiinId),
+                        barilgiinId: String(req.body.barilgiinId),
+                      };
+                  const pDoc = await Parking(req.body.tukhainBaaziinKholbolt)
+                    .findOne(parkingQuery)
+                    .lean();
+                  if (pDoc) {
+                    parkingDansCandidate =
+                      req.body.turul === "QRGadaa" && pDoc.zogsooliinDansSticker
+                        ? pDoc.zogsooliinDansSticker
+                        : pDoc.zogsooliinDans ||
+                          pDoc.zogsooliinDansSticker ||
+                          null;
+                  }
+                } catch (pErr) {
+                  console.warn(
+                    "⚠️ [QPAY-ZOGSOOL-LOOKUP] Error finding parking doc:",
+                    pErr.message,
+                  );
+                }
+              }
+
+              // Check if parkingDansCandidate exists in QPay configuration
+              let matchedAccount = null;
+              if (isZogsoolTulbur && parkingDansCandidate) {
+                // First check target building's bank accounts
+                matchedAccount = targetSalbar.bank_accounts.find(
+                  (acc) =>
+                    String(acc.account_number).trim() ===
+                    String(parkingDansCandidate).trim(),
+                );
+
+                // If not found in target building, check if parking is registered under another salbar in QPay
+                if (!matchedAccount && qpayConfig && Array.isArray(qpayConfig.salbaruud)) {
+                  for (const s of qpayConfig.salbaruud) {
+                    if (Array.isArray(s.bank_accounts)) {
+                      const foundInOther = s.bank_accounts.find(
+                        (acc) =>
+                          String(acc.account_number).trim() ===
+                          String(parkingDansCandidate).trim(),
+                      );
+                      if (foundInOther) {
+                        matchedAccount = foundInOther;
+                        // Point barilgiinId to this salbar so quickqpaypackvSukh matches it
+                        req.body.barilgiinId = s.salbariinId;
+                        console.log(
+                          `🅿️ [QPAY-ZOGSOOL] Matched parking account in branch ${s.salbariinNer} (${s.salbariinId}): ${matchedAccount.account_number}`,
+                        );
+                        break;
+                      }
+                    }
+                  }
+                }
+
+                if (matchedAccount) {
+                  console.log(
+                    `🅿️ [QPAY-ZOGSOOL] Dedicated parking account selected: ${matchedAccount.account_number} (${matchedAccount.account_bank_code})`,
+                  );
+                } else {
+                  console.log(
+                    `ℹ️ [QPAY-ZOGSOOL] Candidate account ${parkingDansCandidate} not configured in QPay merchant. Falling back to main unified account.`,
+                  );
+                }
+              }
+
+              // Use dedicated parking account if matched; otherwise fallback to main account (first bank account)
+              const bankAccount = matchedAccount || targetSalbar.bank_accounts[0];
               const newDansniiDugaar =
                 bankAccount.account_number || req.body.dansniiDugaar;
 
@@ -1641,12 +1723,17 @@ router.post("/qpayGargaya", tokenShalgakh, tulukhErkhShalgaya, async (req, res, 
 
                 if (fallbackDans) {
                   // Use the Dans account number for merchant credentials lookup
-                  // But we can still use building-specific account for display if needed
-                  req.body.dansniiDugaar = fallbackDans.dugaar;
+                  req.body.dansniiDugaar = matchedAccount
+                    ? matchedAccount.account_number
+                    : fallbackDans.dugaar;
                   req.body.burtgeliinDugaar =
                     bankAccount.account_bank_code || req.body.burtgeliinDugaar;
                 } else {
-                  // Don't change dansniiDugaar if no valid Dans found
+                  if (matchedAccount) {
+                    req.body.dansniiDugaar = matchedAccount.account_number;
+                    req.body.burtgeliinDugaar =
+                      matchedAccount.account_bank_code || req.body.burtgeliinDugaar;
+                  }
                 }
               }
             } else {
