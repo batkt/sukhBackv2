@@ -1240,6 +1240,17 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
       });
     }
 
+    // Password handling: Hash if provided with at least 4 chars, otherwise remove
+    if (req.body.nuutsUg !== undefined) {
+      if (typeof req.body.nuutsUg === "string" && req.body.nuutsUg.trim().length >= 4) {
+        const bcrypt = require("bcrypt");
+        const salt = await bcrypt.genSalt(12);
+        req.body.nuutsUg = await bcrypt.hash(req.body.nuutsUg.trim(), salt);
+      } else {
+        delete req.body.nuutsUg;
+      }
+    }
+
     const result = await OrshinSuugch(db.erunkhiiKholbolt).findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -1614,6 +1625,119 @@ router.post(
   "/orshinSuugchNuutsUgSoliyo",
   tokenShalgakh,
   orshinSuugchiinNuutsUgSoliyo,
+);
+
+/**
+ * Админ / СӨХ-ийн ажилтан оршин суугч эсвэл харилцагчийн нууц үгийг сэргээх/солих
+ * POST /khereglech/nuutsUgSergeeyeAdmin
+ */
+router.post(
+  "/khereglech/nuutsUgSergeeyeAdmin",
+  tokenShalgakh,
+  async (req, res, next) => {
+    try {
+      const bcrypt = require("bcrypt");
+      const { id, turul, shineNuutsUg, smsIlgeekh } = req.body;
+
+      if (!id) {
+        return res.status(400).json({
+          success: false,
+          aldaa: "Хэрэглэгчийн ID шаардлагатай!",
+        });
+      }
+
+      if (!shineNuutsUg || typeof shineNuutsUg !== "string" || shineNuutsUg.trim().length < 4) {
+        return res.status(400).json({
+          success: false,
+          aldaa: "Шинэ нууц үг хамгийн багадаа 4 тэмдэгт байх ёстой!",
+        });
+      }
+
+      const salt = await bcrypt.genSalt(12);
+      const hashedNuutsUg = await bcrypt.hash(shineNuutsUg.trim(), salt);
+
+      const Khariltsagch = require("../models/khariltsagch");
+
+      let user = null;
+      let modelType = "orshinSuugch";
+
+      if (turul === "khariltsagch") {
+        user = await Khariltsagch(db.erunkhiiKholbolt).findById(id);
+        modelType = "khariltsagch";
+      } else {
+        user = await OrshinSuugch(db.erunkhiiKholbolt).findById(id);
+        if (!user) {
+          user = await Khariltsagch(db.erunkhiiKholbolt).findById(id);
+          if (user) modelType = "khariltsagch";
+        }
+      }
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          aldaa: "Оршин суугч / харилцагч олдсонгүй!",
+        });
+      }
+
+      // Update password & invalidate active sessions
+      user.nuutsUg = hashedNuutsUg;
+      user.currentSessionId = String(Date.now() + Math.random().toString(36).substring(2, 7));
+      await user.save();
+
+      let smsIlgeesen = false;
+      let smsAldaa = null;
+
+      if (smsIlgeekh && user.utas) {
+        try {
+          const smsService = require("../services/smsService");
+          const phone = String(user.utas).replace(/\D/g, "");
+          if (phone && phone.length === 8) {
+            const smsText = `[AmarHome] Танд нэвтрэх шинэ нууц үг олгогдлоо: ${shineNuutsUg.trim()}`;
+            const key = "aa8e588459fdd9b7ac0b809fc29cfae3";
+            const senderNumber = "72002002";
+
+            let tukhainKholbolt = db.erunkhiiKholbolt;
+            if (user.baiguullagiinId && db.kholboltuud) {
+              const matched = db.kholboltuud.find(
+                (k) => String(k.baiguullagiinId) === String(user.baiguullagiinId),
+              );
+              if (matched) tukhainKholbolt = matched;
+            }
+
+            await smsService.sendSms(
+              [
+                {
+                  to: phone,
+                  text: smsText,
+                  baiguullagiinId: user.baiguullagiinId || "",
+                  barilgiinId: user.barilgiinId || "",
+                },
+              ],
+              key,
+              senderNumber,
+              tukhainKholbolt,
+            );
+            smsIlgeesen = true;
+          }
+        } catch (smsErr) {
+          console.error("⚠️ [PASSWORD_RESET_SMS] Error sending SMS:", smsErr.message);
+          smsAldaa = smsErr.message;
+        }
+      }
+
+      res.json({
+        success: true,
+        message:
+          "Нууц үг амжилттай солигдлоо" +
+          (smsIlgeesen ? " бөгөөд хэрэглэгчийн утас руу SMS-ээр илгээгдлээ." : "."),
+        smsIlgeesen,
+        smsAldaa,
+      });
+    } catch (error) {
+      console.error("❌ [PASSWORD_RESET_ADMIN] Error:", error.message);
+      next(error);
+    }
+  },
 );
 router.post("/davhardsanOrshinSuugchShalgayy", davhardsanOrshinSuugchShalgayy);
 router.post("/tootShalgaya", tootShalgaya);

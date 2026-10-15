@@ -1088,6 +1088,17 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
       });
     }
 
+    // Password handling: Hash if provided with at least 4 chars, otherwise remove
+    if (req.body.nuutsUg !== undefined) {
+      if (typeof req.body.nuutsUg === "string" && req.body.nuutsUg.trim().length >= 4) {
+        const bcrypt = require("bcrypt");
+        const salt = await bcrypt.genSalt(12);
+        req.body.nuutsUg = await bcrypt.hash(req.body.nuutsUg.trim(), salt);
+      } else {
+        delete req.body.nuutsUg;
+      }
+    }
+
     const result = await khariltsagch(db.erunkhiiKholbolt).findByIdAndUpdate(
       req.params.id,
       req.body,
