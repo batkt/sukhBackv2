@@ -4011,6 +4011,17 @@ async function sanuulgaSmsIlgeeye(invoiceId) {
       };
     }
 
+    const { tulburiinSmsZovshoorokhEsekh } = require("../utils/baiguullagiinTokhirgoo");
+    const allowed = await tulburiinSmsZovshoorokhEsekh(invoice.baiguullagiinId, invoice.barilgiinId);
+    if (!allowed) {
+      console.log(`⚠️ [qpayRoute] Reminder SMS sending is disabled by settings.`);
+      return {
+        success: true,
+        message: "Төлбөрийн мессеж илгээх тохиргоо унтраалттай байна",
+        disabled: true,
+      };
+    }
+
     const key = "aa8e588459fdd9b7ac0b809fc29cfae3";
     const dugaar = "72002002";
     const activeUrl = "https://api-text.callpro.mn/v1/sms/send";

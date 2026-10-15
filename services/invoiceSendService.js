@@ -4,21 +4,13 @@ const { deleteInvoice } = require("./invoiceDeletionService");
 const { getKholboltByBaiguullagiinId } = require("../utils/dbConnection");
 const axios = require("axios");
 
-const TULBURIIN_SMS_KHAASAN = [
-  "69f3f56a2899d5fdc24251d1",
-  "6a4b3d1c124040b3dad66792",
-];
+const { tulburiinSmsZovshoorokhEsekh } = require("../utils/baiguullagiinTokhirgoo");
 
 async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, options = {}) {
   const ENABLE_SMS = true; // Set to true to re-enable SMS service
   if (!ENABLE_SMS) {
     console.log(`⚠️ [SMS Notification] SMS sending is temporarily disabled for invoiceId: ${invoiceId}`);
     return { success: true, message: "SMS service temporarily disabled" };
-  }
-
-  if (TULBURIIN_SMS_KHAASAN.includes(String(baiguullagiinId || ""))) {
-    console.log(`⚠️ [SMS Notification] SMS sending is disabled for baiguullagiinId: ${baiguullagiinId}`);
-    return { success: true, message: "SMS sending disabled for this organization" };
   }
 
   try {
@@ -28,6 +20,12 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
     if (!invoice) {
       console.error(`❌ [SMS Notification] Invoice not found: ${invoiceId}`);
       return { success: false, error: "Invoice not found" };
+    }
+
+    const allowed = await tulburiinSmsZovshoorokhEsekh(baiguullagiinId, invoice.barilgiinId);
+    if (!allowed) {
+      console.log(`⚠️ [SMS Notification] Payment SMS sending is disabled by settings for baiguullagiinId: ${baiguullagiinId}`);
+      return { success: true, message: "SMS sending disabled by settings" };
     }
 
     if (invoice.tuluv === "Төлсөн") {

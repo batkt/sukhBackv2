@@ -18,11 +18,10 @@ const MsgTuukh = require("../models/msgTuukh");
  *
  * Дахин нээхдээ доорх массиваас id-г нь хасна.
  */
-const TULBURIIN_SMS_KHAASAN = [
-  "69f3f56a2899d5fdc24251d1",
-  "6a4b3d1c124040b3dad66792",
-  "6a9786569a202a8f8f859f94"
-];
+const {
+  tulburiinSmsZovshoorokhEsekh,
+  TULBURIIN_SMS_KHAASAN,
+} = require("../utils/baiguullagiinTokhirgoo");
 
 const smsKhaasanUu = (baiguullagiinId) =>
   TULBURIIN_SMS_KHAASAN.includes(String(baiguullagiinId || ""));
@@ -303,6 +302,24 @@ router.route("/msgIlgeeye").post(tokenShalgakh, async (req, res, next) => {
 
     const khariu = [];
     const medegdliinSms = req.body?.turul === "medegdel";
+
+    if (!medegdliinSms) {
+      const allowed = await tulburiinSmsZovshoorokhEsekh(
+        baiguullaga || baiguullagiinId,
+        barilgiinId,
+      );
+      if (!allowed) {
+        console.log(
+          `⚠️ [POST /msgIlgeeye] ${baiguullagiinId} байгууллагын төлбөрийн SMS тохиргоогоор хаалттай.`,
+        );
+        return res.send([
+          {
+            Result: "DISABLED",
+            message: "Төлбөрийн мессеж илгээх тохиргоо унтраалттай байна",
+          },
+        ]);
+      }
+    }
 
     msgIlgeeye(
       msgnuud.map((m) => ({ ...m, to: String(m.to || "").trim() })).filter((m) => m.to),

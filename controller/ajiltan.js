@@ -899,6 +899,13 @@ exports.orlogiinMsgIlgeeye = asyncHandler(
       duusakhOgnoo.setHours(23, 59, 59, 999);
       for await (const baiguullaga of baiguullaguud) {
         try {
+          const { tulburiinSmsZovshoorokhEsekh } = require("../utils/baiguullagiinTokhirgoo");
+          const allowed = await tulburiinSmsZovshoorokhEsekh(baiguullaga);
+          if (!allowed) {
+            console.log(`ℹ️ [orlogiinMsgIlgeeye] Income SMS skipped (disabled in settings) for baiguullaga: ${baiguullaga._id}`);
+            continue;
+          }
+
           var kholboltuud = db.kholboltuud;
           var kholbolt = kholboltuud.find(
             (a) => a.baiguullagiinId == baiguullaga._id.toString(),
