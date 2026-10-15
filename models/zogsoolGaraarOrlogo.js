@@ -21,6 +21,7 @@ const zogsoolGaraarOrlogoSchema = new Schema(
     tailbar: String,
     ajiltniiId: String,
     ajiltniiNer: String,
+    uilchluulegchiinId: String,
   },
   { timestamps: true },
 );

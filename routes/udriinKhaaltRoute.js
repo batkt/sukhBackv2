@@ -12,6 +12,7 @@ const router = express.Router();
 const { tokenShalgakh } = require("zevbackv2");
 const UdriinKhaalt = require("../models/udriinKhaalt");
 const ZogsoolGaraarOrlogo = require("../models/zogsoolGaraarOrlogo");
+const { Uilchluulegch } = require("sukhParking-v1");
 
 const tooAvya = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
@@ -147,13 +148,71 @@ router.post("/zogsoolGaraarOrlogoKhiiye", tokenShalgakh, async (req, res, next) 
     const dun = tooAvya(req.body.dun);
     const mashiniiDugaar = String(req.body.mashiniiDugaar || "").trim().toUpperCase();
     if (!mashiniiDugaar) return res.status(400).json({ message: "Машины дугаар заавал" });
-    if (dun <= 0) return res.status(400).json({ message: "Орлогын дүн 0-ээс их байх ёстой" });
+    if (!/^\d{4}[А-ЯӨҮЁ]{3}$/.test(mashiniiDugaar)) {
+      return res.status(400).json({ message: "Машины дугаар 4 тоо + 3 үсэг байх ёстой (ж: 1234УБА)" });
+    }
+    if (dun < 0) return res.status(400).json({ message: "Орлогын дүн 0-ээс бага байж болохгүй" });
     const khaalt = await udurKhaagdsan(kholbolt, barilgiinId, udur);
     if (khaalt) {
       return res.status(409).json({
         message: `${udur}-ны өдрийг ${khaalt.ajiltniiNer || "ажилтан"} хаасан тул орлого нэмэх боломжгүй`,
       });
     }
+
+    // Камерын системд үйлчлүүлэгчийн бүртгэл (Uilchluulegch) үүсгэнэ
+    let uilchluulegchId = null;
+    let uilchluulegchDoc = null;
+    try {
+      const now = new Date();
+      const uilchluulegchModel = Uilchluulegch(kholbolt);
+      uilchluulegchDoc = await new uilchluulegchModel({
+        mashiniiDugaar,
+        baiguullagiinId: String(kholbolt.baiguullagiinId),
+        barilgiinId: barilgiinId ? String(barilgiinId) : "",
+        turul: "Үйлчлүүлэгч",
+        niitDun: dun,
+        tuukh: [
+          {
+            tsagiinTuukh: [
+              {
+                orsonTsag: now,
+                garsanTsag: now,
+              },
+            ],
+            niitKhugatsaa: 0,
+            burtgesenAjiltaniiId: String(ajiltan.id),
+            burtgesenAjiltaniiNer: ajiltan.ner || "",
+            undsenUne: dun,
+            tulukhDun: dun,
+            orsonKhaalga: "ГАРААР",
+            garsanKhaalga: "ГАРААР",
+            uneguiGarsan: dun === 0 ? (tailbar || "Камер кассын орлого") : "",
+            tuluv: dun === 0 ? -1 : 1, // 1: Төлсөн, -1: Үнэгүй
+            tulbur:
+              dun > 0
+                ? [
+                    {
+                      ognoo: now,
+                      turul: String(khelber || "belen"),
+                      dun: dun,
+                    },
+                  ]
+                : [],
+          },
+        ],
+      }).save();
+
+      if (uilchluulegchDoc) {
+        uilchluulegchId = String(uilchluulegchDoc._id);
+        const io = req.app?.get("socketio");
+        if (io) {
+          io.emit(`zogsool${kholbolt.baiguullagiinId}`, uilchluulegchDoc);
+        }
+      }
+    } catch (saveUilchErr) {
+      console.error("Uilchluulegch garaar orlogod uusgekhed aldaa:", saveUilchErr);
+    }
+
     const orlogo = await new (ZogsoolGaraarOrlogo(kholbolt))({
       baiguullagiinId: String(kholbolt.baiguullagiinId),
       barilgiinId: barilgiinId ? String(barilgiinId) : "",
@@ -164,8 +223,9 @@ router.post("/zogsoolGaraarOrlogoKhiiye", tokenShalgakh, async (req, res, next) 
       tailbar: tailbar ? String(tailbar).slice(0, 300) : "",
       ajiltniiId: String(ajiltan.id),
       ajiltniiNer: ajiltan.ner || "",
+      uilchluulegchiinId: uilchluulegchId,
     }).save();
-    res.json({ success: true, orlogo });
+    res.json({ success: true, orlogo, uilchluulegch: uilchluulegchDoc });
   } catch (err) {
     next(err);
   }
@@ -179,6 +239,15 @@ router.delete("/zogsoolGaraarOrlogo/:id", tokenShalgakh, async (req, res, next) 
     if (!orlogo) return res.status(404).json({ message: "Орлого олдсонгүй" });
     if (await udurKhaagdsan(kholbolt, orlogo.barilgiinId, orlogo.udur)) {
       return res.status(409).json({ message: `${orlogo.udur}-ны өдөр хаагдсан тул устгах боломжгүй` });
+    }
+    if (orlogo.uilchluulegchiinId) {
+      try {
+        await Uilchluulegch(kholbolt).deleteOne({ _id: orlogo.uilchluulegchiinId });
+        const io = req.app?.get("socketio");
+        if (io) {
+          io.emit(`zogsool${kholbolt.baiguullagiinId}`, { _id: orlogo.uilchluulegchiinId, ustsan: true });
+        }
+      } catch (_) {}
     }
     await Model.deleteOne({ _id: orlogo._id });
     res.json({ success: true });
