@@ -1518,9 +1518,19 @@ async function zogsoolNiitDungeerEbarimtShivye(
       (e) => e._id.toString() === String(barilgiinId)
     )?.tokhirgoo;
 
-    if (!tuxainSalbar?.eBarimtShine || !tuxainSalbar?.merchantTin) return;
+    const { resolveParkingEbarimtConfig } = require("../lib/parkingEbarimtHelper");
+    const zogsooliinId = _tuukhuud?.[0]?.tuukh?.[0]?.zogsooliinId || _tuukhuud?.[0]?.zogsooliinId || null;
+    const ebConfig = await resolveParkingEbarimtConfig({
+      kholbolt: tukhainBaaziinKholbolt,
+      baiguullagiinId,
+      barilgiinId,
+      zogsooliinId,
+      tuxainSalbar,
+    });
 
-    const nuatTulukhEsekh = tuxainSalbar.nuatTulukhEsekh !== false;
+    if (!ebConfig?.eBarimtShine || !ebConfig?.merchantTin) return;
+
+    const nuatTulukhEsekh = ebConfig.nuatTulukhEsekh !== false;
     const dun = niitDun;
 
     var ebarimt = new EbarimtShine(tukhainBaaziinKholbolt)();
@@ -1533,9 +1543,9 @@ async function zogsoolNiitDungeerEbarimtShivye(
     ebarimt.totalVAT = nuatTulukhEsekh ? nuatBodyo(dun) : 0;
     ebarimt.totalCityTax = "0.00";
     ebarimt.branchNo = "001";
-    ebarimt.districtCode = String(tuxainSalbar.districtCode || "").padStart(4, "0");
+    ebarimt.districtCode = String(ebConfig.districtCode || "").padStart(4, "0");
     ebarimt.posNo = "0001";
-    ebarimt.merchantTin = tuxainSalbar.merchantTin;
+    ebarimt.merchantTin = ebConfig.merchantTin;
     ebarimt.createdAt = new Date();
 
     const taxType = nuatTulukhEsekh ? "VAT_ABLE" : "VAT_FREE";
@@ -1558,7 +1568,7 @@ async function zogsoolNiitDungeerEbarimtShivye(
         totalVAT: nuatTulukhEsekh ? nuatBodyo(dun) : 0,
         totalCityTax: "0.00",
         taxType,
-        merchantTin: tuxainSalbar.merchantTin,
+        merchantTin: ebConfig.merchantTin,
         items: [item],
       },
     ];
@@ -1575,6 +1585,8 @@ async function zogsoolNiitDungeerEbarimtShivye(
               const saved = new EbarimtShine(tukhainBaaziinKholbolt)(d);
               saved.baiguullagiinId = baiguullagiinId;
               saved.barilgiinId = barilgiinId;
+              if (ebConfig.merchantTin) saved.merchantTin = ebConfig.merchantTin;
+              if (ebConfig.districtCode) saved.districtCode = String(ebConfig.districtCode).padStart(4, "0");
               if (d.qrData) saved.qrData = d.qrData;
               if (d.lottery) saved.lottery = d.lottery;
               if (d.id) saved.receiptId = d.id;
@@ -1585,7 +1597,8 @@ async function zogsoolNiitDungeerEbarimtShivye(
         },
         (err) => { if (next) next(err); resolve(); },
         true,
-        baiguullagiinId
+        baiguullagiinId,
+        ebConfig.ebarimtShineUrl || null
       );
     });
   } catch (err) {

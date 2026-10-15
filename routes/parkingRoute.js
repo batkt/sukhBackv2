@@ -47,6 +47,7 @@ const moment = require("moment");
 const Baiguullaga = require("../models/baiguullaga");
 const { zogsoolNiitDungeerEbarimtShivye } = require("../routes/ebarimtRoute");
 const { resolveDistrictCode } = require("../lib/districtMapping");
+const { resolveParkingEbarimtConfig } = require("../lib/parkingEbarimtHelper");
 const { msgIlgeeye } = require("../controller/orshinSuugch");
 const MsgTuukh = require("../models/msgTuukh");
 const client = require("../routes/redisClient");
@@ -3768,17 +3769,25 @@ router.route("/v1/pay").post(async (req, res, next) => {
         var tuxainSalbar = baiguullaga?.barilguud?.find(
           (e) => e._id.toString() == tukhainObject.barilgiinId,
         )?.tokhirgoo;
-        var nuatTulukhEsekh = baiguullaga.barilguud.find(
-          (x) => x._id.toString() == tukhainObject.barilgiinId,
-        )?.tokhirgoo?.nuatTulukhEsekh;
-        if (nuatTulukhEsekh != false) nuatTulukhEsekh = true;
-        if (tuxainSalbar?.eBarimtShine === true) {
+
+        const zogsooliinId = tukhainZogsool?._id || tukhainObject?.tuukh?.[0]?.zogsooliinId;
+        const ebConfig = await resolveParkingEbarimtConfig({
+          parkingDoc: tukhainZogsool,
+          kholbolt: tukhainKholbolt,
+          baiguullagiinId: tukhainObject.baiguullagiinId,
+          barilgiinId: tukhainObject.barilgiinId,
+          zogsooliinId,
+          tuxainSalbar,
+        });
+
+        var nuatTulukhEsekh = ebConfig.nuatTulukhEsekh;
+        if (ebConfig.eBarimtShine === true) {
           var ebarimt = await zogsooloosEbarimtShineUusgye(
             tukhainObject,
             req.body.customerNo,
             req.body.customerTin,
-            tuxainSalbar.merchantTin, //"37900846788",
-            tuxainSalbar.districtCode, //,"0023"
+            ebConfig.merchantTin,
+            ebConfig.districtCode,
             tukhainKholbolt,
             nuatTulukhEsekh,
           );
@@ -3795,13 +3804,15 @@ router.route("/v1/pay").post(async (req, res, next) => {
                 }
               } else {
                 var ebarimt;
-                if (!!tuxainSalbar.eBarimtShine)
+                if (!!ebConfig.eBarimtShine)
                   ebarimt = new EbarimtShine(tukhainKholbolt)(d);
                 else ebarimt = new Ebarimt(tukhainKholbolt)(d);
                 ebarimt.zogsooliinId = tukhainObject._id;
                 ebarimt.baiguullagiinId = khariuObject.baiguullagiinId;
                 ebarimt.barilgiinId = khariuObject.barilgiinId;
                 ebarimt.mashiniiDugaar = khariuObject.mashiniiDugaar;
+                if (ebConfig.merchantTin) ebarimt.merchantTin = ebConfig.merchantTin;
+                if (ebConfig.districtCode) ebarimt.districtCode = String(ebConfig.districtCode).padStart(4, "0");
                 ebarimt.save().catch((err) => {
                   if (!res.headersSent && next) next(err);
                 });
@@ -4350,16 +4361,24 @@ router.route("/pass/pay").post(tokenShalgakh, async (req, res, next) => {
           (e) => e._id.toString() == tukhainObject.barilgiinId,
         )?.tokhirgoo;
 
-        var nuatTulukhEsekh = false;
-        nuatTulukhEsekh = tuxainSalbar.nuatTulukhEsekh;
-        if (nuatTulukhEsekh != false) nuatTulukhEsekh = true;
-        if (!!tuxainSalbar?.eBarimtShine) {
+        const zogsooliinId = tukhainZogsool?._id || tukhainObject?.tuukh?.[0]?.zogsooliinId;
+        const ebConfig = await resolveParkingEbarimtConfig({
+          parkingDoc: tukhainZogsool,
+          kholbolt: tukhainKholbolt,
+          baiguullagiinId: tukhainObject.baiguullagiinId,
+          barilgiinId: tukhainObject.barilgiinId,
+          zogsooliinId,
+          tuxainSalbar,
+        });
+
+        var nuatTulukhEsekh = ebConfig.nuatTulukhEsekh;
+        if (!!ebConfig.eBarimtShine) {
           var ebarimt = await zogsooloosEbarimtShineUusgye(
             tukhainObject,
             req.body.customerNo,
             req.body.customerTin,
-            tuxainSalbar.merchantTin, //"37900846788",
-            tuxainSalbar.districtCode, //,"0023"
+            ebConfig.merchantTin,
+            ebConfig.districtCode,
             tukhainKholbolt,
             nuatTulukhEsekh,
           );
@@ -4368,13 +4387,15 @@ router.route("/pass/pay").post(tokenShalgakh, async (req, res, next) => {
               if (d?.status != "SUCCESS" && !d.success)
                 throw new Error(d.message);
               var ebarimt;
-              if (!!tuxainSalbar.eBarimtShine)
+              if (!!ebConfig.eBarimtShine)
                 ebarimt = new EbarimtShine(tukhainKholbolt)(d);
               else ebarimt = new Ebarimt(tukhainKholbolt)(d);
               ebarimt.zogsooliinId = tukhainObject._id;
               ebarimt.baiguullagiinId = khariuObject.baiguullagiinId;
               ebarimt.barilgiinId = khariuObject.barilgiinId;
               ebarimt.mashiniiDugaar = khariuObject.mashiniiDugaar;
+              if (ebConfig.merchantTin) ebarimt.merchantTin = ebConfig.merchantTin;
+              if (ebConfig.districtCode) ebarimt.districtCode = String(ebConfig.districtCode).padStart(4, "0");
               ebarimt.save().catch((err) => {
                 if (!res.headersSent && next) next(err);
               });
@@ -4802,17 +4823,24 @@ router
         tuxainSalbar = baiguullaga?.barilguud?.find(
           (e) => e._id.toString() == tukhainObject.barilgiinId,
         )?.tokhirgoo;
-        var nuatTulukhEsekh = baiguullaga.barilguud.find(
-          (x) => x._id.toString() == tukhainObject.barilgiinId,
-        )?.tokhirgoo?.nuatTulukhEsekh;
-        if (nuatTulukhEsekh != false) nuatTulukhEsekh = true;
-        if (!!tuxainSalbar?.eBarimtShine)
+
+        const zogsooliinId = tukhainObject.tuukh?.[0]?.zogsooliinId || tukhainObject.zogsooliinId || req.body.zogsooliinId;
+        const ebConfig = await resolveParkingEbarimtConfig({
+          kholbolt: tukhainKholbolt,
+          baiguullagiinId: tukhainObject.baiguullagiinId,
+          barilgiinId: tukhainObject.barilgiinId,
+          zogsooliinId,
+          tuxainSalbar,
+        });
+
+        var nuatTulukhEsekh = ebConfig.nuatTulukhEsekh;
+        if (!!ebConfig.eBarimtShine)
           ebarimt = await zogsooloosEbarimtShineUusgye(
             tukhainObject,
             req.body.customerNo,
             req.body.customerTin,
-            tuxainSalbar.merchantTin, //"37900846788",
-            tuxainSalbar.districtCode, //,"0023"
+            ebConfig.merchantTin,
+            ebConfig.districtCode,
             tukhainKholbolt,
             nuatTulukhEsekh,
           );
@@ -4829,13 +4857,15 @@ router
             if (d?.status != "SUCCESS" && !d.success)
               throw new Error(d.message);
             var ebarimt;
-            if (!!tuxainSalbar.eBarimtShine)
+            if (!!ebConfig.eBarimtShine)
               ebarimt = new EbarimtShine(tukhainKholbolt)(d);
             else ebarimt = new Ebarimt(tukhainKholbolt)(d);
             ebarimt.zogsooliinId = tukhainObject._id;
             ebarimt.baiguullagiinId = khariuObject.baiguullagiinId;
             ebarimt.barilgiinId = khariuObject.barilgiinId;
             ebarimt.mashiniiDugaar = khariuObject.mashiniiDugaar;
+            if (ebConfig.merchantTin) ebarimt.merchantTin = ebConfig.merchantTin;
+            if (ebConfig.districtCode) ebarimt.districtCode = String(ebConfig.districtCode).padStart(4, "0");
             ebarimt.save().catch((err) => {
               if (!res.headersSent && next) next(err);
             });
@@ -5561,39 +5591,48 @@ router.post("/ebarimtShivye", tokenShalgakh, async (req, res, next) => {
 
     const baiguullagiinId = tukhainObject.baiguullagiinId || req.body.baiguullagiinId;
     const barilgiinId = tukhainObject.barilgiinId || req.body.barilgiinId;
+    const zogsooliinId = tukhainObject.tuukh?.[0]?.zogsooliinId || tukhainObject.zogsooliinId || req.body.zogsooliinId;
 
     const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(baiguullagiinId);
     const tuxainSalbar = baiguullaga?.barilguud?.find(
       (e) => e._id.toString() === String(barilgiinId)
     )?.tokhirgoo;
 
-    console.log("[ebarimtShivye] barilgiinId:", barilgiinId, "merchantTin:", tuxainSalbar?.merchantTin, "eBarimtShine:", tuxainSalbar?.eBarimtShine);
+    const ebConfig = await resolveParkingEbarimtConfig({
+      kholbolt: tukhainKholbolt,
+      baiguullagiinId,
+      barilgiinId,
+      zogsooliinId,
+      tuxainSalbar,
+    });
 
-    if (!tuxainSalbar?.merchantTin) {
+    console.log("[ebarimtShivye] barilgiinId:", barilgiinId, "merchantTin:", ebConfig.merchantTin, "isDedicated:", ebConfig.isDedicated);
+
+    if (!ebConfig.merchantTin) {
       return res.status(400).json({ error: "И-Баримт тохиргоо хийгдээгүй байна (merchantTin олдсонгүй)" });
     }
 
-    const nuatTulukhEsekh = tuxainSalbar.nuatTulukhEsekh !== false;
+    const nuatTulukhEsekh = ebConfig.nuatTulukhEsekh;
     // type "3" = Байгууллага (B2B) has customerTin; type "1" = Хувь хүн (B2C) has customerNo
     const isB2B = type === "3" || type === "B2B_RECEIPT";
     const customerTin = isB2B ? (register || "") : "";
     const customerNo = !isB2B ? (register || "") : "";
 
-    const districtCode = await resolveDistrictCode(tuxainSalbar, tukhainKholbolt);
+    const districtCode = ebConfig.districtCode;
     console.log("[ebarimtShivye] resolved districtCode:", districtCode);
 
     const ebarimt = await zogsooloosEbarimtShineUusgye(
       tukhainObject,
       customerNo,
       customerTin,
-      tuxainSalbar.merchantTin,
+      ebConfig.merchantTin,
       districtCode,
       tukhainKholbolt,
       nuatTulukhEsekh
     );
 
-    // per-org ebarimt server URL (optional — falls back to EBARIMTSHINE_IP env var)
-    const orgEbarimtUrl = tuxainSalbar.ebarimtShineUrl || null;
+    // per-org or per-parking ebarimt server URL (optional — falls back to EBARIMTSHINE_IP env var)
+    const orgEbarimtUrl = ebConfig.ebarimtShineUrl || null;
     console.log("[ebarimtShivye] orgEbarimtUrl:", orgEbarimtUrl || "(using env EBARIMTSHINE_IP)");
 
     ebarimtDuudya(
@@ -5609,7 +5648,7 @@ router.post("/ebarimtShivye", tokenShalgakh, async (req, res, next) => {
           saved.baiguullagiinId = tukhainObject.baiguullagiinId;
           saved.barilgiinId = tukhainObject.barilgiinId;
           saved.mashiniiDugaar = tukhainObject.mashiniiDugaar;
-          if (tuxainSalbar.merchantTin) saved.merchantTin = tuxainSalbar.merchantTin;
+          if (ebConfig.merchantTin) saved.merchantTin = ebConfig.merchantTin;
           if (districtCode) saved.districtCode = String(districtCode).padStart(4, "0");
           if (d.qrData) saved.qrData = d.qrData;
           if (d.lottery) saved.lottery = d.lottery;
