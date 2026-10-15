@@ -81,6 +81,11 @@ const orshinSuugchSchema = new Schema(
     barilgiinId: String, // Keep for backward compatibility (primary/default)
     erkh: String,
     firebaseToken: String,
+    platform: {
+      type: String,
+      lowercase: true,
+      trim: true,
+    },
     zurgiinId: String,
     nevtrekhNer: String,
     duureg: String, // Keep for backward compatibility

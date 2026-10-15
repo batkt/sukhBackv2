@@ -72,10 +72,12 @@ exports.upsertVersion = asyncHandler(async (req, res, next) => {
       !khuuchin || String(khuuchin.version) !== String(version);
 
     if (shineKhuvilbarEsekh) {
-      // Аппын хувилбар нь платформын хэмжээнд зарлагддаг тул
-      // `baiguullagiinId` дамжуулахгүй — БҮХ хэрэглэгч рүү явна.
+      // Аппын хувилбар нь тухайн платформын (ios эсвэл android)
+      // хэрэглэгчдэд л илгээгдэх ёстой. Өөр платформын хэрэглэгчдэд илгээвэл
+      // хуурамч/алдаатай мэдэгдэл болно.
       sonorduulgaKhuleelguiTaraaya({
         erunkhiiKholbolt: db.erunkhiiKholbolt,
+        platform: String(platform).toLowerCase().trim(),
         title: "Аппын шинэчлэлт",
         body:
           message ||

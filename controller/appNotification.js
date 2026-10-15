@@ -109,7 +109,51 @@ async function orshinSuugchidSonorduulgaIlgeeye(
   }
 }
 
+async function topicRuuSonorduulgaIlgeeye(topic, medeelel) {
+  if (!admin.apps.length) {
+    console.error("Firebase Admin SDK is not initialized");
+    return null;
+  }
+
+  const payload = {
+    topic: String(topic).trim(),
+    notification: {
+      title: medeelel?.title || "Таньд мэдэгдэл ирлээ!",
+      body: medeelel?.body || medeelel?.message || "Шинэ мэдэгдэл",
+    },
+    android: {
+      priority: "high",
+      notification: {
+        sound: "default",
+        channelId: "default",
+      },
+    },
+    apns: {
+      payload: {
+        aps: {
+          sound: "default",
+          badge: 1,
+        },
+      },
+    },
+    data: {
+      type: medeelel?.type || "notification",
+      ...(medeelel?.data || {}),
+    },
+  };
+
+  try {
+    const response = await admin.messaging().send(payload);
+    console.log(`✅ Firebase topic (${topic}) notification sent:`, response);
+    return response;
+  } catch (error) {
+    console.error(`❌ Firebase topic (${topic}) notification error:`, error.message);
+    return null;
+  }
+}
+
 module.exports = {
   sonorduulgaIlgeeye,
   orshinSuugchidSonorduulgaIlgeeye,
+  topicRuuSonorduulgaIlgeeye,
 };

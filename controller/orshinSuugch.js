@@ -1625,6 +1625,12 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
       }
 
       khariltsagch.currentSessionId = String(Date.now() + Math.random().toString(36).substring(2, 7));
+      if (req.body.firebaseToken) {
+        khariltsagch.firebaseToken = req.body.firebaseToken;
+      }
+      if (req.body.platform) {
+        khariltsagch.platform = String(req.body.platform).toLowerCase().trim();
+      }
       await khariltsagch.save();
 
       const khariltsagchToken = khariltsagch.tokenUusgeye();
@@ -1709,6 +1715,9 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
       );
       if (req.body.firebaseToken) {
         orshinSuugch.firebaseToken = req.body.firebaseToken;
+      }
+      if (req.body.platform) {
+        orshinSuugch.platform = String(req.body.platform).toLowerCase().trim();
       }
       // Үндсэн эзэмшигч байгууллага/барилгаа сольсон байж болзошгүй тул
       // нэвтрэх бүрд дахин тэгшитгэнэ (токен нь baiguullagiinId-аар бааз сонгодог)
@@ -2232,6 +2241,9 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
 
     if (req.body.firebaseToken) {
       orshinSuugch.firebaseToken = req.body.firebaseToken;
+    }
+    if (req.body.platform) {
+      orshinSuugch.platform = String(req.body.platform).toLowerCase().trim();
     }
 
     await orshinSuugch.save();
@@ -3145,6 +3157,9 @@ exports.walletBurtgey = asyncHandler(async (req, res, next) => {
 
     if (req.body.firebaseToken) {
       orshinSuugch.firebaseToken = req.body.firebaseToken;
+    }
+    if (req.body.platform) {
+      orshinSuugch.platform = String(req.body.platform).toLowerCase().trim();
     }
 
     await orshinSuugch.save();

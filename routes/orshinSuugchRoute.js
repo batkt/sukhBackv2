@@ -1700,6 +1700,9 @@ router.post("/orshinSuugchdTokenOnooyo", tokenShalgakh, (req, res, next) => {
     let update = {
       firebaseToken: req.body.token,
     };
+    if (req.body.platform) {
+      update.platform = String(req.body.platform).toLowerCase().trim();
+    }
     OrshinSuugch(db.erunkhiiKholbolt)
       .updateOne(filter, update)
       .then((result) => {

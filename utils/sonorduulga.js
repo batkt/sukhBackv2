@@ -64,6 +64,7 @@ async function tokenuudRuuIlgeeye(tokenuud, medeelel) {
  * @param {string} [p.baiguullagiinId] Хоосон бол БҮХ байгууллага (жишээ нь
  *        аппын шинэчлэлт — платформын хэмжээнд зарлагддаг)
  * @param {string[]} [p.barilguud] Зөвхөн эдгээр барилгын хэрэглэгчид
+ * @param {string} [p.platform] Платформоор шүүх ('android', 'ios')
  * @param {string} p.title Мэдэгдлийн гарчиг
  * @param {string} p.body Мэдэгдлийн бие
  * @param {string} p.turul `data.type` — апп дээр ямар дэлгэц нээхийг шийднэ
@@ -78,6 +79,7 @@ async function sonorduulgaTaraaya({
   erunkhiiKholbolt,
   baiguullagiinId,
   barilguud,
+  platform,
   title,
   body,
   turul,
@@ -96,6 +98,9 @@ async function sonorduulgaTaraaya({
     const shuult = {
       firebaseToken: { $exists: true, $nin: [null, ""] },
     };
+    if (platform) {
+      shuult.platform = String(platform).toLowerCase().trim();
+    }
     // Байгууллага/барилга нь зөвхөн toots[]-д бүртгэлтэй хэрэглэгчдийг ч хамруулна
     // (өмнө нь тэд нийтлэл, санал асуулгын мэдэгдэл авдаггүй байв).
     const nukhtsluud = [];
@@ -159,6 +164,28 @@ async function sonorduulgaTaraaya({
       });
       khariu.ilgeesen = ur.ilgeesen;
       khariu.aldaatai = ur.aldaatai;
+    }
+
+    if (platform && turul === "app_update") {
+      try {
+        const {
+          topicRuuSonorduulgaIlgeeye,
+        } = require("../controller/appNotification");
+        if (typeof topicRuuSonorduulgaIlgeeye === "function") {
+          const topicName = `app_update_${String(platform).toLowerCase().trim()}`;
+          await topicRuuSonorduulgaIlgeeye(topicName, {
+            title,
+            body,
+            type: turul,
+            data: {
+              type: turul,
+              ...(dataNemelt || {}),
+            },
+          });
+        }
+      } catch (topicAldaa) {
+        console.error("⚠️ [SONORDUULGA] Topic алдаа:", topicAldaa.message);
+      }
     }
 
     if (io && socketEvent) {
