@@ -334,6 +334,8 @@ const serveMedegdelImage = (req, res, next) => {
     "/qpayShalgay",
     "/zogsool/qr/",
     "/v1/search_car/",
+    "/ebarimtShivye",
+    "/tatvaraasBaiguullagaAvya",
     ...String(process.env.ZOCHIN_NEMELT_ZAM || "")
       .split(",")
       .map((z) => z.trim())
