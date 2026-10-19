@@ -375,11 +375,12 @@ const qpaycallbackGadaaStickerHandler = async (req, res, next) => {
       };
       // Төлбөрийг зогсоолын session (Uilchluulegch.tuukh.0.tulbur) дээр хадгална.
       // Үүнгүйгээр QPay төлөгдсөн ч зогсоол дээр төлбөр бүртгэгдэхгүй байв.
+      let durslel = null;
       try {
         const { tulburUridchiljTulukh } = require("../controller/zogsool");
         // next-ийг өгөхгүй: дотроо next(err) дуудвал доорх sendStatus(200)-той
         // давхцаж "headers already sent" болно.
-        const durslel = await tulburUridchiljTulukh(body, (tulburNextErr) => {
+        durslel = await tulburUridchiljTulukh(body, (tulburNextErr) => {
           console.error(
             "❌ [QPAY CALLBACK GADAA] session шинэчлэхэд алдаа:",
             tulburNextErr?.message,
@@ -387,8 +388,27 @@ const qpaycallbackGadaaStickerHandler = async (req, res, next) => {
         });
         console.log(
           "✅ [QPAY CALLBACK GADAA] төлбөр session-д хадгалагдлаа:",
-          durslel,
+          durslel?._id || durslel,
         );
+
+        // Вэб касс (camera) болон жагсаалт (jagsaalt) руу бодит цагт мэдэгдэх
+        const ioLive = req.app.get("socketio");
+        if (ioLive) {
+          const liveDoc =
+            durslel && typeof durslel === "object"
+              ? durslel
+              : {
+                  _id: qpayObject.zogsoolUilchluulegch?.uId,
+                  mashiniiDugaar: qpayObject.zogsoolUilchluulegch?.plate_number,
+                  tulsunDun: qpayObject.zogsoolUilchluulegch?.pay_amount,
+                };
+          ioLive.emit(`zogsool${b}`, liveDoc);
+          ioLive.emit(`parkingEntry/${b}`, { uilchluulegch: liveDoc });
+          const barId = req.params.barilgiinId || qpayObject.salbariinId;
+          if (barId) {
+            ioLive.emit(`parkingEntry/${b}/${barId}`, { uilchluulegch: liveDoc });
+          }
+        }
       } catch (tulburAldaa) {
         console.error(
           "❌ [QPAY CALLBACK GADAA] tulburUridchiljTulukh алдаа:",

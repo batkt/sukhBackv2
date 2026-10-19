@@ -5565,10 +5565,15 @@ function zogsooliinKhungulultEsekh(turul) {
 function zogsooliinTulsunDun(obj) {
   const raw = obj?.tuukh?.[0]?.tulbur;
   const tulbur = Array.isArray(raw) ? raw : raw ? [raw] : [];
-  return tulbur.reduce(
+  const sum = tulbur.reduce(
     (s, t) => s + (Number(t?.dun) > 0 && !zogsooliinKhungulultEsekh(t?.turul) ? Number(t.dun) : 0),
     0,
   );
+  if (sum > 0) return sum;
+  if (Number(obj?.tuukh?.[0]?.tulsunDun) > 0) return Number(obj.tuukh[0].tulsunDun);
+  if (Number(obj?.tulsunDun) > 0) return Number(obj.tulsunDun);
+  if (Number(obj?.niitDun) > 0 && obj?.tuukh?.[0]?.tuluv === 1) return Number(obj.niitDun);
+  return 0;
 }
 
 router.post("/ebarimtShivye", tokenShalgakh, async (req, res, next) => {
@@ -5576,7 +5581,26 @@ router.post("/ebarimtShivye", tokenShalgakh, async (req, res, next) => {
     const { id, type, register } = req.body;
     if (!id) return res.status(400).json({ error: "id заавал оруулна" });
 
-    const tukhainKholbolt = req.body.tukhainBaaziinKholbolt;
+    let tukhainKholbolt = req.body.tukhainBaaziinKholbolt || req.kholbolt;
+    if (!tukhainKholbolt && (req.body.baiguullagiinId || req.query?.baiguullagiinId)) {
+      const bId = req.body.baiguullagiinId || req.query?.baiguullagiinId;
+      tukhainKholbolt = db.kholboltuud.find((a) => String(a.baiguullagiinId) === String(bId));
+    }
+    if (!tukhainKholbolt && Array.isArray(db.kholboltuud)) {
+      for (const k of db.kholboltuud) {
+        try {
+          const found = await Uilchluulegch(k).findById(id).lean();
+          if (found) {
+            tukhainKholbolt = k;
+            break;
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (!tukhainKholbolt) {
+      return res.status(400).json({ error: "Байгууллагын холболт олдсонгүй" });
+    }
 
     const tukhainObject = await Uilchluulegch(tukhainKholbolt).findById(id).lean();
     if (!tukhainObject) return res.status(404).json({ error: "Бүртгэл олдсонгүй" });
@@ -5656,13 +5680,48 @@ router.post("/ebarimtShivye", tokenShalgakh, async (req, res, next) => {
           await saved.save().catch((err) => console.error("[EBARIMT] save error:", err.message));
 
           const ebId = d.id || d.receiptId || d.lottery || "";
-          await Uilchluulegch(tukhainKholbolt).findByIdAndUpdate(tukhainObject._id, {
-            ebarimtAvsanEsekh: true,
-            ebarimtAvsanDun: Number(d.totalAmount) || tulsunDun,
-            ...(customerNo ? { ebarimtRegister: customerNo } : {}),
-            ...(ebId ? { ebarimtId: ebId, ebarimtDugaar: ebId, lottery: d.lottery } : {}),
-            ...(ebId ? { "tuukh.0.ebarimtId": ebId, "tuukh.0.ebarimtDugaar": ebId, "tuukh.0.lottery": d.lottery } : {}),
-          }).catch(() => {});
+          const updatedVehicle = await Uilchluulegch(tukhainKholbolt).findByIdAndUpdate(
+            tukhainObject._id,
+            {
+              ebarimtAvsanEsekh: true,
+              ebarimtAvsanDun: Number(d.totalAmount) || tulsunDun,
+              ...(customerNo ? { ebarimtRegister: customerNo } : {}),
+              ...(customerTin ? { ebarimtRegister: customerTin } : {}),
+              ...(ebId ? { ebarimtId: ebId, ebarimtDugaar: ebId, lottery: d.lottery } : {}),
+              ...(ebId
+                ? {
+                    "tuukh.0.ebarimtId": ebId,
+                    "tuukh.0.ebarimtDugaar": ebId,
+                    "tuukh.0.lottery": d.lottery,
+                  }
+                : {}),
+            },
+            { new: true }
+          ).catch(() => null);
+
+          // Касс болон жагсаалт руу шинэчлэгдсэн и-баримттай өгөгдлийг илгээнэ
+          const io = req.app.get("socketio");
+          if (io && updatedVehicle) {
+            io.emit(`zogsool${tukhainObject.baiguullagiinId}`, updatedVehicle);
+            io.emit(`parkingEntry/${tukhainObject.baiguullagiinId}`, {
+              uilchluulegch: updatedVehicle,
+            });
+          }
+
+          if (customerNo && d.qrData) {
+            autoApproveQr(customerNo, d.qrData, tukhainObject.baiguullagiinId, tukhainKholbolt).catch(() => {});
+          }
+
+          res.json({ success: true, qrData: d.qrData, lottery: d.lottery, receiptId: d.id, ...d });
+        } catch (err) {
+          next(err);
+        }
+      },
+      next,
+      true,
+      tukhainObject.baiguullagiinId,
+      orgEbarimtUrl
+    );
 
           if (customerNo && d.qrData) {
             autoApproveQr(customerNo, d.qrData, tukhainObject.baiguullagiinId, tukhainKholbolt).catch(() => {});

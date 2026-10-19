@@ -163,97 +163,113 @@ module.exports.zogsoolMsgIlgeeye = async function zogsoolMsgIlgeeye() {
 
 module.exports.tulburUridchiljTulukh = async (body, next) => {
   try {
-    let tulbur = [
-      {
-        ognoo: new Date(),
-        turul: body.turul,
-        dun: body.paid_amount,
-      },
-    ];
-    var oldsonMashin;
-    var tukhainKholbolt;
-    var tukhainObject;
-    var tukhainZogsool;
-    var bodsonDun = 0;
-    const zogsool = body.zogsooliinId
-      ? await Parking(body.tukhainBaaziinKholbolt).findOne({
-        _id: body.zogsooliinId,
-      })
-      : await Parking(body.tukhainBaaziinKholbolt).findOne({
-        baiguullagiinId: body.baiguullagiinId,
-        barilgiinId: body.barilgiinId,
-        "khaalga.ajiltnuud.id": body.ajiltniiId,
-      });
-    if (!!zogsool) {
-      oldsonMashin = await Uilchluulegch(
-        body.tukhainBaaziinKholbolt,
-        true
-      ).findOne({
-        _id: body.uilchluulegchiinId,
-      });
-      if (!!oldsonMashin && !!oldsonMashin.mashiniiDugaar) {
-        tukhainKholbolt = body.tukhainBaaziinKholbolt;
-        tukhainZogsool = zogsool;
-        tukhainObject = oldsonMashin;
-      }
+    const tukhainKholbolt = body.tukhainBaaziinKholbolt;
+    if (!tukhainKholbolt) {
+      return "Холболт олдсонгүй!";
     }
-    bodsonDun = await zogsooliinDunAvya(
-      tukhainZogsool,
-      tukhainObject,
-      tukhainKholbolt
-    );
-    if (!tukhainObject) {
+
+    let oldsonMashin = null;
+    if (body.uilchluulegchiinId) {
+      oldsonMashin = await Uilchluulegch(tukhainKholbolt, true).findById(
+        body.uilchluulegchiinId
+      );
+    }
+    if (!oldsonMashin && body.plate_number) {
+      oldsonMashin = await Uilchluulegch(tukhainKholbolt, true)
+        .findOne({ mashiniiDugaar: body.plate_number })
+        .sort({ createdAt: -1 });
+    }
+
+    if (!oldsonMashin) {
       return "Машины мэдээлэл олдсонгүй!";
     }
-    if (
-      tukhainObject &&
-      tukhainObject.tuukh &&
-      tukhainObject.tuukh.length > 0
-    ) {
-      if (tukhainObject.tuukh && tukhainObject.tuukh.length > 0)
-        if (
-          tukhainObject.tuukh[0].tulbur &&
-          tukhainObject.tuukh[0].tulbur.length > 0
-        )
-          tukhainObject.tuukh[0].tulbur.push(...tulbur);
-        else tukhainObject.tuukh[0].tulbur = tulbur;
-      const tulsunDun = Number(body.paid_amount) || 0;
-      const garsanTsag = tukhainObject?.tuukh[0].tsagiinTuukh[0].garsanTsag;
-      // Бодогдсон дүнг бүрэн нөхсөн эсэх (bodsonDun 0 бол төлбөр байхгүй)
-      const burenTulsun =
-        tulsunDun > 0 && (bodsonDun <= 0 || tulsunDun + 0.01 >= bodsonDun);
 
-      var set = {
-        "tuukh.0.tulbur": tukhainObject?.tuukh?.[0]?.tulbur || 0,
-        // Төлбөр бүрэн төлөгдсөн бол машин ХАРААХАН ГАРААГҮЙ байсан ч "Төлсөн"
-        // болно. Өмнө нь зөвхөн garsanTsag байхад л 1 болгодог байсан тул
-        // QR-аар урьдчилж төлсөн машин 0 (төлөөгүй) хэвээр үлдэж, гарсныхаа
-        // дараа саарал "Үнэгүй" гэж харагддаг байв. Мөн /v1/search_car түүнийг
-        // дахин төлүүлэхээр олсоор байсан.
-        "tuukh.0.tuluv": burenTulsun || garsanTsag ? 1 : 0,
-        "tuukh.0.tulukhDun": 0,
-      };
-      // "ДҮН" багана session-ий niitDun-аас уншдаг. Урьдчилж төлсөн үед энэ нь
-      // 0 хэвээр үлдэж, төлбөртэй машин үнэгүй мэт харагддаг байв.
-      if (burenTulsun && !(Number(tukhainObject.niitDun) > 0))
-        set["niitDun"] = bodsonDun > 0 ? bodsonDun : tulsunDun;
-      if (!tukhainObject?.tuukh[0].tsagiinTuukh[0].garsanTsag)
-        set["garakhTsag"] = new Date(
-          Date.now() + (tukhainZogsool?.garakhTsag || 30) * 60000
-        );
-      if (bodsonDun > 0 && bodsonDun === body.paid_amount) {
-        set["tuukh.0.burtgesenAjiltaniiId"] = body.ajiltniiId;
-        set["tuukh.0.burtgesenAjiltaniiNer"] = body.ajiltniiNer;
-      }
-      await Uilchluulegch(tukhainKholbolt).findByIdAndUpdate(
-        tukhainObject._id,
-        { $set: set },
-        { new: true }
-      );
-      return "Amjilttai";
+    const zogsooliinId =
+      body.zogsooliinId ||
+      oldsonMashin.tuukh?.[0]?.zogsooliinId ||
+      oldsonMashin.zogsooliinId;
+
+    let tukhainZogsool = null;
+    if (zogsooliinId) {
+      tukhainZogsool = await Parking(tukhainKholbolt).findOne({
+        _id: zogsooliinId,
+      });
     }
+    if (!tukhainZogsool) {
+      tukhainZogsool = await Parking(tukhainKholbolt).findOne({
+        baiguullagiinId: body.baiguullagiinId || oldsonMashin.baiguullagiinId,
+        barilgiinId: body.barilgiinId || oldsonMashin.barilgiinId,
+      });
+    }
+
+    const exitedDun =
+      Number(oldsonMashin.niitDun) ||
+      Number(oldsonMashin.tuukh?.[0]?.savedDun) ||
+      0;
+    const garsanTsag =
+      oldsonMashin?.tuukh?.[0]?.tsagiinTuukh?.[0]?.garsanTsag;
+
+    let bodsonDun = 0;
+    if (garsanTsag && exitedDun > 0) {
+      bodsonDun = exitedDun;
+    } else {
+      bodsonDun = await zogsooliinDunAvya(
+        tukhainZogsool,
+        oldsonMashin,
+        tukhainKholbolt
+      );
+    }
+
+    const tulsunDun = Number(body.paid_amount) || 0;
+    const existingTulbur = Array.isArray(oldsonMashin?.tuukh?.[0]?.tulbur)
+      ? [...oldsonMashin.tuukh[0].tulbur]
+      : oldsonMashin?.tuukh?.[0]?.tulbur
+        ? [oldsonMashin.tuukh[0].tulbur]
+        : [];
+
+    existingTulbur.push({
+      ognoo: new Date(),
+      turul: body.turul || "QPay",
+      dun: tulsunDun,
+    });
+
+    const currentTulsun = existingTulbur.reduce(
+      (s, t) => s + (Number(t?.dun) > 0 ? Number(t.dun) : 0),
+      0
+    );
+
+    const set = {
+      "tuukh.0.tulbur": existingTulbur,
+      "tuukh.0.tulsunDun": currentTulsun,
+      tulsunDun: currentTulsun,
+      "tuukh.0.tuluv": 1,
+      "tuukh.0.tulukhDun": 0,
+    };
+
+    if (!(Number(oldsonMashin.niitDun) > 0)) {
+      set["niitDun"] = bodsonDun > 0 ? bodsonDun : currentTulsun;
+    }
+    if (!garsanTsag) {
+      set["garakhTsag"] = new Date(
+        Date.now() + (tukhainZogsool?.garakhTsag || 30) * 60000
+      );
+    }
+    if (body.ajiltniiId) {
+      set["tuukh.0.burtgesenAjiltaniiId"] = body.ajiltniiId;
+    }
+    if (body.ajiltniiNer) {
+      set["tuukh.0.burtgesenAjiltaniiNer"] = body.ajiltniiNer;
+    }
+
+    const updatedMashin = await Uilchluulegch(tukhainKholbolt).findByIdAndUpdate(
+      oldsonMashin._id,
+      { $set: set },
+      { new: true }
+    );
+    return updatedMashin;
   } catch (err) {
-    next(err);
+    if (typeof next === "function") next(err);
+    else throw err;
   }
 };
 
