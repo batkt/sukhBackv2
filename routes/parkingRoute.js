@@ -5719,21 +5719,9 @@ router.post("/ebarimtShivye", tokenShalgakh, async (req, res, next) => {
       tukhainObject.baiguullagiinId,
       orgEbarimtUrl
     );
-
-    if (customerNo && d.qrData) {
-      autoApproveQr(customerNo, d.qrData, tukhainObject.baiguullagiinId, tukhainKholbolt).catch(() => { });
-    }
-
-    res.json({ success: true, qrData: d.qrData, lottery: d.lottery, receiptId: d.id, ...d });
   } catch (err) {
     next(err);
   }
-},
-  next,
-  true,
-  tukhainObject.baiguullagiinId,
-  orgEbarimtUrl
-);
-
+});
 
 module.exports = router;
