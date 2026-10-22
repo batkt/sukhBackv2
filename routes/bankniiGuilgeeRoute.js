@@ -337,5 +337,23 @@ router.post(
   bankniiGuilgeeExcelOruulya,
 );
 
+// Дансны хуулга: United Ebill / Банкны хуулга Excel-ээр ухаалгаар оруулах (Preview & Auto-Match & Deduplication)
+const {
+  bankStatementPreview,
+  bankStatementConfirmImport,
+} = require("../controller/bankStatementImportController");
+
+router.post(
+  "/excelPreview",
+  uploadFile.single("excel"),
+  tokenShalgakh,
+  bankStatementPreview,
+);
+router.post(
+  "/excelConfirmImport",
+  tokenShalgakh,
+  bankStatementConfirmImport,
+);
+
 module.exports = router;
 
