@@ -344,10 +344,22 @@ const {
 } = require("../controller/bankStatementImportController");
 
 router.post(
+  "/bankniiGuilgee/excelPreview",
+  uploadFile.single("excel"),
+  tokenShalgakh,
+  bankStatementPreview,
+);
+router.post(
   "/excelPreview",
   uploadFile.single("excel"),
   tokenShalgakh,
   bankStatementPreview,
+);
+
+router.post(
+  "/bankniiGuilgee/excelConfirmImport",
+  tokenShalgakh,
+  bankStatementConfirmImport,
 );
 router.post(
   "/excelConfirmImport",
