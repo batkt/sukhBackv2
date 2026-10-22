@@ -9,6 +9,28 @@ const guilgeeService = require("../services/guilgeeService");
 const aldaa = require("../components/aldaa");
 
 /**
+ * Helper to ensure model connection object has .kholbolt property
+ */
+function getSafeConnection(kholbolt, baiguullagiinId) {
+  let conn =
+    kholbolt ||
+    (db.kholboltuud &&
+      db.kholboltuud.find(
+        (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
+      )) ||
+    db.erunkhiiKholbolt;
+
+  if (!conn) {
+    throw new aldaa("Байгууллагын мэдээллийн сангийн холболт олдсонгүй");
+  }
+  // Models expect conn.kholbolt
+  if (!conn.kholbolt) {
+    conn = { kholbolt: conn, baiguullagiinId };
+  }
+  return conn;
+}
+
+/**
  * Clean strings for comparison
  */
 function cleanStr(s) {
@@ -165,16 +187,20 @@ function makeGuilgeeCompoundKey(dansniiDugaar, journal, orlogo, zarlaga, date, t
  */
 exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
   try {
-    const { baiguullagiinId, barilgiinId, dansniiDugaar, bank } = req.body;
-    if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон байна");
-    if (!req.file) throw new aldaa("Excel файл сонгоно уу");
+    const baiguullagiinId =
+      req.body.baiguullagiinId ||
+      req.body.nevtersenAjiltniiToken?.baiguullagiinId;
+    const { barilgiinId, dansniiDugaar, bank } = req.body;
 
-    const kholbolt =
-      req.body.tukhainBaaziinKholbolt ||
-      db.kholboltuud.find(
-        (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
-      );
-    if (!kholbolt) throw new aldaa("Байгууллагын холболт олдсонгүй");
+    if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон байна");
+    if (!req.file || !req.file.buffer) {
+      throw new aldaa("Excel файл сонгоно уу");
+    }
+
+    const safeConn = getSafeConnection(
+      req.body.tukhainBaaziinKholbolt,
+      baiguullagiinId
+    );
 
     // Read Excel
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
@@ -205,11 +231,13 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
     const startIdx = hasHeader ? 1 : 0;
 
     // Fetch existing BankniiGuilgee for deduplication
-    const BankniiGuilgeeModel = BankniiGuilgee(kholbolt, false);
+    const BankniiGuilgeeModel = BankniiGuilgee(safeConn, false);
     const existingGuilgeenuud = await BankniiGuilgeeModel.find({
       baiguullagiinId: String(baiguullagiinId),
     })
-      .select("record tranId amount Amt tranAmount income outcome postDate tranDate dansniiDugaar description time kholbosonTalbainId")
+      .select(
+        "record tranId amount Amt tranAmount income outcome postDate tranDate dansniiDugaar description time kholbosonTalbainId"
+      )
       .lean();
 
     const existingJournalSet = new Set();
@@ -222,13 +250,17 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
       const d = g.postDate || g.tranDate || "";
       const dStr = d ? new Date(d).toISOString().split("T")[0] : "";
       const inc = Number(g.income || (g.amount > 0 ? g.amount : 0) || 0);
-      const exp = Number(g.outcome || (g.amount < 0 ? Math.abs(g.amount) : 0) || 0);
-      const cKey = `${g.dansniiDugaar || ""}_${rec}_${inc}_${exp}_${dStr}_${g.time || ""}`;
+      const exp = Number(
+        g.outcome || (g.amount < 0 ? Math.abs(g.amount) : 0) || 0
+      );
+      const cKey = `${g.dansniiDugaar || ""}_${rec}_${inc}_${exp}_${dStr}_${
+        g.time || ""
+      }`;
       existingCompoundKeySet.add(cKey);
     });
 
     // Fetch active contracts for this organization
-    const GereeModel = Geree(kholbolt, false);
+    const GereeModel = Geree(safeConn, false);
     const contractMatch = {
       baiguullagiinId: String(baiguullagiinId),
       tuluv: { $ne: "Цуцалсан" },
@@ -236,14 +268,17 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
     if (barilgiinId) contractMatch.barilgiinId = String(barilgiinId);
 
     const activeContracts = await GereeModel.find(contractMatch)
-      .select("_id gereeniiDugaar ovog ner utas toot davkhar bairNer barilgiinId orshinSuugchId updatedAt")
+      .select(
+        "_id gereeniiDugaar ovog ner utas toot davkhar bairNer barilgiinId orshinSuugchId updatedAt"
+      )
       .lean();
 
     // Fetch organization & buildings for building name mapping
-    const BaiguullagaModel = Baiguullaga;
-    const orgDoc = await BaiguullagaModel.findById(baiguullagiinId)
+    const orgDoc = await Baiguullaga(db.erunkhiiKholbolt || safeConn)
+      .findById(baiguullagiinId)
       .select("barilguud")
-      .lean();
+      .lean()
+      .catch(() => null);
 
     const barilgaMap = new Map(); // id -> name, and name -> id
     if (orgDoc?.barilguud) {
@@ -268,7 +303,9 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
 
     activeContracts.forEach((g) => {
       const tootVariants = tootiinKhuvilbaruud(g.toot);
-      const bNer = String(g.bairNer || barilgaMap.get(String(g.barilgiinId)) || "").trim();
+      const bNer = String(
+        g.bairNer || barilgaMap.get(String(g.barilgiinId)) || ""
+      ).trim();
       const numMatch = bNer.match(/\b(21[0-9]|\d{1,4})\b/);
       const bairNum = numMatch ? numMatch[1] : bNer;
 
@@ -315,8 +352,10 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
 
       // Check corrupted float decimals (like 53453.902759...)
       const isCorrupted =
-        (!Number.isInteger(orlogoRaw) && String(orlogoRaw).split(".")[1]?.length > 4) ||
-        (!Number.isInteger(zarlagaRaw) && String(zarlagaRaw).split(".")[1]?.length > 4);
+        (!Number.isInteger(orlogoRaw) &&
+          String(orlogoRaw).split(".")[1]?.length > 4) ||
+        (!Number.isInteger(zarlagaRaw) &&
+          String(zarlagaRaw).split(".")[1]?.length > 4);
 
       if (isCorrupted) {
         // Skip corrupted row completely
@@ -389,10 +428,19 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
           const exactNameMatches = candidates.filter((c) => {
             const cName = cleanStr(c.ner);
             const cOvog = cleanStr(c.ovog);
-            if (targetPhone && c.utas && c.utas.some((u) => String(u).includes(targetPhone))) {
+            if (
+              targetPhone &&
+              c.utas &&
+              c.utas.some((u) => String(u).includes(targetPhone))
+            ) {
               return true;
             }
-            if (targetName && (cName.includes(targetName) || targetName.includes(cName) || cOvog.includes(targetName))) {
+            if (
+              targetName &&
+              (cName.includes(targetName) ||
+                targetName.includes(cName) ||
+                cOvog.includes(targetName))
+            ) {
               return true;
             }
             return false;
@@ -408,7 +456,8 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
             candidateGerees = candidates.map((c) => ({
               _id: c._id,
               gereeniiDugaar: c.gereeniiDugaar,
-              bairNer: c.bairNer || barilgaMap.get(String(c.barilgiinId)) || "",
+              bairNer:
+                c.bairNer || barilgaMap.get(String(c.barilgiinId)) || "",
               toot: c.toot,
               ovog: c.ovog || "",
               ner: c.ner || "",
@@ -453,7 +502,10 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
           ? {
               _id: matchedGeree._id,
               gereeniiDugaar: matchedGeree.gereeniiDugaar,
-              bairNer: matchedGeree.bairNer || barilgaMap.get(String(matchedGeree.barilgiinId)) || "",
+              bairNer:
+                matchedGeree.bairNer ||
+                barilgaMap.get(String(matchedGeree.barilgiinId)) ||
+                "",
               toot: matchedGeree.toot,
               ovog: matchedGeree.ovog || "",
               ner: matchedGeree.ner || "",
@@ -484,7 +536,11 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
       rows: parsedRows,
     });
   } catch (error) {
-    next(error);
+    console.error("❌ [EXCEL PREVIEW ALDAA]:", error);
+    res.status(400).json({
+      success: false,
+      aldaa: error.message || "Хуулга уншихад алдаа гарлаа",
+    });
   }
 });
 
@@ -494,22 +550,24 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
  */
 exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
   try {
-    const { baiguullagiinId, barilgiinId, dansniiDugaar, bank, rows } = req.body;
+    const baiguullagiinId =
+      req.body.baiguullagiinId ||
+      req.body.nevtersenAjiltniiToken?.baiguullagiinId;
+    const { barilgiinId, dansniiDugaar, bank, rows } = req.body;
+
     if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон байна");
     if (!Array.isArray(rows) || rows.length === 0) {
       throw new aldaa("Бүртгэх гүйлгээ сонгогдоогүй байна");
     }
 
-    const kholbolt =
-      req.body.tukhainBaaziinKholbolt ||
-      db.kholboltuud.find(
-        (k) => String(k.baiguullagiinId) === String(baiguullagiinId)
-      );
-    if (!kholbolt) throw new aldaa("Байгууллагын холболт олдсонгүй");
+    const safeConn = getSafeConnection(
+      req.body.tukhainBaaziinKholbolt,
+      baiguullagiinId
+    );
 
-    const BankniiGuilgeeModel = BankniiGuilgee(kholbolt);
-    const GuilgeeAvlaguudModel = GuilgeeAvlaguud(kholbolt);
-    const GereeModel = Geree(kholbolt, false);
+    const BankniiGuilgeeModel = BankniiGuilgee(safeConn);
+    const GuilgeeAvlaguudModel = GuilgeeAvlaguud(safeConn);
+    const GereeModel = Geree(safeConn, false);
     const ajiltan = req.body.nevtersenAjiltniiToken || {};
 
     let importedCount = 0;
@@ -537,7 +595,9 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
         // Parse date
         let postDate = new Date();
         if (dateStr) {
-          const d = new Date(dateStr.replace(/\./g, "-") + (timeStr ? `T${timeStr}` : ""));
+          const d = new Date(
+            dateStr.replace(/\./g, "-") + (timeStr ? `T${timeStr}` : "")
+          );
           if (!isNaN(d.getTime())) postDate = d;
         }
 
@@ -559,7 +619,9 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
           const recordId = journal || `EXCEL-${Date.now()}-${importedCount}`;
           savedBankGuilgee = await BankniiGuilgeeModel.create({
             baiguullagiinId: String(baiguullagiinId),
-            barilgiinId: barilgiinId ? String(barilgiinId) : (r.matchedGeree?.barilgiinId || ""),
+            barilgiinId: barilgiinId
+              ? String(barilgiinId)
+              : r.matchedGeree?.barilgiinId || "",
             dansniiDugaar: String(dansniiDugaar || ""),
             bank: bank || r.bank || "khanbank",
             record: recordId,
@@ -596,7 +658,7 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
           if (!existingPayment) {
             const gereeDoc = await GereeModel.findById(targetGereeId).lean();
             if (gereeDoc) {
-              await guilgeeService.recordPayment(kholbolt, {
+              await guilgeeService.recordPayment(safeConn, {
                 baiguullagiinId: String(baiguullagiinId),
                 baiguullagiinNer: gereeDoc.baiguullagiinNer || "",
                 barilgiinId: String(gereeDoc.barilgiinId || barilgiinId || ""),
@@ -606,7 +668,9 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
                 toot: gereeDoc.toot || r.detectedToot || "",
                 ognoo: postDate,
                 dun: -Math.abs(amount),
-                tailbar: r.description || `Дансны хуулга ${gereeDoc.toot || ""} тоот`,
+                tailbar:
+                  r.description ||
+                  `Дансны хуулга ${gereeDoc.toot || ""} тоот`,
                 source: "bank_excel",
                 bankniiGuilgeeId: String(savedBankGuilgee._id),
                 dansniiDugaar: String(dansniiDugaar || ""),
@@ -615,16 +679,19 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
               });
 
               // Link to contract on BankniiGuilgee
-              await BankniiGuilgeeModel.findByIdAndUpdate(savedBankGuilgee._id, {
-                $addToSet: {
-                  kholbosonTalbainId: String(gereeDoc._id),
-                  kholbosonGereeniiId: String(gereeDoc._id),
-                },
-                $set: {
-                  kholbosonAjiltniiNer: ajiltan.ner || "",
-                  kholbosonAjiltniiId: ajiltan.id ? String(ajiltan.id) : "",
-                },
-              });
+              await BankniiGuilgeeModel.findByIdAndUpdate(
+                savedBankGuilgee._id,
+                {
+                  $addToSet: {
+                    kholbosonTalbainId: String(gereeDoc._id),
+                    kholbosonGereeniiId: String(gereeDoc._id),
+                  },
+                  $set: {
+                    kholbosonAjiltniiNer: ajiltan.ner || "",
+                    kholbosonAjiltniiId: ajiltan.id ? String(ajiltan.id) : "",
+                  },
+                }
+              );
 
               paidCount++;
             }
@@ -656,6 +723,10 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
       errors: errors.slice(0, 10),
     });
   } catch (error) {
-    next(error);
+    console.error("❌ [EXCEL CONFIRM IMPORT ALDAA]:", error);
+    res.status(400).json({
+      success: false,
+      aldaa: error.message || "Гүйлгээ баталгаажуулахад алдаа гарлаа",
+    });
   }
 });
