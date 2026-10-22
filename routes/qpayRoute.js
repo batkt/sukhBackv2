@@ -1701,10 +1701,27 @@ router.post("/qpayGargaya", tokenShalgakh, tulukhErkhShalgaya, async (req, res, 
                 }
               }
 
-              // Use dedicated parking account if matched; otherwise fallback to main account (first bank account)
-              const bankAccount = matchedAccount || targetSalbar.bank_accounts[0];
+              // Determine intended account:
+              // - If parking payment: match dedicated parking account (e.g. "МРЖ ХХК")
+              // - If regular SUKH payment: explicitly choose SUKH account and strictly avoid parking/company accounts
+              let bankAccount = null;
+              if (isZogsoolTulbur) {
+                bankAccount =
+                  matchedAccount ||
+                  targetSalbar.bank_accounts.find((a) =>
+                    /мрж|зогсоол|parking|garaaj|гараж/i.test(a.account_name)
+                  ) ||
+                  targetSalbar.bank_accounts[0];
+              } else {
+                bankAccount =
+                  targetSalbar.bank_accounts.find(
+                    (a) =>
+                      !/мрж|зогсоол|parking|garaaj|гараж/i.test(a.account_name)
+                  ) || targetSalbar.bank_accounts[0];
+              }
+
               const newDansniiDugaar =
-                bankAccount.account_number || req.body.dansniiDugaar;
+                bankAccount?.account_number || req.body.dansniiDugaar;
 
               // Check if this account exists in Dans model with merchant credentials
               const dansModel = Dans(req.body.tukhainBaaziinKholbolt);
@@ -1719,7 +1736,7 @@ router.post("/qpayGargaya", tokenShalgakh, tulukhErkhShalgaya, async (req, res, 
                 // Account exists in Dans with QPay enabled, use it
                 req.body.dansniiDugaar = newDansniiDugaar;
                 req.body.burtgeliinDugaar =
-                  bankAccount.account_bank_code || req.body.burtgeliinDugaar;
+                  bankAccount?.account_bank_code || req.body.burtgeliinDugaar;
               } else {
                 // Account doesn't exist in Dans or doesn't have QPay enabled
                 // Try to find a Dans entry for this barilga with QPay enabled
@@ -1743,19 +1760,24 @@ router.post("/qpayGargaya", tokenShalgakh, tulukhErkhShalgaya, async (req, res, 
 
                 if (fallbackDans) {
                   // Use the Dans account number for merchant credentials lookup
-                  req.body.dansniiDugaar = matchedAccount
-                    ? matchedAccount.account_number
-                    : fallbackDans.dugaar;
+                  req.body.dansniiDugaar = bankAccount?.account_number || fallbackDans.dugaar;
                   req.body.burtgeliinDugaar =
-                    bankAccount.account_bank_code || req.body.burtgeliinDugaar;
+                    bankAccount?.account_bank_code || req.body.burtgeliinDugaar;
                 } else {
-                  if (matchedAccount) {
-                    req.body.dansniiDugaar = matchedAccount.account_number;
+                  // CRITICAL: Always ensure dansniiDugaar is explicitly set to the intended account!
+                  // Never leave req.body.dansniiDugaar as undefined, otherwise quickqpaypackvSukh
+                  // will attach ALL branch accounts (including parking accounts like МРЖ ХХК) to SUKH invoices.
+                  if (bankAccount?.account_number) {
+                    req.body.dansniiDugaar = bankAccount.account_number;
                     req.body.burtgeliinDugaar =
-                      matchedAccount.account_bank_code || req.body.burtgeliinDugaar;
+                      bankAccount.account_bank_code || req.body.burtgeliinDugaar;
                   }
                 }
               }
+
+              console.log(
+                `💳 [QPAY-ACCOUNT-SELECTION] isZogsool: ${isZogsoolTulbur}, Selected account: ${req.body.dansniiDugaar} (${bankAccount?.account_name || "N/A"})`
+              );
             } else {
             }
           } else {
