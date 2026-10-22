@@ -782,6 +782,19 @@ if (
     }
   );
 
+  // Өчигдрийн орлогын SMS — `tokhirgoo.msgAvakhTsag: "09:30"` байгууллагууд
+  // (анкет зөвшөөрөхөд захирлын дугаараар автоматаар тохируулагддаг).
+  cron.schedule(
+    "30 9 * * *",
+    function () {
+      require("./controller/ajiltan").orlogiinMsgIlgeeye("09:30");
+    },
+    {
+      scheduled: true,
+      timezone: "Asia/Ulaanbaatar",
+    }
+  );
+
   // 12-hour cron job to auto-delete guest invitations on waiting list older than 12 hours
   cron.schedule(
     "0 */12 * * *",
