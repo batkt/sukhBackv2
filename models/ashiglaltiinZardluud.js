@@ -29,6 +29,11 @@ const ashiglaltiinZardluudSchema = new Schema(
     zaalt: Boolean, // Electricity (цахилгаан) flag
     zaaltTariff: Number, // кВт tariff for electricity (legacy - use zaaltTariffTiers if available)
     zaaltDefaultDun: Number, // Default amount for electricity calculation
+    zoriulalt: {
+      type: String,
+      enum: ["orshinSuugch", "khariltsagch"],
+      default: "orshinSuugch",
+    },
     zaaltTariffTiers: [
       {
         threshold: Number, // Usage threshold (кВт) - e.g., 175, 256
@@ -126,7 +131,16 @@ async function handleZardluudUpdate(doc) {
     const GereeModel = Geree(kholbolt);
     const gereenuud = await GereeModel.find(gereeQuery).lean();
 
+    const isKhariltsagchDoc = doc.zoriulalt === "khariltsagch";
+
     for (const geree of gereenuud) {
+      // Зөвхөн тохирох гэрээнд л синк хийнэ:
+      // Харилцагчийн зардал -> зөвхөн харилцагчийн гэрээнд
+      // Оршин суугчийн зардал -> зөвхөн оршин суугчийн гэрээнд
+      const isKhariltsagchGeree = Boolean(geree.khariltsagchId);
+      if (isKhariltsagchDoc !== isKhariltsagchGeree) {
+        continue;
+      }
       // Нэг гэрээ унасан ч бусдыг үргэлжлүүлнэ.
       try {
         // Remove any pre-existing entry with matching name/turul
@@ -146,6 +160,7 @@ async function handleZardluudUpdate(doc) {
           tariff: doc.tariff || 0,
           tariffUsgeer: doc.tariffUsgeer || "",
           zardliinTurul: doc.zardliinTurul || "Энгийн",
+          zoriulalt: doc.zoriulalt || "orshinSuugch",
           barilgiinId: doc.barilgiinId || "",
           tulukhDun: 0,
           dun: doc.dun || 0,

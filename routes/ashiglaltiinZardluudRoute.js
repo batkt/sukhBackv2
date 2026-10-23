@@ -278,6 +278,7 @@ router.post("/zardalTseverlekhiya", tokenShalgakh, async (req, res, next) => {
       tariff: doc.tariff || 0,
       tariffUsgeer: doc.tariffUsgeer || "",
       zardliinTurul: doc.zardliinTurul || "Энгийн",
+      zoriulalt: doc.zoriulalt || "orshinSuugch",
       barilgiinId: doc.barilgiinId || "",
       tulukhDun: 0,
       dun: doc.dun || 0,

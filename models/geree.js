@@ -68,6 +68,7 @@ const gereeSchema = new Schema(
         tariff: Number,
         tariffUsgeer: String,
         zardliinTurul: String,
+        zoriulalt: String,
         barilgiinId: String, // Барилгын ID - аль барилгаас ирсэн zardal болохыг тодорхойлох
         tulukhDun: Number, // Менежментийн зардал
         dun: Number, //dung n zuwxun munguur tootsoj awax togtmol ued buglunu

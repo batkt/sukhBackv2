@@ -367,9 +367,21 @@ exports.createGeree = asyncHandler(async (req, res) => {
 
   // 1. Get default ashiglaltiinZardluud from the collection
   const AshiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
+  const isKhariltsagch = !!req.body.khariltsagchId && !req.body.orshinSuugchId;
+  const zoriulaltFilter = isKhariltsagch
+    ? { zoriulalt: "khariltsagch" }
+    : {
+        $or: [
+          { zoriulalt: "orshinSuugch" },
+          { zoriulalt: { $exists: false } },
+          { zoriulalt: null },
+        ],
+      };
+
   const defaultZardluud = await AshiglaltiinZardluud(tukhainBaaziinKholbolt).find({
     baiguullagiinId: baiguullagiinId,
     barilgiinId: barilgiinId,
+    ...zoriulaltFilter,
   });
 
   // 2. Prepare geree data, populating zardluud if empty
@@ -382,6 +394,7 @@ exports.createGeree = asyncHandler(async (req, res) => {
           ner: z.ner,
           turul: z.turul,
           zardliinTurul: z.zardliinTurul,
+          zoriulalt: z.zoriulalt || (isKhariltsagch ? "khariltsagch" : "orshinSuugch"),
           tariff: z.tariff,
           tariffUsgeer: z.tariffUsgeer,
           bodokhArga: z.bodokhArga,

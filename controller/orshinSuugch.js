@@ -5698,6 +5698,15 @@ exports.syncResidentContracts = async function syncResidentContracts(
     ).find({
       baiguullagiinId: baiguullagiinId,
       barilgiinId: currentBarilgiinId,
+      ...(isKhariltsagch
+        ? { zoriulalt: "khariltsagch" }
+        : {
+            $or: [
+              { zoriulalt: "orshinSuugch" },
+              { zoriulalt: { $exists: false } },
+              { zoriulalt: null },
+            ],
+          }),
     });
 
     const unitTurul = tootEntry.turul || "Орон сууц";
@@ -5727,6 +5736,7 @@ exports.syncResidentContracts = async function syncResidentContracts(
       ner: zardal.ner,
       turul: zardal.turul,
       zardliinTurul: zardal.zardliinTurul,
+      zoriulalt: zardal.zoriulalt || (isKhariltsagch ? "khariltsagch" : "orshinSuugch"),
       tariff: zardal.tariff,
       tariffUsgeer: zardal.tariffUsgeer || "",
       tulukhDun: 0,
