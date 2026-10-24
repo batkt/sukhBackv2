@@ -270,15 +270,38 @@ async function mashinuudBurtgeye({
             ...zochinTalbaruud(),
           });
           shineEsekh = true;
-        } else if (
-          !baigaa.ezemshigchiinId ||
-          baigaa.ezemshigchiinId !== ezemshigchiinId
-        ) {
-          baigaa.ezemshigchiinId = ezemshigchiinId;
-          baigaa.orshinSuugchiinId = ezemshigchiinId;
-          baigaa.ezenToot = ezenToot || baigaa.ezenToot;
-          baigaa.barilgiinId = barilgiinId || baigaa.barilgiinId;
-          await baigaa.save();
+        } else {
+          let uurchlugdsun = false;
+          if (
+            !baigaa.ezemshigchiinId ||
+            baigaa.ezemshigchiinId !== ezemshigchiinId
+          ) {
+            baigaa.ezemshigchiinId = ezemshigchiinId;
+            baigaa.orshinSuugchiinId = ezemshigchiinId;
+            uurchlugdsun = true;
+          }
+          if (zochinTurul && (baigaa.zochinTurul !== zochinTurul || (zochinTurul === "Харилцагч" && baigaa.turul !== "Харилцагч"))) {
+            baigaa.zochinTurul = zochinTurul;
+            if (zochinTurul === "Харилцагч") {
+              baigaa.turul = "Харилцагч";
+            }
+            uurchlugdsun = true;
+          }
+          if (ezemshigch?.ner && baigaa.ezemshigchiinNer !== ezemshigch.ner) {
+            baigaa.ezemshigchiinNer = ezemshigch.ner;
+            uurchlugdsun = true;
+          }
+          if (ezenToot && baigaa.ezenToot !== ezenToot) {
+            baigaa.ezenToot = ezenToot;
+            uurchlugdsun = true;
+          }
+          if (barilgiinId && baigaa.barilgiinId !== barilgiinId) {
+            baigaa.barilgiinId = barilgiinId;
+            uurchlugdsun = true;
+          }
+          if (uurchlugdsun) {
+            await baigaa.save();
+          }
         }
       } catch (aldaa) {
         khariu.aldaa.push(`${dugaar}: ${aldaa.message}`);

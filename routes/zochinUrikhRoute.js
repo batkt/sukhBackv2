@@ -2568,6 +2568,12 @@ router.get("/zochinJagsaalt", tokenShalgakh, async (req, res, next) => {
             [...bichleguud.values()]
               .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
               .forEach((mp) => {
+                if (mp._id && (mp.turul !== "Харилцагч" || mp.zochinTurul !== "Харилцагч")) {
+                  Mashin(tukhainBaaziinKholbolt).updateOne(
+                    { _id: mp._id },
+                    { $set: { turul: "Харилцагч", zochinTurul: "Харилцагч" } }
+                  ).exec().catch(() => {});
+                }
                 fullMergedData.push(
                   ezniiMurBelgeye(k, mp, dugaaruud, "Харилцагч"),
                 );
