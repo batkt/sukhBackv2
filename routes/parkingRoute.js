@@ -592,6 +592,20 @@ router.get(
                 const mashin = v.mashin || mashinMap.get(v.mashiniiDugaar);
                 const hasResidentData = mashin?.ezenToot || mashin?.orshinSuugchiinId || mashin?.ezemshigchiinNer;
                 const mashinTurul = mashin?.turul || mashin?.zochinTurul;
+                const isKhariltsagch =
+                  mashinTurul === "Харилцагч" ||
+                  mashin?.ezemshigchiinTurul === "Khariltsagch" ||
+                  mashin?.zochinTurul === "Харилцагч";
+
+                if (isKhariltsagch) {
+                  return {
+                    ...v,
+                    turul: "Харилцагч",
+                    toot: v.toot || mashin?.ezenToot,
+                    orshinSuugchiinNer: v.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
+                    mashin: mashin || v.mashin,
+                  };
+                }
 
                 // If root turul is missing but mashin has it, or mashin has resident indicators
                 if (!v.turul && (mashinTurul || hasResidentData)) {
@@ -711,6 +725,20 @@ router.get(
             const mashin = v.mashin || mashinMap.get(v.mashiniiDugaar);
             const hasResidentData = mashin?.ezenToot || mashin?.orshinSuugchiinId || mashin?.ezemshigchiinNer;
             const mashinTurul = mashin?.turul || mashin?.zochinTurul;
+            const isKhariltsagch =
+              mashinTurul === "Харилцагч" ||
+              mashin?.ezemshigchiinTurul === "Khariltsagch" ||
+              mashin?.zochinTurul === "Харилцагч";
+
+            if (isKhariltsagch) {
+              return {
+                ...v,
+                turul: "Харилцагч",
+                toot: v.toot || mashin?.ezenToot,
+                orshinSuugchiinNer: v.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
+                mashin: mashin || v.mashin,
+              };
+            }
 
             // If root turul is missing but mashin has it, or mashin has resident indicators
             if (!v.turul && (mashinTurul || hasResidentData)) {
