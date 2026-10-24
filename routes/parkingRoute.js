@@ -588,22 +588,58 @@ router.get(
                 }
               }
 
+              const ownerIds = [
+                ...new Set(
+                  result.jagsaalt
+                    .map(v => {
+                      const m = v.mashin || mashinMap.get(v.mashiniiDugaar);
+                      return m?.ezemshigchiinId || m?.orshinSuugchiinId || v.ezemshigchiinId || v.orshinSuugchiinId;
+                    })
+                    .filter(Boolean)
+                )
+              ];
+
+              let khariltsagchIds = new Set();
+              if (ownerIds.length > 0) {
+                try {
+                  const Khariltsagch = require("../models/khariltsagch");
+                  const { db } = require("zevbackv2");
+                  const foundKhar = await Khariltsagch(db.erunkhiiKholbolt)
+                    .find({ _id: { $in: ownerIds } })
+                    .distinct("_id");
+                  khariltsagchIds = new Set(foundKhar.map(String));
+                } catch (e) {
+                  console.error("[Khariltsagch lookup error]", e.message);
+                }
+              }
+
               result.jagsaalt = result.jagsaalt.map((v) => {
                 const mashin = v.mashin || mashinMap.get(v.mashiniiDugaar);
+                const ownerId = String(mashin?.ezemshigchiinId || mashin?.orshinSuugchiinId || v.ezemshigchiinId || v.orshinSuugchiinId || "");
+                const isKhariltsagchOwner = ownerId && khariltsagchIds.has(ownerId);
+                const mashinTurul = isKhariltsagchOwner ? "Харилцагч" : (mashin?.turul || mashin?.zochinTurul);
                 const hasResidentData = mashin?.ezenToot || mashin?.orshinSuugchiinId || mashin?.ezemshigchiinNer;
-                const mashinTurul = mashin?.turul || mashin?.zochinTurul;
                 const isKhariltsagch =
+                  isKhariltsagchOwner ||
                   mashinTurul === "Харилцагч" ||
                   mashin?.ezemshigchiinTurul === "Khariltsagch" ||
-                  mashin?.zochinTurul === "Харилцагч";
+                  mashin?.zochinTurul === "Харилцагч" ||
+                  v.turul === "Харилцагч";
 
                 if (isKhariltsagch) {
+                  if (isKhariltsagchOwner && mashin?._id && (mashin.turul !== "Харилцагч" || mashin.zochinTurul !== "Харилцагч")) {
+                    const kholbolt = req.body.tukhainBaaziinKholbolt || req.query.tukhainBaaziinKholbolt;
+                    Mashin(kholbolt).updateOne(
+                      { _id: mashin._id },
+                      { $set: { turul: "Харилцагч", zochinTurul: "Харилцагч" } }
+                    ).exec().catch(() => {});
+                  }
                   return {
                     ...v,
                     turul: "Харилцагч",
                     toot: v.toot || mashin?.ezenToot,
                     orshinSuugchiinNer: v.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
-                    mashin: mashin || v.mashin,
+                    mashin: mashin ? { ...mashin, turul: "Харилцагч", zochinTurul: "Харилцагч" } : v.mashin,
                   };
                 }
 
@@ -721,22 +757,58 @@ router.get(
             }
           }
 
+          const ownerIds = [
+            ...new Set(
+              paginatedResults
+                .map(v => {
+                  const m = v.mashin || mashinMap.get(v.mashiniiDugaar);
+                  return m?.ezemshigchiinId || m?.orshinSuugchiinId || v.ezemshigchiinId || v.orshinSuugchiinId;
+                })
+                .filter(Boolean)
+            )
+          ];
+
+          let khariltsagchIds = new Set();
+          if (ownerIds.length > 0) {
+            try {
+              const Khariltsagch = require("../models/khariltsagch");
+              const { db } = require("zevbackv2");
+              const foundKhar = await Khariltsagch(db.erunkhiiKholbolt)
+                .find({ _id: { $in: ownerIds } })
+                .distinct("_id");
+              khariltsagchIds = new Set(foundKhar.map(String));
+            } catch (e) {
+              console.error("[Khariltsagch lookup error]", e.message);
+            }
+          }
+
           paginatedResults = paginatedResults.map((v) => {
             const mashin = v.mashin || mashinMap.get(v.mashiniiDugaar);
+            const ownerId = String(mashin?.ezemshigchiinId || mashin?.orshinSuugchiinId || v.ezemshigchiinId || v.orshinSuugchiinId || "");
+            const isKhariltsagchOwner = ownerId && khariltsagchIds.has(ownerId);
+            const mashinTurul = isKhariltsagchOwner ? "Харилцагч" : (mashin?.turul || mashin?.zochinTurul);
             const hasResidentData = mashin?.ezenToot || mashin?.orshinSuugchiinId || mashin?.ezemshigchiinNer;
-            const mashinTurul = mashin?.turul || mashin?.zochinTurul;
             const isKhariltsagch =
+              isKhariltsagchOwner ||
               mashinTurul === "Харилцагч" ||
               mashin?.ezemshigchiinTurul === "Khariltsagch" ||
-              mashin?.zochinTurul === "Харилцагч";
+              mashin?.zochinTurul === "Харилцагч" ||
+              v.turul === "Харилцагч";
 
             if (isKhariltsagch) {
+              if (isKhariltsagchOwner && mashin?._id && (mashin.turul !== "Харилцагч" || mashin.zochinTurul !== "Харилцагч")) {
+                const kholbolt = req.body.tukhainBaaziinKholbolt || req.query.tukhainBaaziinKholbolt;
+                Mashin(kholbolt).updateOne(
+                  { _id: mashin._id },
+                  { $set: { turul: "Харилцагч", zochinTurul: "Харилцагч" } }
+                ).exec().catch(() => {});
+              }
               return {
                 ...v,
                 turul: "Харилцагч",
                 toot: v.toot || mashin?.ezenToot,
                 orshinSuugchiinNer: v.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
-                mashin: mashin || v.mashin,
+                mashin: mashin ? { ...mashin, turul: "Харилцагч", zochinTurul: "Харилцагч" } : v.mashin,
               };
             }
 
