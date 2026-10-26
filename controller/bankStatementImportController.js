@@ -23,7 +23,6 @@ function getSafeConnection(kholbolt, baiguullagiinId) {
   if (!conn) {
     throw new aldaa("Байгууллагын мэдээллийн сангийн холболт олдсонгүй");
   }
-  // Models expect conn.kholbolt
   if (!conn.kholbolt) {
     conn = { kholbolt: conn, baiguullagiinId };
   }
@@ -35,7 +34,19 @@ function getSafeConnection(kholbolt, baiguullagiinId) {
  */
 function cleanStr(s) {
   if (!s) return "";
-  return String(s).trim().toLowerCase().replace(/[\s\-_.,/]/g, "");
+  return String(s).trim().toLowerCase().replace(/[\s\-_.,/()]/g, "");
+}
+
+/**
+ * Robust money / number parser
+ * Handles commas, spaces, currency symbols: e.g. "50,000" -> 50000, " 48,600.00 " -> 48600
+ */
+function parseMoney(val) {
+  if (val === undefined || val === null || val === "") return 0;
+  if (typeof val === "number") return isNaN(val) ? 0 : val;
+  const clean = String(val).replace(/,/g, "").replace(/\s/g, "").replace(/[^0-9.-]/g, "").trim();
+  const num = parseFloat(clean);
+  return isNaN(num) ? 0 : num;
 }
 
 /**
@@ -56,22 +67,22 @@ function tootiinKhuvilbaruud(toot) {
  */
 function parseStatementDescription(desc) {
   if (!desc) return { type: "EMPTY" };
-  const str = String(desc).trim();
+  const originalStr = String(desc).trim();
 
   // 1. Fee / Charge / Operational skip
   if (
-    /^fee$/i.test(str) ||
-    /шимтгэл|хураамж/i.test(str) ||
-    /данс хөтөлсний/i.test(str)
+    /^fee$/i.test(originalStr) ||
+    /шимтгэл|хураамж/i.test(originalStr) ||
+    /данс хөтөлсний/i.test(originalStr)
   ) {
     return { type: "FEE", isFee: true, skipSuggested: true };
   }
 
+  const isAldangi = /^алданги/i.test(originalStr);
+
   // 2. 16-digit United E-bill barcode format:
   // e.g. "2003260218001490_Т.АРИУНАА_СӨХ_2025/12"
-  // or "Алданги. 2003260219000490_Ц.ДАВААХҮҮ_СӨХ_2025/11"
-  const isAldangi = /^алданги/i.test(str);
-  const ebill = str.match(
+  const ebill = originalStr.match(
     /(?:алданги[.\s]*)?(\d{7})(\d{3})(\d{5})(\d{1})_([^_]+)_([^_]+)_(\d{4}\/\d{1,2})/i
   );
   if (ebill) {
@@ -79,15 +90,15 @@ function parseStatementDescription(desc) {
       type: "EBILL",
       isAldangi,
       orgCode: ebill[1],
-      bair: ebill[2], // e.g. "218"
-      toot: String(parseInt(ebill[3], 10)), // e.g. "149"
+      bair: ebill[2],
+      toot: String(parseInt(ebill[3], 10)),
       residentName: ebill[5].trim(),
       period: ebill[7].trim(),
     };
   }
 
-  // 3. Fallback ebill pattern with varying prefix length:
-  const ebillAlt = str.match(
+  // 3. Fallback ebill pattern:
+  const ebillAlt = originalStr.match(
     /(?:алданги[.\s]*)?(\d{14,18})_([^_]+)_([^_]+)_(\d{4}\/\d{1,2})/i
   );
   if (ebillAlt) {
@@ -108,69 +119,78 @@ function parseStatementDescription(desc) {
     };
   }
 
-  // 4. Flexible building and toot:
-  // e.g. "217-56 94192889", "219-Р БАЙР 66 ТООТ", "216 БАЙР . 125 ТООТ", "217*26 ТООТ", "218Н14ТООТ", "218 6TOOT"
-  const flexible = str.match(
-    /\b(21[0-9]|\d{1,3})\s*(?:-?[рr]|\s*ба[йи]р|\s*bair|\s*iin|\s*ийн|\s*н|\*|[-./])*\s*(\d{1,4})\s*(?:тоот|toot)?\b/i
+  // Phone match
+  const phoneMatch = originalStr.match(/\b[5-9]\d{7}\b/);
+  const phone = phoneMatch ? phoneMatch[0] : null;
+
+  // Clean a working copy of the string to avoid dates/months matching as buildings/toots
+  let clean = originalStr;
+
+  // Remove parentheses like "(ХААН БАНК ...)"
+  clean = clean.replace(/\([^)]*\)/g, " ");
+
+  // Remove QPAY and GD prefixes
+  clean = clean.replace(/qpay\s*\d+/gi, " ").replace(/гд[-:]?\d+/gi, " ").replace(/ap\/\d+\/\d+/gi, " ");
+
+  // Remove full year or year-month e.g. 2025-10, 2026.01, 2026/12, 2025/11, 2026
+  clean = clean.replace(/\b202[0-9][-/.](?:0?[1-9]|1[0-2])\b/g, " ");
+  clean = clean.replace(/\b202[0-9]\b/g, " ");
+
+  // Remove month indicators e.g. "10 сар", "9 сарын", "12-R SAR", "1,2 SAR", "5-12 SAR", "10 CAP"
+  clean = clean.replace(/\b(?:\d{1,2}(?:\s*,\s*\d{1,2})*|\d{1,2}\s*-\s*\d{1,2})\s*(?:-[рr]\s*)?(?:сар|cap|sar)[а-яөүёa-z]*/gi, " ");
+  clean = clean.replace(/\b(?:\d{1,2})\s*(?:-[рr]\s*)?(?:сар|cap|sar)[а-яөүёa-z]*/gi, " ");
+
+  // 4. Look for explicit bair + toot:
+  // e.g. "217-56", "219-Р БАЙР 66 ТООТ", "216 БАЙР . 125 ТООТ", "217*26 ТООТ", "218Н14ТООТ", "218 6TOOT"
+  const bairToot = clean.match(
+    /\b(21[6-9]|\d{1,3})\s*(?:-?[рr]\s*байр|\s*ба[йи]р|\s*bair|\s*iin|\s*ийн|\s*н|\*|[-./])\s*(\d{1,4}[А-Яа-яA-Za-z]?)\s*(?:тоот|toot)?\b/i
   );
-  if (flexible) {
-    const phoneMatch = str.match(/[5-9]\d{7}/);
+  if (bairToot) {
     return {
-      type: "MANUAL_BAIR_TOOT",
+      type: "BAIR_TOOT",
       isAldangi,
-      bair: flexible[1],
-      toot: String(parseInt(flexible[2], 10)),
-      phone: phoneMatch ? phoneMatch[0] : null,
+      bair: bairToot[1],
+      toot: String(bairToot[2]).replace(/^0+/, "") || bairToot[2],
+      phone,
     };
   }
 
-  // 5. Reversed building & toot:
-  // e.g. "БАЙР 216 ... 125 ТООТ" or "216 ... ТООТ 125"
-  const rev =
-    str.match(
-      /(?:ба[йи]р|bair)\s*[:.]?\s*(\d{1,4}).*?(?:тоот|toot)\s*[:.]?\s*(\d{1,4})/i
-    ) || str.match(/\b(21[0-9]).*?(?:тоот|toot)\s*[:.]?\s*(\d{1,4})/i);
-  if (rev) {
-    const phoneMatch = str.match(/[5-9]\d{7}/);
+  // 5. Look for explicit "тоот" / "toot": e.g. "66 тоот", "502тоот", "151А тоот"
+  const tootWord = clean.match(/\b(\d{1,4}[А-Яа-яA-Za-z]?)\s*(?:тоот|toot)\b/i) ||
+                   clean.match(/(?:тоот|toot)\s*[:.]?\s*(\d{1,4}[А-Яа-яA-Za-z]?)\b/i);
+  if (tootWord) {
     return {
-      type: "REVERSED_BAIR_TOOT",
+      type: "EXPLICIT_TOOT",
       isAldangi,
-      bair: rev[1],
-      toot: String(parseInt(rev[2], 10)),
-      phone: phoneMatch ? phoneMatch[0] : null,
+      toot: String(tootWord[1]).replace(/^0+/, "") || tootWord[1],
+      phone,
     };
   }
 
-  // 6. Generic toot only:
-  // e.g. "143 тоот", "605TOOT"
-  const tootMatch =
-    str.match(/(\d{1,4})\s*(?:тоот|toot)\b/i) ||
-    str.match(/(?:тоот|toot)\s*(\d{1,4})\b/i);
-  if (tootMatch) {
-    const phoneMatch = str.match(/[5-9]\d{7}/);
-    return {
-      type: "GENERIC_TOOT",
-      isAldangi,
-      toot: String(parseInt(tootMatch[1], 10)),
-      phone: phoneMatch ? phoneMatch[0] : null,
-    };
+  // 6. Look for standalone apartment numbers: e.g. "- 903", "-502", "303 -", "903"
+  const standaloneToot = clean.match(/(?:^|[-_#\s])([1-9]\d{1,3}[А-Яа-яA-Za-z]?)(?:[-_#\s]|$)/);
+  if (standaloneToot) {
+    const candidate = standaloneToot[1];
+    if (candidate.length <= 4 && Number(candidate.replace(/[^\d]/g, "")) <= 2500) {
+      return {
+        type: "STANDALONE_TOOT",
+        isAldangi,
+        toot: candidate,
+        phone,
+      };
+    }
   }
 
-  // 7. QPay
-  if (/qpay/i.test(str)) {
-    return { type: "QPAY", isQpay: true };
-  }
-
-  // 8. Other / Expense
-  if (/харуул|lift|лифт|засвар|хүрэлхүүгээс өрөө/i.test(str)) {
+  // 7. Operational Expense Check
+  if (/харуул|lift|лифт|засвар|хүрэлхүүгээс өрөө|цалин|хог|тээвэр/i.test(originalStr)) {
     return { type: "OPERATIONAL_EXPENSE", skipSuggested: true };
   }
 
-  return { type: "OTHER" };
+  return { type: "OTHER", isAldangi, phone };
 }
 
 /**
- * Generate compound deduplication key
+ * Compound key for deduplication
  */
 function makeGuilgeeCompoundKey(dansniiDugaar, journal, orlogo, zarlaga, date, time) {
   const j = String(journal || "").trim();
@@ -183,7 +203,6 @@ function makeGuilgeeCompoundKey(dansniiDugaar, journal, orlogo, zarlaga, date, t
 
 /**
  * POST /bankniiGuilgee/excelPreview
- * Parse uploaded Excel, cross-reference DB (Deduplication + Resident Matching), return preview
  */
 exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
   try {
@@ -216,19 +235,81 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
       throw new aldaa("Excel файл хоосон байна");
     }
 
-    // Determine if Row 0 is header or data
-    let hasHeader = false;
-    const row0 = allRows[0] || [];
-    const r0Text = row0.map((c) => String(c).toLowerCase()).join(" ");
-    if (
-      r0Text.includes("огноо") ||
-      r0Text.includes("утга") ||
-      r0Text.includes("орлого")
-    ) {
-      hasHeader = true;
+    // Dynamic Header Row Detection across first 15 rows
+    let headerRowIdx = -1;
+    for (let rIdx = 0; rIdx < Math.min(allRows.length, 15); rIdx++) {
+      const row = allRows[rIdx] || [];
+      const rowText = row.map((c) => String(c).toLowerCase()).join(" ");
+      if (
+        (rowText.includes("огноо") || rowText.includes("date")) &&
+        (rowText.includes("утга") || rowText.includes("орлого") || rowText.includes("гүйлгээ") || rowText.includes("credit") || rowText.includes("description"))
+      ) {
+        headerRowIdx = rIdx;
+        break;
+      }
     }
 
-    const startIdx = hasHeader ? 1 : 0;
+    let dateIdx = 0;
+    let timeIdx = 1;
+    let journalIdx = 2;
+    let branchIdx = 3;
+    let descIdx = 4;
+    let orlogoIdx = 5;
+    let zarlagaIdx = 6;
+    let balanceIdx = 7;
+    let relatedAccountIdx = 8;
+    let accNameIdx = 9;
+    let bankIdx = 10;
+
+    let detectedBankFromHeader = bank || "";
+    let detectedAccountFromHeader = dansniiDugaar || "";
+
+    // Extract potential metadata before header row
+    for (let rIdx = 0; rIdx < (headerRowIdx !== -1 ? headerRowIdx : Math.min(allRows.length, 5)); rIdx++) {
+      const rowStr = (allRows[rIdx] || []).map(String).join(" ");
+      const dansMatch = rowStr.match(/(?:данс|харилцах данс|account)[\s:]*([0-9]{9,16})/i);
+      if (dansMatch && !detectedAccountFromHeader) detectedAccountFromHeader = dansMatch[1];
+      if (!detectedBankFromHeader) {
+        if (/худалдаа хөгжил|tdb/i.test(rowStr)) detectedBankFromHeader = "tdb";
+        else if (/хаан|khan/i.test(rowStr)) detectedBankFromHeader = "khanbank";
+        else if (/голомт|golomt/i.test(rowStr)) detectedBankFromHeader = "golomt";
+        else if (/төрийн банк|state bank/i.test(rowStr)) detectedBankFromHeader = "statebank";
+        else if (/хас|xac/i.test(rowStr)) detectedBankFromHeader = "xacbank";
+      }
+    }
+
+    // Map column indices from header row
+    if (headerRowIdx !== -1) {
+      const hRow = allRows[headerRowIdx] || [];
+      hRow.forEach((cell, idx) => {
+        const text = String(cell || "").toLowerCase().trim();
+        if (text.includes("тайлант огноо") || text.includes("гүйлгээний огноо") || text.includes("огноо") || text === "date") {
+          dateIdx = idx;
+        } else if (text.includes("цаг") || text === "time") {
+          timeIdx = idx;
+        } else if (text.includes("журнал") || text.includes("баримтын дугаар") || text.includes("гүйлгээний дугаар") || text.includes("journal") || text.includes("tran id")) {
+          journalIdx = idx;
+        } else if (text.includes("салбар") || text.includes("байршил") || text.includes("branch")) {
+          branchIdx = idx;
+        } else if (text.includes("утга") || text.includes("тайлбар") || text.includes("description") || text.includes("гүйлгээний утга")) {
+          descIdx = idx;
+        } else if (text.includes("орлого") || text.includes("credit") || text.includes("орлогын дүн")) {
+          orlogoIdx = idx;
+        } else if (text.includes("зарлага") || text.includes("debit") || text.includes("зарлагын дүн")) {
+          zarlagaIdx = idx;
+        } else if (text.includes("үлдэгдэл") || text.includes("balance")) {
+          balanceIdx = idx;
+        } else if (text.includes("харьцсан данс") || text.includes("харьцсан дансны дугаар") || text.includes("related account")) {
+          relatedAccountIdx = idx;
+        } else if (text.includes("дансны нэр") || text.includes("харилцагчийн нэр") || text.includes("account name")) {
+          accNameIdx = idx;
+        } else if (text.includes("банкны нэр") || text === "банк" || text.includes("bank")) {
+          bankIdx = idx;
+        }
+      });
+    }
+
+    const startIdx = headerRowIdx !== -1 ? headerRowIdx + 1 : 0;
 
     // Fetch existing BankniiGuilgee for deduplication
     const BankniiGuilgeeModel = BankniiGuilgee(safeConn, false);
@@ -280,14 +361,13 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
       .lean()
       .catch(() => null);
 
-    const barilgaMap = new Map(); // id -> name, and name -> id
+    const barilgaMap = new Map();
     if (orgDoc?.barilguud) {
       orgDoc.barilguud.forEach((b) => {
         const bId = String(b._id);
         const bNer = String(b.ner || "").trim();
         barilgaMap.set(bId, bNer);
         barilgaMap.set(bNer.toLowerCase(), bId);
-        // Extract numeric part, e.g. "216-р байр" -> "216"
         const numMatch = bNer.match(/\b(21[0-9]|\d{1,4})\b/);
         if (numMatch) {
           barilgaMap.set(numMatch[1], bId);
@@ -295,9 +375,7 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
       });
     }
 
-    // Build indexing for fast & accurate contract matching
-    // Index 1: "bair_toot" -> contracts[]
-    // Index 2: "toot" -> contracts[]
+    // Build indexing for contract matching
     const contractsByBairToot = new Map();
     const contractsByToot = new Map();
 
@@ -310,11 +388,9 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
       const bairNum = numMatch ? numMatch[1] : bNer;
 
       tootVariants.forEach((tv) => {
-        // Toot index
         if (!contractsByToot.has(tv)) contractsByToot.set(tv, []);
         contractsByToot.get(tv).push(g);
 
-        // Bair + Toot index
         if (bairNum) {
           const key = `${bairNum}_${tv}`;
           if (!contractsByBairToot.has(key)) contractsByBairToot.set(key, []);
@@ -325,12 +401,23 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
 
     const parsedRows = [];
     let exactCount = 0;
+    let exactAmount = 0;
     let multiCount = 0;
+    let multiAmount = 0;
     let unmatchedCount = 0;
+    let unmatchedAmount = 0;
     let alreadyImportedCount = 0;
+    let alreadyImportedAmount = 0;
     let skipCount = 0;
+    let skipAmount = 0;
     let totalIncome = 0;
     let totalExpense = 0;
+    let incomeCount = 0;
+    let expenseCount = 0;
+    let otherCount = 0;
+
+    let minDate = "";
+    let maxDate = "";
 
     for (let i = startIdx; i < allRows.length; i++) {
       const r = allRows[i];
@@ -338,19 +425,19 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
         continue;
       }
 
-      const dateStr = String(r[0] || "").trim();
-      const timeStr = String(r[1] || "").trim();
-      const journal = String(r[2] || "").trim();
-      const branch = String(r[3] || "").trim();
-      const desc = String(r[4] || "").trim();
-      const orlogoRaw = Number(r[5]) || 0;
-      const zarlagaRaw = Number(r[6]) || 0;
-      const balance = Number(r[7]) || 0;
-      const relatedAccount = String(r[8] || "").trim();
-      const accName = String(r[9] || "").trim();
-      const rowBank = String(r[10] || bank || "").trim();
+      const dateStr = String(r[dateIdx] || "").trim();
+      const timeStr = timeIdx !== -1 ? String(r[timeIdx] || "").trim() : "";
+      const journal = journalIdx !== -1 ? String(r[journalIdx] || "").trim() : "";
+      const branch = branchIdx !== -1 ? String(r[branchIdx] || "").trim() : "";
+      const desc = descIdx !== -1 ? String(r[descIdx] || "").trim() : "";
+      const orlogoRaw = orlogoIdx !== -1 ? parseMoney(r[orlogoIdx]) : 0;
+      const zarlagaRaw = zarlagaIdx !== -1 ? parseMoney(r[zarlagaIdx]) : 0;
+      const balance = balanceIdx !== -1 ? parseMoney(r[balanceIdx]) : 0;
+      const relatedAccount = relatedAccountIdx !== -1 ? String(r[relatedAccountIdx] || "").trim() : "";
+      const accName = accNameIdx !== -1 ? String(r[accNameIdx] || "").trim() : "";
+      const rowBank = bankIdx !== -1 ? String(r[bankIdx] || detectedBankFromHeader || "").trim() : detectedBankFromHeader || "";
 
-      // Check corrupted float decimals (like 53453.902759...)
+      // Check corrupted float decimals
       const isCorrupted =
         (!Number.isInteger(orlogoRaw) &&
           String(orlogoRaw).split(".")[1]?.length > 4) ||
@@ -358,18 +445,33 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
           String(zarlagaRaw).split(".")[1]?.length > 4);
 
       if (isCorrupted) {
-        // Skip corrupted row completely
         continue;
       }
 
+      // Track min/max dates
+      if (dateStr) {
+        if (!minDate || dateStr < minDate) minDate = dateStr;
+        if (!maxDate || dateStr > maxDate) maxDate = dateStr;
+      }
+
+      // If orlogoRaw > 0, it is an INCOME transaction!
       const isOrlogo = orlogoRaw > 0;
+      const isExpense = !isOrlogo && zarlagaRaw > 0;
       const amount = isOrlogo ? orlogoRaw : zarlagaRaw;
-      if (isOrlogo) totalIncome += orlogoRaw;
-      else totalExpense += zarlagaRaw;
+
+      if (isOrlogo) {
+        totalIncome += orlogoRaw;
+        incomeCount++;
+      } else if (isExpense) {
+        totalExpense += zarlagaRaw;
+        expenseCount++;
+      } else {
+        otherCount++;
+      }
 
       // Deduplication check
       const compoundKey = makeGuilgeeCompoundKey(
-        dansniiDugaar,
+        detectedAccountFromHeader || dansniiDugaar,
         journal,
         orlogoRaw,
         zarlagaRaw,
@@ -385,28 +487,32 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
       const parsedDesc = parseStatementDescription(desc);
 
       let status = "UNMATCHED";
-      let action = isOrlogo ? "IMPORT_AND_PAY" : "IMPORT_ONLY";
+      let action = isOrlogo ? "IMPORT_AND_PAY" : "SKIP";
       let matchedGeree = null;
       let candidateGerees = [];
       let matchReason = "";
+
+      let detectedBair = parsedDesc.bair || "";
+      let detectedToot = parsedDesc.toot || "";
+      let detectedName = parsedDesc.residentName || "";
 
       if (isAlreadyImported) {
         status = "ALREADY_IMPORTED";
         action = "SKIP";
         matchReason = "Өмнө нь системд бүртгэгдсэн гүйлгээ";
         alreadyImportedCount++;
-      } else if (parsedDesc.skipSuggested || !isOrlogo || parsedDesc.isFee) {
+        alreadyImportedAmount += amount;
+      } else if (parsedDesc.isFee || parsedDesc.skipSuggested || !isOrlogo) {
         status = "SKIP";
         action = "SKIP";
         matchReason = parsedDesc.isFee
           ? "Банкны шимтгэл"
           : "Зарлага / Үйл ажиллагааны зардал";
         skipCount++;
+        skipAmount += amount;
       } else {
-        // Match against contracts
+        // Contract matching
         let candidates = [];
-        const detectedBair = parsedDesc.bair;
-        const detectedToot = parsedDesc.toot;
 
         if (detectedBair && detectedToot) {
           const key = `${detectedBair}_${detectedToot}`;
@@ -415,11 +521,44 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
           candidates = contractsByToot.get(detectedToot) || [];
         }
 
+        // If toot was not detected in description, try matching resident name or phone
+        if (!detectedToot || candidates.length === 0) {
+          const searchName = cleanStr(parsedDesc.residentName || accName);
+          const searchPhone = parsedDesc.phone;
+
+          let nameMatched = [];
+          if (searchPhone) {
+            nameMatched = activeContracts.filter((c) =>
+              c.utas && c.utas.some((u) => String(u).includes(searchPhone))
+            );
+          }
+
+          if (nameMatched.length === 0 && searchName && searchName.length >= 3) {
+            nameMatched = activeContracts.filter((c) => {
+              const cName = cleanStr(c.ner);
+              const cOvog = cleanStr(c.ovog);
+              return (
+                (cName && (searchName.includes(cName) || cName.includes(searchName))) ||
+                (cOvog && searchName.includes(cOvog))
+              );
+            });
+          }
+
+          if (nameMatched.length > 0) {
+            candidates = nameMatched;
+            detectedToot = candidates[0].toot;
+            const bNer = candidates[0].bairNer || barilgaMap.get(String(candidates[0].barilgiinId)) || "";
+            const numMatch = bNer.match(/\b(21[0-9]|\d{1,4})\b/);
+            if (numMatch) detectedBair = numMatch[1];
+          }
+        }
+
         if (candidates.length === 1) {
           matchedGeree = candidates[0];
           status = "EXACT";
           matchReason = `${detectedBair ? detectedBair + "-р байр, " : ""}${detectedToot} тоот таарсан`;
           exactCount++;
+          exactAmount += amount;
         } else if (candidates.length > 1) {
           // Tiebreaker: match by resident name or phone
           const targetName = cleanStr(parsedDesc.residentName || accName);
@@ -451,6 +590,7 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
             status = "EXACT";
             matchReason = `${detectedBair ? detectedBair + "-р байр, " : ""}${detectedToot} тоот, нэр таарсан`;
             exactCount++;
+            exactAmount += amount;
           } else {
             status = "MULTI";
             candidateGerees = candidates.map((c) => ({
@@ -466,6 +606,7 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
             matchedGeree = candidates[0]; // Preselect latest
             matchReason = `Тухайн тоот дээр ${candidates.length} гэрээ олдлоо`;
             multiCount++;
+            multiAmount += amount;
           }
         } else {
           status = "UNMATCHED";
@@ -474,11 +615,13 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
             ? `Тоот (${detectedToot}) тодорхой боловч гэрээ олдсонгүй`
             : "Тоот тодорхойгүй";
           unmatchedCount++;
+          unmatchedAmount += amount;
         }
       }
 
       parsedRows.push({
-        rowNumber: i + 1,
+        rowNumber: i + 1 - startIdx,
+        originalIndex: i,
         date: dateStr,
         time: timeStr,
         journal,
@@ -491,12 +634,12 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
         relatedAccount,
         accName,
         bank: rowBank,
-        detectedBair: parsedDesc.bair || "",
-        detectedToot: parsedDesc.toot || "",
-        detectedName: parsedDesc.residentName || "",
+        detectedBair,
+        detectedToot,
+        detectedName,
         isAldangi: parsedDesc.isAldangi || false,
-        status, // "EXACT" | "MULTI" | "UNMATCHED" | "ALREADY_IMPORTED" | "SKIP"
-        action, // "IMPORT_AND_PAY" | "IMPORT_ONLY" | "SKIP"
+        status,
+        action,
         matchReason,
         matchedGeree: matchedGeree
           ? {
@@ -523,15 +666,25 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
       summary: {
         totalRows: parsedRows.length,
         exactCount,
+        exactAmount,
         multiCount,
+        multiAmount,
         unmatchedCount,
+        unmatchedAmount,
         alreadyImportedCount,
+        alreadyImportedAmount,
         skipCount,
+        skipAmount,
+        incomeCount,
+        expenseCount,
+        otherCount,
         totalIncome,
         totalExpense,
-        payableAmount: parsedRows
-          .filter((r) => r.status === "EXACT" && r.action === "IMPORT_AND_PAY")
-          .reduce((sum, r) => sum + r.amount, 0),
+        totalAmount: totalIncome + totalExpense,
+        payableAmount: exactAmount,
+        detectedAccount: detectedAccountFromHeader,
+        detectedBank: detectedBankFromHeader,
+        dateRange: { start: minDate, end: maxDate },
       },
       rows: parsedRows,
     });
@@ -546,7 +699,6 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
 
 /**
  * POST /bankniiGuilgee/excelConfirmImport
- * Commit confirmed rows to BankniiGuilgee and record payments in GuilgeeAvlaguud
  */
 exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
   try {
@@ -586,13 +738,12 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
         const journal = String(r.journal || "").trim();
         const dateStr = String(r.date || "").trim();
         const timeStr = String(r.time || "").trim();
-        const orlogo = Number(r.orlogo) || 0;
-        const zarlaga = Number(r.zarlaga) || 0;
-        const amount = Number(r.amount) || Math.abs(orlogo || zarlaga);
-        const isOrlogo = orlogo > 0;
+        const orlogo = parseMoney(r.orlogo);
+        const zarlaga = parseMoney(r.zarlaga);
+        const amount = parseMoney(r.amount) || Math.abs(orlogo || zarlaga);
+        const isOrlogo = orlogo > 0 || (orlogo === 0 && zarlaga === 0 && Number(r.amount) > 0);
         const signedAmount = isOrlogo ? amount : -amount;
 
-        // Parse date
         let postDate = new Date();
         if (dateStr) {
           const d = new Date(
@@ -601,7 +752,6 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
           if (!isNaN(d.getTime())) postDate = d;
         }
 
-        // Deduplication check: check if BankniiGuilgee already exists
         let existingBankRecord = null;
         if (journal) {
           existingBankRecord = await BankniiGuilgeeModel.findOne({
@@ -615,7 +765,6 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
           savedBankGuilgee = existingBankRecord;
           alreadyExistedCount++;
         } else {
-          // Create new BankniiGuilgee
           const recordId = journal || `EXCEL-${Date.now()}-${importedCount}`;
           savedBankGuilgee = await BankniiGuilgeeModel.create({
             baiguullagiinId: String(baiguullagiinId),
@@ -640,7 +789,6 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
             accName: r.accName || "",
             kholbosonTalbainId: [],
             kholbosonGereeniiId: [],
-            // Prevent duplicate ebarimt generation for united ebill payments
             ebarimtAvsanEsekh: true,
           });
           importedCount++;
@@ -649,7 +797,6 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
         // Record payment in GuilgeeAvlaguud if action === "IMPORT_AND_PAY"
         const targetGereeId = r.matchedGeree?._id || r.matchedGereeId;
         if (r.action === "IMPORT_AND_PAY" && targetGereeId) {
-          // Check if payment already recorded for this bank transaction
           const existingPayment = await GuilgeeAvlaguudModel.findOne({
             baiguullagiinId: String(baiguullagiinId),
             bankniiGuilgeeId: String(savedBankGuilgee._id),
@@ -678,7 +825,6 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
                 guilgeeKhiisenAjiltniiId: ajiltan.id || null,
               });
 
-              // Link to contract on BankniiGuilgee
               await BankniiGuilgeeModel.findByIdAndUpdate(
                 savedBankGuilgee._id,
                 {
@@ -702,7 +848,6 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
       }
     }
 
-    // Emit socket event to notify frontend
     const io = req.app.get("socketio");
     if (io) {
       io.emit("baiguullagiin" + baiguullagiinId, {
