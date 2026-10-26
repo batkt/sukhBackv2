@@ -143,6 +143,88 @@ function davkhruudOlya(barilga) {
   });
 }
 
+/** "12, 13" / ["12","13"] → ["12","13"] (барилгын тохиргооны утга) */
+function negjuudJagsaalt(utga) {
+  const tuukhii = Array.isArray(utga) ? utga : typeof utga === "string" ? [utga] : [];
+  return tuukhii
+    .flatMap((v) => String(v ?? "").split(/[\s,;|]+/))
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+/** Гараж/зогсоол ба агуулахын төрлийг нэг хэлбэрт оруулна. */
+function negjiinAngilal(turul) {
+  const t = String(turul || "").trim().toLowerCase();
+  if (t === "гараж" || t === "гараш" || t === "зогсоол" || t === "parking" || t === "garage") return "Гараж";
+  if (t === "агуулах" || t === "storage") return "Агуулах";
+  return "";
+}
+
+/**
+ * Барилгын бүртгэлтэй гараж/агуулахын дугааруудаас ЭЗЭМШИГЧГҮЙ (сул)
+ * дугааруудыг давхраар нь буцаана: { "B1": ["1","2"], ... }.
+ *
+ * Эзэмшигч = харилцагч эсвэл оршин суугчийн toots[] дотор тухайн барилгын
+ * ижил төрөл, давхар, дугаартай тоот. Давхаргүй хадгалсан хуучин бичлэг
+ * бүх давхрын тэр дугаарыг эзэлсэнд тооцно (андуурч давхар олгохоос сэргийлнэ).
+ */
+async function sulNegjuudOlya({ erunkhiiKholbolt, barilga, barilgiinId }) {
+  const OrshinSuugch = require("../models/orshinSuugch");
+  const tokhirgooTalbar = { Гараж: "davkhariinZogsoolnuud", Агуулах: "davkhariinAguulakhnuud" };
+
+  const shuult = {
+    $or: [{ "toots.barilgiinId": String(barilgiinId) }, { barilgiinId: String(barilgiinId) }],
+  };
+  const talbaruud = { toots: 1, toot: 1, davkhar: 1, turul: 1, barilgiinId: 1 };
+  const [khariltsagchid, orshinSuugchid] = await Promise.all([
+    Khariltsagch(erunkhiiKholbolt).find(shuult, talbaruud).lean(),
+    OrshinSuugch(erunkhiiKholbolt).find(shuult, talbaruud).lean(),
+  ]);
+
+  // ezlegdsen[angilal] = Set("B1|12", "|12" (давхаргүй))
+  const ezlegdsen = { Гараж: new Set(), Агуулах: new Set() };
+  for (const khun of [...khariltsagchid, ...orshinSuugchid]) {
+    const tootuud = Array.isArray(khun.toots) && khun.toots.length > 0 ? khun.toots : [];
+    for (const t of tootuud) {
+      if (String(t?.barilgiinId || "") !== String(barilgiinId)) continue;
+      const angilal = negjiinAngilal(t.turul);
+      const toot = String(t.toot || "").trim();
+      if (!angilal || !toot) continue;
+      ezlegdsen[angilal].add(`${String(t.davkhar || "").trim().toLowerCase()}|${toot.toLowerCase()}`);
+    }
+  }
+
+  const ur = { Гараж: {}, Агуулах: {} };
+  for (const angilal of ["Гараж", "Агуулах"]) {
+    const map = barilga?.tokhirgoo?.[tokhirgooTalbar[angilal]] || {};
+    Object.entries(map).forEach(([key, utga]) => {
+      const davkhar = String(key.includes("::") ? key.split("::")[1] : key).trim();
+      if (!davkhar) return;
+      const d = davkhar.toLowerCase();
+      const sul = negjuudJagsaalt(utga).filter((toot) => {
+        const tl = toot.toLowerCase();
+        return !ezlegdsen[angilal].has(`${d}|${tl}`) && !ezlegdsen[angilal].has(`|${tl}`);
+      });
+      ur[angilal][davkhar] = Array.from(new Set([...(ur[angilal][davkhar] || []), ...sul]));
+    });
+  }
+  return ur;
+}
+
+/** Excel-ийн баганын үсэг: 1 → A, 27 → AA */
+function baganiinUseg(n) {
+  let s = "";
+  while (n > 0) {
+    const m = (n - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+/** Давхрын нэрийг Excel-ийн нэрлэсэн мужид тохирох болгоно: "B-1" → "B_1" */
+const davkhariinNerKhevshuulekh = (d) => String(d).trim().replace(/[^0-9A-Za-zА-Яа-яЁёӨөҮү]/g, "_");
+
 /**
  * Excel-ийн буферээс өгөгдлийн мөрүүдийг уншина.
  *
@@ -248,6 +330,8 @@ exports.generateKhariltsagchExcelTemplate = asyncHandler(
       const { baiguullagiinId, barilgiinId } = req.query;
 
       let davkharList = [];
+      // Сул гараж/агуулахын дугаар давхраар: { Гараж: { B1: [...] }, Агуулах: {...} }
+      let sulNegjuud = { Гараж: {}, Агуулах: {} };
 
       if (baiguullagiinId) {
         const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt).findById(
@@ -258,7 +342,19 @@ exports.generateKhariltsagchExcelTemplate = asyncHandler(
             (b) => String(b._id) === String(barilgiinId),
           )
           : baiguullaga?.barilguud?.[0];
-        if (barilga) davkharList = davkhruudOlya(barilga);
+        if (barilga) {
+          davkharList = davkhruudOlya(barilga);
+          try {
+            sulNegjuud = await sulNegjuudOlya({
+              erunkhiiKholbolt: db.erunkhiiKholbolt,
+              barilga,
+              barilgiinId: String(barilga._id),
+            });
+          } catch (e) {
+            // Жагсаалт гаргаж чадаагүй ч загвар (dropdown-гүй) татагдана
+            console.error("Сул гараж/агуулахын жагсаалт гаргахад алдаа:", e.message);
+          }
+        }
       }
 
       if (davkharList.length === 0) davkharList = ["B1", "B2", "B3"];
@@ -291,6 +387,60 @@ exports.generateKhariltsagchExcelTemplate = asyncHandler(
         });
       }
 
+      // ── Гараж / агуулахын дугаар — зөвхөн бүртгэлтэй СУЛ дугаараас сонгуулна ──
+      // Жагсаалтыг нуусан «Жагсаалт» хуудсанд давхар бүрээр багана болгон
+      // бичиж, нэрлэсэн муж (Z_B1, A_B1 ...) үүсгэнэ. Давхар (E) сонгосон бол
+      // тухайн давхрын сул дугаар, сонгоогүй бол бүх давхрын сул дугаар гарна.
+      // Нэг нүдэнд таслалаар олон дугаар бичих боломжийг хадгалахын тулд
+      // алдааг «анхааруулга» хэлбэрээр харуулна (хориглохгүй).
+      const jagsaalt = workbook.addWorksheet("Жагсаалт", { state: "veryHidden" });
+      let jagsaaltBagana = 0;
+      const muzNemekh = (ner, utguud) => {
+        if (!utguud.length) return false;
+        jagsaaltBagana += 1;
+        const useg = baganiinUseg(jagsaaltBagana);
+        jagsaalt.getCell(`${useg}1`).value = ner;
+        utguud.forEach((u, i) => {
+          // Тоог текст болгож хадгална — «01» гэх мэт дугаар тэглэгдэхгүй
+          jagsaalt.getCell(`${useg}${i + 2}`).value = String(u);
+        });
+        workbook.definedNames.add(
+          `'Жагсаалт'!$${useg}$2:$${useg}$${utguud.length + 1}`,
+          ner,
+        );
+        return true;
+      };
+
+      [
+        { angilal: "Гараж", tolgoi: "Зогсоолын дугаар", urtgal: "Z" },
+        { angilal: "Агуулах", tolgoi: "Агуулахын дугаар", urtgal: "A" },
+      ].forEach(({ angilal, tolgoi, urtgal }) => {
+        const davkhraar = sulNegjuud[angilal] || {};
+        const davkhruud = Object.keys(davkhraar).filter((d) => davkhraar[d].length > 0);
+        const buh = Array.from(new Set(davkhruud.flatMap((d) => davkhraar[d])));
+        const buhNer = `${urtgal}_BUH`;
+        if (!muzNemekh(buhNer, buh)) return; // Сул дугаар алга — dropdown тавихгүй
+        davkhruud.forEach((d) => muzNemekh(`${urtgal}_${davkhariinNerKhevshuulekh(d)}`, davkhraar[d]));
+
+        const useg = baganiinUseg(TOLGOINUUD.indexOf(tolgoi) + 1);
+        // Давхрын нэрийг томъёонд ижил дүрмээр хувиргана (- , зай → _)
+        const davkharNer = `SUBSTITUTE(SUBSTITUTE(TRIM($E2),"-","_")," ","_")`;
+        worksheet.dataValidations.add(`${useg}2:${useg}2000`, {
+          type: "list",
+          allowBlank: true,
+          formulae: [
+            `IF(TRIM($E2)="",${buhNer},IFERROR(INDIRECT("${urtgal}_"&${davkharNer}),${buhNer}))`,
+          ],
+          showErrorMessage: true,
+          errorStyle: "warning",
+          errorTitle: "Жагсаалтад байхгүй дугаар",
+          error: `Энэ ${angilal === "Гараж" ? "зогсоолын" : "агуулахын"} дугаар бүртгэлгүй эсвэл эзэмшигчтэй байна. Олон дугаарыг таслалаар бичсэн бол «Yes» дарж үргэлжлүүлнэ үү.`,
+          showInputMessage: true,
+          promptTitle: `Сул ${angilal === "Гараж" ? "зогсоол" : "агуулах"}`,
+          prompt: "Давхар сонгосон бол тухайн давхрын сул дугаар л гарна.",
+        });
+      });
+
       // «Зогсоолын дугаар» гарчиг дээр тайлбар (Excel-ийн note) — гадна
       // зогсоол дугааргүй тул хоосон үлдээнэ.
       const zogsoolBagana = TOLGOINUUD.indexOf("Зогсоолын дугаар") + 1;
@@ -317,8 +467,8 @@ exports.generateKhariltsagchExcelTemplate = asyncHandler(
         ["Нэр", "Заавал. Овог тусдаа баганад байхгүй бол \"Б.Батбаяр\" гэж бичиж болно."],
         ["Утас", "Хоосон байж болно. Бөглөвөл 8 оронтой тоо. Ижил утастай харилцагч аль хэдийн бүртгэлтэй бол шинээр үүсгэхгүй, тоот/машиныг нь нэмж бүртгэнэ."],
         ["Давхар", "Зогсоол/агуулах байрлах давхар (B1, B2 ...). Хоосон байж болно."],
-        ["Зогсоолын дугаар", "Зөвхөн гадна зогсоол бол хоосон үлдээнэ үү. Нэг харилцагчид олон зогсоол байвал таслалаар: 12,13,14"],
-        ["Агуулахын дугаар", "Таслалаар олныг бичиж болно: 5,6"],
+        ["Зогсоолын дугаар", "Жагсаалтаас сонгоно — зөвхөн бүртгэлтэй, эзэмшигчгүй (сул) дугаар гарна. Давхар сонгосон бол тухайн давхрынх л гарна. Зөвхөн гадна зогсоол бол хоосон үлдээнэ үү. Олон зогсоол байвал таслалаар: 12,13,14"],
+        ["Агуулахын дугаар", "Жагсаалтаас сонгоно — зөвхөн сул агуулах гарна. Таслалаар олныг бичиж болно: 5,6"],
         ["Машины дугаар", "Таслалаар олныг бичиж болно: 1234УБА, 5678УНА. Зогсоолын гэрээтэй хамт машин нь бүртгэгдэнэ."],
         ["Эхний үлдэгдэл", "Гэрээний эхний үлдэгдэл. Хоосон бол 0."],
         ["Өөр давхар", "Нэг харилцагч өөр давхарт бас зогсоол эзэмшдэг бол ижил утастай ӨӨР мөр нэмнэ."],
