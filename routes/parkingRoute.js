@@ -1399,8 +1399,9 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
             barilgiinId: req.body.barilgiinId,
             baiguullagiinId: req.body.baiguullagiinId,
             mashiniiDugaar: req.body.mashiniiDugaar,
-            turul: "бүртгэлгүй",
+            turul: khariu.turul === "ДК" ? "ДК" : "бүртгэлгүй",
           }).save();
+          console.log(`🚪 [Burtgelgui Exit] Бүртгэлгүй машины гарц бүртгэгдэв: dugaar=${req.body.mashiniiDugaar} ip=${req.body.CAMERA_IP} barilga=${req.body.barilgiinId}`);
         }
       } catch (logErr) {
         console.error("[Gate] Error logging burtgelgui khaalga neesen:", logErr.message);
