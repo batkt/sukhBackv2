@@ -13,7 +13,7 @@ const schema = new Schema(
     toot: String, // Resident apartment / door number
     utas: String, // Resident phone number
     mashiniiDugaar: String, // Car plate number
-    turul: { type: String, enum: ["нээсэн", "урьсан"], default: "нээсэн" },
+    turul: { type: String, enum: ["нээсэн", "урьсан", "бүртгэлгүй", "ДК"], default: "нээсэн" },
     ezenNer: String,   // for урьсан: name of the resident who invited
     ezenToot: String,  // for урьсан: toot of the inviting resident
   },

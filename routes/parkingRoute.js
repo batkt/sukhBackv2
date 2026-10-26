@@ -972,6 +972,21 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
             alreadyExited: true,
           });
         }
+        try {
+          const KhaalgaModel = KhaalgaNeeyeTuukh(db.erunkhiiKholbolt);
+          const recentlyOpened = await KhaalgaModel.findOne({
+            ip: req.body.CAMERA_IP,
+            mashiniiDugaar: req.body.mashiniiDugaar,
+            createdAt: { $gt: new Date(Date.now() - 30 * 1000) },
+          }).lean();
+          if (recentlyOpened) {
+            return res.send({
+              aldaa: false,
+              message: "Хаалт аль хэдийн нээгдсэн байна",
+              alreadyExited: true,
+            });
+          }
+        } catch (_) {}
       }
     }
 
@@ -1244,7 +1259,12 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
             // төрлийн мөрөнд СӨХ-ийн нэрийг тавьдаг.
             let turul = sambariinMur?.turul || khariu?.turul || "";
             if (!turul) {
-              turul = sambariinMur?.urisanMashin ? "Зочин" : "Үйлчлүүлэгч";
+              const dugaarClean = String(req.body.mashiniiDugaar || "").replace(/^(blocked|блок)\s*/i, "").replace(/[\s\-_]/g, "").trim();
+              if (/^[0-9]{4}[ДдDd][КкKk]$/i.test(dugaarClean)) {
+                turul = "ДК";
+              } else {
+                turul = sambariinMur?.urisanMashin ? "Зочин" : "Үйлчлүүлэгч";
+              }
             }
             io.to(`gate-room-${req.body.barilgiinId}`).emit("sambar-show", {
               ip,
@@ -1262,6 +1282,28 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
       }
     }
 
+    if (khariu && khariu.burtgelguiMashin && req.body.CAMERA_IP) {
+      try {
+        const KhaalgaModel = KhaalgaNeeyeTuukh(db.erunkhiiKholbolt);
+        const recentLog = await KhaalgaModel.findOne({
+          ip: req.body.CAMERA_IP,
+          mashiniiDugaar: req.body.mashiniiDugaar,
+          createdAt: { $gt: new Date(Date.now() - 30 * 1000) },
+        }).lean();
+        if (!recentLog) {
+          await new KhaalgaModel({
+            ip: req.body.CAMERA_IP,
+            barilgiinId: req.body.barilgiinId,
+            baiguullagiinId: req.body.baiguullagiinId,
+            mashiniiDugaar: req.body.mashiniiDugaar,
+            turul: "бүртгэлгүй",
+          }).save();
+        }
+      } catch (logErr) {
+        console.error("[Gate] Error logging burtgelgui khaalga neesen:", logErr.message);
+      }
+    }
+
     if (khariu && khariu.aldaa) {
       console.warn(`⚠️ [sdkData] Request blocked or errored: ${khariu.aldaa}`);
     }
@@ -1270,23 +1312,24 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
     }
     if (!khariu.aldaa && !khariu.turul && req.body.mashiniiDugaar) {
       try {
-        const MashinModel = Mashin(req.body.tukhainBaaziinKholbolt);
-        const m = await MashinModel.findOne({ dugaar: req.body.mashiniiDugaar }).lean();
-        if (m && m.turul) {
-          khariu.turul = m.turul;
+        const dugaarClean = String(req.body.mashiniiDugaar || "").replace(/^(blocked|блок)\s*/i, "").replace(/[\s\-_]/g, "").trim();
+        if (/^[0-9]{4}[ДдDd][КкKk]$/i.test(dugaarClean)) {
+          khariu.turul = "ДК";
         } else {
-          const z = await EzenUrisanMashin(req.body.tukhainBaaziinKholbolt).findOne({
-            urisanMashiniiDugaar: req.body.mashiniiDugaar,
-            tuluv: { $in: [0, 1] },
-          }).lean();
-          if (z) {
-            khariu.turul = "Зочин";
+          const MashinModel = Mashin(req.body.tukhainBaaziinKholbolt);
+          const m = await MashinModel.findOne({ dugaar: req.body.mashiniiDugaar }).lean();
+          if (m && m.turul) {
+            khariu.turul = m.turul;
           } else {
-            // Mashin дээр ч БАЙХГҮЙ, урисан зочин ч БИШ бол энэ нь гаднаас
-            // орж ирсэн ҮЙЛЧЛҮҮЛЭГЧ. Өмнө нь "Оршин суугч" гэж тавьдаг
-            // байсан нь төлбөртэй үйлчлүүлэгчийг оршин суугч мэт харуулж,
-            // самбар болон хариуд нь буруу төрөл тараадаг байв.
-            khariu.turul = "Үйлчлүүлэгч";
+            const z = await EzenUrisanMashin(req.body.tukhainBaaziinKholbolt).findOne({
+              urisanMashiniiDugaar: req.body.mashiniiDugaar,
+              tuluv: { $in: [0, 1] },
+            }).lean();
+            if (z) {
+              khariu.turul = "Зочин";
+            } else {
+              khariu.turul = "Үйлчлүүлэгч";
+            }
           }
         }
       } catch (_) { }
