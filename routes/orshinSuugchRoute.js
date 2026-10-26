@@ -1457,13 +1457,20 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
           }
 
           // 1a. Update unit-specific details (Meter readings, unit balances, names)
+          // Тусгай нэр/утастай тоотууд — доор нэхэмжлэхэд нь ч тусгана.
+          const tusgaiKhariltsagchtaiNegjuud = [];
           if (Array.isArray(result.toots)) {
             for (const unit of result.toots) {
               if (String(unit.baiguullagiinId) === String(orgId)) {
+                const tusgai = syncService.tootGereeniiKhariltsagch(unit, result, {});
                 const unitSyncData = {
-                  ner: unit.ner || result.ner,
-                  ovog: unit.ovog || result.ovog
+                  ner: unit.gereeNer ? tusgai.ner : unit.ner || result.ner,
+                  ovog: unit.gereeNer ? tusgai.ovog : unit.ovog || result.ovog,
+                  utas: tusgai.utas,
                 };
+                if (unit.gereeNer || unit.gereeUtas) {
+                  tusgaiKhariltsagchtaiNegjuud.push({ unit, data: { ner: unitSyncData.ner, ovog: unitSyncData.ovog, utas: unitSyncData.utas } });
+                }
 
                 if (unit.tsahilgaaniiZaalt !== undefined) {
                   const zaalt = parseFloat(unit.tsahilgaaniiZaalt) || 0;
@@ -1505,6 +1512,24 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
               },
               { $set: invoiceUpdateData }
             );
+          }
+
+          // 2a. Тусгай нэр/утастай тоотын нэхэмжлэхүүд — дээрх ерөнхий шинэчлэлийг
+          // тухайн тоотын гэрээний нэр, утсаар дарж бичнэ.
+          for (const { unit, data } of tusgaiKhariltsagchtaiNegjuud) {
+            try {
+              const gereenuud = await GereeModel.find(
+                { orshinSuugchId: result._id.toString(), toot: unit.toot, barilgiinId: unit.barilgiinId },
+                { _id: 1 },
+              ).lean();
+              if (gereenuud.length === 0) continue;
+              await NekhemjlekhModel.updateMany(
+                { gereeniiId: { $in: gereenuud.map((g) => String(g._id)) } },
+                { $set: data },
+              );
+            } catch (e) {
+              console.error("Тоотын нэхэмжлэхийн нэр/утас шинэчлэхэд алдаа:", e.message);
+            }
           }
 
           // 3. Update Mashin (Guest/Vehicle settings)

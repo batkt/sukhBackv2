@@ -1237,12 +1237,45 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
           const baiguullaga = await require("../models/baiguullaga")(db.erunkhiiKholbolt).findById(orgId);
 
           if (baiguullaga) {
+            // Sync-ээс ӨМНӨХ идэвхтэй гэрээнүүд — шинээр үүссэнийг ялгахад
+            const ezniiShuult = {
+              $or: [
+                { khariltsagchId: result._id.toString() },
+                { orshinSuugchId: result._id.toString() },
+              ],
+              tuluv: "Идэвхтэй",
+            };
+            const umnukhGereeIds = new Set(
+              (await GereeModel.find(ezniiShuult, { _id: 1 }).lean()).map((g) => String(g._id)),
+            );
+
             await syncService.syncResidentContracts(
               result,
               baiguullaga,
               tukhainBaaziinKholbolt,
               req
             );
+
+            // syncResidentContracts харилцагчид нэхэмжлэх үүсгэдэггүй. Өмнө нь
+            // бүртгэлтэй харилцагч дээр гараж/агуулах нэмэхэд (Excel импорт,
+            // засах цонх) шинэ гэрээ үүсдэг ч нэхэмжлэх нь үүсдэггүй байв —
+            // POST /khariltsagch-тэй ижлээр ЗӨВХӨН шинэ гэрээнд үүсгэнэ.
+            const shineGereenuud = (await GereeModel.find(ezniiShuult)).filter(
+              (g) => !umnukhGereeIds.has(String(g._id)),
+            );
+            for (const shineGeree of shineGereenuud) {
+              try {
+                await gereeNeesNekhemjlekhUusgekh(
+                  shineGeree,
+                  baiguullaga,
+                  tukhainBaaziinKholbolt,
+                  "automataar",
+                  true,
+                );
+              } catch (e) {
+                console.error("Харилцагчийн шинэ гэрээний нэхэмжлэх үүсгэхэд алдаа:", e.message);
+              }
+            }
           }
 
           // Шинээр нэмсэн тоотын эхний үлдэгдэл — мөр байхгүй үед л үүсгэнэ

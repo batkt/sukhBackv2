@@ -802,6 +802,16 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
           walletUserInfo?.email || req.body.mail || email || orshinSuugch.mail;
       }
       if (walletUserId) orshinSuugch.walletUserId = walletUserId;
+      if (Array.isArray(req.body.nemeltUtas)) {
+        const undsen = String(orshinSuugch.utas || "").trim();
+        orshinSuugch.nemeltUtas = [
+          ...new Set(
+            [...(orshinSuugch.nemeltUtas || []), ...req.body.nemeltUtas]
+              .map((u) => String(u || "").trim())
+              .filter((u) => u && u !== undsen),
+          ),
+        ];
+      }
       if (req.body.ekhniiUldegdel !== undefined) {
         orshinSuugch.ekhniiUldegdel = parseFloat(req.body.ekhniiUldegdel) || 0;
       }
@@ -928,6 +938,8 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
             tsahilgaaniiZaalt: parseFloat(unit.tsahilgaaniiZaalt) || 0,
             khonogoorBodokhEsekh: unit.khonogoorBodokhEsekh === true || unit.khonogoorBodokhEsekh === "true",
             bodokhKhonog: Number(unit.bodokhKhonog) || 0,
+            gereeNer: String(unit.gereeNer || "").trim(),
+            gereeUtas: String(unit.gereeUtas || "").trim(),
             createdAt: new Date(),
           };
 
@@ -5530,6 +5542,24 @@ exports.orshinSuugchTootUstgakh = asyncHandler(async (req, res, next) => {
     next(error);
   }
 });
+/**
+ * Тоотын гэрээнд харагдах нэр, утас. Тоот дээр тусгай нэр (gereeNer) бичсэн
+ * бол түүнийг овоггүйгээр, тусгай утас (gereeUtas) сонгосон бол түүнийг
+ * ашиглана. Үгүй бол оршин суугчийн үндсэн мэдээлэл.
+ */
+exports.tootGereeniiKhariltsagch = function tootGereeniiKhariltsagch(tootEntry, orshinSuugch, body = {}) {
+  const gereeNer = String(tootEntry?.gereeNer || "").trim();
+  const gereeUtas = String(tootEntry?.gereeUtas || "").trim();
+  const undsenUtas = Array.isArray(orshinSuugch?.utas)
+    ? orshinSuugch.utas
+    : [orshinSuugch?.utas].filter(Boolean);
+  return {
+    ner: gereeNer || body.ner || orshinSuugch?.ner || "",
+    ovog: gereeNer ? "" : body.ovog || orshinSuugch?.ovog || "",
+    utas: gereeUtas ? [gereeUtas] : undsenUtas,
+  };
+};
+
 exports.syncResidentContracts = async function syncResidentContracts(
   orshinSuugch,
   baiguullaga,
@@ -5684,10 +5714,17 @@ exports.syncResidentContracts = async function syncResidentContracts(
         bodokhKhonog: au.bodokhKhonog || 0,
       }));
 
+    const gereeniiKhariltsagch = exports.tootGereeniiKhariltsagch(tootEntry, orshinSuugch, req.body);
+
     if (existingActiveGeree) {
       // Already has an active contract, update its details and additional units list
       await GereeModel.findByIdAndUpdate(existingActiveGeree._id, {
-        $set: { nemeltTootnuud: currentAuData }
+        $set: {
+          nemeltTootnuud: currentAuData,
+          // Тоотод тусгай нэр/утас өгсөн бол гэрээнд шууд тусгана
+          ...(tootEntry.gereeNer ? { ner: gereeniiKhariltsagch.ner, ovog: gereeniiKhariltsagch.ovog } : {}),
+          ...(tootEntry.gereeUtas ? { utas: gereeniiKhariltsagch.utas } : {}),
+        }
       });
       continue;
     }
@@ -5809,12 +5846,10 @@ exports.syncResidentContracts = async function syncResidentContracts(
       gereeniiOgnoo: new Date(),
       turul: req.body.turul || "Үндсэн",
       tuluv: "Идэвхтэй",
-      ovog: req.body.ovog || orshinSuugch.ovog || "",
-      ner: req.body.ner || orshinSuugch.ner,
+      ovog: gereeniiKhariltsagch.ovog,
+      ner: gereeniiKhariltsagch.ner,
       register: req.body.register || orshinSuugch.register || "",
-      utas: Array.isArray(orshinSuugch.utas)
-        ? orshinSuugch.utas
-        : [orshinSuugch.utas],
+      utas: gereeniiKhariltsagch.utas,
       mail: req.body.mail || orshinSuugch.mail || "",
       baiguullagiinId: baiguullaga._id,
       baiguullagiinNer: baiguullaga.ner,

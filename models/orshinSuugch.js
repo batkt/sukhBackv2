@@ -36,6 +36,10 @@ const orshinSuugchSchema = new Schema(
         bairniiNer: String,
         ovog: String, // Resident's ovog for this specific address
         ner: String, // Resident's ner for this specific address
+        // Нэг хүн олон тоот эзэмшихэд тухайн тоотын гэрээнд харагдах нэр, утас.
+        // Хоосон бол оршин суугчийн үндсэн нэр, утсыг ашиглана.
+        gereeNer: String,
+        gereeUtas: String,
         billingId: String, // Added: For identifying billing in Wallet API
         walletUserId: String, // Global Wallet User ID
         walletCustomerId: String, // Added: For multiple wallet accounts
@@ -62,6 +66,8 @@ const orshinSuugchSchema = new Schema(
     ],
     ovog: String,
     utas: String,
+    // Үндсэн утаснаас гадна нэмэлт утаснууд (тоот бүрийн гэрээнд сонгож болно)
+    nemeltUtas: [String],
     currentSessionId: String,
     mail: String,
     tuluv: String,
