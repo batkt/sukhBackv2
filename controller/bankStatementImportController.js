@@ -687,6 +687,16 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
         dateRange: { start: minDate, end: maxDate },
       },
       rows: parsedRows,
+      activeContracts: activeContracts.map((c) => ({
+        _id: c._id,
+        gereeniiDugaar: c.gereeniiDugaar,
+        bairNer: c.bairNer,
+        toot: c.toot,
+        ovog: c.orshinSuugchId?.ovog,
+        ner: c.orshinSuugchId?.ner || c.ner,
+        utas: c.orshinSuugchId?.utas,
+        sarBuriinTulbur: c.sarBuriinTulbur || c.nekhemjlekhDun || 0,
+      })),
     });
   } catch (error) {
     console.error("❌ [EXCEL PREVIEW ALDAA]:", error);
