@@ -425,11 +425,15 @@ exports.generateKhariltsagchExcelTemplate = asyncHandler(
         const useg = baganiinUseg(TOLGOINUUD.indexOf(tolgoi) + 1);
         // Давхрын нэрийг томъёонд ижил дүрмээр хувиргана (- , зай → _)
         const davkharNer = `SUBSTITUTE(SUBSTITUTE(TRIM($E2),"-","_")," ","_")`;
+        const davkhriinMuj = `INDIRECT("${urtgal}_"&${davkharNer})`;
         worksheet.dataValidations.add(`${useg}2:${useg}2000`, {
           type: "list",
           allowBlank: true,
+          // IFERROR-ийг ХЭРЭГЛЭХГҮЙ: жагсаалтын эх нь МУЖ (reference) байх
+          // ёстой, IFERROR утга буцаадаг тул Excel сумыг харуулаад жагсаалтыг
+          // нээдэггүй байв. ISREF + IF нь мужийг хэвээр нь буцаана.
           formulae: [
-            `IF(TRIM($E2)="",${buhNer},IFERROR(INDIRECT("${urtgal}_"&${davkharNer}),${buhNer}))`,
+            `IF(TRIM($E2)="",${buhNer},IF(ISREF(${davkhriinMuj}),${davkhriinMuj},${buhNer}))`,
           ],
           showErrorMessage: true,
           errorStyle: "warning",
