@@ -114,7 +114,11 @@ async function handleZardluudUpdate(doc) {
 
     const { db } = require("zevbackv2");
     const Geree = require("./geree");
-    const { gereeniiTootTurul, zardluudShuuye } = require("../utils/zardalAngilal");
+    const {
+      gereeniiTootTurul,
+      zardluudShuuye,
+      khariltsagchiinZardalSongolt,
+    } = require("../utils/zardalAngilal");
 
     const kholbolt = db.kholboltuud.find(
       (a) => String(a.baiguullagiinId) === String(doc.baiguullagiinId)
@@ -136,6 +140,7 @@ async function handleZardluudUpdate(doc) {
     for (const geree of gereenuud) {
       // Харилцагчийн тусгай зардал бол зөвхөн харилцагчийн гэрээнд синк хийнэ.
       // Нийтлэг зардал бол оршин суугч болон үндсэн тооттой харилцагчид синк хийгдэнэ.
+      const isKhariltsagchGeree = Boolean(geree.khariltsagchId);
       if (isKhariltsagchDoc && !isKhariltsagchGeree) {
         continue;
       }
@@ -144,9 +149,15 @@ async function handleZardluudUpdate(doc) {
         // Remove any pre-existing entry with matching name/turul
         let zardluud = (geree.zardluud || []).filter((z) => !isSameZardal(z, doc));
 
-        // Зогсоол/агуулахын гэрээнд өөр ангиллын (орон сууцны) зардал нэмэхгүй
-        const tootTurul = await gereeniiTootTurul(geree);
-        if (zardluudShuuye([doc], tootTurul).length === 0) {
+        // Харилцагч зардлаа гараар сонгосон бол зөвхөн сонголтоор нь.
+        // Үгүй бол зогсоол/агуулахын гэрээнд өөр ангиллын зардал нэмэхгүй.
+        const songolt = isKhariltsagchGeree
+          ? await khariltsagchiinZardalSongolt(geree)
+          : null;
+        const tokhirokhgui = songolt
+          ? !songolt.includes(String(doc._id))
+          : zardluudShuuye([doc], await gereeniiTootTurul(geree)).length === 0;
+        if (tokhirokhgui) {
           await gereeniiZardluudBichye(GereeModel, geree._id, zardluud);
           continue;
         }

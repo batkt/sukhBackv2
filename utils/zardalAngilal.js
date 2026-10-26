@@ -94,7 +94,41 @@ async function gereeniiTootTurul(geree) {
   return ur;
 }
 
+/**
+ * Харилцагчийн гараар сонгосон зардлууд (`songosonZardluud`).
+ *
+ * Сонголт хийгээгүй (эсвэл харилцагчийн гэрээ биш) бол `null` — тэр үед
+ * хуучин дүрэм (`zardluudShuuye`) үйлчилнэ. Массив бол сонголт нь тоотын
+ * төрлийн шүүлтээс ДАВАМГАЙ: гаражтай харилцагчид «Цэвэрлэгээ» сонговол
+ * бодогдох ёстой.
+ *
+ * Санахгүй — сонголтыг өөрчилсний дараа шууд үйлчлэх ёстой.
+ */
+async function khariltsagchiinZardalSongolt(geree) {
+  if (!geree?.khariltsagchId) return null;
+  try {
+    const { db } = require("zevbackv2");
+    const kh = await require("../models/khariltsagch")(db.erunkhiiKholbolt)
+      .findById(String(geree.khariltsagchId))
+      .select({ songosonZardluud: 1 })
+      .lean();
+    return Array.isArray(kh?.songosonZardluud) ? kh.songosonZardluud.map(String) : null;
+  } catch (err) {
+    console.error("[zardalAngilal] харилцагчийн зардлын сонголт уншиж чадсангүй:", err.message);
+    return null;
+  }
+}
+
+/** Барилгын зардлын баримтуудаас (`_id`-тай) сонгосныг нь үлдээнэ. */
+function songoltoorShuuye(zardalDocuud, songolt) {
+  if (!Array.isArray(songolt)) return zardalDocuud || [];
+  const set = new Set(songolt.map(String));
+  return (zardalDocuud || []).filter((z) => set.has(String(z?._id)));
+}
+
 module.exports = {
+  khariltsagchiinZardalSongolt,
+  songoltoorShuuye,
   OR_SUUTS,
   GARAJ,
   AGUULAKH,

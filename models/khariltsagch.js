@@ -78,6 +78,18 @@ const khariltsagchSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    /**
+     * Энэ харилцагчид бодогдох ашиглалтын зардлууд (`ashiglaltiinZardluud._id`).
+     *
+     * Тодорхойгүй бол хуучин дүрмээр: тоотын төрөлд тохирох, барилгын
+     * «харилцагч» зориулалттай бүх зардал. Массив бол ЗӨВХӨН эдгээр нь
+     * гэрээнд орж нэхэмжлэгдэнэ (хоосон массив = зардалгүй).
+     * Дүрэм: utils/zardalAngilal → khariltsagchiinZardalSongolt.
+     */
+    songosonZardluud: {
+      type: [String],
+      default: undefined,
+    },
     taniltsuulgaKharakhEsekh: {
       type: Boolean,
       default: true,

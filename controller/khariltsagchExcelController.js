@@ -752,6 +752,32 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
           }
         }
 
+        // ── Үндсэн барилга/байгууллага ────────────────────────────────────
+        // Утсаар олдсон харилцагч өмнө нь ӨӨР барилга (эсвэл байгууллага)
+        // дээр бүртгэгдсэн байж болно. Толгойн `barilgiinId` нь тэр хуучин
+        // барилга руу заасаар үлдвэл гэрээ, нэхэмжлэх нь энэ барилгад үүсдэг
+        // атлаа харилцагч өөр барилгын жагсаалтад харагддаг байв. Хуучин
+        // барилгад нь тоот үлдээгүй бол толгойг энэ импортын барилга руу
+        // шилжүүлнэ — тоот эзэмшиж буй барилга нь л үндсэн байх ёстой.
+        if (tootuud.length > 0) {
+          const khuuchinBarilga = String(khariltsagch.barilgiinId || "");
+          const khuuchinBarilgadTootBii = khariltsagch.toots.some(
+            (t) => khuuchinBarilga && String(t.barilgiinId || "") === khuuchinBarilga,
+          );
+          if (khuuchinBarilga !== String(undsenBarilgiinId) && !khuuchinBarilgadTootBii) {
+            khariltsagch.baiguullagiinId = baiguullaga._id.toString();
+            khariltsagch.baiguullagiinNer = baiguullaga.ner;
+            khariltsagch.barilgiinId = undsenBarilgiinId;
+            khariltsagch.bairniiNer = targetBarilga.ner || "";
+            khariltsagch.duureg = duuregNer;
+            khariltsagch.soh = sohNer;
+            if (undsenToot) {
+              khariltsagch.toot = undsenToot.toot;
+              khariltsagch.davkhar = davkhar || "";
+            }
+          }
+        }
+
         await khariltsagch.save();
 
         // ── Гэрээ (гараар бүртгэхтэй ижил логик) ──────────────────────────

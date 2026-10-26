@@ -317,15 +317,22 @@ router.post("/zardalTseverlekhiya", tokenShalgakh, async (req, res, next) => {
     let updatedCount = 0;
     const aldaatai = [];
 
-    const { gereeniiTootTurul, zardluudShuuye } = require("../utils/zardalAngilal");
+    const {
+      gereeniiTootTurul,
+      zardluudShuuye,
+      khariltsagchiinZardalSongolt,
+    } = require("../utils/zardalAngilal");
     for (const geree of gereenuud) {
       // Нэг гэрээ унасан ч бусдыг үргэлжлүүлнэ. Өмнө нь энд try/catch байхгүй
       // байсан тул хуучин өгөгдөлтэй ганц гэрээ синкийг бүхэлд нь таслаад,
       // дараагийн гэрээнүүд устгасан зардлаа хэвээр үлдээж байв.
       try {
-        // Зогсоол/агуулахын гэрээнд зөвхөн өөрийн ангиллын зардал
-        const tootTurul = await gereeniiTootTurul(geree);
-        const tokhirokh = zardluudShuuye(masterZardluud, tootTurul);
+        // Харилцагч зардлаа гараар сонгосон бол зөвхөн сонгосныг нь.
+        // Үгүй бол зогсоол/агуулахын гэрээнд зөвхөн өөрийн ангиллын зардал.
+        const songolt = await khariltsagchiinZardalSongolt(geree);
+        const tokhirokh = songolt
+          ? masterZardluud.filter((_, i) => songolt.includes(String(activeZardluud[i]._id)))
+          : zardluudShuuye(masterZardluud, await gereeniiTootTurul(geree));
         await gereeniiZardluudBichye(GereeModel, geree._id, tokhirokh);
         updatedCount++;
       } catch (aldaa) {

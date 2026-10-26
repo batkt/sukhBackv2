@@ -5716,19 +5716,6 @@ exports.syncResidentContracts = async function syncResidentContracts(
 
     const gereeniiKhariltsagch = exports.tootGereeniiKhariltsagch(tootEntry, orshinSuugch, req.body);
 
-    if (existingActiveGeree) {
-      // Already has an active contract, update its details and additional units list
-      await GereeModel.findByIdAndUpdate(existingActiveGeree._id, {
-        $set: {
-          nemeltTootnuud: currentAuData,
-          // Тоотод тусгай нэр/утас өгсөн бол гэрээнд шууд тусгана
-          ...(tootEntry.gereeNer ? { ner: gereeniiKhariltsagch.ner, ovog: gereeniiKhariltsagch.ovog } : {}),
-          ...(tootEntry.gereeUtas ? { utas: gereeniiKhariltsagch.utas } : {}),
-        }
-      });
-      continue;
-    }
-
     // Fetch building-specific tariffs
     let allAshiglaltiinZardluudData = [];
     if (isKhariltsagch) {
@@ -5755,23 +5742,34 @@ exports.syncResidentContracts = async function syncResidentContracts(
       });
     }
 
+    // Харилцагч зардлаа гараар сонгосон бол (`songosonZardluud`) ЗӨВХӨН
+    // сонгосныг нь — тоотын төрлийн шүүлтээс давамгай. Үгүй бол харилцагчийн
+    // бүх зардал + тоотын төрөлд тохирох бусад зардал.
+    const { songoltoorShuuye } = require("../utils/zardalAngilal");
+    const zardliinSongolt =
+      isKhariltsagch && Array.isArray(orshinSuugch.songosonZardluud)
+        ? orshinSuugch.songosonZardluud.map(String)
+        : null;
     const unitTurul = tootEntry.turul || "Орон сууц";
-    const ashiglaltiinZardluudData = allAshiglaltiinZardluudData.filter((zardal) => {
-      if (isKhariltsagch && zardal.zoriulalt === "khariltsagch") {
-        return true;
-      }
-      const name = (zardal.ner || "").toLowerCase();
-      const type = (zardal.zardliinTurul || "").toLowerCase();
-      if (unitTurul === "Гараж") {
-        return name.includes("гараж") || name.includes("зогсоол") || type.includes("гараж") || type.includes("зогсоол");
-      } else if (unitTurul === "Агуулах") {
-        return name.includes("агуулах") || type.includes("агуулах");
-      } else {
-        const isGarageOrStorage = name.includes("гараж") || name.includes("зогсоол") || name.includes("агуулах") ||
-          type.includes("гараж") || type.includes("зогсоол") || type.includes("агуулах");
-        return !isGarageOrStorage;
-      }
-    });
+    const ashiglaltiinZardluudData = zardliinSongolt
+      ? songoltoorShuuye(allAshiglaltiinZardluudData, zardliinSongolt)
+      : allAshiglaltiinZardluudData.filter((zardal) => {
+          // Харилцагчийн зориулалттай зардал тоотын төрлөөс үл хамаарна.
+          if (isKhariltsagch && zardal.zoriulalt === "khariltsagch") {
+            return true;
+          }
+          const name = (zardal.ner || "").toLowerCase();
+          const type = (zardal.zardliinTurul || "").toLowerCase();
+          if (unitTurul === "Гараж") {
+            return name.includes("гараж") || name.includes("зогсоол") || type.includes("гараж") || type.includes("зогсоол");
+          } else if (unitTurul === "Агуулах") {
+            return name.includes("агуулах") || type.includes("агуулах");
+          } else {
+            const isGarageOrStorage = name.includes("гараж") || name.includes("зогсоол") || name.includes("агуулах") ||
+              type.includes("гараж") || type.includes("зогсоол") || type.includes("агуулах");
+            return !isGarageOrStorage;
+          }
+        });
 
     const targetBarilgaForToot = baiguullaga.barilguud?.find(
       (b) => String(b._id) === String(currentBarilgiinId),
@@ -5801,6 +5799,38 @@ exports.syncResidentContracts = async function syncResidentContracts(
       nuatNemekhEsekh: zardal.nuatNemekhEsekh || false,
       ognoonuud: zardal.ognoonuud || [],
     }));
+
+    if (existingActiveGeree) {
+      // Сонголтыг ЭНЭ хүсэлтээр өөрчилсөн бол одоо байгаа гэрээний
+      // зардлуудыг тааруулна: сонгоогүй барилгын зардлыг хасаж, шинээр
+      // сонгосныг нэмнэ. Гэрээнд гараар нэмсэн (барилгын жагсаалтад
+      // байхгүй) мөр болон аль хэдийн байгаа мөрийн өгөгдөл хэвээр.
+      let zardliinZasvar = {};
+      if (zardliinSongolt && req.body && req.body.songosonZardluud !== undefined) {
+        const { zardalAdilUu, niitTulburBodoyo } = require("../utils/gereeniiZardalTseverlegee");
+        const umnukh = existingActiveGeree.zardluud || [];
+        const barilgiinBish = umnukh.filter(
+          (z) => !allAshiglaltiinZardluudData.some((b) => zardalAdilUu(z, b)),
+        );
+        const songoson = ashiglaltiinZardluudData.map(
+          (b, i) => umnukh.find((z) => zardalAdilUu(z, b)) || zardluudArray[i],
+        );
+        const shineZardluud = [...barilgiinBish, ...songoson];
+        zardliinZasvar = { zardluud: shineZardluud, niitTulbur: niitTulburBodoyo(shineZardluud) };
+      }
+      // Already has an active contract, update its details and additional units list
+      await GereeModel.findByIdAndUpdate(existingActiveGeree._id, {
+        $set: {
+          nemeltTootnuud: currentAuData,
+          // Тоотод тусгай нэр/утас өгсөн бол гэрээнд шууд тусгана
+          ...(tootEntry.gereeNer ? { ner: gereeniiKhariltsagch.ner, ovog: gereeniiKhariltsagch.ovog } : {}),
+          ...(tootEntry.gereeUtas ? { utas: gereeniiKhariltsagch.utas } : {}),
+          ...zardliinZasvar,
+        }
+      });
+      continue;
+    }
+
 
     const tailbarFromZardluud =
       ashiglaltiinZardluudData

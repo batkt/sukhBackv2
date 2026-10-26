@@ -17,9 +17,13 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
   // Зогсоол/агуулахын гэрээнд орон сууцны ашиглалтын зардал нэхэмжлэхгүй
   // (гэрээнд буруу хуулагдсан хуучин өгөгдлийг ч энд шүүнэ).
   {
-    const { gereeniiTootTurul, zardluudShuuye, OR_SUUTS } = require("../utils/zardalAngilal");
+    const { gereeniiTootTurul, zardluudShuuye, OR_SUUTS, khariltsagchiinZardalSongolt } = require("../utils/zardalAngilal");
     const tootTurul = await gereeniiTootTurul(geree);
-    if (tootTurul !== OR_SUUTS) {
+    // Харилцагч зардлаа гараар сонгосон бол гэрээний зардлууд нь тэр
+    // сонголтыг аль хэдийн тусгасан — төрлөөр дахин шүүвэл сонгосон
+    // «Цэвэрлэгээ» гаражийн гэрээнээс унана.
+    const songolt = tootTurul !== OR_SUUTS ? await khariltsagchiinZardalSongolt(geree) : null;
+    if (tootTurul !== OR_SUUTS && !songolt) {
       const ekh = geree.toObject ? geree.toObject() : geree;
       const shuusen = zardluudShuuye(ekh.zardluud, tootTurul);
       if (shuusen.length !== (ekh.zardluud || []).length) {

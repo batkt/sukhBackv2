@@ -33,10 +33,21 @@ const KHOOSON_UTGANUUD = new Set(["", "БҮРТГЭЛГҮЙ", "-", "ҮГҮЙ"]);
  * @param {any} raw Excel-ийн нүдний утга
  * @returns {string[]} давхардалгүй, цэвэрлэсэн дугаарууд
  */
+/**
+ * Үсэг, тооны байр солигдсон дугаарыг засна: "УБА1234" / "УБА-1234" →
+ * "1234УБА". Excel-д ихэвчлэн ингэж буруу бичигддэг тул хаалга/камер
+ * танихгүй, хэлбэрийн шалгалтад унадаг байв. Бусад хэлбэрийг хөндөхгүй.
+ */
+function bairSolighdsonDugaarZasya(dugaar) {
+  const taarsan = /^([А-ЯӨҮЁ]{3})-?(\d{4})$/.exec(dugaar);
+  return taarsan ? `${taarsan[2]}${taarsan[1]}` : dugaar;
+}
+
 function dugaaruudSalgaya(raw) {
   const jagsaalt = String(raw ?? "")
     .split(/[,;|/\n\r]+/)
     .map(mashiniiDugaarTseverle)
+    .map(bairSolighdsonDugaarZasya)
     .filter((d) => !KHOOSON_UTGANUUD.has(d));
   return Array.from(new Set(jagsaalt));
 }
