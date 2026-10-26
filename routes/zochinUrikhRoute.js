@@ -1388,6 +1388,9 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
                 : undefined,
               barilgiinId: barilgiinId ? String(barilgiinId) : undefined,
               turul: "Харилцагч",
+              // Бусад бүртгэлийн замтай ижил анхны нууц үг — эс бөгөөс апп-аар
+              // нэвтрэхэд «нууц үг тохируулаагүй» гэж зогсдог байв.
+              nuutsUg: "1234",
               createdAt: new Date(),
               updatedAt: new Date(),
             });

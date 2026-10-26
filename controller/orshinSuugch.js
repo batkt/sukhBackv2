@@ -3982,7 +3982,13 @@ exports.dugaarBatalgaajuulya = asyncHandler(async (req, res, next) => {
         });
       }
     } else if (purpose === "password_reset") {
-      if (!existing) {
+      // Харилцагч ч нууц үгээ сэргээх ёстой — эцсийн `nuutsUgSergeeye` нь
+      // Khariltsagch-ийг дэмждэг атлаа код илгээх энэ алхам зөвхөн оршин
+      // суугчийг хайдаг тул «хэрэглэгч олдсонгүй» гэж зогсдог байв.
+      const khariltsagchBii =
+        !existing &&
+        (await Khariltsagch(db.erunkhiiKholbolt).exists({ utas }));
+      if (!existing && !khariltsagchBii) {
         return res.status(404).json({
           success: false,
           message: "Энэ утасны дугаартай хэрэглэгч олдсонгүй!",
@@ -4034,6 +4040,17 @@ exports.dugaarBatalgaajuulya = asyncHandler(async (req, res, next) => {
   }
 });
 
+/**
+ * Хэрэглэгчийн (оршин суугч / харилцагч) байгууллага. Зарим нь байгууллагаа
+ * зөвхөн toots[]-д бүртгэлтэй байдаг.
+ */
+function khereglegchiinBaiguullagiinId(khereglegch) {
+  return (
+    khereglegch?.baiguullagiinId ||
+    (khereglegch?.toots || []).find((t) => t && t.baiguullagiinId)?.baiguullagiinId
+  );
+}
+
 exports.orshinSuugchBatalgaajuulya = asyncHandler(async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
@@ -4046,23 +4063,21 @@ exports.orshinSuugchBatalgaajuulya = asyncHandler(async (req, res, next) => {
       });
     }
 
-    const orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt)
-      .findOne({ utas: utas })
-      .catch((err) => {
-        next(err);
-      });
+    // Харилцагч ч мөн апп-аар нэвтэрдэг (orshinSuugchNevtrey → Khariltsagch
+    // fallback) тул нууц үг сэргээх эхний алхам ч түүнийг олох ёстой —
+    // эс бөгөөс «хэрэглэгч олдсонгүй» гэж зогсдог байв.
+    const khereglegch =
+      (await OrshinSuugch(db.erunkhiiKholbolt).findOne({ utas: utas })) ||
+      (await Khariltsagch(db.erunkhiiKholbolt).findOne({ utas: utas }));
 
-    if (!orshinSuugch) {
+    if (!khereglegch) {
       return res.status(404).json({
         success: false,
         message: "Энэ утасны дугаартай хэрэглэгч олдсонгүй!",
       });
     }
 
-    // Зарим оршин суугчийн байгууллага зөвхөн toots[]-д бүртгэлтэй байдаг
-    req.body.baiguullagiinId =
-      orshinSuugch.baiguullagiinId ||
-      (orshinSuugch.toots || []).find((t) => t && t.baiguullagiinId)?.baiguullagiinId;
+    req.body.baiguullagiinId = khereglegchiinBaiguullagiinId(khereglegch);
 
     if (!req.body.baiguullagiinId) {
       return res.status(400).json({
@@ -4120,8 +4135,9 @@ exports.nuutsUgSergeeye = asyncHandler(async (req, res, next) => {
 
     const activeUser = isKhariltsagch ? khariltsagchUser : orshinSuugch;
 
+    // Код илгээхдээ ашигласан байгууллагаар (toots[]-ийн нөөцтэй) шалгана
     const verificationResult = await verifyCodeHelper(
-      activeUser.baiguullagiinId,
+      khereglegchiinBaiguullagiinId(activeUser),
       utas,
       code,
     );
