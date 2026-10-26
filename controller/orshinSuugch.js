@@ -5639,6 +5639,29 @@ exports.syncResidentContracts = async function syncResidentContracts(
     additionalUnits = additionalUnits.slice(1);
   }
 
+  // Харилцагч тоот/гараж/агуулахгүй (жишээ нь гадна зогсоол) бүртгэгдсэн ч
+  // ГЭРЭЭТЭЙ байх ёстой — авлага үүсээгүй ч гэрээний жагсаалтад харагдаж,
+  // дараа нь нэхэмжлэх үүсгэх боломжтой. Тоотгүй нэг гэрээ үүсгэнэ; тоот
+  // нэмэгдэхэд энэ гэрээ доорх 3-р алхмаар цуцлагдаж, тоотынх үүснэ.
+  if (
+    isKhariltsagch &&
+    mainUnits.length === 0 &&
+    additionalUnits.length === 0 &&
+    barilgiinId &&
+    String(orshinSuugch.baiguullagiinId || "") === baiguullagiinId
+  ) {
+    mainUnits = [
+      {
+        toot: "",
+        turul: "Орон сууц",
+        barilgiinId: String(barilgiinId),
+        baiguullagiinId,
+        orts: "",
+        davkhar: "",
+      },
+    ];
+  }
+
   let anyReactivated = false;
 
   // 1. Identify all active contracts for this resident in this organization
@@ -5717,8 +5740,22 @@ exports.syncResidentContracts = async function syncResidentContracts(
       orshinSuugchId: orshinSuugch._id.toString(),
     });
 
+    // Олон тоотой оршин суугчийн гараж/агуулах нь `linkedAptToot`-оор аль
+    // тоотод хамаарахаа заана — зөвхөн тэр тоотын гэрээнд орно. Өмнө нь бүх
+    // гараж тоот бүрийн гэрээнд давхар ордог байв. Холбоосгүй эсвэл холбосон
+    // тоот нь алга бол үндсэн (эхний) тоотынх — нэхэмжлэхийн дүрэмтэй ижил.
+    const tootKey = (v) => String(v ?? "").trim();
+    const undsenTootKey = tootKey(uniqueToots[0]?.toot);
+    const kharyaaTootKey = (au) => {
+      const link = tootKey(au.linkedAptToot);
+      return link && uniqueToots.some((m) => tootKey(m.toot) === link)
+        ? link
+        : undsenTootKey;
+    };
+
     const currentAuData = additionalUnits
       .filter(au => String(au.barilgiinId || barilgiinId) === String(currentBarilgiinId))
+      .filter(au => kharyaaTootKey(au) === tootKey(tootEntry.toot))
       .map(au => ({
         toot: au.toot,
         turul: au.turul,
