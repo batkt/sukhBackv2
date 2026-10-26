@@ -5730,24 +5730,36 @@ exports.syncResidentContracts = async function syncResidentContracts(
     }
 
     // Fetch building-specific tariffs
-    const allAshiglaltiinZardluudData = await AshiglaltiinZardluud(
-      tukhainBaaziinKholbolt,
-    ).find({
-      baiguullagiinId: baiguullagiinId,
-      barilgiinId: currentBarilgiinId,
-      ...(isKhariltsagch
-        ? { zoriulalt: "khariltsagch" }
-        : {
-            $or: [
-              { zoriulalt: "orshinSuugch" },
-              { zoriulalt: { $exists: false } },
-              { zoriulalt: null },
-            ],
-          }),
-    });
+    let allAshiglaltiinZardluudData = [];
+    if (isKhariltsagch) {
+      allAshiglaltiinZardluudData = await AshiglaltiinZardluud(
+        tukhainBaaziinKholbolt,
+      ).find({
+        baiguullagiinId: baiguullagiinId,
+        barilgiinId: currentBarilgiinId,
+        zoriulalt: "khariltsagch",
+      });
+    }
+
+    if (!allAshiglaltiinZardluudData || allAshiglaltiinZardluudData.length === 0) {
+      allAshiglaltiinZardluudData = await AshiglaltiinZardluud(
+        tukhainBaaziinKholbolt,
+      ).find({
+        baiguullagiinId: baiguullagiinId,
+        barilgiinId: currentBarilgiinId,
+        $or: [
+          { zoriulalt: "orshinSuugch" },
+          { zoriulalt: { $exists: false } },
+          { zoriulalt: null },
+        ],
+      });
+    }
 
     const unitTurul = tootEntry.turul || "Орон сууц";
     const ashiglaltiinZardluudData = allAshiglaltiinZardluudData.filter((zardal) => {
+      if (isKhariltsagch && zardal.zoriulalt === "khariltsagch") {
+        return true;
+      }
       const name = (zardal.ner || "").toLowerCase();
       const type = (zardal.zardliinTurul || "").toLowerCase();
       if (unitTurul === "Гараж") {

@@ -134,11 +134,9 @@ async function handleZardluudUpdate(doc) {
     const isKhariltsagchDoc = doc.zoriulalt === "khariltsagch";
 
     for (const geree of gereenuud) {
-      // Зөвхөн тохирох гэрээнд л синк хийнэ:
-      // Харилцагчийн зардал -> зөвхөн харилцагчийн гэрээнд
-      // Оршин суугчийн зардал -> зөвхөн оршин суугчийн гэрээнд
-      const isKhariltsagchGeree = Boolean(geree.khariltsagchId);
-      if (isKhariltsagchDoc !== isKhariltsagchGeree) {
+      // Харилцагчийн тусгай зардал бол зөвхөн харилцагчийн гэрээнд синк хийнэ.
+      // Нийтлэг зардал бол оршин суугч болон үндсэн тооттой харилцагчид синк хийгдэнэ.
+      if (isKhariltsagchDoc && !isKhariltsagchGeree) {
         continue;
       }
       // Нэг гэрээ унасан ч бусдыг үргэлжлүүлнэ.

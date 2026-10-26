@@ -32,7 +32,11 @@ function zardalAngilal(z) {
 function zardluudShuuye(zardluud, tootTurul) {
   const turul = tootTurulKhevshuulekh(tootTurul);
   if (turul === OR_SUUTS) return zardluud || [];
-  return (zardluud || []).filter((z) => zardalAngilal(z) === turul);
+  return (zardluud || []).filter((z) => {
+    // Хэрэв уг зардал нь тусгайлан Харилцагчид зориулагдсан бол өмчийн шүүлтүүрээр хасахгүй
+    if (z?.zoriulalt === "khariltsagch") return true;
+    return zardalAngilal(z) === turul;
+  });
 }
 
 // Эзэмшигчийн хайлтыг богино хугацаанд санах (нэхэмжлэх үүсгэхэд олон дуудагдана)

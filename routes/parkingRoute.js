@@ -1366,6 +1366,9 @@ router.post("/zogsoolSdkService", tokenShalgakh, async (req, res, next) => {
                 turul = sambariinMur?.urisanMashin ? "Зочин" : "Үйлчлүүлэгч";
               }
             }
+            if (uldegdel === 0 && tulsun > 0 && (!turul || turul === "Үйлчлүүлэгч")) {
+              turul = "Төлсөн";
+            }
             io.to(`gate-room-${req.body.barilgiinId}`).emit("sambar-show", {
               ip,
               plate: sambariinMur?.mashiniiDugaar || req.body.mashiniiDugaar,
@@ -1524,6 +1527,7 @@ router
           });
           const garakhKhugatsaa = zogsoolConfig?.garakhTsag || 30;
           setObj.garakhTsag = new Date(Date.now() + garakhKhugatsaa * 60000);
+          setObj.freezeOgnoo = new Date();
         }
         await Uilchluulegch(req.body.tukhainBaaziinKholbolt).updateOne(
           {

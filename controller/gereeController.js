@@ -368,21 +368,27 @@ exports.createGeree = asyncHandler(async (req, res) => {
   // 1. Get default ashiglaltiinZardluud from the collection
   const AshiglaltiinZardluud = require("../models/ashiglaltiinZardluud");
   const isKhariltsagch = !!req.body.khariltsagchId && !req.body.orshinSuugchId;
-  const zoriulaltFilter = isKhariltsagch
-    ? { zoriulalt: "khariltsagch" }
-    : {
-        $or: [
-          { zoriulalt: "orshinSuugch" },
-          { zoriulalt: { $exists: false } },
-          { zoriulalt: null },
-        ],
-      };
 
-  const defaultZardluud = await AshiglaltiinZardluud(tukhainBaaziinKholbolt).find({
-    baiguullagiinId: baiguullagiinId,
-    barilgiinId: barilgiinId,
-    ...zoriulaltFilter,
-  });
+  let defaultZardluud = [];
+  if (isKhariltsagch) {
+    defaultZardluud = await AshiglaltiinZardluud(tukhainBaaziinKholbolt).find({
+      baiguullagiinId: baiguullagiinId,
+      barilgiinId: barilgiinId,
+      zoriulalt: "khariltsagch",
+    });
+  }
+
+  if (!defaultZardluud || defaultZardluud.length === 0) {
+    defaultZardluud = await AshiglaltiinZardluud(tukhainBaaziinKholbolt).find({
+      baiguullagiinId: baiguullagiinId,
+      barilgiinId: barilgiinId,
+      $or: [
+        { zoriulalt: "orshinSuugch" },
+        { zoriulalt: { $exists: false } },
+        { zoriulalt: null },
+      ],
+    });
+  }
 
   // 2. Prepare geree data, populating zardluud if empty
   const contractData = {

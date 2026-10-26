@@ -244,6 +244,7 @@ module.exports.tulburUridchiljTulukh = async (body, next) => {
       tulsunDun: currentTulsun,
       "tuukh.0.tuluv": 1,
       "tuukh.0.tulukhDun": 0,
+      freezeOgnoo: new Date(),
     };
 
     if (!(Number(oldsonMashin.niitDun) > 0)) {
