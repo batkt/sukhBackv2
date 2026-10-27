@@ -234,6 +234,19 @@ const baiguullagaSchema = new Schema(
         type: Boolean,
         default: true,
       },
+      /**
+       * Нэг эрхээр зөвхөн 1 төхөөрөмжөөс хандах эсэх (Single session policy).
+       * true (анхдагч) - Зөвхөн 1 төхөөрөмжөөс хандана (өөр төхөөрөмжөөс нэвтрэхэд өмнөх нь гарна).
+       * false (унтраасан) - 1 эрхээр хэдэн ч төхөөрөмжнөөс зэрэг хандах боломжтой.
+       */
+      negSessionEsekh: {
+        type: Boolean,
+        default: true,
+      },
+      olonTokhooromjZuvshuurukh: {
+        type: Boolean,
+        default: false,
+      },
       /**Хоногт бодох алдангийн хувь дээд тал 0.5 байна */
       aldangiinKhuvi: Number,
 

@@ -4903,6 +4903,74 @@ exports.orshinSuugchOorooUstgakh = asyncHandler(async (req, res, next) => {
           undsenId: String(orshinSuugch.undsenId),
         })
         .catch(() => { });
+
+      // Notify organizations linked to parent or member
+      try {
+        const parentUser = await OrshinSuugchModel.findById(orshinSuugch.undsenId).lean();
+        const memberOrgIds = new Set();
+        if (orshinSuugch.baiguullagiinId) memberOrgIds.add(String(orshinSuugch.baiguullagiinId));
+        if (parentUser?.baiguullagiinId) memberOrgIds.add(String(parentUser.baiguullagiinId));
+        if (Array.isArray(parentUser?.toots)) {
+          parentUser.toots.forEach(t => { if (t?.baiguullagiinId) memberOrgIds.add(String(t.baiguullagiinId)); });
+        }
+
+        const Medegdel = require("../models/medegdel");
+        const io = req.app?.get("socketio");
+        const memberName = ezemshigchNer(orshinSuugch, { orsonSuutsToot: false }) || orshinSuugch.ner || "";
+        const memberUtas = orshinSuugch.utas || "";
+        const memberToot = orshinSuugch.toot || parentUser?.toot || (parentUser?.toots && parentUser.toots[0]?.toot) || "";
+        const memberMsg = `${memberToot ? memberToot + " тоот, " : ""}${memberName ? memberName + " (" + memberUtas + ")" : memberUtas} (гэр бүлийн гишүүн) өөрийн бүртгэлээ апп-аас устгалаа.`;
+
+        for (const orgId of memberOrgIds) {
+          const conn = db.kholboltuud?.find(k => String(k.baiguullagiinId) === String(orgId));
+          let savedMed = null;
+          if (conn) {
+            try {
+              const MedegdelModel = Medegdel(conn);
+              const m = new MedegdelModel({
+                baiguullagiinId: String(orgId),
+                barilgiinId: orshinSuugch.barilgiinId || parentUser?.barilgiinId || "",
+                title: "Оршин суугч бүртгэлээ устгалаа",
+                message: memberMsg,
+                orshinSuugchId: userIdString,
+                orshinSuugchNer: memberName,
+                orshinSuugchUtas: memberUtas,
+                toot: memberToot,
+                kharsanEsekh: false,
+                status: "pending",
+                turul: "medegdel",
+                ognoo: new Date(),
+              });
+              savedMed = await m.save();
+            } catch (notifErr) {
+              console.error("[OorooUstgakh] Member Medegdel save error:", notifErr.message);
+            }
+          }
+
+          if (io) {
+            const payload = {
+              userId: userIdString,
+              orshinSuugchId: userIdString,
+              ner: memberName,
+              utas: memberUtas,
+              toot: memberToot,
+              baiguullagiinId: String(orgId),
+              title: "Оршин суугч бүртгэлээ устгалаа",
+              message: memberMsg,
+              medegdelId: savedMed?._id,
+              ognoo: new Date(),
+            };
+            io.emit("baiguullagiin" + orgId, { type: "orshinSuugchDeleted", data: payload });
+            io.emit("baiguullagiin" + orgId, { type: "orshinSuugch.deleted", data: payload });
+          }
+        }
+        if (io) {
+          io.emit("orshinSuugch.deleted", { userId: userIdString, orshinSuugchId: userIdString });
+        }
+      } catch (e) {
+        console.error("[OorooUstgakh] Error in member delete notification:", e.message);
+      }
+
       await OrshinSuugchModel.deleteOne({ _id: orshinSuugch._id });
 
       return res.status(200).json({
@@ -4929,17 +4997,134 @@ exports.orshinSuugchOorooUstgakh = asyncHandler(async (req, res, next) => {
     const orgIdsForDel = new Set();
     if (orshinSuugch.baiguullagiinId) orgIdsForDel.add(orshinSuugch.baiguullagiinId.toString());
     if (Array.isArray(orshinSuugch.toots)) {
-      orshinSuugch.toots.forEach(t => { if (t.baiguullagiinId) orgIdsForDel.add(t.baiguullagiinId.toString()); });
+      orshinSuugch.toots.forEach(t => { if (t?.baiguullagiinId) orgIdsForDel.add(t.baiguullagiinId.toString()); });
     }
 
+    // Scan for any contracts in other tenant databases
+    for (const conn of db.kholboltuud || []) {
+      if (!conn || !conn.baiguullagiinId) continue;
+      const orgId = String(conn.baiguullagiinId);
+      if (orgIdsForDel.has(orgId)) continue;
+      try {
+        const hasGeree = await Geree(conn).exists({ orshinSuugchId: userIdString });
+        if (hasGeree) orgIdsForDel.add(orgId);
+      } catch (e) {}
+    }
+
+    const Medegdel = require("../models/medegdel");
+    const io = req.app?.get("socketio");
+    const residentName = ezemshigchNer(orshinSuugch, { orsonSuutsToot: false }) || orshinSuugch.ner || "";
+    const residentUtas = orshinSuugch.utas || "";
+
     for (const orgId of orgIdsForDel) {
-      const conn = db.kholboltuud.find(k => String(k.baiguullagiinId) === String(orgId));
+      const conn = db.kholboltuud?.find(k => String(k.baiguullagiinId) === String(orgId));
       if (conn) {
+        // Collect toots and contracts for this org
+        const orgToots = (Array.isArray(orshinSuugch.toots) ? orshinSuugch.toots : [])
+          .filter(t => t && String(t.baiguullagiinId) === String(orgId));
+
+        let gereeToots = [];
+        let orgBarilgaId = orshinSuugch.barilgiinId || "";
+        try {
+          const gereenuud = await Geree(conn)
+            .find({ orshinSuugchId: userIdString })
+            .select("toot barilgiinId gereeniiDugaar")
+            .lean();
+          gereeToots = gereenuud.map(g => g.toot).filter(Boolean);
+          if (!orgBarilgaId && gereenuud.length > 0 && gereenuud[0].barilgiinId) {
+            orgBarilgaId = gereenuud[0].barilgiinId;
+          }
+        } catch (gErr) {}
+
+        if (orgToots.length > 0 && orgToots[0].barilgiinId) {
+          orgBarilgaId = orgToots[0].barilgiinId;
+        }
+
+        const allToots = [
+          ...new Set([
+            ...orgToots.map(t => t.toot),
+            ...gereeToots,
+            ...(String(orshinSuugch.baiguullagiinId) === String(orgId) && orshinSuugch.toot ? [orshinSuugch.toot] : [])
+          ].filter(Boolean))
+        ];
+        const tootStr = allToots.join(", ");
+
+        // Mark contracts as "Цуцалсан"
         await Geree(conn).updateMany(
           { orshinSuugchId: userIdString },
           { $set: { tuluv: "Цуцалсан", tsutsalsanOgnoo: new Date() } }
         );
+
+        // Clean up vehicles registered under this resident
+        try {
+          await Mashin(conn).deleteMany({
+            $or: [
+              { ezemshigchiinId: userIdString },
+              { orshinSuugchiinId: userIdString }
+            ]
+          });
+        } catch (mErr) {}
+
+        const notifMsg = `${tootStr ? tootStr + " тоот, " : ""}${residentName ? residentName + " (" + residentUtas + ")" : residentUtas} оршин суугч өөрийн бүртгэлээ апп-аас устгалаа.`;
+
+        let savedMedegdel = null;
+        try {
+          const MedegdelModel = Medegdel(conn);
+          const m = new MedegdelModel({
+            baiguullagiinId: String(orgId),
+            barilgiinId: orgBarilgaId ? String(orgBarilgaId) : "",
+            title: "Оршин суугч бүртгэлээ устгалаа",
+            message: notifMsg,
+            orshinSuugchId: userIdString,
+            orshinSuugchNer: residentName,
+            orshinSuugchUtas: residentUtas,
+            toot: tootStr,
+            kharsanEsekh: false,
+            status: "pending",
+            turul: "medegdel",
+            ognoo: new Date()
+          });
+          savedMedegdel = await m.save();
+        } catch (medErr) {
+          console.error(`[OorooUstgakh] Error saving Medegdel for org ${orgId}:`, medErr.message);
+        }
+
+        // Emit real-time socket events for this organization
+        if (io) {
+          const payloadData = {
+            userId: userIdString,
+            orshinSuugchId: userIdString,
+            ner: residentName,
+            utas: residentUtas,
+            toot: tootStr,
+            barilgiinId: orgBarilgaId ? String(orgBarilgaId) : "",
+            baiguullagiinId: String(orgId),
+            title: "Оршин суугч бүртгэлээ устгалаа",
+            message: notifMsg,
+            medegdelId: savedMedegdel?._id,
+            ognoo: new Date(),
+          };
+
+          io.emit("baiguullagiin" + orgId, {
+            type: "orshinSuugchDeleted",
+            data: payloadData,
+          });
+
+          io.emit("baiguullagiin" + orgId, {
+            type: "orshinSuugch.deleted",
+            data: payloadData,
+          });
+        }
       }
+    }
+
+    if (io) {
+      io.emit("orshinSuugch.deleted", {
+        userId: userIdString,
+        orshinSuugchId: userIdString,
+        ner: residentName,
+        utas: residentUtas,
+      });
     }
 
     let gereesToCancel = [];
@@ -5144,6 +5329,20 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
 
     // Actually delete the orshinSuugch user account
     await OrshinSuugchModel.findByIdAndDelete(userId);
+
+    // Emit socket event so web clients refresh resident list in realtime
+    try {
+      const io = req.app?.get("socketio");
+      if (io) {
+        for (const orgId of orgIdsForDel) {
+          io.emit("baiguullagiin" + orgId, {
+            type: "orshinSuugch.deleted",
+            data: { userId: userIdString, orshinSuugchId: userIdString, baiguullagiinId: orgId }
+          });
+        }
+        io.emit("orshinSuugch.deleted", { userId: userIdString, orshinSuugchId: userIdString });
+      }
+    } catch (sErr) {}
 
     console.log(`✅ [DELETE-RESIDENT] Resident ${userId} vehicle data cleared, contracts cancelled and record deleted.`);
 

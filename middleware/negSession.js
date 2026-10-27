@@ -53,6 +53,49 @@ function sanakhTaviya(tulkhuur, zuv) {
   sanakh.set(tulkhuur, { zuv, tsag: Date.now() });
 }
 
+/**
+ * Байгууллагын «нэг эрхээр нэг л төхөөрөмж» бодлогын тохиргоог шалгах.
+ * Хүсэлт бүрд бааз руу хандахгүй байх үүднээс 15 секунд кэшлэнэ.
+ */
+const orgSanakh = new Map();
+const ORG_SANAKH_MS = 15000;
+
+async function negSessionIdevkhteiEsekh(baiguullagiinId) {
+  if (!baiguullagiinId) return true;
+  const key = String(baiguullagiinId);
+  const odoo = Date.now();
+  const cached = orgSanakh.get(key);
+  if (cached && odoo - cached.tsag < ORG_SANAKH_MS) {
+    return cached.negSessionEsekh;
+  }
+
+  try {
+    const { db } = require("zevbackv2");
+    const Baiguullaga = require("../models/baiguullaga")(db.erunkhiiKholbolt);
+    const org = await Baiguullaga.findById(baiguullagiinId)
+      .select({
+        "tokhirgoo.negSessionEsekh": 1,
+        "tokhirgoo.olonTokhooromjZuvshuurukh": 1,
+      })
+      .lean();
+
+    // negSessionEsekh: false эсвэл olonTokhooromjZuvshuurukh: true үед хязгаарлалт унтраалттай
+    const negSessionEsekh =
+      org?.tokhirgoo?.negSessionEsekh !== false &&
+      !org?.tokhirgoo?.olonTokhooromjZuvshuurukh;
+
+    if (orgSanakh.size > 2000) orgSanakh.clear();
+    orgSanakh.set(key, { negSessionEsekh, tsag: odoo });
+    return negSessionEsekh;
+  } catch (aldaa) {
+    console.error(
+      "[negSession] байгууллагын тохиргоо уншихад алдаа:",
+      aldaa.message,
+    );
+    return true;
+  }
+}
+
 async function negSession(req, res, next) {
   try {
     const header = req.headers && req.headers.authorization;
@@ -88,6 +131,19 @@ async function negSession(req, res, next) {
      * төхөөрөмж» бодлого ХЭВЭЭРЭЭ үлдэнэ.
      */
     if (!payload.exp) return next();
+
+    /* ─── БАЙГУУЛЛАГЫН «1 ЭРХЭЭР ОЛОН ТӨХӨӨРӨМЖ» ТОХИРГОО ──────────────
+     * Тохиргоонд «1 эрхээр зөвхөн 1 төхөөрөмжнөөс хандах»-ыг унтраасан бол
+     * хэдэн ч төхөөрөмжнөөс нэгэн зэрэг хандахыг зөвшөөрнө.
+     */
+    const baiguullagiinId = payload?.baiguullagiinId;
+    if (baiguullagiinId) {
+      const idevkhteiEsekh = await negSessionIdevkhteiEsekh(baiguullagiinId);
+      if (!idevkhteiEsekh) {
+        sanakhTaviya(token, true);
+        return next();
+      }
+    }
 
     const sanasan = sanakhAvya(token);
     if (sanasan === true) return next();

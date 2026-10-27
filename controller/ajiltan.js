@@ -1327,17 +1327,44 @@ exports.sessionUusgekh = asyncHandler(
       const { db } = require("zevbackv2");
       const Session = session(db.erunkhiiKholbolt);
 
-      // Invalidate old sessions for this user (single session policy)
-      await Session.updateMany(
-        {
-          ajiltanId: ajiltanId,
-          isActive: true,
-        },
-        {
-          isActive: false,
-          updatedAt: new Date(),
-        },
-      );
+      // Байгууллагын «1 эрхээр зөвхөн 1 төхөөрөмжнөөс хандах» тохиргоог шалгах
+      let negSessionEsekh = true;
+      if (baiguullagiinId) {
+        try {
+          const Baiguullaga = require("../models/baiguullaga")(db.erunkhiiKholbolt);
+          const org = await Baiguullaga.findById(baiguullagiinId)
+            .select({
+              "tokhirgoo.negSessionEsekh": 1,
+              "tokhirgoo.olonTokhooromjZuvshuurukh": 1,
+            })
+            .lean();
+          if (
+            org?.tokhirgoo?.negSessionEsekh === false ||
+            org?.tokhirgoo?.olonTokhooromjZuvshuurukh === true
+          ) {
+            negSessionEsekh = false;
+          }
+        } catch (orgErr) {
+          console.error(
+            "[sessionUusgekh] байгууллагын тохиргоо уншихад алдаа:",
+            orgErr.message,
+          );
+        }
+      }
+
+      // Invalidate old sessions for this user ONLY IF single session policy is enabled
+      if (negSessionEsekh) {
+        await Session.updateMany(
+          {
+            ajiltanId: ajiltanId,
+            isActive: true,
+          },
+          {
+            isActive: false,
+            updatedAt: new Date(),
+          },
+        );
+      }
 
       // Get device info
       const source = req.headers["user-agent"];
