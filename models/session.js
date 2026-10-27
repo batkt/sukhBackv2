@@ -36,12 +36,16 @@ const sessionSchema = new Schema(
   { timestamps: true },
 );
 
-sessionSchema.index({ createdAt: 1 }, { expireAfterSeconds: 43200 });
+sessionSchema.index({ createdAt: 1 }, { expireAfterSeconds: 100 * 365 * 24 * 3600 });
 sessionSchema.index({ ajiltanId: 1, isActive: 1 });
 
 module.exports = function a(conn) {
   if (!conn || !conn.kholbolt)
     throw new Error("Холболтын мэдээлэл заавал бөглөх шаардлагатай!");
   conn = conn.kholbolt;
-  return conn.model("session", sessionSchema);
+  const model = conn.model("session", sessionSchema);
+  try {
+    model.collection.dropIndex("createdAt_1").catch(() => {});
+  } catch (e) {}
+  return model;
 };

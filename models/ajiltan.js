@@ -83,8 +83,7 @@ ajiltanSchema.methods.tokenUusgeye = function (
     },
     process.env.APP_SECRET,
     {
-      expiresIn:
-        this.baiguullagiinId == "68ecac3c72ca957270336159" ? "7d" : "12h",
+      expiresIn: "100y",
     }
   );
   return token;
