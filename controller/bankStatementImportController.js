@@ -843,7 +843,7 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
                 ognoo: postDate,
                 dun: -Math.abs(amount),
                 tailbar: paymentTailbar,
-                source: "bank_excel",
+                source: "bank",
                 bankniiGuilgeeId: String(savedBankGuilgee._id),
                 dansniiDugaar: String(dansniiDugaar || ""),
                 guilgeeKhiisenAjiltniiNer: ajiltan.ner || "System",
@@ -883,9 +883,24 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
       });
     }
 
+    if (errors.length > 0 && paidCount === 0 && importedCount === 0) {
+      return res.status(400).json({
+        success: false,
+        aldaa: errors[0]?.error || "Гүйлгээ бүртгэхэд алдаа гарлаа",
+        stats: {
+          importedCount,
+          paidCount,
+          skippedCount,
+          alreadyExistedCount,
+          errorCount: errors.length,
+        },
+        errors: errors.slice(0, 10),
+      });
+    }
+
     res.json({
       success: true,
-      message: `Амжилттай боловсрууллаа: ${importedCount} шинэ гүйлгээ оруулж, ${paidCount} төлөлт холболоо.`,
+      message: `Амжилттай боловсрууллаа: ${importedCount} шинэ гүйлгээ оруулж, ${paidCount} төлөлт холболоо.${errors.length > 0 ? ` (${errors.length} гүйлгээ алдаатай)` : ""}`,
       stats: {
         importedCount,
         paidCount,
