@@ -694,6 +694,9 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
             khonogoorBodokhEsekh,
             bodokhKhonog,
             toots: [],
+            // Excel-ээр оруулахад ашиглалтын зардал АВТОМАТААР холбогдохгүй —
+            // хоосон массив = зардалгүй. Зардлыг дараа нь модалаас гараар холбоно.
+            songosonZardluud: [],
           });
         } else {
           if (ovog) khariltsagch.ovog = ovog;
@@ -710,6 +713,11 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
           if (!khariltsagch.toot && undsenToot)
             khariltsagch.toot = undsenToot.toot;
           if (!khariltsagch.davkhar && davkhar) khariltsagch.davkhar = davkhar;
+          // Зардлаа гараар сонгоогүй харилцагчид импортоор зардал холбохгүй.
+          // Аль хэдийн сонгосон бол (массив) тэр сонголт хэвээр үлдэнэ.
+          if (!Array.isArray(khariltsagch.songosonZardluud)) {
+            khariltsagch.songosonZardluud = [];
+          }
 
           // Нэр солигдвол тоот тус бүрийн хуулбарыг нь нийцүүлнэ.
           if (Array.isArray(khariltsagch.toots)) {
@@ -829,14 +837,17 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
         }
 
         // ── Нэхэмжлэх ─────────────────────────────────────────────────────
-        // `syncResidentContracts` харилцагчид нэхэмжлэх үүсгэдэггүй тул
-        // гараар бүртгэх урсгалтай ижлээр энд үүсгэнэ. "automataar" нь
-        // тухайн тооцооны мөчлөгт давхар нэхэмжлэх үүсэхийг хаана.
-        const idevkhteiGereenuud = await GereeModel.find({
-          orshinSuugchId: khariltsagch._id.toString(),
-          barilgiinId: String(undsenBarilgiinId),
-          tuluv: "Идэвхтэй",
-        });
+        // Импортоор ашиглалтын зардлын нэхэмжлэх (гүйлгээний түүх) ҮҮСГЭХГҮЙ.
+        // Зардлыг модалаас гараар холбож авлага үүсгэсэн үед л түүхэнд орно.
+        // Зөвхөн Excel-д эхний үлдэгдэл оруулсан бол түүнийг бүртгэхийн тулд
+        // нэхэмжлэх үүсгэнэ. "automataar" нь мөчлөгт давхардахаас хамгаална.
+        const idevkhteiGereenuud = ekhniiUldegdel
+          ? await GereeModel.find({
+              orshinSuugchId: khariltsagch._id.toString(),
+              barilgiinId: String(undsenBarilgiinId),
+              tuluv: "Идэвхтэй",
+            })
+          : [];
 
         for (const geree of idevkhteiGereenuud) {
           try {
