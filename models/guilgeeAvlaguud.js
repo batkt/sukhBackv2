@@ -72,6 +72,7 @@ const guilgeeAvlaguudSchema = new Schema(
         "busad",
         "excel_import",
         "zogsool",
+        "bank_excel",
         // Хөнгөлөлтийн цонхоос (khungulultController) — энэ утгагүйгээс
         // хадгалах бүр шалгалтад унаж «N гэрээнд алдаа гарлаа» гардаг байв.
         "khungulult",
