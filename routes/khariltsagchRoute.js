@@ -740,6 +740,19 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
       }
     }
 
+    // Ашиглалтын зардал АВТОМАТААР холбогдохгүй — модалаас гараар сонгосон
+    // (`songosonZardluud`) зардал л гэрээнд орно. Ирээгүй бол хоосон = зардалгүй.
+    if (!Array.isArray(req.body.songosonZardluud)) {
+      req.body.songosonZardluud = [];
+    }
+    const zardalSongosonEsekh = req.body.songosonZardluud.length > 0;
+    const ekhniiUldegdeltei =
+      (parseFloat(String(req.body.ekhniiUldegdel ?? 0).replace(/,/g, "")) || 0) !== 0 ||
+      (Array.isArray(req.body.toots) &&
+        req.body.toots.some(
+          (t) => (parseFloat(String(t?.ekhniiUldegdel ?? 0).replace(/,/g, "")) || 0) !== 0,
+        ));
+
     const result = new khariltsagchModel(req.body);
     if (!result.nuutsUg) {
       result.nuutsUg = "1234";
@@ -905,8 +918,9 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
             console.error("❌ [AUTO-ZOCHIN] Error:", zochinErr.message);
           }
 
-          // Always attempt to create initial invoice
-          if (geree) {
+          // Анхны нэхэмжлэх (гүйлгээний түүх) — зөвхөн зардлыг гараар холбосон
+          // эсвэл эхний үлдэгдэл оруулсан үед. Өмнө нь зардалгүй ч үргэлж үүсдэг байв.
+          if (geree && (zardalSongosonEsekh || ekhniiUldegdeltei)) {
             const invoiceResult = await gereeNeesNekhemjlekhUusgekh(
               geree,
               baiguullaga,
