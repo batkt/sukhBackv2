@@ -866,6 +866,31 @@ exports.importKhariltsagchFromExcel = asyncHandler(async (req, res, next) => {
           }
         }
 
+        // ── Гаражийн нэхэмжлэх ────────────────────────────────────────────
+        // Гаражийн дугаар оруулсан бол гараж бүрт энэ сарын нэхэмжлэх
+        // автоматаар үүснэ (ашиглалтын зардлаас үл хамаарна).
+        if (zogsoolnuud.length > 0) {
+          try {
+            const tok = req.body?.nevtersenAjiltniiToken || {};
+            await require("../utils/zogsoolAvlaga").khariltsagchiinGaraashNekhemjlekhUusgey(
+              tukhainBaaziinKholbolt,
+              {
+                baiguullagiinId: baiguullaga._id.toString(),
+                barilgiinId: String(undsenBarilgiinId),
+                khariltsagchId: khariltsagch._id.toString(),
+                toots: tootuud,
+                ajiltanId: tok.id || req.ajiltan?._id,
+                ajiltanNer: tok.ner || req.ajiltan?.ner,
+              },
+            );
+          } catch (garaashAldaa) {
+            console.error(
+              `Гаражийн нэхэмжлэх үүсгэхэд алдаа (мөр ${murniiDugaar}):`,
+              garaashAldaa.message,
+            );
+          }
+        }
+
         durslel.success.push({
           row: murniiDugaar,
           utas,

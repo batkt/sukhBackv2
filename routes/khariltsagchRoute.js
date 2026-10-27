@@ -934,6 +934,25 @@ router.post("/khariltsagch", tokenShalgakh, async (req, res, next) => {
               );
             }
           }
+
+          // Гараж + гаражийн дугаартай бол гараж бүрт энэ сарын нэхэмжлэх
+          // автоматаар үүснэ (Excel импорттой ижил).
+          try {
+            const tok = req.body?.nevtersenAjiltniiToken || {};
+            await require("../utils/zogsoolAvlaga").khariltsagchiinGaraashNekhemjlekhUusgey(
+              tukhainBaaziinKholbolt,
+              {
+                baiguullagiinId: String(baiguullagiinId),
+                barilgiinId: String(barilgiinId),
+                khariltsagchId: result._id.toString(),
+                toots: result.toots,
+                ajiltanId: tok.id || req.ajiltan?._id,
+                ajiltanNer: tok.ner || req.ajiltan?.ner,
+              },
+            );
+          } catch (garaashErr) {
+            console.error("❌ [AUTO-GARAASH] Error:", garaashErr.message);
+          }
         }
       }
     } catch (autoErr) {
