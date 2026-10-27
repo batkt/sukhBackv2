@@ -813,23 +813,49 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
           importedCount++;
         }
 
-        // Record payment in GuilgeeAvlaguud if action === "IMPORT_AND_PAY"
-        const targetGereeId = r.matchedGeree?._id || r.matchedGereeId;
-        if (r.action === "IMPORT_AND_PAY" && targetGereeId) {
+        // Record payment in GuilgeeAvlaguud if matched to a contract
+        let targetGereeId = r.matchedGeree?._id || r.matchedGereeId;
+        const tootCandidate = String(r.detectedToot || "").trim();
+
+        if (!targetGereeId && tootCandidate) {
+          const foundGeree = await GereeModel.findOne({
+            baiguullagiinId: String(baiguullagiinId),
+            toot: tootCandidate,
+            tuluv: "Идэвхтэй",
+          }).lean();
+          if (foundGeree) {
+            targetGereeId = String(foundGeree._id);
+          }
+        }
+
+        const shouldPay = (r.action === "IMPORT_AND_PAY" || (!r.action && targetGereeId) || targetGereeId) && targetGereeId;
+
+        if (shouldPay) {
           const existingPayment = await GuilgeeAvlaguudModel.findOne({
             baiguullagiinId: String(baiguullagiinId),
             bankniiGuilgeeId: String(savedBankGuilgee._id),
             gereeniiId: String(targetGereeId),
           }).lean();
 
-          if (!existingPayment) {
-            const gereeDoc = await GereeModel.findById(targetGereeId).lean();
+          if (existingPayment) {
+            console.log(`ℹ️ [EXCEL IMPORT] Payment already recorded in guilgeeAvlaguud: ${existingPayment._id}`);
+            paidCount++;
+          } else {
+            let gereeDoc = await GereeModel.findById(targetGereeId).lean();
+            if (!gereeDoc && tootCandidate) {
+              gereeDoc = await GereeModel.findOne({
+                baiguullagiinId: String(baiguullagiinId),
+                toot: tootCandidate,
+                tuluv: "Идэвхтэй",
+              }).lean();
+            }
+
             if (gereeDoc) {
               const y = postDate.getFullYear();
               const m = String(postDate.getMonth() + 1).padStart(2, "0");
               const day = String(postDate.getDate()).padStart(2, "0");
               const dateFormatted = `${y}.${m}.${day}`;
-              const tootStr = gereeDoc.toot || r.detectedToot || "";
+              const tootStr = gereeDoc.toot || tootCandidate || "";
               const paymentTailbar = r.tailbar || `Банк тулгалт - ${dateFormatted}${tootStr ? ` - ${tootStr} тоот` : ""}`;
 
               await guilgeeService.recordPayment(safeConn, {
@@ -868,6 +894,8 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
               );
 
               paidCount++;
+            } else {
+              console.warn(`⚠️ [EXCEL IMPORT] Geree not found for targetGereeId: ${targetGereeId}, toot: ${tootCandidate}`);
             }
           }
         }
