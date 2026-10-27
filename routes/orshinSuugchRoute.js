@@ -1314,15 +1314,23 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             mashinUpdateData.utas = utasnudaa.length > 0 ? utasnudaa[0] : "";
           }
 
-          if (req.body.toot !== undefined) {
+          // Тоотын жагсаалт (toots) ирсэн бол байршлыг (toot/davkhar/orts) БҮХ
+          // гэрээ, нэхэмжлэхэд тараахгүй — доорх 1a-д тоот тус бүрээр нь бичнэ.
+          // Өмнө нь үндсэн тоотын байршил 2, 3-р тоотын гэрээ/нэхэмжлэх дээр
+          // дарагдаж, гүйлгээний түүхэнд эхний тоот давхардсан мэт харагддаг байв.
+          const tootoorBairshilEsekh =
+            Array.isArray(req.body.toots) && req.body.toots.length > 0;
+          if (req.body.toot !== undefined && !tootoorBairshilEsekh) {
             invoiceUpdateData.toot = req.body.toot;
           }
           if (req.body.davkhar !== undefined) {
-            syncData.davkhar = req.body.davkhar;
-            invoiceUpdateData.davkhar = req.body.davkhar;
+            if (!tootoorBairshilEsekh) {
+              syncData.davkhar = req.body.davkhar;
+              invoiceUpdateData.davkhar = req.body.davkhar;
+            }
             mashinUpdateData.ezenToot = req.body.toot || result.toot;
           }
-          if (req.body.orts !== undefined) {
+          if (req.body.orts !== undefined && !tootoorBairshilEsekh) {
             syncData.orts = req.body.orts;
             invoiceUpdateData.orts = req.body.orts;
           }
@@ -1468,9 +1476,21 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
                   ovog: unit.gereeNer ? tusgai.ovog : unit.ovog || result.ovog,
                   utas: tusgai.utas,
                 };
-                if (unit.gereeNer || unit.gereeUtas) {
-                  tusgaiKhariltsagchtaiNegjuud.push({ unit, data: { ner: unitSyncData.ner, ovog: unitSyncData.ovog, utas: unitSyncData.utas } });
-                }
+                // Гэрээний байршил нь ТУХАЙН тоотынх (үндсэн тоотынх биш)
+                const bairshil = {
+                  toot: unit.toot,
+                  ...(unit.davkhar !== undefined ? { davkhar: unit.davkhar || "" } : {}),
+                  ...(unit.orts !== undefined ? { orts: unit.orts || "" } : {}),
+                };
+                if (unit.davkhar !== undefined) unitSyncData.davkhar = unit.davkhar || "";
+                if (unit.orts !== undefined) unitSyncData.orts = unit.orts || "";
+                const tusgaiEsekh = !!(unit.gereeNer || unit.gereeUtas);
+                tusgaiKhariltsagchtaiNegjuud.push({
+                  unit,
+                  data: tusgaiEsekh
+                    ? { ner: unitSyncData.ner, ovog: unitSyncData.ovog, utas: unitSyncData.utas, ...bairshil }
+                    : bairshil,
+                });
 
                 if (unit.tsahilgaaniiZaalt !== undefined) {
                   const zaalt = parseFloat(unit.tsahilgaaniiZaalt) || 0;
@@ -1514,8 +1534,8 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
             );
           }
 
-          // 2a. Тусгай нэр/утастай тоотын нэхэмжлэхүүд — дээрх ерөнхий шинэчлэлийг
-          // тухайн тоотын гэрээний нэр, утсаар дарж бичнэ.
+          // 2a. Тоот бүрийн нэхэмжлэх — байршлыг (toot/davkhar/orts) тухайн
+          // тоотынхоор, тусгай нэр/утастай бол түүгээр нь дарж бичнэ.
           for (const { unit, data } of tusgaiKhariltsagchtaiNegjuud) {
             try {
               const gereenuud = await GereeModel.find(
