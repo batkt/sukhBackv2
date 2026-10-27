@@ -418,23 +418,21 @@ exports.generateKhariltsagchExcelTemplate = asyncHandler(
         const davkhraar = sulNegjuud[angilal] || {};
         const davkhruud = Object.keys(davkhraar).filter((d) => davkhraar[d].length > 0);
         const buh = Array.from(new Set(davkhruud.flatMap((d) => davkhraar[d])));
-        const buhNer = `${urtgal}_BUH`;
+        // Давхар хоосон үед «Z_» нэр (бүх давхрын сул дугаар) гарна.
+        const buhNer = `${urtgal}_`;
         if (!muzNemekh(buhNer, buh)) return; // Сул дугаар алга — dropdown тавихгүй
         davkhruud.forEach((d) => muzNemekh(`${urtgal}_${davkhariinNerKhevshuulekh(d)}`, davkhraar[d]));
 
         const useg = baganiinUseg(TOLGOINUUD.indexOf(tolgoi) + 1);
         // Давхрын нэрийг томъёонд ижил дүрмээр хувиргана (- , зай → _)
         const davkharNer = `SUBSTITUTE(SUBSTITUTE(TRIM($E2),"-","_")," ","_")`;
-        const davkhriinMuj = `INDIRECT("${urtgal}_"&${davkharNer})`;
         worksheet.dataValidations.add(`${useg}2:${useg}2000`, {
           type: "list",
           allowBlank: true,
-          // IFERROR-ийг ХЭРЭГЛЭХГҮЙ: жагсаалтын эх нь МУЖ (reference) байх
-          // ёстой, IFERROR утга буцаадаг тул Excel сумыг харуулаад жагсаалтыг
-          // нээдэггүй байв. ISREF + IF нь мужийг хэвээр нь буцаана.
-          formulae: [
-            `IF(TRIM($E2)="",${buhNer},IF(ISREF(${davkhriinMuj}),${davkhriinMuj},${buhNer}))`,
-          ],
+          // Энгийн INDIRECT — Excel (Windows/Mac/Online) бүгд dropdown-ийг
+          // найдвартай нээдэг. IF/ISREF/IFERROR-оор ороосон томъёо зарим
+          // хувилбарт жагсаалтыг нээдэггүй байв.
+          formulae: [`INDIRECT("${urtgal}_"&${davkharNer})`],
           showErrorMessage: true,
           errorStyle: "warning",
           errorTitle: "Жагсаалтад байхгүй дугаар",
