@@ -940,6 +940,11 @@ exports.orshinSuugchBurtgey = asyncHandler(async (req, res, next) => {
             bodokhKhonog: Number(unit.bodokhKhonog) || 0,
             gereeNer: String(unit.gereeNer || "").trim(),
             gereeUtas: String(unit.gereeUtas || "").trim(),
+            // Гараж/агуулах аль тоотын дор нэмэгдсэнийг хадгална. Эс бөгөөс олон
+            // тоотой оршин суугчийн бүх гараж үндсэн (эхний) тоот дээр бүртгэгддэг.
+            ...(unitTurul !== "Орон сууц" && unit.linkedAptToot
+              ? { linkedAptToot: String(unit.linkedAptToot).trim() }
+              : {}),
             createdAt: new Date(),
           };
 
