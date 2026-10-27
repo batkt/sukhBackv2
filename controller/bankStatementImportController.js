@@ -157,7 +157,7 @@ function parseStatementDescription(desc) {
 
   // 5. Look for explicit "тоот" / "toot": e.g. "66 тоот", "502тоот", "151А тоот"
   const tootWord = clean.match(/\b(\d{1,4}[А-Яа-яA-Za-z]?)\s*(?:тоот|toot)\b/i) ||
-                   clean.match(/(?:тоот|toot)\s*[:.]?\s*(\d{1,4}[А-Яа-яA-Za-z]?)\b/i);
+    clean.match(/(?:тоот|toot)\s*[:.]?\s*(\d{1,4}[А-Яа-яA-Za-z]?)\b/i);
   if (tootWord) {
     return {
       type: "EXPLICIT_TOOT",
@@ -334,9 +334,8 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
       const exp = Number(
         g.outcome || (g.amount < 0 ? Math.abs(g.amount) : 0) || 0
       );
-      const cKey = `${g.dansniiDugaar || ""}_${rec}_${inc}_${exp}_${dStr}_${
-        g.time || ""
-      }`;
+      const cKey = `${g.dansniiDugaar || ""}_${rec}_${inc}_${exp}_${dStr}_${g.time || ""
+        }`;
       existingCompoundKeySet.add(cKey);
     });
 
@@ -643,19 +642,19 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
         matchReason,
         matchedGeree: matchedGeree
           ? {
-              _id: matchedGeree._id,
-              gereeniiDugaar: matchedGeree.gereeniiDugaar,
-              bairNer:
-                matchedGeree.bairNer ||
-                barilgaMap.get(String(matchedGeree.barilgiinId)) ||
-                "",
-              toot: matchedGeree.toot,
-              ovog: matchedGeree.ovog || "",
-              ner: matchedGeree.ner || "",
-              utas: matchedGeree.utas || [],
-              orshinSuugchId: matchedGeree.orshinSuugchId || "",
-              barilgiinId: matchedGeree.barilgiinId || "",
-            }
+            _id: matchedGeree._id,
+            gereeniiDugaar: matchedGeree.gereeniiDugaar,
+            bairNer:
+              matchedGeree.bairNer ||
+              barilgaMap.get(String(matchedGeree.barilgiinId)) ||
+              "",
+            toot: matchedGeree.toot,
+            ovog: matchedGeree.ovog || "",
+            ner: matchedGeree.ner || "",
+            utas: matchedGeree.utas || [],
+            orshinSuugchId: matchedGeree.orshinSuugchId || "",
+            barilgiinId: matchedGeree.barilgiinId || "",
+          }
           : null,
         candidateGerees,
       });
@@ -756,14 +755,22 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
 
         let postDate = new Date();
         if (dateStr) {
+          let normalizedDate = dateStr.replace(/\./g, "-");
+          // Prepend year if missing (e.g. "09-01" -> "2026-09-01")
+          if (!/^\d{4}/.test(normalizedDate)) {
+            const currentYear = new Date().getFullYear();
+            normalizedDate = `${currentYear}-${normalizedDate}`;
+          }
           const d = new Date(
-            dateStr.replace(/\./g, "-") + (timeStr ? `T${timeStr}` : "")
+            normalizedDate + (timeStr ? `T${timeStr}` : "")
           );
-          if (!isNaN(d.getTime())) postDate = d;
+          if (!isNaN(d.getTime())) {
+            postDate = d;
+          }
         }
 
         let existingBankRecord = null;
-        if (journal) {
+        if (journal && !journal.startsWith("J-") && !journal.startsWith("EXCEL-")) {
           existingBankRecord = await BankniiGuilgeeModel.findOne({
             baiguullagiinId: String(baiguullagiinId),
             $or: [{ record: journal }, { tranId: journal }],
@@ -775,7 +782,9 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
           savedBankGuilgee = existingBankRecord;
           alreadyExistedCount++;
         } else {
-          const recordId = journal || `EXCEL-${Date.now()}-${importedCount}`;
+          const recordId = (journal && !journal.startsWith("J-") && !journal.startsWith("EXCEL-"))
+            ? journal
+            : `EXCEL-${Date.now()}-${importedCount}-${Math.random().toString(36).substring(2, 6)}`;
           savedBankGuilgee = await BankniiGuilgeeModel.create({
             baiguullagiinId: String(baiguullagiinId),
             barilgiinId: barilgiinId
@@ -810,11 +819,19 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
           const existingPayment = await GuilgeeAvlaguudModel.findOne({
             baiguullagiinId: String(baiguullagiinId),
             bankniiGuilgeeId: String(savedBankGuilgee._id),
+            gereeniiId: String(targetGereeId),
           }).lean();
 
           if (!existingPayment) {
             const gereeDoc = await GereeModel.findById(targetGereeId).lean();
             if (gereeDoc) {
+              const y = postDate.getFullYear();
+              const m = String(postDate.getMonth() + 1).padStart(2, "0");
+              const day = String(postDate.getDate()).padStart(2, "0");
+              const dateFormatted = `${y}.${m}.${day}`;
+              const tootStr = gereeDoc.toot || r.detectedToot || "";
+              const paymentTailbar = r.tailbar || `Банк тулгалт - ${dateFormatted}${tootStr ? ` - ${tootStr} тоот` : ""}`;
+
               await guilgeeService.recordPayment(safeConn, {
                 baiguullagiinId: String(baiguullagiinId),
                 baiguullagiinNer: gereeDoc.baiguullagiinNer || "",
@@ -822,12 +839,10 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
                 gereeniiId: String(gereeDoc._id),
                 gereeniiDugaar: gereeDoc.gereeniiDugaar || "",
                 orshinSuugchId: gereeDoc.orshinSuugchId || "",
-                toot: gereeDoc.toot || r.detectedToot || "",
+                toot: tootStr,
                 ognoo: postDate,
                 dun: -Math.abs(amount),
-                tailbar:
-                  r.description ||
-                  `Дансны хуулга ${gereeDoc.toot || ""} тоот`,
+                tailbar: paymentTailbar,
                 source: "bank_excel",
                 bankniiGuilgeeId: String(savedBankGuilgee._id),
                 dansniiDugaar: String(dansniiDugaar || ""),
@@ -843,8 +858,11 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
                     kholbosonGereeniiId: String(gereeDoc._id),
                   },
                   $set: {
-                    kholbosonAjiltniiNer: ajiltan.ner || "",
+                    kholbosonDun: amount,
+                    kholbosonAjiltniiNer: ajiltan.ner || "Бүртгэл",
                     kholbosonAjiltniiId: ajiltan.id ? String(ajiltan.id) : "",
+                    tuluv: "Төлсөн",
+                    status: "Холбогдсон",
                   },
                 }
               );
