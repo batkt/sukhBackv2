@@ -330,9 +330,15 @@ router.post("/zardalTseverlekhiya", tokenShalgakh, async (req, res, next) => {
         // Харилцагч зардлаа гараар сонгосон бол зөвхөн сонгосныг нь.
         // Үгүй бол зогсоол/агуулахын гэрээнд зөвхөн өөрийн ангиллын зардал.
         const songolt = await khariltsagchiinZardalSongolt(geree);
+        // Харилцагчид зориулсан зардал ОРШИН СУУГЧИЙН гэрээнд орохгүй — зардал
+        // нэмэх hook (models/ashiglaltiinZardluud) ч ийм дүрэмтэй. Өмнө нь синк
+        // хийх бүрд харилцагчийн зардал оршин суугч бүрт давхар бичигддэг байв.
+        const ezemshigchiinZardluud = geree.khariltsagchId
+          ? masterZardluud
+          : masterZardluud.filter((z) => z.zoriulalt !== "khariltsagch");
         const tokhirokh = songolt
           ? masterZardluud.filter((_, i) => songolt.includes(String(activeZardluud[i]._id)))
-          : zardluudShuuye(masterZardluud, await gereeniiTootTurul(geree));
+          : zardluudShuuye(ezemshigchiinZardluud, await gereeniiTootTurul(geree));
         await gereeniiZardluudBichye(GereeModel, geree._id, tokhirokh);
         updatedCount++;
       } catch (aldaa) {
