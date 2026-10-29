@@ -18,6 +18,7 @@ const { tokenShalgakh, db } = require("zevbackv2");
 const { Uilchluulegch } = require("sukhParking-v1");
 
 const Geree = require("../models/geree");
+const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
 const OrshinSuugch = require("../models/orshinSuugch");
 const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
 const Medegdel = require("../models/medegdel");
@@ -75,6 +76,13 @@ router.get("/tailan/bi", tokenShalgakh, async (req, res, next) => {
       : orgShuult;
     const khugatsaa = { $gte: ekhlekh, $lte: duusakh };
 
+    // Нэг сарын дотор шүүсэн бол орлогын графикийг өдрөөр (1-31) гаргана
+    const negSar =
+      ekhlekh.getFullYear() === duusakh.getFullYear() &&
+      ekhlekh.getMonth() === duusakh.getMonth();
+    // Өдрийн хил серверийн цагийн бүстэй таарах ёстой (ekhlekh/duusakh-тай адил)
+    const tsagiinBus = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+
     // ── Бүх хэсгийг зэрэг гүйцэтгэнэ ──
     const [
       gereenuud,
@@ -87,11 +95,15 @@ router.get("/tailan/bi", tokenShalgakh, async (req, res, next) => {
       asuulguud,
       asuulgiinKhariult,
       khaalgaNeelt,
+      tulultBarilgaarRaw,
+      avlagaAngillaarRaw,
+      nekhemjlekhuud,
+      guilgeeUdruur,
     ] = await Promise.all([
       // 1. Гэрээ — төлөв, барилга, үүссэн сараар
       Geree(kholbolt)
         .find({ ...barilgaShuult, ustgagdakhEsekh: { $ne: true } })
-        .select("tuluv barilgiinId createdAt toot orts")
+        .select("tuluv barilgiinId createdAt toot orts ovog ner")
         .lean(),
 
       // 2. Оршин суугчийн тоо
@@ -140,6 +152,7 @@ router.get("/tailan/bi", tokenShalgakh, async (req, res, next) => {
             },
             gereeniiDugaar: { $first: "$gereeniiDugaar" },
             toot: { $first: "$toot" },
+            barilgiinId: { $first: "$barilgiinId" },
           },
         },
       ]),
@@ -195,7 +208,84 @@ router.get("/tailan/bi", tokenShalgakh, async (req, res, next) => {
           },
         ])
         .catch(() => []),
+
+      // 10. Төлөлтийн хувь — барилгаар (хугацааны доторх). Барилга сонгосон
+      //     үед ч бүх барилгыг харьцуулахын тулд байгууллагаар шүүнэ.
+      GuilgeeAvlaguud(kholbolt).aggregate([
+        { $match: { ...orgShuult, ognoo: khugatsaa } },
+        {
+          $group: {
+            _id: { $ifNull: ["$barilgiinId", "-"] },
+            nekhemjilsen: { $sum: { $cond: [{ $gt: ["$dun", 0] }, "$dun", 0] } },
+            tulsun: {
+              $sum: { $cond: [{ $lt: ["$dun", 0] }, { $abs: "$dun" }, 0] },
+            },
+          },
+        },
+      ]),
+
+      // 11. Нэхэмжилсэн дүн — зардлын ангиллаар. Нэхэмжлэхтэй холбогдсон
+      //     мөрүүдийн нэхэмжлэхийн ID-г ч цуглуулна (12-тэй давхардуулахгүй).
+      GuilgeeAvlaguud(kholbolt).aggregate([
+        { $match: { ...barilgaShuult, ognoo: khugatsaa, dun: { $gt: 0 } } },
+        {
+          $facet: {
+            angilal: [
+              {
+                $group: {
+                  _id: {
+                    $ifNull: [
+                      "$zardliinNer",
+                      { $ifNull: ["$zardliinTurul", { $ifNull: ["$turul", "Бусад"] }] },
+                    ],
+                  },
+                  dun: { $sum: "$dun" },
+                },
+              },
+            ],
+            nekhemjlekhIduud: [
+              { $match: { nekhemjlekhId: { $nin: [null, ""] } } },
+              { $group: { _id: "$nekhemjlekhId" } },
+            ],
+          },
+        },
+      ]),
+
+      // 12. Нэхэмжлэхүүд — гүйлгээний мөргүй нэхэмжлэхийн зардлыг
+      //     (medeelel.zardluud) ангилалд нэмэхэд. Нэгтгэл тайлантай адил.
+      NekhemjlekhiinTuukh(kholbolt)
+        .find({ ...barilgaShuult, ognoo: khugatsaa })
+        .select("_id medeelel.zardluud")
+        .lean()
+        .catch(() => []),
+
+      // 13. Нэхэмжилсэн / төлсөн — өдрөөр (зөвхөн нэг сар шүүсэн үед)
+      negSar
+        ? GuilgeeAvlaguud(kholbolt).aggregate([
+            { $match: { ...barilgaShuult, ognoo: khugatsaa } },
+            {
+              $group: {
+                _id: {
+                  $dateToString: { format: "%Y-%m-%d", date: "$ognoo", timezone: tsagiinBus },
+                },
+                nekhemjilsen: { $sum: { $cond: [{ $gt: ["$dun", 0] }, "$dun", 0] } },
+                tulsun: {
+                  $sum: { $cond: [{ $lt: ["$dun", 0] }, { $abs: "$dun" }, 0] },
+                },
+              },
+            },
+          ])
+        : Promise.resolve([]),
+
     ]);
+
+    /** gereeniiId → нэр, тоот (харилцагчийн нэрийг харуулахад) */
+    const gereeMap = new Map(
+      gereenuud.map((g) => [
+        String(g._id),
+        { ner: [g.ovog, g.ner].filter(Boolean).join(" "), toot: g.toot || "" },
+      ]),
+    );
 
     /* ─── Гэрээ / оршин суугч ─────────────────────────────────────────── */
     const gereeTuluvuur = {};
@@ -231,15 +321,20 @@ router.get("/tailan/bi", tokenShalgakh, async (req, res, next) => {
     const nasjilt = { p0_30: 0, p31_60: 0, p61_90: 0, p91_120: 0, p120plus: 0 };
     let niitUldegdel = 0;
     const uldegdeltei = [];
+    const uldegdelBarilgaar = {};
 
     avlagaGereegeer.forEach((r) => {
       const uld = bugtgel((r.nekhemjilsen || 0) - (r.tulsun || 0));
       if (uld <= 0.009) return;
       niitUldegdel += uld;
+      const barId = String(r.barilgiinId || "-");
+      uldegdelBarilgaar[barId] = (uldegdelBarilgaar[barId] || 0) + uld;
+      const g = gereeMap.get(String(r._id || ""));
       uldegdeltei.push({
         gereeniiId: String(r._id || ""),
         gereeniiDugaar: r.gereeniiDugaar || "",
-        toot: r.toot || "",
+        toot: r.toot || g?.toot || "",
+        ner: g?.ner || "",
         uldegdel: uld,
       });
       // Хамгийн хуучин авлагын өдрөөр насжилтын хүрээг тодорхойлно
@@ -278,6 +373,53 @@ router.get("/tailan/bi", tokenShalgakh, async (req, res, next) => {
         zogsoolTurluur[turul] = bugtgel((zogsoolTurluur[turul] || 0) + dun);
       });
     });
+
+    /* ─── Авлагын бүтэц — ангиллаар ──────────────────────────────────── */
+    const angilalMap = new Map(); // жижиг үсгээр түлхүүр → { ner, dun }
+    const angilalNemye = (ner, dun) => {
+      const v = Number(dun) || 0;
+      if (v <= 0) return;
+      const nerTseverlesen = String(ner || "Бусад").trim() || "Бусад";
+      const key = nerTseverlesen.toLowerCase();
+      const one = angilalMap.get(key) || { ner: nerTseverlesen, dun: 0 };
+      one.dun += v;
+      angilalMap.set(key, one);
+    };
+    const angilalFacet = avlagaAngillaarRaw?.[0] || {};
+    (angilalFacet.angilal || []).forEach((r) => angilalNemye(r._id, r.dun));
+    const murtaiNekhemjlekh = new Set(
+      (angilalFacet.nekhemjlekhIduud || []).map((r) => String(r._id)),
+    );
+    nekhemjlekhuud.forEach((inv) => {
+      if (murtaiNekhemjlekh.has(String(inv._id))) return;
+      (inv.medeelel?.zardluud || []).forEach((z) => {
+        const zNer = String(z.ner || z.tailbar || "").toLowerCase();
+        if (z.isEkhniiUldegdel || zNer.includes("эхний үлдэгдэл")) return;
+        angilalNemye(z.ner || z.turul, z.tulukhDun || z.dun);
+      });
+    });
+    // Зогсоолын касс/камерын төлбөр
+    angilalNemye("Зогсоолын төлбөр", zogsoolOrlogo);
+    const avlagaAngillaar = [...angilalMap.values()]
+      .map((r) => ({ ner: r.ner, dun: bugtgel(r.dun) }))
+      .sort((a, b) => b.dun - a.dun);
+
+    /* ─── Орлого өдрөөр (нэг сар) ────────────────────────────────────── */
+    let orlogoUdruur = [];
+    if (negSar) {
+      const udurMap = new Map(guilgeeUdruur.map((r) => [String(r._id), r]));
+      const it = new Date(ekhlekh);
+      while (it <= duusakh) {
+        const key = `${sariinTulkhuur(it)}-${String(it.getDate()).padStart(2, "0")}`;
+        const r = udurMap.get(key);
+        orlogoUdruur.push({
+          udur: key,
+          nekhemjilsen: bugtgel(r?.nekhemjilsen || 0),
+          tulsun: bugtgel(r?.tulsun || 0),
+        });
+        it.setDate(it.getDate() + 1);
+      }
+    }
 
     /* ─── Санал асуулга ──────────────────────────────────────────────── */
     const khariultMap = new Map(
@@ -330,11 +472,25 @@ router.get("/tailan/bi", tokenShalgakh, async (req, res, next) => {
         barilgaar: gereeBarilgaar,
         saraar: saruud.map((s) => ({ sar: s, too: gereeSaraar[s] || 0 })),
       },
-      orlogo: { saraar: orlogoSaraar },
+      orlogo: { saraar: orlogoSaraar, udruur: orlogoUdruur },
       avlaga: {
         nasjilt,
         khamgiinIkhUldegdel: uldegdeltei.slice(0, 10),
+        angillaar: avlagaAngillaar,
+        barilgaar: Object.entries(uldegdelBarilgaar)
+          .map(([barilgiinId, dun]) => ({ barilgiinId, dun: bugtgel(dun) }))
+          .sort((a, b) => b.dun - a.dun),
       },
+      tulultBarilgaar: tulultBarilgaarRaw
+        .map((r) => ({
+          barilgiinId: String(r._id),
+          nekhemjilsen: bugtgel(r.nekhemjilsen),
+          tulsun: bugtgel(r.tulsun),
+          khuvi:
+            r.nekhemjilsen > 0 ? bugtgel((r.tulsun / r.nekhemjilsen) * 100) : 0,
+        }))
+        .filter((r) => r.nekhemjilsen > 0)
+        .sort((a, b) => b.khuvi - a.khuvi),
       tulburiinKhelber: guilgeeTurluur.map((r) => ({
         turul: String(r._id || "busad"),
         dun: bugtgel(r.dun),

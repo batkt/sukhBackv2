@@ -266,4 +266,44 @@ async function zogsoolTuluvAvya(kholbolt, { baiguullagiinId, barilgiinId, turul:
   });
 }
 
-module.exports = { zogsoolAvlagaUusgey, zogsoolTuluvAvya };
+/**
+ * Харилцагч бүртгэхэд (Excel / гараар) гаражийн дугаартай бол гараж бүрт энэ
+ * сарын нэхэмжлэхийг автоматаар үүсгэнэ. Ашиглалтын зардал холбогдоогүй ч
+ * гараж нь өөрөө авлага тул гүйлгээний түүхэнд орно. Алдаа гарсан ч бүртгэлийг
+ * таслахгүй — үр дүнг буцаана.
+ */
+async function khariltsagchiinGaraashNekhemjlekhUusgey(kholbolt, {
+  baiguullagiinId,
+  barilgiinId,
+  khariltsagchId,
+  toots,
+  ajiltanId,
+  ajiltanNer,
+}) {
+  const urDun = [];
+  const garaashuud = (Array.isArray(toots) ? toots : []).filter((t) => {
+    const turul = String(t?.turul || "").trim();
+    if (turul !== "Гараж" && turul !== "Зогсоол") return false;
+    if (!String(t?.toot || "").trim()) return false;
+    return !barilgiinId || !t.barilgiinId || String(t.barilgiinId) === String(barilgiinId);
+  });
+  for (const g of garaashuud) {
+    try {
+      const ur = await zogsoolAvlagaUusgey(kholbolt, {
+        baiguullagiinId,
+        barilgiinId: barilgiinId || g.barilgiinId,
+        khariltsagchId: String(khariltsagchId),
+        toot: String(g.toot).trim(),
+        turul: "Зогсоол",
+        ajiltanId,
+        ajiltanNer,
+      });
+      urDun.push({ toot: g.toot, ...ur });
+    } catch (e) {
+      urDun.push({ toot: g.toot, success: false, message: e.message });
+    }
+  }
+  return urDun;
+}
+
+module.exports = { zogsoolAvlagaUusgey, zogsoolTuluvAvya, khariltsagchiinGaraashNekhemjlekhUusgey };
