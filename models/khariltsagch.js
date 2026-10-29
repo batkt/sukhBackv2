@@ -54,6 +54,8 @@ const khariltsagchSchema = new Schema(
         // `bodokhKhonog`-ийг вэб эдгээрээс тооцож илгээнэ.
         burtguulsenOgnoo: Date,
         avlagaUusekhOgnoo: Date,
+        // Сар бүрийн авлага үүсгэх өдөр (1–31)
+        avlagaUusekhUdur: { type: Number, min: 1, max: 31 },
         createdAt: {
           type: Date,
           default: Date.now,
