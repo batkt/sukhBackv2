@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 const mongoose = require("mongoose");
 const khariltsagch = require("../models/khariltsagch");
@@ -377,7 +377,14 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
       jagsaalt.forEach((mur) => {
         mur.key = mur._id;
         const authoritativeGeree = gereeMap[mur._id.toString()];
+        // ── Merge: OSM lookup + document's own direct fields (legacy write path) ──
         const mashinuud = mashinMap[mur._id.toString()] || [];
+        const _addPlate = (p) => {
+          const plate = String(p || "").trim().toUpperCase();
+          if (plate && plate !== "БҮРТГЭЛГҮЙ" && !mashinuud.includes(plate)) mashinuud.push(plate);
+        };
+        _addPlate(mur.mashiniiDugaar);
+        if (Array.isArray(mur.mashinuud)) mur.mashinuud.forEach(_addPlate);
         mur.mashinuud = mashinuud;
         mur.mashiniiDugaar = mashinuud.join(", ");
 
