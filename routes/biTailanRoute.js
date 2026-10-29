@@ -76,10 +76,8 @@ router.get("/tailan/bi", tokenShalgakh, async (req, res, next) => {
       : orgShuult;
     const khugatsaa = { $gte: ekhlekh, $lte: duusakh };
 
-    // Нэг сарын дотор шүүсэн бол орлогын графикийг өдрөөр (1-31) гаргана
-    const negSar =
-      ekhlekh.getFullYear() === duusakh.getFullYear() &&
-      ekhlekh.getMonth() === duusakh.getMonth();
+    // 31 хоног хүртэлх хүрээ шүүсэн бол орлогын графикийг өдрөөр гаргана
+    const negSar = (duusakh - ekhlekh) / 86400000 <= 31;
     // Өдрийн хил серверийн цагийн бүстэй таарах ёстой (ekhlekh/duusakh-тай адил)
     const tsagiinBus = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
