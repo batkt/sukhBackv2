@@ -1,6 +1,10 @@
 const asyncHandler = require("express-async-handler");
 const OrshinSuugch = require("../models/orshinSuugch");
 const Khariltsagch = require("../models/khariltsagch");
+const {
+  kholbootoiEzemshigchOlya,
+  tootuudNegtgeye,
+} = require("../utils/kholbootoiEzemshigch");
 const Baiguullaga = require("../models/baiguullaga");
 const {
   mashiniiKhyazgaarOlya,
@@ -4236,6 +4240,7 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
       }
 
       let urDun = await OrshinSuugch(db.erunkhiiKholbolt).findById(tokenObject.id);
+      const orshinSuugchEsekh = !!urDun;
 
       if (!urDun) {
         urDun = await Khariltsagch(db.erunkhiiKholbolt).findById(tokenObject.id);
@@ -4268,6 +4273,26 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
 
       urdunJson.duusakhOgnoo = tokenObject.duusakhOgnoo;
       urdunJson.salbaruud = tokenObject.salbaruud;
+
+      // Ижил утсаар оршин суугч + харилцагч хоёр бүртгэлтэй бол нөгөө
+      // бүртгэлийн тоотуудыг нэгтгэнэ — апп хоёр барилгыг хоёуланг нь
+      // харуулж, гэрээг `kholbootoiIduud`-аар татна.
+      try {
+        const kholbootoi = await kholbootoiEzemshigchOlya(
+          db.erunkhiiKholbolt,
+          urDun,
+          orshinSuugchEsekh,
+        );
+        if (kholbootoi) {
+          urdunJson.kholbootoiIduud = [kholbootoi.id];
+          urdunJson.toots = tootuudNegtgeye(urdunJson.toots, kholbootoi);
+        }
+      } catch (kholbootoiAldaa) {
+        console.error(
+          "⚠️ [Profile] Холбоотой бүртгэл уншихад алдаа:",
+          kholbootoiAldaa.message,
+        );
+      }
 
       // Ensure resident vehicle plate is attached and synchronized
       if (!urdunJson.mashiniiDugaar && !urdunJson.dugaar) {

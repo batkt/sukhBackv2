@@ -1,5 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const OrshinSuugch = require("../models/orshinSuugch");
+const Khariltsagch = require("../models/khariltsagch");
+const { kholbootoiEzemshigchOlya } = require("../utils/kholbootoiEzemshigch");
 const Baiguullaga = require("../models/baiguullaga");
 const Geree = require("../models/geree");
 const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
@@ -36,9 +38,15 @@ exports.orshinSuugchNiitTulbur = asyncHandler(async (req, res, next) => {
     // Гэр бүлийн гишүүн нь үндсэн эзэмшигчийн өгөгдлийг уншина.
     const residentId = String(token.undsenId || token.id);
 
-    const resident = await OrshinSuugch(db.erunkhiiKholbolt)
+    let resident = await OrshinSuugch(db.erunkhiiKholbolt)
       .findById(residentId)
       .lean();
+    const orshinSuugchEsekh = !!resident;
+    if (!resident) {
+      resident = await Khariltsagch(db.erunkhiiKholbolt)
+        .findById(residentId)
+        .lean();
+    }
 
     if (!resident) {
       return res
@@ -51,6 +59,20 @@ exports.orshinSuugchNiitTulbur = asyncHandler(async (req, res, next) => {
     if (resident.baiguullagiinId) orgIds.add(String(resident.baiguullagiinId));
     if (Array.isArray(resident.toots)) {
       resident.toots.forEach((t) => {
+        if (t?.baiguullagiinId) orgIds.add(String(t.baiguullagiinId));
+      });
+    }
+
+    // Ижил утсаар бүртгэлтэй нөгөө (оршин суугч/харилцагч) бүртгэл
+    const ezemshigchiinIduud = [residentId];
+    const kholbootoi = await kholbootoiEzemshigchOlya(
+      db.erunkhiiKholbolt,
+      resident,
+      orshinSuugchEsekh,
+    ).catch(() => null);
+    if (kholbootoi) {
+      ezemshigchiinIduud.push(kholbootoi.id);
+      kholbootoi.toots.forEach((t) => {
         if (t?.baiguullagiinId) orgIds.add(String(t.baiguullagiinId));
       });
     }
@@ -89,8 +111,8 @@ exports.orshinSuugchNiitTulbur = asyncHandler(async (req, res, next) => {
         .find({
           tuluv: "Идэвхтэй",
           $or: [
-            { orshinSuugchId: residentId },
-            { khariltsagchId: residentId },
+            { orshinSuugchId: { $in: ezemshigchiinIduud } },
+            { khariltsagchId: { $in: ezemshigchiinIduud } },
           ],
         })
         .select(
