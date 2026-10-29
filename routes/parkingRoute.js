@@ -614,8 +614,9 @@ router.get(
               }
 
               result.jagsaalt = result.jagsaalt.map((v) => {
-                const mashin = v.mashin || mashinMap.get(v.mashiniiDugaar);
-                const ownerId = String(mashin?.ezemshigchiinId || mashin?.orshinSuugchiinId || v.ezemshigchiinId || v.orshinSuugchiinId || "");
+                const doc = v && typeof v.toObject === "function" ? v.toObject() : (v?._doc ? { ...v._doc, ...v } : { ...v });
+                const mashin = doc.mashin || mashinMap.get(doc.mashiniiDugaar);
+                const ownerId = String(mashin?.ezemshigchiinId || mashin?.orshinSuugchiinId || doc.ezemshigchiinId || doc.orshinSuugchiinId || "");
                 const isKhariltsagchOwner = ownerId && khariltsagchIds.has(ownerId);
                 const mashinTurul = isKhariltsagchOwner ? "Харилцагч" : (mashin?.turul || mashin?.zochinTurul);
                 const hasResidentData = mashin?.ezenToot || mashin?.orshinSuugchiinId || mashin?.ezemshigchiinNer;
@@ -624,7 +625,7 @@ router.get(
                   mashinTurul === "Харилцагч" ||
                   mashin?.ezemshigchiinTurul === "Khariltsagch" ||
                   mashin?.zochinTurul === "Харилцагч" ||
-                  v.turul === "Харилцагч";
+                  doc.turul === "Харилцагч";
 
                 if (isKhariltsagch) {
                   if (isKhariltsagchOwner && mashin?._id && (mashin.turul !== "Харилцагч" || mashin.zochinTurul !== "Харилцагч")) {
@@ -635,25 +636,25 @@ router.get(
                     ).exec().catch(() => {});
                   }
                   return {
-                    ...v,
+                    ...doc,
                     turul: "Харилцагч",
-                    toot: v.toot || mashin?.ezenToot,
-                    orshinSuugchiinNer: v.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
-                    mashin: mashin ? { ...mashin, turul: "Харилцагч", zochinTurul: "Харилцагч" } : v.mashin,
+                    toot: doc.toot || mashin?.ezenToot,
+                    orshinSuugchiinNer: doc.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
+                    mashin: mashin ? { ...mashin, turul: "Харилцагч", zochinTurul: "Харилцагч" } : doc.mashin,
                   };
                 }
 
                 // If root turul is missing but mashin has it, or mashin has resident indicators
-                if (!v.turul && (mashinTurul || hasResidentData)) {
+                if (!doc.turul && (mashinTurul || hasResidentData)) {
                   return {
-                    ...v,
+                    ...doc,
                     turul: mashinTurul || "Оршин суугч",
-                    toot: v.toot || mashin?.ezenToot,
-                    orshinSuugchiinNer: v.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
-                    mashin: mashin || v.mashin,
+                    toot: doc.toot || mashin?.ezenToot,
+                    orshinSuugchiinNer: doc.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
+                    mashin: mashin || doc.mashin,
                   };
                 }
-                return v;
+                return doc;
               });
             }
             res.send(result);
@@ -783,8 +784,9 @@ router.get(
           }
 
           paginatedResults = paginatedResults.map((v) => {
-            const mashin = v.mashin || mashinMap.get(v.mashiniiDugaar);
-            const ownerId = String(mashin?.ezemshigchiinId || mashin?.orshinSuugchiinId || v.ezemshigchiinId || v.orshinSuugchiinId || "");
+            const doc = v && typeof v.toObject === "function" ? v.toObject() : (v?._doc ? { ...v._doc, ...v } : { ...v });
+            const mashin = doc.mashin || mashinMap.get(doc.mashiniiDugaar);
+            const ownerId = String(mashin?.ezemshigchiinId || mashin?.orshinSuugchiinId || doc.ezemshigchiinId || doc.orshinSuugchiinId || "");
             const isKhariltsagchOwner = ownerId && khariltsagchIds.has(ownerId);
             const mashinTurul = isKhariltsagchOwner ? "Харилцагч" : (mashin?.turul || mashin?.zochinTurul);
             const hasResidentData = mashin?.ezenToot || mashin?.orshinSuugchiinId || mashin?.ezemshigchiinNer;
@@ -793,7 +795,7 @@ router.get(
               mashinTurul === "Харилцагч" ||
               mashin?.ezemshigchiinTurul === "Khariltsagch" ||
               mashin?.zochinTurul === "Харилцагч" ||
-              v.turul === "Харилцагч";
+              doc.turul === "Харилцагч";
 
             if (isKhariltsagch) {
               if (isKhariltsagchOwner && mashin?._id && (mashin.turul !== "Харилцагч" || mashin.zochinTurul !== "Харилцагч")) {
@@ -804,25 +806,25 @@ router.get(
                 ).exec().catch(() => {});
               }
               return {
-                ...v,
+                ...doc,
                 turul: "Харилцагч",
-                toot: v.toot || mashin?.ezenToot,
-                orshinSuugchiinNer: v.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
-                mashin: mashin ? { ...mashin, turul: "Харилцагч", zochinTurul: "Харилцагч" } : v.mashin,
+                toot: doc.toot || mashin?.ezenToot,
+                orshinSuugchiinNer: doc.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
+                mashin: mashin ? { ...mashin, turul: "Харилцагч", zochinTurul: "Харилцагч" } : doc.mashin,
               };
             }
 
             // If root turul is missing but mashin has it, or mashin has resident indicators
-            if (!v.turul && (mashinTurul || hasResidentData)) {
+            if (!doc.turul && (mashinTurul || hasResidentData)) {
               return {
-                ...v,
+                ...doc,
                 turul: mashinTurul || "Оршин суугч",
-                toot: v.toot || mashin?.ezenToot,
-                orshinSuugchiinNer: v.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
-                mashin: mashin || v.mashin,
+                toot: doc.toot || mashin?.ezenToot,
+                orshinSuugchiinNer: doc.orshinSuugchiinNer || mashin?.ezemshigchiinNer,
+                mashin: mashin || doc.mashin,
               };
             }
-            return v;
+            return doc;
           });
 
           res.send({
