@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 const OrshinSuugch = require("../models/orshinSuugch");
 const Baiguullaga = require("../models/baiguullaga");
@@ -561,8 +561,86 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
         }
       }
 
+      // ── Машины дугаарыг batch-ээр татна ────────────────────────────────
+      // orshinSuugchMashin нь Central + Tenant хоёуланд хадгалагддаг тул
+      // хоёуланг нэгтгэж уншина. mashin коллекц нь tenant DB-д байна.
+      const mashinMap = {};
+      {
+        const OrshinSuugchMashinModel = require("../models/orshinSuugchMashin");
+        const residentIds = jagsaalt.map((r) => r._id.toString());
+
+        const ezniiShalgalt = {
+          $or: [
+            { orshinSuugchiinId: { $in: residentIds } },
+            { ezemshigchiinId: { $in: residentIds } },
+          ],
+        };
+
+        const nemye = (ezen, dugaar) => {
+          const d = String(dugaar || "").trim().toUpperCase();
+          if (!d || d === "БҮРТГЭЛГҮЙ") return;
+          const e = String(ezen || "");
+          if (!e) return;
+          if (!mashinMap[e]) mashinMap[e] = [];
+          if (!mashinMap[e].includes(d)) mashinMap[e].push(d);
+        };
+
+        try {
+          // 1. Central DB — Excel import болон mashinuudBurtgeye энд бичдэг
+          const CentralOSM = OrshinSuugchMashinModel(db.erunkhiiKholbolt);
+          const centralOsmuud = await CentralOSM.find(ezniiShalgalt)
+            .select("orshinSuugchiinId ezemshigchiinId mashiniiDugaar")
+            .lean();
+          centralOsmuud.forEach((m) =>
+            nemye(m.orshinSuugchiinId || m.ezemshigchiinId, m.mashiniiDugaar),
+          );
+        } catch (err) {
+          console.error("Error fetching central OSM for orshinSuugch list:", err);
+        }
+
+        if (tukhainBaaziinKholbolt) {
+          try {
+            // 2. Tenant DB OSM
+            const TenantOSM = OrshinSuugchMashinModel(tukhainBaaziinKholbolt);
+            const tenantOsmuud = await TenantOSM.find(ezniiShalgalt)
+              .select("orshinSuugchiinId ezemshigchiinId mashiniiDugaar")
+              .lean();
+            tenantOsmuud.forEach((m) =>
+              nemye(m.orshinSuugchiinId || m.ezemshigchiinId, m.mashiniiDugaar),
+            );
+
+            // 3. Tenant mashin collection (хаалга/камерын бичлэг)
+            const MashinModel = require("../models/mashin")(tukhainBaaziinKholbolt);
+            const mashinuud = await MashinModel.find(ezniiShalgalt)
+              .select("ezemshigchiinId orshinSuugchiinId dugaar mashiniiDugaar")
+              .lean();
+            mashinuud.forEach((m) =>
+              nemye(
+                m.ezemshigchiinId || m.orshinSuugchiinId,
+                m.dugaar || m.mashiniiDugaar,
+              ),
+            );
+          } catch (err) {
+            console.error("Error fetching tenant mashin data for orshinSuugch list:", err);
+          }
+        }
+      }
+      // ────────────────────────────────────────────────────────────────────
+
       jagsaalt.forEach((mur) => {
         mur.key = mur._id;
+        // ── Merge: OSM lookup + document's own direct fields (legacy write path) ──
+        const murMashinuud = mashinMap[mur._id.toString()] || [];
+        const _addPlate = (p) => {
+          const plate = String(p || "").trim().toUpperCase();
+          if (plate && plate !== "БҮРТГЭЛГҮЙ" && !murMashinuud.includes(plate)) murMashinuud.push(plate);
+        };
+        // Document's mashiniiDugaar string field (may be set without OSM record)
+        _addPlate(mur.mashiniiDugaar);
+        // Document's mashinuud array (legacy import path)
+        if (Array.isArray(mur.mashinuud)) mur.mashinuud.forEach(_addPlate);
+        mur.mashinuud = murMashinuud;
+        mur.mashiniiDugaar = murMashinuud.join(", ");
         const authoritativeGeree = gereeMap[mur._id.toString()];
 
         // If query has baiguullagiinId, ensure the returned object reflects that organization's data
