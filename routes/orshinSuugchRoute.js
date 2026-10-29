@@ -178,10 +178,70 @@ router.post("/orshinSuugchiinMashinKhadgalya", tokenShalgakh, async (req, res, n
     // хязгаар»-аас байгууллага/барилгын хэмжээнд тохируулна. Тохируулаагүй (0)
     // бол хязгаарлахгүй. Энэ endpoint нь БҮТЭН шинэ жагсаалтыг хүлээн авдаг
     // тул ирсэн жагсаалтын урт нь шалгах ёстой тоо яг өөрөө.
+    // 6a97d3afaf2ad1911035e063 зэрэг байгууллагын хувьд апп-аас өөрийн машин нэмэх / бүртгэхийг хаах
+    const BLOCKED_CAR_ADD_ORGS = new Set(["6a97d3afaf2ad1911035e063"]);
     const orgIdForLimit = baiguullagiinId || resident.baiguullagiinId;
+    const currentOrgId = String(
+      orgIdForLimit ||
+      req.body.nevtersenAjiltniiToken?.baiguullagiinId ||
+      ""
+    );
+    const requesterRole = req.body.nevtersenAjiltniiToken?.erkh;
+    const isStaffOrAdmin = [
+      "Админ",
+      "Сууц өмчлөгчдийн холбоо",
+      "Хэрэглэгч",
+      "Инженер",
+      "Нярав",
+    ].includes(requesterRole);
+
+    let baiguullagaDoc = null;
     if (orgIdForLimit) {
+      baiguullagaDoc = await Baiguullaga(db.erunkhiiKholbolt).findById(orgIdForLimit);
+    }
+
+    const isBlockedOrg =
+      BLOCKED_CAR_ADD_ORGS.has(currentOrgId) ||
+      baiguullagaDoc?.tokhirgoo?.zochinTokhirgoo?.appMashinNemekhKhoriglokh === true;
+
+    if (isBlockedOrg && !isStaffOrAdmin && validCars.length > 0) {
+      const existingCentral = await OrshinSuugchMashin(db.erunkhiiKholbolt)
+        .find({ orshinSuugchiinId: String(resident._id) })
+        .select("mashiniiDugaar");
+
+      const existingPlates = new Set(
+        existingCentral.map((c) =>
+          String(c.mashiniiDugaar || "").trim().toUpperCase()
+        )
+      );
+
+      if (tukhainBaaziinKholbolt) {
+        try {
+          const existingTenant = await OrshinSuugchMashin(tukhainBaaziinKholbolt)
+            .find({ orshinSuugchiinId: String(resident._id) })
+            .select("mashiniiDugaar");
+          existingTenant.forEach((c) =>
+            existingPlates.add(String(c.mashiniiDugaar || "").trim().toUpperCase())
+          );
+        } catch (e) {}
+      }
+
+      const hasNewCar = validCars.some(
+        (c) => !existingPlates.has(c.mashiniiDugaar)
+      );
+
+      if (hasNewCar || existingPlates.size === 0) {
+        return res.status(403).json({
+          success: false,
+          aldaa: "Тус байгууллагын хувьд аппликейшнээс өөрийн машин бүртгэх боломжгүй байна. Та СӨХ / контортоо хандана уу.",
+          message: "Тус байгууллагын хувьд аппликейшнээс өөрийн машин бүртгэх боломжгүй байна. Та СӨХ / контортоо хандана уу.",
+        });
+      }
+    }
+
+    if (baiguullagaDoc) {
       const khyazgaar = mashiniiKhyazgaarOlya(
-        await Baiguullaga(db.erunkhiiKholbolt).findById(orgIdForLimit),
+        baiguullagaDoc,
         resident.barilgiinId,
       );
 
@@ -463,13 +523,24 @@ router.get("/orshinSuugch", tokenShalgakh, async (req, res, next) => {
     // Residents MUST be in erunkhiiKholbolt
     const kholbolt = db.erunkhiiKholbolt;
 
+    // Машины дугаарын талбаруудыг заавал оруулна (select projection-оос хасагдсан байвал ч гэсэн)
+    let effectiveSelect = body.select;
+    if (effectiveSelect) {
+      const selStr = Array.isArray(effectiveSelect)
+        ? effectiveSelect.join(" ")
+        : String(effectiveSelect);
+      if (!selStr.includes("mashiniiDugaar")) {
+        effectiveSelect = selStr + " mashiniiDugaar mashinuud";
+      }
+    }
+
     // Fetch residents from erunkhiiKholbolt
     const [jagsaalt, niitMur] = await Promise.all([
       OrshinSuugch(kholbolt)
         .find(body.query)
         .sort(body.order)
         .collation(body.collation ? body.collation : {})
-        .select(body.select)
+        .select(effectiveSelect)
         .skip((khuudasniiDugaar - 1) * khuudasniiKhemjee)
         .limit(khuudasniiKhemjee)
         .lean(),

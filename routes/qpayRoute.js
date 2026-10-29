@@ -3944,26 +3944,41 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
  * @param {string} invoiceId Нэхэмжлэхийн ЭСВЭЛ гэрээний id
  * @returns {Promise<{success: boolean, message: string, disabled?: boolean}>}
  */
-async function sanuulgaSmsIlgeeye(invoiceId) {
+async function sanuulgaSmsIlgeeye(invoiceId, explicitKholbolt = null, skipBlock = false) {
     const { db } = require("zevbackv2");
+    const mongoose = require("mongoose");
     const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
     // `invoiceId` нь нэхэмжлэхийн эсвэл ГЭРЭЭНИЙ id байж болно
 
     let invoice = null;
     let foundKholbolt = null;
 
-    for (const kholbolt of db.kholboltuud) {
+    const kholboltuudToSearch = explicitKholbolt
+      ? [explicitKholbolt, ...(db.kholboltuud || [])]
+      : (db.kholboltuud || []);
+
+    const targetIdStr = String(invoiceId || "");
+    const isObjectId = mongoose.Types.ObjectId.isValid(targetIdStr);
+
+    for (const kholbolt of kholboltuudToSearch) {
+      if (!kholbolt) continue;
       try {
         const NekhemjlekhModel = NekhemjlekhiinTuukh(kholbolt);
         let inv = null;
-        try {
-          inv = await NekhemjlekhModel.findById(invoiceId).lean();
-        } catch (e) { }
+        if (isObjectId) {
+          try {
+            inv = await NekhemjlekhModel.findById(targetIdStr).lean();
+          } catch (e) { }
+        }
 
         if (!inv) {
-          // Fallback: try finding by gereeniiId (retrieve the latest invoice of this contract)
-          inv = await NekhemjlekhModel.findOne({ gereeniiId: invoiceId })
-            .sort({ createdAt: -1 })
+          // Fallback: try finding by gereeniiId (retrieve the latest unpaid or active invoice of this contract)
+          const gereeQuery = isObjectId
+            ? { $or: [{ gereeniiId: targetIdStr }, { gereeniiId: new mongoose.Types.ObjectId(targetIdStr) }] }
+            : { gereeniiId: targetIdStr };
+
+          inv = await NekhemjlekhModel.findOne(gereeQuery)
+            .sort({ ognoo: -1, createdAt: -1 })
             .lean();
         }
 
@@ -3979,13 +3994,24 @@ async function sanuulgaSmsIlgeeye(invoiceId) {
       return { success: false, message: "Нэхэмжлэх олдсонгүй." };
     }
 
-    // `utas` дотор зай, null, хоосон мөр тохиолддог. Өмнө нь зөвхөн
-    // `!phone` гэж шалгадаг тул `" "` нь өнгөрч, CallPro
-    // `400 invalid phone number` буцаадаг байв — хэрэглэгч «Request
-    // failed with status code 400» гэсэн тайлбаргүй алдаа хардаг.
-    const dugaaruud = (Array.isArray(invoice.utas) ? invoice.utas : [invoice.utas])
+    // `utas` дотор зай, null, хоосон мөр тохиолддог
+    let dugaaruud = (Array.isArray(invoice.utas) ? invoice.utas : [invoice.utas])
       .map((d) => String(d ?? "").replace(/\s+/g, ""))
       .filter((d) => /^\d{8}$/.test(d));
+
+    // Утасны дугаар нэхэмжлэх дээр байхгүй бол гэрээнээс нөхөж хайна
+    if (dugaaruud.length === 0 && invoice.gereeniiId && foundKholbolt) {
+      try {
+        const GereeModel = require("../models/geree")(foundKholbolt);
+        const g = await GereeModel.findById(invoice.gereeniiId).select("utas").lean();
+        if (g && g.utas) {
+          const extra = (Array.isArray(g.utas) ? g.utas : [g.utas])
+            .map((d) => String(d ?? "").replace(/\s+/g, ""))
+            .filter((d) => /^\d{8}$/.test(d));
+          dugaaruud.push(...extra);
+        }
+      } catch (_) {}
+    }
 
     if (dugaaruud.length === 0) {
       return {
@@ -3995,13 +4021,19 @@ async function sanuulgaSmsIlgeeye(invoiceId) {
     }
 
     // 1. Calculate overall outstanding balance
-    let overallUldegdel = invoice.niitTulbur;
-    if (invoice.gereeniiId) {
+    let overallUldegdel = Number(invoice.niitTulbur) || 0;
+    if (invoice.gereeniiId && foundKholbolt) {
       try {
         const GuilgeeModel = require("../models/guilgeeAvlaguud")(foundKholbolt);
         if (GuilgeeModel) {
+          const gid = String(invoice.gereeniiId);
+          const matchConditions = [{ gereeniiId: gid }];
+          if (mongoose.Types.ObjectId.isValid(gid)) {
+            matchConditions.push({ gereeniiId: new mongoose.Types.ObjectId(gid) });
+          }
+
           const result = await GuilgeeModel.aggregate([
-            { $match: { gereeniiId: invoice.gereeniiId } },
+            { $match: { $or: matchConditions } },
             {
               $group: {
                 _id: null,
@@ -4009,8 +4041,12 @@ async function sanuulgaSmsIlgeeye(invoiceId) {
               },
             },
           ]);
-          const currentBal = result[0]?.uldegdel || 0;
-          overallUldegdel = currentBal > 0 ? Number(currentBal.toFixed(2)) : 0;
+          if (result && result.length > 0) {
+            const currentBal = result[0]?.uldegdel || 0;
+            if (currentBal > 0) {
+              overallUldegdel = Number(currentBal.toFixed(2));
+            }
+          }
         }
       } catch (balErr) {
         console.error("❌ Failed to calculate outstanding balance for reminder SMS:", balErr.message);
@@ -4018,7 +4054,11 @@ async function sanuulgaSmsIlgeeye(invoiceId) {
     }
 
     if (overallUldegdel <= 0) {
-      return { success: false, message: "Төлөх төлбөрийн үлдэгдэл байхгүй байна." };
+      if (invoice.tuluv !== "Төлсөн" && Number(invoice.niitTulbur) > 0) {
+        overallUldegdel = Number(invoice.niitTulbur);
+      } else {
+        return { success: false, message: "Төлөх төлбөрийн үлдэгдэл байхгүй байна." };
+      }
     }
 
     // 2. Format Cyrillic/Mongolian message with outstanding balance and pay link
@@ -4047,21 +4087,23 @@ async function sanuulgaSmsIlgeeye(invoiceId) {
     if (!ENABLE_SMS) {
       console.log(`⚠️ [qpayRoute] Reminder SMS sending is temporarily disabled.`);
       return {
-        success: true,
+        success: false,
         message: "SMS сервис түр идэвхгүй байна (SMS disabled)",
         disabled: true,
       };
     }
 
-    const { tulburiinSmsZovshoorokhEsekh } = require("../utils/baiguullagiinTokhirgoo");
-    const allowed = await tulburiinSmsZovshoorokhEsekh(invoice.baiguullagiinId, invoice.barilgiinId);
-    if (!allowed) {
-      console.log(`⚠️ [qpayRoute] Reminder SMS sending is disabled by settings.`);
-      return {
-        success: true,
-        message: "Төлбөрийн мессеж илгээх тохиргоо унтраалттай байна",
-        disabled: true,
-      };
+    if (!skipBlock) {
+      const { tulburiinSmsZovshoorokhEsekh } = require("../utils/baiguullagiinTokhirgoo");
+      const allowed = await tulburiinSmsZovshoorokhEsekh(invoice.baiguullagiinId, invoice.barilgiinId);
+      if (!allowed) {
+        console.log(`⚠️ [qpayRoute] Reminder SMS sending is disabled by settings.`);
+        return {
+          success: false,
+          message: "Төлбөрийн мессеж илгээх тохиргоо унтраалттай байна",
+          disabled: true,
+        };
+      }
     }
 
     const key = "aa8e588459fdd9b7ac0b809fc29cfae3";
@@ -4137,7 +4179,7 @@ router.post(
   tokenShalgakh,
   async (req, res, next) => {
     try {
-      const khariu = await sanuulgaSmsIlgeeye(req.params.invoiceId);
+      const khariu = await sanuulgaSmsIlgeeye(req.params.invoiceId, req.body?.tukhainBaaziinKholbolt, true);
       return res.status(khariu.success ? 200 : 400).json(khariu);
     } catch (err) {
       next(err);
@@ -4169,16 +4211,29 @@ router.post(
       const davkhardalgui = Array.from(new Set(iduud));
       const durslel = { ilgeesen: [], aldaatai: [] };
 
-      // ЗЭРЭГЦЭЭ биш, дараалан: CallPro-д нэг дор олон хүсэлт цохих нь
-      // хязгаарлалтад унах эрсдэлтэй, мөр тус бүрийн үр дүн ч хэрэгтэй.
-      for (const id of davkhardalgui) {
-        try {
-          const khariu = await sanuulgaSmsIlgeeye(id);
-          if (khariu.success) durslel.ilgeesen.push(id);
-          else durslel.aldaatai.push({ id, message: khariu.message });
-        } catch (aldaa) {
-          durslel.aldaatai.push({ id, message: aldaa.message });
-        }
+      // Бөөнөөр илгээх үед block хийхгүй (skipBlock=true) бөгөөд 5-аар багцлан зэрэгцээ илгээж хурдасгана
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < davkhardalgui.length; i += BATCH_SIZE) {
+        const batch = davkhardalgui.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.allSettled(
+          batch.map((id) =>
+            sanuulgaSmsIlgeeye(id, req.body?.tukhainBaaziinKholbolt, true)
+          )
+        );
+
+        batchResults.forEach((res, index) => {
+          const id = batch[index];
+          if (res.status === "fulfilled") {
+            const khariu = res.value;
+            if (khariu && khariu.success) {
+              durslel.ilgeesen.push(id);
+            } else {
+              durslel.aldaatai.push({ id, message: khariu?.message || "Алдаа гарлаа" });
+            }
+          } else {
+            durslel.aldaatai.push({ id, message: res.reason?.message || "Алдаа гарлаа" });
+          }
+        });
       }
 
       return res.status(200).json({

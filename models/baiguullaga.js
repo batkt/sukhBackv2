@@ -131,6 +131,7 @@ const baiguullagaSchema = new Schema(
              * рүү нөхнө (`utils/mashinBurtgel.js` → `mashiniiKhyazgaarOlya`).
              */
             khariltsagchMashiniiLimit: Number,
+            appMashinNemekhKhoriglokh: Boolean,
           },
           bodokhArgaEnabled: {
             type: Boolean,
@@ -350,6 +351,7 @@ const baiguullagaSchema = new Schema(
          * рүү нөхнө (`utils/mashinBurtgel.js` → `mashiniiKhyazgaarOlya`).
          */
         khariltsagchMashiniiLimit: Number,
+        appMashinNemekhKhoriglokh: Boolean,
       },
       bodokhArgaEnabled: {
         type: Boolean,

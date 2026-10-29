@@ -215,12 +215,23 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
     // Харилцагч нь ТӨВ баазад (erunkhiiKholbolt) хадгалагддаг
     const kholbolt = db.erunkhiiKholbolt;
 
+    // Машины дугаарын талбаруудыг заавал оруулна (select projection-оос хасагдсан байвал ч гэсэн)
+    let effectiveSelect = body.select;
+    if (effectiveSelect) {
+      const selStr = Array.isArray(effectiveSelect)
+        ? effectiveSelect.join(" ")
+        : String(effectiveSelect);
+      if (!selStr.includes("mashiniiDugaar")) {
+        effectiveSelect = selStr + " mashiniiDugaar mashinuud";
+      }
+    }
+
     const [jagsaalt, niitMur] = await Promise.all([
       khariltsagch(kholbolt)
         .find(body.query)
         .sort(body.order)
         .collation(body.collation ? body.collation : {})
-        .select(body.select)
+        .select(effectiveSelect)
         .skip((khuudasniiDugaar - 1) * khuudasniiKhemjee)
         .limit(khuudasniiKhemjee)
         .lean(),
@@ -315,6 +326,22 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
           console.error("Error fetching authoritative geree data:", err);
         }
 
+        // Машины дугаарыг олох shared helper (tenant + central OSM хоёуланд хэрэглэнэ)
+        const ezniiShalgalt = {
+          $or: [
+            { orshinSuugchiinId: { $in: khariltsagchIds } },
+            { ezemshigchiinId: { $in: khariltsagchIds } },
+          ],
+        };
+        const nemye = (ezen, dugaar) => {
+          const d = String(dugaar || "").trim();
+          if (!d || d === "БҮРТГЭЛГҮЙ") return;
+          const e = String(ezen || "");
+          if (!e) return;
+          if (!mashinMap[e]) mashinMap[e] = [];
+          if (!mashinMap[e].includes(d)) mashinMap[e].push(d);
+        };
+
         try {
           // ── Машины дугаарыг ХОЁР коллекциос цуглуулна ─────────────────
           // Дугаар нэг газар байхгүй:
@@ -327,22 +354,6 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
           //
           // Эзэмшигчийн id нь хоёр талбарын аль нэгэнд байж болно
           // (`orshinSuugchiinId` нь `ezemshigchiinId`-ийн alias).
-          const ezniiShalgalt = {
-            $or: [
-              { orshinSuugchiinId: { $in: khariltsagchIds } },
-              { ezemshigchiinId: { $in: khariltsagchIds } },
-            ],
-          };
-
-          const nemye = (ezen, dugaar) => {
-            const d = String(dugaar || "").trim();
-            // "БҮРТГЭЛГҮЙ" нь дугаар БАЙХГҮЙ гэсэн дүүргэгч
-            if (!d || d === "БҮРТГЭЛГҮЙ") return;
-            const e = String(ezen || "");
-            if (!e) return;
-            if (!mashinMap[e]) mashinMap[e] = [];
-            if (!mashinMap[e].includes(d)) mashinMap[e].push(d);
-          };
 
           const OSMModel = require("../models/orshinSuugchMashin")(
             tukhainBaaziinKholbolt,
@@ -371,6 +382,27 @@ router.get("/khariltsagch", tokenShalgakh, async (req, res, next) => {
           );
         } catch (err) {
           console.error("Error fetching mashin data:", err);
+        }
+
+        // ── Central DB OSM lookup (khariltsagch cars may be stored in central OSM) ──
+        try {
+          const CentralOSMModel = require("../models/orshinSuugchMashin")(
+            db.erunkhiiKholbolt,
+          );
+          const ezniiShalgaltCentral = {
+            $or: [
+              { orshinSuugchiinId: { $in: khariltsagchIds } },
+              { ezemshigchiinId: { $in: khariltsagchIds } },
+            ],
+          };
+          const centralOsmuud = await CentralOSMModel.find(ezniiShalgaltCentral)
+            .select("orshinSuugchiinId ezemshigchiinId mashiniiDugaar")
+            .lean();
+          centralOsmuud.forEach((m) =>
+            nemye(m.orshinSuugchiinId || m.ezemshigchiinId, m.mashiniiDugaar),
+          );
+        } catch (err) {
+          console.error("Error fetching central OSM for khariltsagch:", err);
         }
       }
 

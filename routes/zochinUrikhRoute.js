@@ -1132,6 +1132,40 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
 
     // 1. PLATE CHANGE RESTRICTION: Resident primary car
     if (inviterId && isResidentCar) {
+      // 6a97d3afaf2ad1911035e063 зэрэг байгууллагын хувьд апп-аас өөрийн машин нэмэх / бүртгэхийг хаах
+      const BLOCKED_CAR_ADD_ORGS = new Set(["6a97d3afaf2ad1911035e063"]);
+      const targetOrg = String(
+        baiguullagiinId ||
+        req.body.nevtersenAjiltniiToken?.baiguullagiinId ||
+        ""
+      );
+      const isStaffOrAdmin = [
+        "Админ",
+        "Сууц өмчлөгчдийн холбоо",
+        "Хэрэглэгч",
+        "Инженер",
+        "Нярав",
+      ].includes(requesterRole);
+
+      let isBlockedOrg = BLOCKED_CAR_ADD_ORGS.has(targetOrg);
+      if (targetOrg && !isBlockedOrg) {
+        try {
+          const BaiguullagaModel = require("../models/baiguullaga");
+          const bDoc = await BaiguullagaModel(db.erunkhiiKholbolt).findById(targetOrg);
+          if (bDoc?.tokhirgoo?.zochinTokhirgoo?.appMashinNemekhKhoriglokh === true) {
+            isBlockedOrg = true;
+          }
+        } catch (e) {}
+      }
+
+      if (isBlockedOrg && !isStaffOrAdmin) {
+        return res.status(403).json({
+          success: false,
+          aldaa: "Тус байгууллагын хувьд аппликейшнээс өөрийн машин бүртгэх боломжгүй байна. Та СӨХ / контортоо хандана уу.",
+          message: "Тус байгууллагын хувьд аппликейшнээс өөрийн машин бүртгэх боломжгүй байна. Та СӨХ / контортоо хандана уу.",
+        });
+      }
+
       const oldPlate = existingPrimary ? (existingPrimary.dugaar || existingPrimary.mashiniiDugaar || "") : "";
       const newPlate = (orshinSuugchMedeelel && orshinSuugchMedeelel.mashiniiDugaar) || mashiniiDugaar || "";
       // Сул слот байгаа бол энэ нь дугаар солих биш, ШИНЭ машин нэмэх үйлдэл.
@@ -1259,59 +1293,13 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
             });
           }
 
-          // Бүртгэлгүй оршин суугч бол автоматаар үүсгэнэ
+          // Бүртгэлгүй оршин суугчийг автоматаар үүсгэхгүй — шууд хориглоно
           if (!orshinSuugchResult) {
-            try {
-              console.log(
-                `ℹ️ [ZOCHIN_HADGALYA] Unregistered resident detected for phone ${phoneString}. Auto-creating resident...`
-              );
-              orshinSuugchResult = await orshinSuugchKhadgalya(
-                orshinSuugchMedeelel,
-                phoneString,
-                tukhainBaaziinKholbolt,
-                baiguullagiinId,
-                barilgiinId
-              );
-              console.log(
-                `✅ [ZOCHIN_HADGALYA] Auto-registered resident ID:`,
-                orshinSuugchResult?._id
-              );
-            } catch (autoRegErr) {
-              console.warn(
-                "⚠️ [ZOCHIN_HADGALYA] orshinSuugchKhadgalya fallback:",
-                autoRegErr.message
-              );
-              const newRes = new (OrshinSuugch(db.erunkhiiKholbolt))({
-                ner:
-                  orshinSuugchMedeelel.ner ||
-                  req.body.ezemshigchiinNer ||
-                  "Оршин суугч",
-                ovog:
-                  orshinSuugchMedeelel.ovog ||
-                  orshinSuugchMedeelel.ner ||
-                  "",
-                utas: phoneString,
-                toot:
-                  orshinSuugchMedeelel.ezenToot ||
-                  req.body.ezemshigchiinTalbainDugaar ||
-                  "-",
-                baiguullagiinId: baiguullagiinId
-                  ? String(baiguullagiinId)
-                  : undefined,
-                barilgiinId: barilgiinId ? String(barilgiinId) : undefined,
-                mashiniiDugaar:
-                  orshinSuugchMedeelel.mashiniiDugaar ||
-                  req.body.mashiniiDugaar ||
-                  "",
-                dugaar:
-                  orshinSuugchMedeelel.mashiniiDugaar ||
-                  req.body.mashiniiDugaar ||
-                  "",
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              });
-              orshinSuugchResult = await newRes.save();
-            }
+            return res.status(400).json({
+              success: false,
+              aldaa: "Бүртгэлгүй оршин суугч байна.",
+              message: "Бүртгэлгүй оршин суугч байна.",
+            });
           }
         } else if (isCustomerType) {
           const Khariltsagch = require("../models/khariltsagch");
