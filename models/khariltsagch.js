@@ -50,6 +50,10 @@ const khariltsagchSchema = new Schema(
           type: Number,
           default: 0,
         },
+        // Эхний сарын авлагыг хоногоор бодоход: бүртгүүлсэн → авлага үүсэх огноо.
+        // `bodokhKhonog`-ийг вэб эдгээрээс тооцож илгээнэ.
+        burtguulsenOgnoo: Date,
+        avlagaUusekhOgnoo: Date,
         createdAt: {
           type: Date,
           default: Date.now,
