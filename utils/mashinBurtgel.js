@@ -507,7 +507,56 @@ async function ezniiMashinuudOlya(tokhirgoo) {
   return bichleguud.map((b) => b.mashiniiDugaar);
 }
 
+
+/**
+ * Хүсэлт гаргагч нь ажилтан / админ (вебээс хандаж буй) эсэхийг найдвартай тодорхойлно.
+ * Аппликейшнаас хандаж буй оршин суугч/харилцагч биш, харин СӨХ/админ гэдгийг шалгана.
+ *
+ * @param {object} token req.body.nevtersenAjiltniiToken
+ * @param {object} [dbConn] db.erunkhiiKholbolt
+ * @returns {Promise<boolean>}
+ */
+async function isStaffOrAdminCheck(token, dbConn) {
+  if (!token || !token.id) return false;
+
+  // 1. Аппликейшний хэрэглэгч нь OrshinSuugch эсвэл khariltsagch эрхтэй эсвэл sessionId-тэй байна
+  if (token.erkh === 'OrshinSuugch' || token.erkh === 'khariltsagch' || token.sessionId) {
+    return false;
+  }
+
+  // 2. Ажилтны тодорхой эрх token дотор шууд байвал
+  const staffRoles = [
+    'Admin',
+    'SuperAdmin',
+    'Админ',
+    'Сууц өмчлөгчдийн холбоо',
+    'Хэрэглэгч',
+    'Инженер',
+    'Нярав',
+    'Менежер',
+    'Захирал',
+    'Ажилтан',
+    'operator',
+  ];
+  if (token.erkh && staffRoles.includes(token.erkh)) {
+    return true;
+  }
+
+  // 3. Төв баазын Ajiltan цуглуулгад тухайн id байгаа эсэхийг шалгах (вебийн токенд erkh талбар байдаггүй)
+  try {
+    const conn = dbConn || require('zevbackv2').db?.erunkhiiKholbolt;
+    if (conn) {
+      const Ajiltan = require('../models/ajiltan');
+      const exists = await Ajiltan(conn).exists({ _id: token.id });
+      if (exists) return true;
+    }
+  } catch (e) {}
+
+  return false;
+}
+
 module.exports = {
+  isStaffOrAdminCheck,
   mashiniiDugaarTseverle,
   dugaaruudSalgaya,
   zochinTokhirgooOlya,

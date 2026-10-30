@@ -1,3 +1,4 @@
+const { isStaffOrAdminCheck } = require("../utils/mashinBurtgel");
 const express = require("express");
 const moment = require("moment");
 const {
@@ -1139,13 +1140,10 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
         req.body.nevtersenAjiltniiToken?.baiguullagiinId ||
         ""
       );
-      const isStaffOrAdmin = [
-        "Админ",
-        "Сууц өмчлөгчдийн холбоо",
-        "Хэрэглэгч",
-        "Инженер",
-        "Нярав",
-      ].includes(requesterRole);
+      const isStaffOrAdmin = await isStaffOrAdminCheck(
+        req.body.nevtersenAjiltniiToken,
+        db.erunkhiiKholbolt
+      );
 
       let isBlockedOrg = BLOCKED_CAR_ADD_ORGS.has(targetOrg);
       if (targetOrg && !isBlockedOrg) {

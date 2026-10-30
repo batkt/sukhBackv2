@@ -79,6 +79,7 @@ ajiltanSchema.methods.tokenUusgeye = function (
       baiguullagiinId: this.baiguullagiinId,
       salbaruud: salbaruud,
       duusakhOgnoo: duusakhOgnoo,
+      erkh: this.erkh || "Админ",
       ...(nemelt || {}),
     },
     process.env.APP_SECRET,

@@ -5,6 +5,7 @@ const Baiguullaga = require("../models/baiguullaga");
 const {
   mashiniiKhyazgaarOlya,
   ezniiMashiniiBichleguudOlya,
+  isStaffOrAdminCheck,
 } = require("../utils/mashinBurtgel");
 const Geree = require("../models/geree");
 const NevtreltiinTuukh = require("../models/nevtreltiinTuukh");
@@ -187,13 +188,10 @@ router.post("/orshinSuugchiinMashinKhadgalya", tokenShalgakh, async (req, res, n
       ""
     );
     const requesterRole = req.body.nevtersenAjiltniiToken?.erkh;
-    const isStaffOrAdmin = [
-      "Админ",
-      "Сууц өмчлөгчдийн холбоо",
-      "Хэрэглэгч",
-      "Инженер",
-      "Нярав",
-    ].includes(requesterRole);
+    const isStaffOrAdmin = await isStaffOrAdminCheck(
+      req.body.nevtersenAjiltniiToken,
+      db.erunkhiiKholbolt
+    );
 
     let baiguullagaDoc = null;
     if (orgIdForLimit) {
