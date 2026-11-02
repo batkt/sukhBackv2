@@ -1354,37 +1354,12 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
           }
 
           if (!khariltsagchResult && !orshinSuugchResult) {
-            // Бүртгэлгүй харилцагч бол автоматаар бүртгэнэ
-            console.log(
-              `ℹ️ [ZOCHIN_HADGALYA] Unregistered customer detected. Auto-creating khariltsagch...`
-            );
-            const newKhariltsagch = new (Khariltsagch(db.erunkhiiKholbolt))({
-              ner:
-                orshinSuugchMedeelel.ner ||
-                req.body.ezemshigchiinNer ||
-                "Харилцагч",
-              ovog: orshinSuugchMedeelel.ovog || "",
-              utas: phoneString || "",
-              toot:
-                orshinSuugchMedeelel.ezenToot ||
-                req.body.ezemshigchiinTalbainDugaar ||
-                "-",
-              baiguullagiinId: baiguullagiinId
-                ? String(baiguullagiinId)
-                : undefined,
-              barilgiinId: barilgiinId ? String(barilgiinId) : undefined,
-              turul: "Харилцагч",
-              // Бусад бүртгэлийн замтай ижил анхны нууц үг — эс бөгөөс апп-аар
-              // нэвтрэхэд «нууц үг тохируулаагүй» гэж зогсдог байв.
-              nuutsUg: "1234",
-              createdAt: new Date(),
-              updatedAt: new Date(),
+            // Бүртгэлгүй харилцагчийг автоматаар үүсгэхгүй — шууд хориглоно
+            return res.status(400).json({
+              success: false,
+              aldaa: "Бүртгэлгүй харилцагч байна.",
+              message: "Бүртгэлгүй харилцагч байна.",
             });
-            khariltsagchResult = await newKhariltsagch.save();
-            console.log(
-              `✅ [ZOCHIN_HADGALYA] Auto-registered customer ID:`,
-              khariltsagchResult?._id
-            );
           }
 
           if (khariltsagchResult) {
@@ -1401,12 +1376,25 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
           orshinSuugchResult = await OrshinSuugch(
             db.erunkhiiKholbolt
           ).findOne({ utas: phoneString });
+          if (!orshinSuugchResult) {
+            const Khariltsagch = require("../models/khariltsagch");
+            orshinSuugchResult = await Khariltsagch(db.erunkhiiKholbolt).findOne({
+              utas: phoneString,
+            });
+          }
+          if (!orshinSuugchResult) {
+            return res.status(400).json({
+              success: false,
+              aldaa: "Бүртгэлгүй хэрэглэгч байна.",
+              message: "Бүртгэлгүй хэрэглэгч байна.",
+            });
+          }
         }
 
         console.log(`🔍 [ZOCHIN_HADGALYA] orshinSuugchResult:`, orshinSuugchResult ? { id: orshinSuugchResult._id, ner: orshinSuugchResult.ner, toot: orshinSuugchResult.toot } : "NULL (Skipped)");
 
         // Also save to Mashin (Vehicle with Guest/Resident Settings)
-        if (orshinSuugchResult || !isResidentType) {
+        if (orshinSuugchResult) {
           const Mashin = require("../models/mashin");
 
           // Fetch defaults from Baiguullaga/Barilga if not provided
