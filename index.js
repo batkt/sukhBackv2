@@ -813,8 +813,30 @@ if (
     }
   );
 
+  // 30-minute cron job for automatic parking cleanup (mashinGargakhKhugatsaa & mashinUstgakhKhugatsaa)
+  cron.schedule(
+    "*/30 * * * *",
+    async function () {
+      try {
+        const zogsoolController = require("./controller/zogsool");
+        if (zogsoolController && zogsoolController.zogsoolTseverlye) {
+          await zogsoolController.zogsoolTseverlye();
+        }
+        if (zogsoolController && zogsoolController.zogsooloosUstgay) {
+          await zogsoolController.zogsooloosUstgay();
+        }
+      } catch (err) {
+        console.error("❌ [CRON] Parking auto-cleanup error:", err.message);
+      }
+    },
+    {
+      scheduled: true,
+      timezone: "Asia/Ulaanbaatar",
+    }
+  );
+
   console.log(
-    "🕐 [CRON] Schedules enabled on Instance 0: 16:20 (Invoices), 07:20 (Parking Archive), 5-min auto-CGW, and 12-hour waiting list cleanup",
+    "🕐 [CRON] Schedules enabled on Instance 0: 16:20 (Invoices), 07:20 (Parking Archive), 5-min auto-CGW, 12-hour waiting list cleanup, and 30-min parking auto-cleanup",
   );
 } else {
   console.log(

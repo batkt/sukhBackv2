@@ -281,14 +281,14 @@ module.exports.zogsoolTseverlye = async (body, next) => {
     if (kholboltuud) {
       for await (const kholbolt of kholboltuud) {
         var zogsooluud = await Parking(kholbolt).find({
+          mashinGargakhKhugatsaa: { $gt: 0 },
           baiguullagiinId: kholbolt.baiguullagiinId,
         });
         if (!!zogsooluud) {
           for await (const zogsool of zogsooluud) {
-            console.log("zogsoolTseverlye:", zogsool.mashinGargakhKhugatsaa);
             var ognoo = new Date();
             ognoo = new Date(
-              ognoo.getTime() - (zogsool.mashinGargakhKhugatsaa || 120) * 60 * 60000
+              ognoo.getTime() - Number(zogsool.mashinGargakhKhugatsaa) * 60 * 60000
             );
             await Uilchluulegch(kholbolt).updateMany(
               {
@@ -302,21 +302,26 @@ module.exports.zogsoolTseverlye = async (body, next) => {
                   $lt: ognoo,
                 },
               },
-              // {
-              //   $set: {
-              //     "tuukh.0.garsanKhaalga": "tseverlesen",
-              //     "tuukh.0.tsagiinTuukh.0.garsanTsag": new Date(),
-              //     "tuukh.0.tuluv": -3, //Tseverlesen tuluv
-              //     zurchil: "Гарсан цаг тодорхойгүй!",
-              //   },
-              // }
+              {
+                $set: {
+                  "tuukh.0.garsanKhaalga": "tseverlesen",
+                  "tuukh.0.tsagiinTuukh.0.garsanTsag": new Date(),
+                  "tuukh.0.tuluv": -3, // Цэвэрлэсэн төлөв
+                  "tuukh.0.uneguiGarsan": "Цэвэрлэсэн",
+                },
+                $unset: {
+                  zurchil: "",
+                  "tuukh.0.zurchil": "",
+                },
+              }
             );
           }
         }
       }
     }
   } catch (err) {
-    next(err);
+    if (typeof next === "function") next(err);
+    else console.error("zogsoolTseverlye error:", err);
   }
 };
 
