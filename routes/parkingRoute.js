@@ -120,6 +120,43 @@ router.get("/parking", tokenShalgakh, async (req, res, next) => {
       }
     }
 
+    // ????? ???????? ??????? ???????? ?????? ? (orshinSuugchKhaalgaNeehEsekh === false),
+    // ?????? ????????? ??????????? (????? ?????? ?????? ??????????) ?????????
+    // ????? ???? ??? ??????? ??? ??? ???? "????" ???? ?????????.
+    const userId = req.body?.nevtersenAjiltniiToken?.id;
+    if (!orshinSuugchKhaalgaNeehEsekh && userId) {
+      try {
+        let u = await OrshinSuugch(db.erunkhiiKholbolt)
+          .findById(userId)
+          .select("khaalgaNeehErkh undsenId")
+          .lean();
+
+        if (u && u.undsenId && !u.khaalgaNeehErkh) {
+          const undsen = await OrshinSuugch(db.erunkhiiKholbolt)
+            .findById(u.undsenId)
+            .select("khaalgaNeehErkh")
+            .lean();
+          if (undsen?.khaalgaNeehErkh) {
+            u.khaalgaNeehErkh = true;
+          }
+        }
+
+        if (!u) {
+          const Khariltsagch = require("../models/khariltsagch");
+          u = await Khariltsagch(db.erunkhiiKholbolt)
+            .findById(userId)
+            .select("khaalgaNeehErkh")
+            .lean();
+        }
+
+        if (u?.khaalgaNeehErkh === true) {
+          orshinSuugchKhaalgaNeehEsekh = true;
+        }
+      } catch (err) {
+        console.warn("[parking] User khaalgaNeehErkh check error:", err.message);
+      }
+    }
+
     res.json({
       success: true,
       jagsaalt: list,

@@ -221,8 +221,16 @@ router.get("/neeye/:ip", async (req, res) => {
               // Not staff -> try resident
               orshinSuugch = await OrshinSuugch(db.erunkhiiKholbolt)
                 .findById(decoded.id)
-                .select("ner utas toot toots baiguullagiinId undsenId")
+                .select("ner utas toot toots baiguullagiinId undsenId khaalgaNeehErkh")
                 .lean();
+
+              if (!orshinSuugch) {
+                const Khariltsagch = require("../models/khariltsagch");
+                orshinSuugch = await Khariltsagch(db.erunkhiiKholbolt)
+                  .findById(decoded.id)
+                  .select("ner utas toot toots baiguullagiinId undsenId khaalgaNeehErkh")
+                  .lean();
+              }
 
               // Гэр бүлийн гишүүн өөрийн тоотгүй тул үндсэн эзэмшигчийн
               // тоот/эрхийг ашиглана. Түүхэнд нь бодит нээсэн хүний нэр,
@@ -230,7 +238,7 @@ router.get("/neeye/:ip", async (req, res) => {
               if (orshinSuugch && orshinSuugch.undsenId) {
                 const undsen = await OrshinSuugch(db.erunkhiiKholbolt)
                   .findById(orshinSuugch.undsenId)
-                  .select("toot toots baiguullagiinId")
+                  .select("toot toots baiguullagiinId khaalgaNeehErkh")
                   .lean();
                 if (undsen) {
                   orshinSuugch = {
@@ -238,6 +246,7 @@ router.get("/neeye/:ip", async (req, res) => {
                     toot: undsen.toot,
                     toots: undsen.toots,
                     baiguullagiinId: undsen.baiguullagiinId,
+                    khaalgaNeehErkh: orshinSuugch.khaalgaNeehErkh || undsen.khaalgaNeehErkh,
                   };
                 } else {
                   console.warn(
@@ -270,6 +279,12 @@ router.get("/neeye/:ip", async (req, res) => {
                   } else {
                     allowed = !!oSetting;
                   }
+                }
+
+                // Тухайн оршин суугчид тусгайлан хаалт нээх эрх олгосон бол
+                // барилгын түвшний хоригоос үл хамааран зөвшөөрнө
+                if (!allowed && orshinSuugch.khaalgaNeehErkh === true) {
+                  allowed = true;
                 }
 
                 if (!allowed) {

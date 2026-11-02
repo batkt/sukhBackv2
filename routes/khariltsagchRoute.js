@@ -1063,6 +1063,7 @@ router.put("/khariltsagch/:id", tokenShalgakh, async (req, res, next) => {
       delete req.body.erkh;
       // Нэхэмжлэгдэх зардлаа өөрөө хасаж болохгүй
       delete req.body.songosonZardluud;
+      delete req.body.khaalgaNeehErkh;
     }
 
     // Get old document before update for audit logging

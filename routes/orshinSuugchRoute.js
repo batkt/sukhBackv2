@@ -1255,6 +1255,7 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
       delete req.body.barilgiinId;
       delete req.body.toots;
       delete req.body.erkh;
+      delete req.body.khaalgaNeehErkh;
     }
 
     // Get old document before update for audit logging
