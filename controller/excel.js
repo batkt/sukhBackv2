@@ -320,8 +320,8 @@ exports.gereeniiExcelAvya = asyncHandler(async (req, res, next) => {
       width: 20,
     },
     {
-      header: "Ирээдүйд ашигласан тооцох",
-      key: "Ирээдүйд ашигласан тооцох",
+      header: "Ашиглалт хоногоор тооцох",
+      key: "Ашиглалт хоногоор тооцох",
       width: 25,
     },
   ];
@@ -518,6 +518,7 @@ exports.gereeniiExcelTatya = asyncHandler(async (req, res, next) => {
           )
             tolgoinObject.ekhniiSariinKhonog = cellAsString[0];
           else if (
+            worksheet[cellAsString].v.includes("Ашиглалт хоногоор тооцох") ||
             worksheet[cellAsString].v.includes("Ирээдүйд ашигласан тооцох")
           )
             tolgoinObject.khonogoorBodokhEsekh = cellAsString[0];
@@ -594,6 +595,7 @@ exports.gereeniiExcelTatya = asyncHandler(async (req, res, next) => {
           )
             tolgoinObject30.ekhniiSariinKhonog = cellAsString[0];
           else if (
+            worksheet30[cellAsString].v.includes("Ашиглалт хоногоор тооцох") ||
             worksheet30[cellAsString].v.includes("Ирээдүйд ашигласан тооцох")
           )
             tolgoinObject30.khonogoorBodokhEsekh = cellAsString[0];
@@ -676,7 +678,7 @@ exports.gereeniiExcelTatya = asyncHandler(async (req, res, next) => {
         object.bodokhKhonog = Number(mur[usegTooruuKhurvuulekh(tolgoinObject.ekhniiSariinKhonog)]) || 0;
         const khonogToggle = mur[usegTooruuKhurvuulekh(tolgoinObject.khonogoorBodokhEsekh)];
         object.khonogoorBodokhEsekh = khonogToggle === "Тийм" || khonogToggle === "true" || khonogToggle === true;
-        
+
         object.guchKhonogOruulakhEsekh = false;
         object.daraagiinTulukhOgnoo = moment(ognoo)
           .add(1, "month")
@@ -1383,7 +1385,7 @@ exports.zaaltExcelTatya = asyncHandler(async (req, res, next) => {
 
     const Geree = require("../models/geree");
     const OrshinSuugch = require("../models/orshinSuugch");
-    
+
     // Robust number parser for Mongolian Excel formats (stripping commas)
     const parseExcelNum = (val) => {
       if (val === undefined || val === null || val === "") return 0;
@@ -1400,7 +1402,7 @@ exports.zaaltExcelTatya = asyncHandler(async (req, res, next) => {
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
-      const rowNumber = i + 2; 
+      const rowNumber = i + 2;
 
       // Robust field lookup helper
       const getVal = (row, ...names) => {
@@ -1446,32 +1448,32 @@ exports.zaaltExcelTatya = asyncHandler(async (req, res, next) => {
         let niitOdooRaw = getVal(row, "Нийт (одоо)", "Нийт", "niit", "suuliinZaalt");
 
         const isEmptyStr = (v) => v === undefined || v === null || String(v).trim() === "";
-        
+
         // If the user uploads the excel template but leaves these columns blank for this row, skip it.
         // "if i insert one data only change that dont make other data empty value like 0 0 0 0"
         if (isEmptyStr(umnuValue) && isEmptyStr(odorValue) && isEmptyStr(shoneValue) && isEmptyStr(niitOdooRaw)) {
-            // No reading data provided for this geree. Skip to avoid billing 0 or duplicating baseFee.
-            results.success.push({
-              row: rowNumber,
-              gereeniiDugaar: gereeniiDugaar,
-              message: "Уншилтын мэдээлэл хоосон тул алгасав",
-            });
-            continue;
+          // No reading data provided for this geree. Skip to avoid billing 0 or duplicating baseFee.
+          results.success.push({
+            row: rowNumber,
+            gereeniiDugaar: gereeniiDugaar,
+            message: "Уншилтын мэдээлэл хоосон тул алгасав",
+          });
+          continue;
         }
 
         let umnu = !isEmptyStr(umnuValue) ? parseExcelNum(umnuValue) : 0;
         let odor = !isEmptyStr(odorValue) ? parseExcelNum(odorValue) : (geree.zaaltTog || 0);
         let shone = !isEmptyStr(shoneValue) ? parseExcelNum(shoneValue) : (geree.zaaltUs || 0);
-        
+
         let niitOdoo = geree.suuliinZaalt || 0;
-        
+
         if (!isEmptyStr(niitOdooRaw)) {
-            niitOdoo = parseExcelNum(niitOdooRaw);
+          niitOdoo = parseExcelNum(niitOdooRaw);
         } else if (!isEmptyStr(odorValue) || !isEmptyStr(shoneValue)) {
-            // Re-calculate if odor or shone is provided
-            niitOdoo = odor + shone;
+          // Re-calculate if odor or shone is provided
+          niitOdoo = odor + shone;
         }
-        
+
         // Base fee from Excel (Support multiple naming variations)
         const defaultDunFromExcel = parseExcelNum(getVal(row, "Суурь хураамж", "Суурь хүраамж", "defaultDun", "baseFee"));
 
@@ -1544,7 +1546,7 @@ exports.zaaltExcelTatya = asyncHandler(async (req, res, next) => {
           orshinSuugch.suuliinZaalt = niitOdoo;
           await orshinSuugch.save();
         }
-        
+
         // Sync tiered calculation tariff with finalized resident/row tariff
         gereeZaaltTariff = finalTariff;
 

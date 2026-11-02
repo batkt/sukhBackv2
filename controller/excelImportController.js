@@ -342,7 +342,7 @@ exports.downloadNekhemjlekhiinTuukhExcel = asyncHandler(
           orts: geree ? geree.orts || "1" : "", // Орц (entrance)
           davkhar: geree ? geree.davkhar || item.davkhar || "" : item.davkhar || "", // Давхар (floor)
           toot: item.toot || "-", // Тоот
-        gereeniiDugaar: item.gereeniiDugaar || "", // Гэрээний дугаар (contract number)
+          gereeniiDugaar: item.gereeniiDugaar || "", // Гэрээний дугаар (contract number)
           turul: item.turul || (geree ? geree.turul : "") || "Үндсэн", // Төрөл (type)
           gereeniiTuluv: gereeTuluv, // Гэрээний төлөв (contract status)
           uldegdel: Number(latestUldegdel || item.uldegdel || item.tulbur || 0), // Үлдэгдэл
@@ -852,7 +852,7 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
           ],
         })
         .lean();
-    } catch (e) {}
+    } catch (e) { }
 
     // 2. Tenant DB OrshinSuugchMashin & Mashin
     let tenantCars = [];
@@ -871,7 +871,7 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
           })
           .lean();
         tenantCars.push(...osmTenant);
-      } catch (e) {}
+      } catch (e) { }
 
       try {
         const mashinTenant = await Mashin(tukhainBaaziinKholbolt)
@@ -885,7 +885,7 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
           })
           .lean();
         tenantCars.push(...mashinTenant);
-      } catch (e) {}
+      } catch (e) { }
     }
 
     // Build map: residentId / toot -> Set of plate strings
@@ -986,7 +986,7 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
       { key: "horoo", label: "Хороо" },
       { key: "soh", label: "СӨХ" },
       { key: "khonogoorBodokhEsekh", label: "Хоногоор бодох" },
-      { key: "bodokhKhonog", label: "Ирээдүйд ашиглах хоног" },
+      { key: "bodokhKhonog", label: "Ашиглалт хоногоор тооцох" },
     ];
     req.body.fileName = req.body.fileName || `Оршин_суугчдын_жагсаалт_${Date.now()}`;
     req.body.sheetName = req.body.sheetName || "Оршин суугчид";
@@ -1375,7 +1375,7 @@ exports.generateExcelTemplate = asyncHandler(async (req, res, next) => {
       "Эхний үлдэгдэл",
       "Цахилгаан квт",
       "Хоногоор бодох",
-      "Ашиглах хоног",
+      "Ашиглалт хоногоор тооцох",
     ];
 
     let workbook = new excel.Workbook();
@@ -1634,8 +1634,11 @@ exports.importUsersFromExcel = asyncHandler(async (req, res, next) => {
           khonogoorBodokhEsekh:
             row["Хоногоор бодох"] === true ||
             String(row["Хоногоор бодох"]).toLowerCase() === "true" ||
-            String(row["Хоногоор бодох"]).toLowerCase() === "тийм",
-          bodokhKhonog: parseInt(row["Ашиглах хоног"]) || parseInt(row["Ирээдүйд ашиглах хоног"]) || parseInt(row["Эхний сарын ашиглах хоног"]) || 0,
+            String(row["Хоногоор бодох"]).toLowerCase() === "тийм" ||
+            row["Ашиглалт хоногоор тооцох"] === true ||
+            String(row["Ашиглалт хоногоор тооцох"]).toLowerCase() === "тийм" ||
+            parseInt(row["Ашиглалт хоногоор тооцох"]) > 0,
+          bodokhKhonog: parseInt(row["Ашиглалт хоногоор тооцох"]) || parseInt(row["Ашиглах хоног"]) || parseInt(row["Ирээдүйд ашиглах хоног"]) || parseInt(row["Эхний сарын ашиглах хоног"]) || 0,
           // New red-section columns
           garaazhToot: row["Гараж тоот"]?.toString().trim() || "",
           aguulakhToot: row["Агуулах тоот"]?.toString().trim() || "",
@@ -3328,15 +3331,15 @@ async function ezemshigchdiigOloy(gereenuud) {
   const [orshinSuugchid, khariltsagchid] = await Promise.all([
     orshinSuugchiinIdnuud.length
       ? OrshinSuugch(db.erunkhiiKholbolt)
-          .find({ _id: { $in: orshinSuugchiinIdnuud } })
-          .select("_id ovog ner utas")
-          .lean()
+        .find({ _id: { $in: orshinSuugchiinIdnuud } })
+        .select("_id ovog ner utas")
+        .lean()
       : [],
     khariltsagchiinIdnuud.length
       ? Khariltsagch(db.erunkhiiKholbolt)
-          .find({ _id: { $in: khariltsagchiinIdnuud } })
-          .select("_id ovog ner utas")
-          .lean()
+        .find({ _id: { $in: khariltsagchiinIdnuud } })
+        .select("_id ovog ner utas")
+        .lean()
       : [],
   ]);
 
@@ -3756,8 +3759,8 @@ exports.importInitialBalanceFromExcel = asyncHandler(async (req, res, next) => {
           const zardalTailbar =
             isGeneral && expenseColHeaders.length === 1
               ? (songosonZardal
-                  ? `Excel-ээр оруулсан эхний үлдэгдэл (${songosonZardal})`
-                  : "Excel-ээр оруулсан эхний үлдэгдэл")
+                ? `Excel-ээр оруулсан эхний үлдэгдэл (${songosonZardal})`
+                : "Excel-ээр оруулсан эхний үлдэгдэл")
               : isGeneral
                 ? "Excel-ээр оруулсан эхний үлдэгдэл"
                 : `Excel-ээр оруулсан эхний үлдэгдэл (${colName})`;

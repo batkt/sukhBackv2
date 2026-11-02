@@ -312,7 +312,7 @@ function murniiUtgaUnshiya(mur) {
     khonogoorBodokhEsekh: tiimEsekh(nudUnshiya(mur, "Хоногоор бодох")),
     bodokhKhonog:
       parseInt(
-        nudUnshiya(mur, "Ирээдүйд ашиглах хоног", "Ашиглах хоног"),
+        nudUnshiya(mur, "Ашиглалт хоногоор тооцох", "Ирээдүйд ашиглах хоног", "Ашиглах хоног"),
         10,
       ) || 0,
     aldaanuud,
