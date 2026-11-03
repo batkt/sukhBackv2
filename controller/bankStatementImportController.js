@@ -7,6 +7,7 @@ const Baiguullaga = require("../models/baiguullaga");
 const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
 const guilgeeService = require("../services/guilgeeService");
 const aldaa = require("../components/aldaa");
+const BankniiTulgaltDurem = require("../models/bankniiTulgaltDurem");
 
 /**
  * Helper to ensure model connection object has .kholbolt property
@@ -818,11 +819,14 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
         const tootCandidate = String(r.detectedToot || "").trim();
 
         if (!targetGereeId && tootCandidate) {
-          const foundGeree = await GereeModel.findOne({
+          const gereeQuery = {
             baiguullagiinId: String(baiguullagiinId),
             toot: tootCandidate,
             tuluv: "Идэвхтэй",
-          }).lean();
+          };
+          const targetBarilga = r.barilgiinId || barilgiinId;
+          if (targetBarilga) gereeQuery.barilgiinId = String(targetBarilga);
+          const foundGeree = await GereeModel.findOne(gereeQuery).lean();
           if (foundGeree) {
             targetGereeId = String(foundGeree._id);
           }
@@ -843,11 +847,14 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
           } else {
             let gereeDoc = await GereeModel.findById(targetGereeId).lean();
             if (!gereeDoc && tootCandidate) {
-              gereeDoc = await GereeModel.findOne({
+              const gereeQuery = {
                 baiguullagiinId: String(baiguullagiinId),
                 toot: tootCandidate,
                 tuluv: "Идэвхтэй",
-              }).lean();
+              };
+              const targetBarilga = r.barilgiinId || barilgiinId;
+              if (targetBarilga) gereeQuery.barilgiinId = String(targetBarilga);
+              gereeDoc = await GereeModel.findOne(gereeQuery).lean();
             }
 
             if (gereeDoc) {
@@ -894,6 +901,41 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
               );
 
               paidCount++;
+
+              // Save learned rule for future statements
+              if (r.relatedAccount || r.accName) {
+                const payerKey = cleanStr(r.relatedAccount || r.accName || "");
+                if (payerKey) {
+                  try {
+                    const DuremModel = BankniiTulgaltDurem(safeConn);
+                    const duremQuery = { baiguullagiinId: String(baiguullagiinId) };
+                    if (r.relatedAccount) duremQuery.accNum = String(r.relatedAccount).trim();
+                    else duremQuery.payerKey = payerKey;
+
+                    await DuremModel.findOneAndUpdate(
+                      duremQuery,
+                      {
+                        $set: {
+                          baiguullagiinId: String(baiguullagiinId),
+                          barilgiinId: String(gereeDoc.barilgiinId || barilgiinId || ""),
+                          accNum: r.relatedAccount ? String(r.relatedAccount).trim() : undefined,
+                          accName: r.accName || undefined,
+                          payerKey,
+                          bairNer: gereeDoc.bairNer || r.building || "",
+                          toot: String(gereeDoc.toot || tootStr || "").trim(),
+                          gereeId: String(gereeDoc._id),
+                          residentName: gereeDoc.ner || "",
+                          lastConfirmedAt: new Date(),
+                        },
+                        $inc: { confirmedCount: 1 },
+                      },
+                      { upsert: true }
+                    );
+                  } catch (dErr) {
+                    console.warn("Durem save notice:", dErr.message);
+                  }
+                }
+              }
             } else {
               console.warn(`⚠️ [EXCEL IMPORT] Geree not found for targetGereeId: ${targetGereeId}, toot: ${tootCandidate}`);
             }
@@ -945,4 +987,56 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
       aldaa: error.message || "Гүйлгээ баталгаажуулахад алдаа гарлаа",
     });
   }
+});
+
+/**
+ * GET /bankniiGuilgee/tulgaltDurem
+ * Байгууллагын хувьд баталгаажсан тулгалтын дүрмүүдийг авах
+ */
+exports.getTulgaltDurem = asyncHandler(async (req, res, next) => {
+  const baiguullagiinId = req.query.baiguullagiinId || req.body.nevtersenAjiltniiToken?.baiguullagiinId;
+  if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон байна");
+  const safeConn = getSafeConnection(req.body.tukhainBaaziinKholbolt, baiguullagiinId);
+  const Model = BankniiTulgaltDurem(safeConn);
+  const rules = await Model.find({ baiguullagiinId }).lean();
+  res.json({ success: true, rules });
+});
+
+/**
+ * POST /bankniiGuilgee/saveTulgaltDurem
+ * Тулгалтын дүрмийг гараар батлах / хадгалах
+ */
+exports.saveTulgaltDurem = asyncHandler(async (req, res, next) => {
+  const baiguullagiinId = req.body.baiguullagiinId || req.body.nevtersenAjiltniiToken?.baiguullagiinId;
+  const { accNum, accName, bairNer, toot, gereeId, residentName, barilgiinId } = req.body;
+  if (!baiguullagiinId || !gereeId) throw new aldaa("Дутуу мэдээлэл");
+  const safeConn = getSafeConnection(req.body.tukhainBaaziinKholbolt, baiguullagiinId);
+  const Model = BankniiTulgaltDurem(safeConn);
+  const payerKey = cleanStr(accNum || accName || "");
+  if (!payerKey) throw new aldaa("Данс эсвэл нэр заавал шаардлагатай");
+
+  const query = { baiguullagiinId };
+  if (accNum) query.accNum = String(accNum).trim();
+  else query.payerKey = payerKey;
+
+  const rule = await Model.findOneAndUpdate(
+    query,
+    {
+      $set: {
+        baiguullagiinId,
+        barilgiinId: barilgiinId ? String(barilgiinId) : undefined,
+        accNum: accNum ? String(accNum).trim() : undefined,
+        accName: accName || undefined,
+        payerKey,
+        bairNer,
+        toot: String(toot || "").trim(),
+        gereeId: String(gereeId),
+        residentName,
+        lastConfirmedAt: new Date(),
+      },
+      $inc: { confirmedCount: 1 },
+    },
+    { upsert: true, new: true }
+  );
+  res.json({ success: true, rule });
 });

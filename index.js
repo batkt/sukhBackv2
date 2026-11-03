@@ -132,6 +132,31 @@ process.env.UV_THREADPOOL_SIZE = 20;
     db.kholboltUusgey(app, MONGODB_URI);
     console.log("✅ MongoDB initialization started");
 
+    // Нэг эрхээр нэвтэрсэн хэрэглэгчид бие биенээ өшиглөж гаргахаас сэргийлж,
+    // бүх байгууллагын олон төхөөрөмж зөвшөөрөх тохиргоог бататгах
+    setTimeout(async () => {
+      try {
+        const Baiguullaga = require("./models/baiguullaga")(db.erunkhiiKholbolt);
+        await Baiguullaga.updateMany(
+          {
+            $or: [
+              { "tokhirgoo.negSessionEsekh": { $ne: false } },
+              { "tokhirgoo.olonTokhooromjZuvshuurukh": { $ne: true } },
+            ],
+          },
+          {
+            $set: {
+              "tokhirgoo.negSessionEsekh": false,
+              "tokhirgoo.olonTokhooromjZuvshuurukh": true,
+            },
+          },
+        );
+        console.log("✅ [INIT] Organization session policy initialized (multiple devices per account allowed by default)");
+      } catch (err) {
+        console.warn("Notice: Org session policy init:", err.message);
+      }
+    }, 5000);
+
     // --- DISABLE BROWSER CACHING ---
     app.use((req, res, next) => {
       res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");

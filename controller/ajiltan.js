@@ -1328,7 +1328,8 @@ exports.sessionUusgekh = asyncHandler(
       const Session = session(db.erunkhiiKholbolt);
 
       // Байгууллагын «1 эрхээр зөвхөн 1 төхөөрөмжнөөс хандах» тохиргоог шалгах
-      let negSessionEsekh = true;
+      // Анхдагчаар олон төхөөрөмж зөвшөөрөгдөнө (negSessionEsekh = false).
+      let negSessionEsekh = false;
       if (baiguullagiinId) {
         try {
           const Baiguullaga = require("../models/baiguullaga")(db.erunkhiiKholbolt);
@@ -1339,10 +1340,10 @@ exports.sessionUusgekh = asyncHandler(
             })
             .lean();
           if (
-            org?.tokhirgoo?.negSessionEsekh === false ||
-            org?.tokhirgoo?.olonTokhooromjZuvshuurukh === true
+            org?.tokhirgoo?.negSessionEsekh === true &&
+            !org?.tokhirgoo?.olonTokhooromjZuvshuurukh
           ) {
-            negSessionEsekh = false;
+            negSessionEsekh = true;
           }
         } catch (orgErr) {
           console.error(

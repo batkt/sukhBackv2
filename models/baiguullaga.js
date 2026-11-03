@@ -242,11 +242,11 @@ const baiguullagaSchema = new Schema(
        */
       negSessionEsekh: {
         type: Boolean,
-        default: true,
+        default: false,
       },
       olonTokhooromjZuvshuurukh: {
         type: Boolean,
-        default: false,
+        default: true,
       },
       /**Хоногт бодох алдангийн хувь дээд тал 0.5 байна */
       aldangiinKhuvi: Number,

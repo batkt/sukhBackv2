@@ -61,7 +61,7 @@ const orgSanakh = new Map();
 const ORG_SANAKH_MS = 15000;
 
 async function negSessionIdevkhteiEsekh(baiguullagiinId) {
-  if (!baiguullagiinId) return true;
+  if (!baiguullagiinId) return false;
   const key = String(baiguullagiinId);
   const odoo = Date.now();
   const cached = orgSanakh.get(key);
@@ -79,9 +79,11 @@ async function negSessionIdevkhteiEsekh(baiguullagiinId) {
       })
       .lean();
 
-    // negSessionEsekh: false эсвэл olonTokhooromjZuvshuurukh: true үед хязгаарлалт унтраалттай
+    // Зөвхөн байгууллагын тохиргоонд «1 эрхээр зөвхөн 1 төхөөрөмж» (negSessionEsekh === true)
+    // гэж тусгайлан сонгосон үед л хязгаарлана. Анхдагчаар (false эсвэл тохируулаагүй үед)
+    // 1 эрхээр олон төхөөрөмжнөөс зэрэг хандахыг зөвшөөрч, өөр хэрэглэгчийг системээс гаргахгүй.
     const negSessionEsekh =
-      org?.tokhirgoo?.negSessionEsekh !== false &&
+      org?.tokhirgoo?.negSessionEsekh === true &&
       !org?.tokhirgoo?.olonTokhooromjZuvshuurukh;
 
     if (orgSanakh.size > 2000) orgSanakh.clear();
@@ -92,7 +94,7 @@ async function negSessionIdevkhteiEsekh(baiguullagiinId) {
       "[negSession] байгууллагын тохиргоо уншихад алдаа:",
       aldaa.message,
     );
-    return true;
+    return false;
   }
 }
 
