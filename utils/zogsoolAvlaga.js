@@ -115,8 +115,8 @@ async function zogsoolAvlagaUusgey(kholbolt, data) {
   const toot = String(data.toot || "").trim();
   if (!toot) return { success: false, message: "Гараж/агуулахын дугаар хоосон байна" };
 
-  const dun = await tolboriinDun(data.baiguullagiinId, data.barilgiinId, turul);
-  if (!(dun > 0)) {
+  const baseDun = await tolboriinDun(data.baiguullagiinId, data.barilgiinId, turul);
+  if (!(baseDun > 0)) {
     return {
       success: false,
       message: `${turul === "Агуулах" ? "Агуулахын" : "Гаражийн"} төлбөрийн дүн тохируулагдаагүй байна (Тохиргоо → Нэмэлт тохиргоо).`,
@@ -132,23 +132,13 @@ async function zogsoolAvlagaUusgey(kholbolt, data) {
 
   // Энэ сард тухайн гаражид аль ч эх сурвалжаас (гар/сарын нэхэмжлэх) нэхэмжилсэн эсэх
   const GuilgeeModel = GuilgeeAvlaguud(kholbolt);
-  const ezenId = geree.orshinSuugchId || data.orshinSuugchId;
+  const ezenId = geree.orshinSuugchId || data.orshinSuugchId || geree.khariltsagchId || data.khariltsagchId;
   const barilgiinIdKhayg = String(data.barilgiinId || geree.barilgiinId || "");
   const umnukhuud = await GuilgeeModel.find({
     $or: [
       { gereeniiId: String(geree._id) },
       ...(ezenId ? [{ orshinSuugchId: String(ezenId) }] : []),
       // БАРИЛГЫН тухайн ТООТОД энэ сард бичигдсэн АЛЬ Ч мөр.
-      //
-      // Сарын нэхэмжлэх (`invoiceService`) нь зогсоолын мөрөө ОРОН СУУЦНЫ
-      // гэрээн дээр бичдэг бол `gereeOlyo` нь гаражийн `nemeltTootnuud`-аар
-      // ӨӨР гэрээ олж болно. Тэр үед дээрх хоёр нөхцөл аль нь ч таарахгүй
-      // тул нэг гаражид НЭГ сард ХОЁР төлбөр бичигддэг байв (эзэмшигч
-      // холбох үйлдэл нь энэ функцийг автоматаар дууддаг).
-      //
-      // Гаражийн дугаар нэг барилгын дотор ДАВТАГДАХГҮЙ тул барилга+тоотоор
-      // шалгахад хангалттай. Доорх `angilliinMur`/`murniiToot` шүүлт нь
-      // зогсоол/агуулахын ангиллыг нь салгана.
       ...(barilgiinIdKhayg
         ? [{ barilgiinId: barilgiinIdKhayg, toot: String(toot) }]
         : []),
@@ -166,6 +156,79 @@ async function zogsoolAvlagaUusgey(kholbolt, data) {
       gereeniiId: String(geree._id),
       message: "Энэ сарын нэхэмжлэх аль хэдийн илгээгдсэн байна",
     };
+  }
+
+  // Хоногоор хувааж бодох тооцоолол
+  const { db } = require("zevbackv2");
+  const b = await Baiguullaga(db.erunkhiiKholbolt).findById(data.baiguullagiinId).lean();
+  const barilga = b?.barilguud?.find((x) => String(x._id) === String(data.barilgiinId || geree.barilgiinId || ""));
+  const t = barilga?.tokhirgoo || {};
+
+  const totalDaysInMonth = new Date(ognoo.getFullYear(), ognoo.getMonth() + 1, 0).getDate();
+
+  let prorateEnabled = false;
+  let arga = "Хуанли";
+  let fixedDays = 30;
+
+  if (turul === "Агуулах") {
+    prorateEnabled = t.aguulakhTolborBodokhArgaEnabled !== undefined
+      ? !!t.aguulakhTolborBodokhArgaEnabled
+      : !!t.bodokhArgaEnabled;
+    arga = t.aguulakhTolborArga || t.bodokhArga || "Хуанли";
+    fixedDays = Number(t.aguulakhTolborKhonog || t.bodokhKhonog || 30);
+  } else {
+    prorateEnabled = t.garsiinTolborBodokhArgaEnabled !== undefined
+      ? !!t.garsiinTolborBodokhArgaEnabled
+      : !!t.bodokhArgaEnabled;
+    arga = t.garsiinTolborArga || t.bodokhArga || "Хуанли";
+    fixedDays = Number(t.garsiinTolborKhonog || t.bodokhKhonog || 30);
+  }
+
+  const denominator = arga === "Тогтмол" ? fixedDays : totalDaysInMonth;
+
+  let unitToot = null;
+  let isClient = !!(geree.khariltsagchId || data.khariltsagchId);
+  if (ezenId) {
+    try {
+      const OrshinSuugch = require("../models/orshinSuugch");
+      const Khariltsagch = require("../models/khariltsagch");
+      const os = await OrshinSuugch(db.erunkhiiKholbolt).findById(String(ezenId)).lean();
+      if (os) {
+        unitToot = (os?.toots || []).find(
+          (x) => String(x.toot || "").trim() === String(toot) &&
+                 ["Гараж", "Зогсоол", "Агуулах"].includes(x.turul)
+        );
+      }
+      if (!unitToot) {
+        const cl = await Khariltsagch(db.erunkhiiKholbolt).findById(String(ezenId)).lean();
+        if (cl) {
+          isClient = true;
+          unitToot = (cl?.toots || []).find(
+            (x) => String(x.toot || "").trim() === String(toot) &&
+                   ["Гараж", "Зогсоол", "Агуулах"].includes(x.turul)
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
+  let bodokhKhonog = 0;
+  if (data.bodokhKhonog !== undefined && Number(data.bodokhKhonog) > 0) {
+    bodokhKhonog = Number(data.bodokhKhonog);
+  } else if (unitToot?.khonogoorBodokhEsekh && Number(unitToot.bodokhKhonog) > 0) {
+    bodokhKhonog = Number(unitToot.bodokhKhonog);
+  } else if (geree.khonogoorBodokhEsekh && Number(geree.bodokhKhonog) > 0) {
+    bodokhKhonog = Number(geree.bodokhKhonog);
+  } else if (prorateEnabled) {
+    // Хэрэв сарын дундуур үүсэж байгаа бол тухайн огнооноос сар дуусталх хоногоор бодно
+    if (ognoo.getDate() > 1) {
+      bodokhKhonog = totalDaysInMonth - ognoo.getDate() + 1;
+    }
+  }
+
+  let dun = baseDun;
+  if (prorateEnabled && bodokhKhonog > 0 && denominator > 0) {
+    dun = Math.round(baseDun * (bodokhKhonog / denominator));
   }
 
   const guilgeeService = require("../services/guilgeeService");
@@ -187,6 +250,19 @@ async function zogsoolAvlagaUusgey(kholbolt, data) {
     guilgeeKhiisenAjiltniiNer: data.ajiltanNer || "Систем",
     guilgeeKhiisenAjiltniiId: data.ajiltanId || "",
   });
+
+  // Нэг удаагийн хоногоор бодох тугийг буцааж цэвэрлэх
+  if (unitToot?.khonogoorBodokhEsekh && ezenId) {
+    try {
+      const Model = isClient
+        ? require("../models/khariltsagch")(db.erunkhiiKholbolt)
+        : require("../models/orshinSuugch")(db.erunkhiiKholbolt);
+      await Model.updateOne(
+        { _id: String(ezenId), "toots._id": unitToot._id },
+        { $set: { "toots.$.khonogoorBodokhEsekh": false, "toots.$.bodokhKhonog": 0 } }
+      );
+    } catch (_) {}
+  }
 
   return {
     success: true,
@@ -283,18 +359,22 @@ async function khariltsagchiinGaraashNekhemjlekhUusgey(kholbolt, {
   const urDun = [];
   const garaashuud = (Array.isArray(toots) ? toots : []).filter((t) => {
     const turul = String(t?.turul || "").trim();
-    if (turul !== "Гараж" && turul !== "Зогсоол") return false;
+    if (turul !== "Гараж" && turul !== "Зогсоол" && turul !== "Агуулах") return false;
     if (!String(t?.toot || "").trim()) return false;
     return !barilgiinId || !t.barilgiinId || String(t.barilgiinId) === String(barilgiinId);
   });
   for (const g of garaashuud) {
     try {
+      const gTurul = String(g.turul || "").trim() === "Агуулах" ? "Агуулах" : "Зогсоол";
       const ur = await zogsoolAvlagaUusgey(kholbolt, {
         baiguullagiinId,
         barilgiinId: barilgiinId || g.barilgiinId,
         khariltsagchId: String(khariltsagchId),
         toot: String(g.toot).trim(),
-        turul: "Зогсоол",
+        turul: gTurul,
+        bodokhKhonog: g.bodokhKhonog,
+        khonogoorBodokhEsekh: g.khonogoorBodokhEsekh,
+        ognoo: g.avlagaUusekhOgnoo || g.burtguulsenOgnoo,
         ajiltanId,
         ajiltanNer,
       });

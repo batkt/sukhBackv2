@@ -16,18 +16,19 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
 
   // Зогсоол/агуулахын гэрээнд орон сууцны ашиглалтын зардал нэхэмжлэхгүй
   // (гэрээнд буруу хуулагдсан хуучин өгөгдлийг ч энд шүүнэ).
+  let contractTootTurul = "Орон сууц";
   {
     const { gereeniiTootTurul, zardluudShuuye, OR_SUUTS, khariltsagchiinZardalSongolt } = require("../utils/zardalAngilal");
-    const tootTurul = await gereeniiTootTurul(geree);
+    contractTootTurul = await gereeniiTootTurul(geree);
     // Харилцагч зардлаа гараар сонгосон бол гэрээний зардлууд нь тэр
     // сонголтыг аль хэдийн тусгасан — төрлөөр дахин шүүвэл сонгосон
     // «Цэвэрлэгээ» гаражийн гэрээнээс унана.
-    const songolt = tootTurul !== OR_SUUTS ? await khariltsagchiinZardalSongolt(geree) : null;
-    if (tootTurul !== OR_SUUTS && !songolt) {
+    const songolt = contractTootTurul !== OR_SUUTS ? await khariltsagchiinZardalSongolt(geree) : null;
+    if (contractTootTurul !== OR_SUUTS && !songolt) {
       const ekh = geree.toObject ? geree.toObject() : geree;
-      const shuusen = zardluudShuuye(ekh.zardluud, tootTurul);
+      const shuusen = zardluudShuuye(ekh.zardluud, contractTootTurul);
       if (shuusen.length !== (ekh.zardluud || []).length) {
-        console.log(`🅿️ [calculateGereeCharges] ${tootTurul} гэрээ — ${(ekh.zardluud || []).length - shuusen.length} орон сууцны зардлыг хасав`);
+        console.log(`🅿️ [calculateGereeCharges] ${contractTootTurul} гэрээ — ${(ekh.zardluud || []).length - shuusen.length} орон сууцны зардлыг хасав`);
       }
       geree = { ...ekh, zardluud: shuusen };
     }
@@ -38,11 +39,36 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
 
   const charges = [];
   const totalDaysInMonth = getDaysInMonth(options.billingDate || new Date());
-  const denominator = barilga?.tokhirgoo?.bodokhArga === "Тогтмол"
-    ? (barilga.tokhirgoo.bodokhKhonog || 30)
-    : totalDaysInMonth;
 
-  const isProratingEnabled = !!barilga?.tokhirgoo?.bodokhArgaEnabled;
+  let bodokhArga = barilga?.tokhirgoo?.bodokhArga;
+  let fixedDays = barilga?.tokhirgoo?.bodokhKhonog;
+  let isProratingEnabled = !!barilga?.tokhirgoo?.bodokhArgaEnabled;
+
+  if (contractTootTurul === "Гараж") {
+    if (barilga?.tokhirgoo?.garsiinTolborBodokhArgaEnabled !== undefined) {
+      isProratingEnabled = !!barilga.tokhirgoo.garsiinTolborBodokhArgaEnabled;
+    }
+    if (barilga?.tokhirgoo?.garsiinTolborArga) {
+      bodokhArga = barilga.tokhirgoo.garsiinTolborArga;
+    }
+    if (barilga?.tokhirgoo?.garsiinTolborKhonog) {
+      fixedDays = barilga.tokhirgoo.garsiinTolborKhonog;
+    }
+  } else if (contractTootTurul === "Агуулах") {
+    if (barilga?.tokhirgoo?.aguulakhTolborBodokhArgaEnabled !== undefined) {
+      isProratingEnabled = !!barilga.tokhirgoo.aguulakhTolborBodokhArgaEnabled;
+    }
+    if (barilga?.tokhirgoo?.aguulakhTolborArga) {
+      bodokhArga = barilga.tokhirgoo.aguulakhTolborArga;
+    }
+    if (barilga?.tokhirgoo?.aguulakhTolborKhonog) {
+      fixedDays = barilga.tokhirgoo.aguulakhTolborKhonog;
+    }
+  }
+
+  const denominator = bodokhArga === "Тогтмол"
+    ? (fixedDays || 30)
+    : totalDaysInMonth;
 
   const shouldProrate = (isProratingEnabled || geree.khonogoorBodokhEsekh) && geree.khonogoorBodokhEsekh && geree.bodokhKhonog > 0;
   const prorateFactor = shouldProrate
@@ -264,6 +290,14 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
 
       if (resident && Array.isArray(resident.toots)) {
         if (gEnabled && gValue > 0) {
+          const gProrateEnabled = barilga?.tokhirgoo?.garsiinTolborBodokhArgaEnabled !== undefined
+            ? !!barilga.tokhirgoo.garsiinTolborBodokhArgaEnabled
+            : isProratingEnabled;
+          const gMethod = barilga?.tokhirgoo?.garsiinTolborArga || barilga?.tokhirgoo?.bodokhArga || "Хуанли";
+          const gDenominator = gMethod === "Тогтмол"
+            ? (barilga?.tokhirgoo?.garsiinTolborKhonog || barilga?.tokhirgoo?.bodokhKhonog || 30)
+            : totalDaysInMonth;
+
           const parkingSlots = resident.toots.filter((t) => {
             const isG = t.turul === "Гараж" || t.turul === "Зогсоол";
             if (!isG) return false;
@@ -276,9 +310,17 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
             const parkingName = `зогсоол (тоот ${p.toot})`.toLowerCase();
             const hasExisting = Array.from(existingAvlaguudNames).some((n) => /зогсоол|гараж|гараш/.test(n) && tootTaarakh(n, p.toot));
             if (!hasExisting) {
+              let pDun = gValue;
+              const pDays = (p.khonogoorBodokhEsekh && Number(p.bodokhKhonog) > 0)
+                ? Number(p.bodokhKhonog)
+                : (shouldProrate && geree.bodokhKhonog > 0 ? Number(geree.bodokhKhonog) : 0);
+              if (gProrateEnabled && pDays > 0) {
+                pDun = Math.round(gValue * (pDays / gDenominator));
+              }
+
               charges.push({
                 ner: `Зогсоолын төлбөр (тоот ${p.toot})`,
-                dun: gValue,
+                dun: pDun,
                 turul: "Авлага",
                 zardliinTurul: "Зогсоол",
                 // Гаражийн дугаар — өмнө нь орон сууцны тоот бичигддэг байсан тул
@@ -290,6 +332,14 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
         }
 
         if (sEnabled && sValue > 0) {
+          const sProrateEnabled = barilga?.tokhirgoo?.aguulakhTolborBodokhArgaEnabled !== undefined
+            ? !!barilga.tokhirgoo.aguulakhTolborBodokhArgaEnabled
+            : isProratingEnabled;
+          const sMethod = barilga?.tokhirgoo?.aguulakhTolborArga || barilga?.tokhirgoo?.bodokhArga || "Хуанли";
+          const sDenominator = sMethod === "Тогтмол"
+            ? (barilga?.tokhirgoo?.aguulakhTolborKhonog || barilga?.tokhirgoo?.bodokhKhonog || 30)
+            : totalDaysInMonth;
+
           const storageSlots = resident.toots.filter((t) => {
             const isS = t.turul === "Агуулах";
             if (!isS) return false;
@@ -302,9 +352,17 @@ async function calculateGereeCharges(kholbolt, geree, options = {}) {
             const storageName = `агуулах (тоот ${s.toot})`.toLowerCase();
             const hasExisting = Array.from(existingAvlaguudNames).some((n) => n.includes(`агуулах`) && tootTaarakh(n, s.toot));
             if (!hasExisting) {
+              let sDun = sValue;
+              const sDays = (s.khonogoorBodokhEsekh && Number(s.bodokhKhonog) > 0)
+                ? Number(s.bodokhKhonog)
+                : (shouldProrate && geree.bodokhKhonog > 0 ? Number(geree.bodokhKhonog) : 0);
+              if (sProrateEnabled && sDays > 0) {
+                sDun = Math.round(sValue * (sDays / sDenominator));
+              }
+
               charges.push({
                 ner: `Агуулахын төлбөр (тоот ${s.toot})`,
-                dun: sValue,
+                dun: sDun,
                 turul: "Авлага",
                 zardliinTurul: "Агуулах",
                 toot: String(s.toot),
@@ -627,7 +685,12 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
               String(t.barilgiinId) === String(geree.barilgiinId) && 
               String(t.baiguullagiinId) === String(geree.baiguullagiinId)
             );
-            if (t.khonogoorBodokhEsekh && (isMainMatch || isNemeltMatch)) {
+            const isSlotMatch = ["Гараж", "Зогсоол", "Агуулах"].includes(t.turul) && (
+              (t.gereeniiId && String(t.gereeniiId) === String(geree._id)) ||
+              (t.linkedAptToot && String(t.linkedAptToot).trim() === String(geree.toot).trim()) ||
+              String(geree.toot).trim() === String(resident.toot).trim()
+            );
+            if (t.khonogoorBodokhEsekh && (isMainMatch || isNemeltMatch || isSlotMatch)) {
               tootsChanged = true;
               t.khonogoorBodokhEsekh = false;
               t.bodokhKhonog = 0;
@@ -653,7 +716,12 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
               String(t.barilgiinId) === String(geree.barilgiinId) && 
               String(t.baiguullagiinId) === String(geree.baiguullagiinId)
             );
-            if (t.khonogoorBodokhEsekh && (isMainMatch || isNemeltMatch)) {
+            const isSlotMatch = ["Гараж", "Зогсоол", "Агуулах"].includes(t.turul) && (
+              (t.gereeniiId && String(t.gereeniiId) === String(geree._id)) ||
+              (t.linkedAptToot && String(t.linkedAptToot).trim() === String(geree.toot).trim()) ||
+              String(geree.toot).trim() === String(client.toot).trim()
+            );
+            if (t.khonogoorBodokhEsekh && (isMainMatch || isNemeltMatch || isSlotMatch)) {
               tootsChanged = true;
               t.khonogoorBodokhEsekh = false;
               t.bodokhKhonog = 0;
