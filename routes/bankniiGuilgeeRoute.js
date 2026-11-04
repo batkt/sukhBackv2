@@ -343,6 +343,7 @@ const {
   bankStatementConfirmImport,
   getTulgaltDurem,
   saveTulgaltDurem,
+  getExistingBankRecords,
 } = require("../controller/bankStatementImportController");
 
 router.post(
@@ -378,6 +379,16 @@ router.post(
   "/bankniiGuilgee/saveTulgaltDurem",
   tokenShalgakh,
   saveTulgaltDurem,
+);
+router.get(
+  "/bankniiGuilgee/existingRecords",
+  tokenShalgakh,
+  getExistingBankRecords,
+);
+router.get(
+  "/existingRecords",
+  tokenShalgakh,
+  getExistingBankRecords,
 );
 
 module.exports = router;

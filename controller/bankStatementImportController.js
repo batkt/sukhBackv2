@@ -774,8 +774,50 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
         if (journal && !journal.startsWith("J-") && !journal.startsWith("EXCEL-")) {
           existingBankRecord = await BankniiGuilgeeModel.findOne({
             baiguullagiinId: String(baiguullagiinId),
-            $or: [{ record: journal }, { tranId: journal }],
+            $or: [
+              { record: journal },
+              { tranId: journal },
+              { recNum: journal },
+              { jrno: journal },
+              { NtryRef: journal },
+              { refno: journal },
+              { journal: journal }
+            ],
           });
+        }
+
+        // Fallback compound match if journal wasn't found or was synthetic
+        if (!existingBankRecord && postDate && amount) {
+          const startOfDay = new Date(postDate);
+          startOfDay.setHours(0, 0, 0, 0);
+          const endOfDay = new Date(postDate);
+          endOfDay.setHours(23, 59, 59, 999);
+
+          const compoundQuery = {
+            baiguullagiinId: String(baiguullagiinId),
+            $or: [
+              { amount: signedAmount },
+              { Amt: signedAmount },
+              { tranAmount: amount },
+              { income: isOrlogo ? amount : 0 }
+            ],
+            $and: [
+              {
+                $or: [
+                  { postDate: { $gte: startOfDay, $lte: endOfDay } },
+                  { tranDate: { $gte: startOfDay, $lte: endOfDay } }
+                ]
+              }
+            ]
+          };
+
+          if (r.relatedAccount) {
+            compoundQuery.relatedAccount = String(r.relatedAccount).trim();
+          } else if (r.description && r.description.length > 5) {
+            compoundQuery.description = r.description;
+          }
+
+          existingBankRecord = await BankniiGuilgeeModel.findOne(compoundQuery);
         }
 
         let savedBankGuilgee = null;
@@ -835,10 +877,27 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
         const shouldPay = (r.action === "IMPORT_AND_PAY" || (!r.action && targetGereeId) || targetGereeId) && targetGereeId;
 
         if (shouldPay) {
+          const startOfDay = new Date(postDate);
+          startOfDay.setHours(0, 0, 0, 0);
+          const endOfDay = new Date(postDate);
+          endOfDay.setHours(23, 59, 59, 999);
+
+          const paymentOrList = [];
+          if (savedBankGuilgee?._id) {
+            paymentOrList.push({
+              bankniiGuilgeeId: String(savedBankGuilgee._id),
+              gereeniiId: String(targetGereeId)
+            });
+          }
+          paymentOrList.push({
+            gereeniiId: String(targetGereeId),
+            ognoo: { $gte: startOfDay, $lte: endOfDay },
+            dun: -Math.abs(amount)
+          });
+
           const existingPayment = await GuilgeeAvlaguudModel.findOne({
             baiguullagiinId: String(baiguullagiinId),
-            bankniiGuilgeeId: String(savedBankGuilgee._id),
-            gereeniiId: String(targetGereeId),
+            $or: paymentOrList
           }).lean();
 
           if (existingPayment) {
@@ -1039,4 +1098,62 @@ exports.saveTulgaltDurem = asyncHandler(async (req, res, next) => {
     { upsert: true, new: true }
   );
   res.json({ success: true, rule });
+});
+
+
+/**
+ * GET /bankniiGuilgee/existingRecords
+ * Fast projection of existing bank records for pre-marking imported rows as "done"
+ */
+exports.getExistingBankRecords = asyncHandler(async (req, res, next) => {
+  const baiguullagiinId =
+    req.query.baiguullagiinId ||
+    req.body.baiguullagiinId ||
+    req.nevtersenAjiltniiToken?.baiguullagiinId;
+
+  if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон байна");
+
+  const safeConn = getSafeConnection(
+    req.body.tukhainBaaziinKholbolt,
+    baiguullagiinId
+  );
+  const BankniiGuilgeeModel = BankniiGuilgee(safeConn, false);
+
+  const query = { baiguullagiinId: String(baiguullagiinId) };
+  if (req.query.barilgiinId) {
+    query.barilgiinId = String(req.query.barilgiinId);
+  }
+
+  const records = await BankniiGuilgeeModel.find(query)
+    .select(
+      "record tranId recNum jrno NtryRef refno journal postDate tranDate time amount Amt tranAmount income description relatedAccount accName kholbosonGereeniiId kholbosonTalbainId tuluv status"
+    )
+    .sort({ postDate: -1, createdAt: -1 })
+    .limit(10000)
+    .lean();
+
+  const formatted = records.map((g) => {
+    const recId = String(
+      g.record || g.tranId || g.recNum || g.jrno || g.NtryRef || g.refno || g.journal || ""
+    ).trim();
+    const d = g.postDate || g.tranDate;
+    const dateStr = d ? new Date(d).toISOString().split("T")[0] : "";
+    const amt = Number(g.amount || g.Amt || g.tranAmount || g.income || 0);
+    const gereeIds = (g.kholbosonGereeniiId || g.kholbosonTalbainId || []).map(String);
+
+    return {
+      _id: String(g._id),
+      record: recId,
+      date: dateStr,
+      time: g.time || "",
+      amount: Math.abs(amt),
+      description: g.description || "",
+      relatedAccount: g.relatedAccount || "",
+      accName: g.accName || "",
+      matchedGereeId: gereeIds[0] || null,
+      status: g.tuluv || g.status || "done",
+    };
+  });
+
+  res.json({ success: true, count: formatted.length, records: formatted });
 });
