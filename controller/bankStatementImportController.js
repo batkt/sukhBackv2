@@ -1084,7 +1084,7 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
 exports.getTulgaltDurem = asyncHandler(async (req, res, next) => {
   const baiguullagiinId = req.query.baiguullagiinId || req.body.nevtersenAjiltniiToken?.baiguullagiinId;
   if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон байна");
-  const safeConn = getSafeConnection(req.body.tukhainBaaziinKholbolt, baiguullagiinId);
+  const safeConn = getSafeConnection(req.tukhainBaaziinKholbolt || req.body?.tukhainBaaziinKholbolt, baiguullagiinId);
   const Model = BankniiTulgaltDurem(safeConn);
   const rules = await Model.find({ baiguullagiinId }).lean();
   res.json({ success: true, rules });
@@ -1098,7 +1098,7 @@ exports.saveTulgaltDurem = asyncHandler(async (req, res, next) => {
   const baiguullagiinId = req.body.baiguullagiinId || req.body.nevtersenAjiltniiToken?.baiguullagiinId;
   const { accNum, accName, bairNer, toot, gereeId, residentName, barilgiinId } = req.body;
   if (!baiguullagiinId || !gereeId) throw new aldaa("Дутуу мэдээлэл");
-  const safeConn = getSafeConnection(req.body.tukhainBaaziinKholbolt, baiguullagiinId);
+  const safeConn = getSafeConnection(req.tukhainBaaziinKholbolt || req.body?.tukhainBaaziinKholbolt, baiguullagiinId);
   const Model = BankniiTulgaltDurem(safeConn);
   const payerKey = cleanStr(accNum || accName || "");
   if (!payerKey) throw new aldaa("Данс эсвэл нэр заавал шаардлагатай");
@@ -1137,15 +1137,21 @@ exports.saveTulgaltDurem = asyncHandler(async (req, res, next) => {
 exports.getExistingBankRecords = asyncHandler(async (req, res, next) => {
   const baiguullagiinId =
     req.query.baiguullagiinId ||
-    req.body.baiguullagiinId ||
+    req.body?.baiguullagiinId ||
     req.nevtersenAjiltniiToken?.baiguullagiinId;
 
-  if (!baiguullagiinId) throw new aldaa("Байгууллагын ID хоосон байна");
+  if (!baiguullagiinId) return res.json({ success: true, count: 0, records: [] });
 
-  const safeConn = getSafeConnection(
-    req.body.tukhainBaaziinKholbolt,
-    baiguullagiinId
-  );
+  let safeConn;
+  try {
+    safeConn = getSafeConnection(
+      req.tukhainBaaziinKholbolt || req.body?.tukhainBaaziinKholbolt,
+      baiguullagiinId
+    );
+  } catch (err) {
+    console.warn("getExistingBankRecords connection fallback:", err?.message);
+    return res.json({ success: true, count: 0, records: [] });
+  }
   const BankniiGuilgeeModel = BankniiGuilgee(safeConn, false);
 
   const query = { baiguullagiinId: String(baiguullagiinId) };

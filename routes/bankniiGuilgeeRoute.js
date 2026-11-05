@@ -14,6 +14,62 @@ const uploadFile = multer({ storage: multer.memoryStorage() });
 //const { crud } = require('../components/crud');
 //const { tokenShalgakh } = require("../middlewares/tokenShalgakh");
 
+// Дансны хуулга: United Ebill / Банкны хуулга Excel-ээр ухаалгаар оруулах (Preview & Auto-Match & Deduplication)
+// ЭДГЭЭРИЙГ crud(router, "bankniiGuilgee")-ээс ӨМНӨ бүртгэх ёстой, эс бөгөөс /bankniiGuilgee/:id-д баригдан 500 aldaa заана!
+const {
+  bankStatementPreview,
+  bankStatementConfirmImport,
+  getTulgaltDurem,
+  saveTulgaltDurem,
+  getExistingBankRecords,
+} = require("../controller/bankStatementImportController");
+
+router.post(
+  "/bankniiGuilgee/excelPreview",
+  uploadFile.single("excel"),
+  tokenShalgakh,
+  bankStatementPreview,
+);
+router.post(
+  "/excelPreview",
+  uploadFile.single("excel"),
+  tokenShalgakh,
+  bankStatementPreview,
+);
+
+router.post(
+  "/bankniiGuilgee/excelConfirmImport",
+  tokenShalgakh,
+  bankStatementConfirmImport,
+);
+router.post(
+  "/excelConfirmImport",
+  tokenShalgakh,
+  bankStatementConfirmImport,
+);
+
+router.get(
+  "/bankniiGuilgee/tulgaltDurem",
+  tokenShalgakh,
+  getTulgaltDurem,
+);
+router.post(
+  "/bankniiGuilgee/saveTulgaltDurem",
+  tokenShalgakh,
+  saveTulgaltDurem,
+);
+router.get(
+  "/bankniiGuilgee/existingRecords",
+  tokenShalgakh,
+  getExistingBankRecords,
+);
+router.get(
+  "/existingRecords",
+  tokenShalgakh,
+  getExistingBankRecords,
+);
+
+
 crud(router, "bankniiGuilgee", (conn) => BankniiGuilgee(conn, false), UstsanBarimt);
 router.post(
   "/bankniiGuilgeeToololtAvya",
@@ -335,60 +391,6 @@ router.post(
   uploadFile.single("file"),
   tokenShalgakh,
   bankniiGuilgeeExcelOruulya,
-);
-
-// Дансны хуулга: United Ebill / Банкны хуулга Excel-ээр ухаалгаар оруулах (Preview & Auto-Match & Deduplication)
-const {
-  bankStatementPreview,
-  bankStatementConfirmImport,
-  getTulgaltDurem,
-  saveTulgaltDurem,
-  getExistingBankRecords,
-} = require("../controller/bankStatementImportController");
-
-router.post(
-  "/bankniiGuilgee/excelPreview",
-  uploadFile.single("excel"),
-  tokenShalgakh,
-  bankStatementPreview,
-);
-router.post(
-  "/excelPreview",
-  uploadFile.single("excel"),
-  tokenShalgakh,
-  bankStatementPreview,
-);
-
-router.post(
-  "/bankniiGuilgee/excelConfirmImport",
-  tokenShalgakh,
-  bankStatementConfirmImport,
-);
-router.post(
-  "/excelConfirmImport",
-  tokenShalgakh,
-  bankStatementConfirmImport,
-);
-
-router.get(
-  "/bankniiGuilgee/tulgaltDurem",
-  tokenShalgakh,
-  getTulgaltDurem,
-);
-router.post(
-  "/bankniiGuilgee/saveTulgaltDurem",
-  tokenShalgakh,
-  saveTulgaltDurem,
-);
-router.get(
-  "/bankniiGuilgee/existingRecords",
-  tokenShalgakh,
-  getExistingBankRecords,
-);
-router.get(
-  "/existingRecords",
-  tokenShalgakh,
-  getExistingBankRecords,
 );
 
 module.exports = router;
