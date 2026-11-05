@@ -771,6 +771,9 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
         }
 
         let existingBankRecord = null;
+        const qpMatch = r.description?.match(/qpay\s*[:#\-]?\s*(\d+)/i);
+        const qpayId = qpMatch ? qpMatch[1] : null;
+
         if (journal && !journal.startsWith("J-") && !journal.startsWith("EXCEL-")) {
           existingBankRecord = await BankniiGuilgeeModel.findOne({
             baiguullagiinId: String(baiguullagiinId),
@@ -784,6 +787,28 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
               { journal: journal }
             ],
           });
+        }
+
+        // QPay specific check: check if already recorded via QPay paymentId in BankniiGuilgee or GuilgeeAvlaguud
+        if (!existingBankRecord && qpayId) {
+          existingBankRecord = await BankniiGuilgeeModel.findOne({
+            baiguullagiinId: String(baiguullagiinId),
+            $or: [
+              { record: qpayId },
+              { tranId: qpayId },
+              { description: new RegExp(qpayId, "i") },
+            ],
+          });
+          if (!existingBankRecord) {
+            const existingLedger = await GuilgeeAvlaguudModel.findOne({
+              baiguullagiinId: String(baiguullagiinId),
+              bankniiGuilgeeId: qpayId,
+            });
+            if (existingLedger) {
+              alreadyExistedCount++;
+              continue; // Skip creating duplicate payment for already processed QPay
+            }
+          }
         }
 
         // Fallback compound match if journal wasn't found or was synthetic
@@ -1140,6 +1165,7 @@ exports.getExistingBankRecords = asyncHandler(async (req, res, next) => {
     const dateStr = d ? new Date(d).toISOString().split("T")[0] : "";
     const amt = Number(g.amount || g.Amt || g.tranAmount || g.income || 0);
     const gereeIds = (g.kholbosonGereeniiId || g.kholbosonTalbainId || []).map(String);
+    const isQPay = g.bank === "qpay" || /qpay/i.test(g.description || "") || /qpay/i.test(recId);
 
     return {
       _id: String(g._id),
@@ -1152,8 +1178,58 @@ exports.getExistingBankRecords = asyncHandler(async (req, res, next) => {
       accName: g.accName || "",
       matchedGereeId: gereeIds[0] || null,
       status: g.tuluv || g.status || "done",
+      bank: g.bank || "",
+      isQPay,
     };
   });
+
+  // Also query QPay ledger records from GuilgeeAvlaguud to ensure all settled QPay payments are included
+  try {
+    const GuilgeeAvlaguudModel = GuilgeeAvlaguud(safeConn, false);
+    const qpayLedger = await GuilgeeAvlaguudModel.find({
+      baiguullagiinId: String(baiguullagiinId),
+      tulsunDun: { $gt: 0 },
+      $or: [
+        { bankniiGuilgeeId: { $exists: true, $ne: "" } },
+        { source: "nekhemjlekh" },
+        { khelber: /qpay/i },
+        { zardliinNer: /qpay/i },
+      ],
+    })
+      .select("bankniiGuilgeeId gereeniiId gereeniiDugaar tulsunDun ognoo toot barilgiinId")
+      .sort({ ognoo: -1 })
+      .limit(5000)
+      .lean();
+
+    if (Array.isArray(qpayLedger) && qpayLedger.length > 0) {
+      qpayLedger.forEach((q) => {
+        const d = q.ognoo;
+        const dateStr = d ? new Date(d).toISOString().split("T")[0] : "";
+        const recId = String(q.bankniiGuilgeeId || "").trim();
+        // Avoid duplicate records if already present
+        if (!formatted.some((f) => f.record && recId && f.record === recId)) {
+          formatted.push({
+            _id: String(q._id),
+            record: recId,
+            date: dateStr,
+            time: "",
+            amount: Number(q.tulsunDun || 0),
+            description: "QPay төлбөр",
+            relatedAccount: "",
+            accName: "",
+            matchedGereeId: String(q.gereeniiId || ""),
+            gereeniiDugaar: String(q.gereeniiDugaar || "").trim(),
+            toot: String(q.toot || "").trim(),
+            status: "done",
+            bank: "qpay",
+            isQPay: true,
+          });
+        }
+      });
+    }
+  } catch (err) {
+    console.warn("Could not query GuilgeeAvlaguud for QPay records:", err?.message);
+  }
 
   res.json({ success: true, count: formatted.length, records: formatted });
 });

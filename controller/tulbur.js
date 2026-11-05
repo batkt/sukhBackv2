@@ -251,6 +251,11 @@ const guilgeeKholbyo = asyncHandler(async (req, res, next) => {
       return res.status(400).json({ error: "Гүйлгээний дүн буруу байна." });
     }
 
+    const garageUnits = (geree.nemeltTootnuud || [])
+      .filter((nt) => String(nt.turul || "").toLowerCase().includes("гараж") || String(nt.turul || "").toLowerCase().includes("garage"))
+      .map((nt) => nt.toot);
+    const garageNote = garageUnits.length > 0 ? ` (Гараж: ${garageUnits.join(", ")})` : "";
+
     // Record payment in GuilgeeAvlaguud (ledger)
     await guilgeeService.recordPayment(tukhainBaaziinKholbolt, {
       baiguullagiinId: String(geree.baiguullagiinId),
@@ -261,7 +266,7 @@ const guilgeeKholbyo = asyncHandler(async (req, res, next) => {
       toot: geree.toot || "",
       ognoo: guilgee.postDate || guilgee.tranDate || guilgee.TxDt || guilgee.txnDate || new Date(),
       dun: -Math.abs(dun),
-      tailbar: `Дансны шилжүүлэг ${geree.toot || ""} тоот`,
+      tailbar: `Дансны шилжүүлэг ${geree.toot || ""} тоот${garageNote}`,
       source: "bank",
       bankniiGuilgeeId: String(guilgee._id),
       dansniiDugaar: guilgee.dansniiDugaar || "",
