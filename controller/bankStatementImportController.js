@@ -902,6 +902,10 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
         const shouldPay = (r.action === "IMPORT_AND_PAY" || (!r.action && targetGereeId) || targetGereeId) && targetGereeId;
 
         if (shouldPay) {
+          const effectivePayAmount = (r.allocation && Number(r.allocation.totalAllocated) > 0)
+            ? Number(r.allocation.totalAllocated)
+            : (Number(r.payAmount) > 0 ? Number(r.payAmount) : amount);
+
           const startOfDay = new Date(postDate);
           startOfDay.setHours(0, 0, 0, 0);
           const endOfDay = new Date(postDate);
@@ -917,7 +921,7 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
           paymentOrList.push({
             gereeniiId: String(targetGereeId),
             ognoo: { $gte: startOfDay, $lte: endOfDay },
-            dun: -Math.abs(amount)
+            dun: -Math.abs(effectivePayAmount)
           });
 
           const existingPayment = await GuilgeeAvlaguudModel.findOne({
@@ -958,7 +962,7 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
                 orshinSuugchId: gereeDoc.orshinSuugchId || "",
                 toot: tootStr,
                 ognoo: postDate,
-                dun: -Math.abs(amount),
+                dun: -Math.abs(effectivePayAmount),
                 tailbar: paymentTailbar,
                 source: "bank",
                 bankniiGuilgeeId: String(savedBankGuilgee._id),
@@ -975,11 +979,11 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
                     kholbosonGereeniiId: String(gereeDoc._id),
                   },
                   $set: {
-                    kholbosonDun: amount,
+                    kholbosonDun: effectivePayAmount,
                     kholbosonAjiltniiNer: ajiltan.ner || "Бүртгэл",
                     kholbosonAjiltniiId: ajiltan.id ? String(ajiltan.id) : "",
-                    tuluv: "Төлсөн",
-                    status: "Холбогдсон",
+                    tuluv: effectivePayAmount >= amount ? "Төлсөн" : "Хэсэгчлэн холбогдсон",
+                    status: effectivePayAmount >= amount ? "Холбогдсон" : "Хэсэгчлэн холбогдсон",
                   },
                 }
               );
