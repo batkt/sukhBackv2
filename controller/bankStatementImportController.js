@@ -902,9 +902,36 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
         const shouldPay = (r.action === "IMPORT_AND_PAY" || (!r.action && targetGereeId) || targetGereeId) && targetGereeId;
 
         if (shouldPay) {
-          const effectivePayAmount = (r.allocation && Number(r.allocation.totalAllocated) > 0)
-            ? Number(r.allocation.totalAllocated)
-            : (Number(r.payAmount) > 0 ? Number(r.payAmount) : amount);
+          let gereeDoc = await GereeModel.findById(targetGereeId).lean();
+          if (!gereeDoc && tootCandidate) {
+            const gereeQuery = {
+              baiguullagiinId: String(baiguullagiinId),
+              toot: tootCandidate,
+              tuluv: "Идэвхтэй",
+            };
+            const targetBarilga = r.barilgiinId || barilgiinId;
+            if (targetBarilga) gereeQuery.barilgiinId = String(targetBarilga);
+            gereeDoc = await GereeModel.findOne(gereeQuery).lean();
+          }
+
+          let effectivePayAmount = 0;
+          if (r.allocation && Number(r.allocation.totalAllocated) > 0) {
+            effectivePayAmount = Number(r.allocation.totalAllocated);
+          } else if (Number(r.allocatedAmount) > 0) {
+            effectivePayAmount = Number(r.allocatedAmount);
+          } else if (Number(r.payAmount) > 0 && Number(r.payAmount) < Number(amount)) {
+            effectivePayAmount = Number(r.payAmount);
+          } else if (r.targetPeriod && /(\d+)\s*сар/.test(r.targetPeriod)) {
+            const mCount = parseInt(r.targetPeriod.match(/(\d+)\s*сар/)[1], 10);
+            const monthlyFee = Number(r.homeAmount || gereeDoc?.suhTulbur || gereeDoc?.ashiglaltiinZardal || 0);
+            if (monthlyFee > 0 && mCount > 0 && amount > monthlyFee * mCount) {
+              effectivePayAmount = monthlyFee * mCount;
+            } else {
+              effectivePayAmount = Number(r.payAmount) > 0 ? Number(r.payAmount) : amount;
+            }
+          } else {
+            effectivePayAmount = Number(r.payAmount) > 0 ? Number(r.payAmount) : amount;
+          }
 
           const startOfDay = new Date(postDate);
           startOfDay.setHours(0, 0, 0, 0);
@@ -933,18 +960,6 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
             console.log(`ℹ️ [EXCEL IMPORT] Payment already recorded in guilgeeAvlaguud: ${existingPayment._id}`);
             paidCount++;
           } else {
-            let gereeDoc = await GereeModel.findById(targetGereeId).lean();
-            if (!gereeDoc && tootCandidate) {
-              const gereeQuery = {
-                baiguullagiinId: String(baiguullagiinId),
-                toot: tootCandidate,
-                tuluv: "Идэвхтэй",
-              };
-              const targetBarilga = r.barilgiinId || barilgiinId;
-              if (targetBarilga) gereeQuery.barilgiinId = String(targetBarilga);
-              gereeDoc = await GereeModel.findOne(gereeQuery).lean();
-            }
-
             if (gereeDoc) {
               const y = postDate.getFullYear();
               const m = String(postDate.getMonth() + 1).padStart(2, "0");
@@ -953,23 +968,53 @@ exports.bankStatementConfirmImport = asyncHandler(async (req, res, next) => {
               const tootStr = gereeDoc.toot || tootCandidate || "";
               const paymentTailbar = r.tailbar || `Банк тулгалт - ${dateFormatted}${tootStr ? ` - ${tootStr} тоот` : ""}`;
 
-              await guilgeeService.recordPayment(safeConn, {
-                baiguullagiinId: String(baiguullagiinId),
-                baiguullagiinNer: gereeDoc.baiguullagiinNer || "",
-                barilgiinId: String(gereeDoc.barilgiinId || barilgiinId || ""),
-                gereeniiId: String(gereeDoc._id),
-                gereeniiDugaar: gereeDoc.gereeniiDugaar || "",
-                orshinSuugchId: gereeDoc.orshinSuugchId || "",
-                toot: tootStr,
-                ognoo: postDate,
-                dun: -Math.abs(effectivePayAmount),
-                tailbar: paymentTailbar,
-                source: "bank",
-                bankniiGuilgeeId: String(savedBankGuilgee._id),
-                dansniiDugaar: String(dansniiDugaar || ""),
-                guilgeeKhiisenAjiltniiNer: ajiltan.ner || "System",
-                guilgeeKhiisenAjiltniiId: ajiltan.id || null,
-              });
+              const monthEntries = (r.allocation?.months && typeof r.allocation.months === "object")
+                ? Object.entries(r.allocation.months).filter(([_, mDun]) => Number(mDun) > 0)
+                : [];
+
+              if (monthEntries.length > 1) {
+                // Record individual payment for each allocated month
+                for (const [mKey, mDun] of monthEntries) {
+                  const mAmount = Number(mDun);
+                  const monthTailbar = `Банк тулгалт - ${dateFormatted}${tootStr ? ` - ${tootStr} тоот` : ""} (${mKey} сар)`;
+                  await guilgeeService.recordPayment(safeConn, {
+                    baiguullagiinId: String(baiguullagiinId),
+                    baiguullagiinNer: gereeDoc.baiguullagiinNer || "",
+                    barilgiinId: String(gereeDoc.barilgiinId || barilgiinId || ""),
+                    gereeniiId: String(gereeDoc._id),
+                    gereeniiDugaar: gereeDoc.gereeniiDugaar || "",
+                    orshinSuugchId: gereeDoc.orshinSuugchId || "",
+                    toot: tootStr,
+                    ognoo: postDate,
+                    dun: -Math.abs(mAmount),
+                    tailbar: monthTailbar,
+                    source: "bank",
+                    bankniiGuilgeeId: `${String(savedBankGuilgee._id)}-${mKey}`,
+                    dansniiDugaar: String(dansniiDugaar || ""),
+                    guilgeeKhiisenAjiltniiNer: ajiltan.ner || "System",
+                    guilgeeKhiisenAjiltniiId: ajiltan.id || null,
+                  });
+                }
+              } else {
+                // Single consolidated payment with exact effectivePayAmount
+                await guilgeeService.recordPayment(safeConn, {
+                  baiguullagiinId: String(baiguullagiinId),
+                  baiguullagiinNer: gereeDoc.baiguullagiinNer || "",
+                  barilgiinId: String(gereeDoc.barilgiinId || barilgiinId || ""),
+                  gereeniiId: String(gereeDoc._id),
+                  gereeniiDugaar: gereeDoc.gereeniiDugaar || "",
+                  orshinSuugchId: gereeDoc.orshinSuugchId || "",
+                  toot: tootStr,
+                  ognoo: postDate,
+                  dun: -Math.abs(effectivePayAmount),
+                  tailbar: paymentTailbar,
+                  source: "bank",
+                  bankniiGuilgeeId: String(savedBankGuilgee._id),
+                  dansniiDugaar: String(dansniiDugaar || ""),
+                  guilgeeKhiisenAjiltniiNer: ajiltan.ner || "System",
+                  guilgeeKhiisenAjiltniiId: ajiltan.id || null,
+                });
+              }
 
               await BankniiGuilgeeModel.findByIdAndUpdate(
                 savedBankGuilgee._id,
