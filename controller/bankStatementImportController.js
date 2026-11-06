@@ -467,10 +467,18 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
         continue;
       }
 
-      // Skip total / summary / footer rows e.g. "Хөл дүн", "Нийт дүн", "Total"
+      // A valid bank transaction MUST have a date!
+      if (dateIdx !== -1 && (!dateStr || dateStr.trim() === "" || dateStr.trim() === "-")) {
+        continue;
+      }
+      if (!desc && !accName) {
+        continue;
+      }
+
+      // Skip total / summary / footer / signature rows e.g. "Хөл дүн", "Эцсийн үлдэгдэл", "Эхний үлдэгдэл", "Теллер", "Хэвлэсэн огноо", "Total"
       const rowText = r.map((c) => String(c || "")).join(" ").toLowerCase();
       if (
-        /(?:хөл\s*дүн|хөлдүн|нийт\s*хөл\s*дүн|нийт\s*хөл|нийт\s*дүн|дүнгийн\s*нийлбэр|total\s*amount|grand\s*total)/i.test(
+        /(?:хөл\s*дүн|хөлдүн|нийт\s*хөл\s*дүн|нийт\s*хөл|нийт\s*дүн|эцсийн\s*үлдэгдэл|эхний\s*үлдэгдэл|теллер|хэвлэсэн\s*огноо|дүнгийн\s*нийлбэр|total\s*amount|grand\s*total)/i.test(
           rowText
         )
       ) {
