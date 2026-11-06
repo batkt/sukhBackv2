@@ -120,9 +120,9 @@ function parseStatementDescription(desc) {
     };
   }
 
-  // Phone match
-  const phoneMatch = originalStr.match(/\b[5-9]\d{7}\b/);
-  const phone = phoneMatch ? phoneMatch[0] : null;
+  // Phone match: 8 digits starting with 7, 8, 9
+  const phoneMatch = originalStr.match(/(?:^|[^\d])(?:\+?976[-.\s]?)?([789]\d{7})(?=[^\d]|$)/);
+  const phone = phoneMatch ? phoneMatch[1] : null;
 
   // Clean a working copy of the string to avoid dates/months matching as buildings/toots
   let clean = originalStr;
@@ -559,15 +559,20 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
         }
 
         // If toot was not detected in description, try matching resident name or phone
+        let isPhoneMatched = false;
         if (!detectedToot || candidates.length === 0) {
           const searchName = cleanStr(parsedDesc.residentName || accName);
           const searchPhone = parsedDesc.phone;
 
           let nameMatched = [];
           if (searchPhone) {
-            nameMatched = activeContracts.filter((c) =>
-              c.utas && c.utas.some((u) => String(u).includes(searchPhone))
-            );
+            nameMatched = activeContracts.filter((c) => {
+              const uList = Array.isArray(c.utas) ? c.utas : (c.utas ? [c.utas] : []);
+              return uList.some((u) => String(u).replace(/\D/g, "").includes(searchPhone));
+            });
+            if (nameMatched.length > 0) {
+              isPhoneMatched = true;
+            }
           }
 
           if (nameMatched.length === 0 && searchName && searchName.length >= 3) {
@@ -592,10 +597,17 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
 
         if (candidates.length === 1) {
           matchedGeree = candidates[0];
-          status = "EXACT";
-          matchReason = `${detectedBair ? detectedBair + "-р байр, " : ""}${detectedToot} тоот таарсан`;
-          exactCount++;
-          exactAmount += amount;
+          if (isPhoneMatched) {
+            status = "LIKELY";
+            matchReason = `Утасны дугаараар тохирсон (${parsedDesc.phone})`;
+            likelyCount++;
+            likelyAmount += amount;
+          } else {
+            status = "EXACT";
+            matchReason = `${detectedBair ? detectedBair + "-р байр, " : ""}${detectedToot} тоот таарсан`;
+            exactCount++;
+            exactAmount += amount;
+          }
         } else if (candidates.length > 1) {
           // Tiebreaker: match by resident name or phone
           const targetName = cleanStr(parsedDesc.residentName || accName);
