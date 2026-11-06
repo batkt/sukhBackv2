@@ -467,6 +467,16 @@ exports.bankStatementPreview = asyncHandler(async (req, res, next) => {
         continue;
       }
 
+      // Skip total / summary / footer rows e.g. "Хөл дүн", "Нийт дүн", "Total"
+      const rowText = r.map((c) => String(c || "")).join(" ").toLowerCase();
+      if (
+        /(?:хөл\s*дүн|хөлдүн|нийт\s*хөл\s*дүн|нийт\s*хөл|нийт\s*дүн|дүнгийн\s*нийлбэр|total\s*amount|grand\s*total)/i.test(
+          rowText
+        )
+      ) {
+        continue;
+      }
+
       // Track min/max dates
       if (dateStr) {
         if (!minDate || dateStr < minDate) minDate = dateStr;
