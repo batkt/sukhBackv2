@@ -1285,6 +1285,16 @@ router.post("/qpayGargaya", tokenShalgakh, tulukhErkhShalgaya, async (req, res, 
         req.body.dansniiDugaar = "5129057717";
       if (req.body.baiguullagiinId == "65cf2f027fbc788f85e50b90")
         req.body.dansniiDugaar = "5112418947";
+      if (String(req.body.baiguullagiinId) === "6a97d3afaf2ad1911035e063") {
+        const isFutabaZogsool =
+          req.body.turul === "QRGadaa" ||
+          Boolean(req.body.zogsooliinId) ||
+          req.body.angilal === "zogsool" ||
+          req.body.angilal === "Зогсоол" ||
+          req.body.angilal === "Гараж";
+        req.body.dansniiDugaar = isFutabaZogsool ? "3105211515" : "5222199314";
+        req.body.burtgeliinDugaar = isFutabaZogsool ? "150000" : "050000";
+      }
       req.body.tailbar = tailbar;
       var callback_url =
         process.env.UNDSEN_SERVER +
@@ -1785,6 +1795,24 @@ router.post("/qpayGargaya", tokenShalgakh, tulukhErkhShalgaya, async (req, res, 
         } catch (qpayConfigError) {
           // Continue with existing dansniiDugaar if error occurs
         }
+      }
+
+      // 100% hardcoded & accurate account enforcement before calling qpayGargaya
+      try {
+        const { qpayDansSongoyo } = require("../utils/qpayDansSongoyo");
+        const resolved = await qpayDansSongoyo({
+          baiguullagiinId: req.body.baiguullagiinId,
+          barilgiinId: req.body.barilgiinId,
+          body: req.body,
+          kholbolt: req.body.tukhainBaaziinKholbolt,
+        });
+        if (resolved && resolved.dansniiDugaar) {
+          req.body.dansniiDugaar = resolved.dansniiDugaar;
+          if (resolved.burtgeliinDugaar) req.body.burtgeliinDugaar = resolved.burtgeliinDugaar;
+          console.log(`🔒 [QPAY-ENFORCED-ACCOUNT] Account set to: ${req.body.dansniiDugaar} (${resolved.account_name || ""})`);
+        }
+      } catch (enforceErr) {
+        console.warn("⚠️ [QPAY-ENFORCE] Error in qpayDansSongoyo:", enforceErr.message);
       }
 
       let khariu;
@@ -3842,6 +3870,14 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
         const { qpayGargaya } = require("quickqpaypackvSukh");
         const callback_url = process.env.UNDSEN_SERVER + "/api/qpayNekhemjlekhCallback/" + invoice.baiguullagiinId.toString() + "/" + invoice._id.toString();
 
+        const { qpayDansSongoyo } = require("../utils/qpayDansSongoyo");
+        const resolvedDans = await qpayDansSongoyo({
+          baiguullagiinId: invoice.baiguullagiinId,
+          barilgiinId: invoice.barilgiinId,
+          invoice: invoice,
+          kholbolt: foundKholbolt,
+        });
+
         const qpayBody = {
           baiguullagiinId: invoice.baiguullagiinId,
           barilgiinId: invoice.barilgiinId,
@@ -3850,6 +3886,8 @@ router.get("/pay/info/:invoiceId", async (req, res, next) => {
           zakhialgiinDugaar: invoice.nekhemjlekhiinDugaar || "1",
           gereeniiId: invoice.gereeniiId,
           nekhemjlekhiinId: invoice._id.toString(),
+          ...(resolvedDans?.dansniiDugaar ? { dansniiDugaar: resolvedDans.dansniiDugaar } : {}),
+          ...(resolvedDans?.burtgeliinDugaar ? { burtgeliinDugaar: resolvedDans.burtgeliinDugaar } : {}),
         };
 
         const khariu = await qpayGargaya(qpayBody, callback_url, foundKholbolt);

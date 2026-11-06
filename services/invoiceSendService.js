@@ -56,6 +56,14 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
           "/" +
           invoice._id.toString();
 
+        const { qpayDansSongoyo } = require("../utils/qpayDansSongoyo");
+        const resolvedDans = await qpayDansSongoyo({
+          baiguullagiinId: baiguullagiinId,
+          barilgiinId: invoice.barilgiinId,
+          invoice: invoice,
+          kholbolt: kholbolt,
+        });
+
         const qpayBody = {
           baiguullagiinId: baiguullagiinId,
           barilgiinId: invoice.barilgiinId,
@@ -64,6 +72,8 @@ async function sendInvoiceSmsNotification(kholbolt, invoiceId, baiguullagiinId, 
           zakhialgiinDugaar: invoice.nekhemjlekhiinDugaar || String(maxDugaar),
           gereeniiId: invoice.gereeniiId,
           nekhemjlekhiinId: invoice._id.toString(),
+          ...(resolvedDans?.dansniiDugaar ? { dansniiDugaar: resolvedDans.dansniiDugaar } : {}),
+          ...(resolvedDans?.burtgeliinDugaar ? { burtgeliinDugaar: resolvedDans.burtgeliinDugaar } : {}),
         };
 
         console.log(`📡 [SMS Notification] Generating QPay invoice for invoiceId: ${invoiceId} with amount: ${displayAmount}`);

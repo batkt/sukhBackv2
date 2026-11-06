@@ -75,6 +75,49 @@ function patchSdkService() {
   } catch (error) {
     console.error(`❌ [PATCH] Error while patching sdkService.js: ${error.message}`);
   }
+
+  // 3. Patch: 100% hardcoded Futaba & SUKH account protection in quickqpaypackvSukh
+  const qpayServicePath = path.join(__dirname, "../node_modules/quickqpaypackvSukh/lib/service.js");
+  if (fs.existsSync(qpayServicePath)) {
+    try {
+      let qpayContent = fs.readFileSync(qpayServicePath, "utf8");
+      if (!qpayContent.includes("PATCHED: 100% hardcoded Futaba & SUKH account protection")) {
+        const targetStr = "bank = salbar.bank_accounts;\n                    if (!bank || bank.length < 1) {\n                        throw new Error('Qpay тохиргоо хийгдээгүй байна!');\n                    }";
+        const replacementStr = `bank = salbar.bank_accounts;
+                    if (!bank || bank.length < 1) {
+                        throw new Error('Qpay тохиргоо хийгдээгүй байна!');
+                    }
+                    /* PATCHED: 100% hardcoded Futaba & SUKH account protection */
+                    if (String(body.baiguullagiinId) === '6a97d3afaf2ad1911035e063') {
+                        var isFutabaZogsool = body.turul === 'QRGadaa' || Boolean(body.zogsooliinId) || body.angilal === 'zogsool' || body.angilal === 'Зогсоол' || body.angilal === 'Гараж';
+                        body.dansniiDugaar = isFutabaZogsool ? '3105211515' : '5222199314';
+                    }
+                    if (!body.dansniiDugaar && bank && bank.length > 1) {
+                        var isZogsoolGen = body.turul === 'QRGadaa' || Boolean(body.zogsooliinId) || body.angilal === 'zogsool' || body.angilal === 'Зогсоол' || body.angilal === 'Гараж';
+                        if (!isZogsoolGen) {
+                            var nonParkingAccs = bank.filter(function(a) { return !/мрж|зогсоол|parking|garaaj|гараж/i.test(a.account_name); });
+                            if (nonParkingAccs.length > 0) bank = [nonParkingAccs[0]];
+                        }
+                    }`;
+
+        if (qpayContent.includes("bank = salbar.bank_accounts;")) {
+          // Normalize line endings for replacement
+          const hasCrlf = qpayContent.includes("\r\n");
+          const normTarget = targetStr.replace(/\r\n/g, "\n");
+          const normContent = qpayContent.replace(/\r\n/g, "\n");
+          if (normContent.includes(normTarget)) {
+            const patchedNorm = normContent.replace(normTarget, replacementStr.replace(/\r\n/g, "\n"));
+            fs.writeFileSync(qpayServicePath, hasCrlf ? patchedNorm.replace(/\n/g, "\r\n") : patchedNorm, "utf8");
+            console.log("✅ [PATCH] Successfully patched quickqpaypackvSukh/lib/service.js for 100% hardcoded Futaba & SUKH account protection");
+          }
+        }
+      } else {
+        console.log("ℹ️ [PATCH] quickqpaypackvSukh/lib/service.js is already up-to-date with Futaba hardcode patch");
+      }
+    } catch (qpErr) {
+      console.error(`❌ [PATCH] Error while patching quickqpaypackvSukh: ${qpErr.message}`);
+    }
+  }
 }
 
 module.exports = patchSdkService;
