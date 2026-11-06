@@ -1238,52 +1238,56 @@ exports.getExistingBankRecords = asyncHandler(async (req, res, next) => {
     };
   });
 
-  // Also query QPay ledger records from GuilgeeAvlaguud to ensure all settled QPay payments are included
+  // Also query ledger payment records from GuilgeeAvlaguud (both employee manual payments and QPay) to detect duplicate payments
   try {
     const GuilgeeAvlaguudModel = GuilgeeAvlaguud(safeConn, false);
-    const qpayLedger = await GuilgeeAvlaguudModel.find({
+    const ledgerPayments = await GuilgeeAvlaguudModel.find({
       baiguullagiinId: String(baiguullagiinId),
-      tulsunDun: { $gt: 0 },
       $or: [
-        { bankniiGuilgeeId: { $exists: true, $ne: "" } },
-        { source: "nekhemjlekh" },
-        { khelber: /qpay/i },
-        { zardliinNer: /qpay/i },
+        { turul: "төлөлт" },
+        { tulsunDun: { $gt: 0 } },
+        { dun: { $lt: 0 } },
       ],
     })
-      .select("bankniiGuilgeeId gereeniiId gereeniiDugaar tulsunDun ognoo toot barilgiinId")
+      .select("bankniiGuilgeeId gereeniiId gereeniiDugaar tulsunDun dun ognoo toot barilgiinId tailbar guilgeeKhiisenAjiltniiNer khelber source")
       .sort({ ognoo: -1 })
-      .limit(5000)
+      .limit(10000)
       .lean();
 
-    if (Array.isArray(qpayLedger) && qpayLedger.length > 0) {
-      qpayLedger.forEach((q) => {
+    if (Array.isArray(ledgerPayments) && ledgerPayments.length > 0) {
+      ledgerPayments.forEach((q) => {
         const d = q.ognoo;
         const dateStr = d ? new Date(d).toISOString().split("T")[0] : "";
         const recId = String(q.bankniiGuilgeeId || "").trim();
-        // Avoid duplicate records if already present
-        if (!formatted.some((f) => f.record && recId && f.record === recId)) {
-          formatted.push({
-            _id: String(q._id),
-            record: recId,
-            date: dateStr,
-            time: "",
-            amount: Number(q.tulsunDun || 0),
-            description: "QPay төлбөр",
-            relatedAccount: "",
-            accName: "",
-            matchedGereeId: String(q.gereeniiId || ""),
-            gereeniiDugaar: String(q.gereeniiDugaar || "").trim(),
-            toot: String(q.toot || "").trim(),
-            status: "done",
-            bank: "qpay",
-            isQPay: true,
-          });
+        const amt = Math.abs(Number(q.tulsunDun || q.dun || 0));
+        const isQPay = Boolean(q.khelber && /qpay/i.test(q.khelber)) || Boolean(q.source && /qpay/i.test(q.source)) || Boolean(q.tailbar && /qpay/i.test(q.tailbar));
+
+        if (amt > 0) {
+          // Avoid duplicate if already present with same recId
+          if (!recId || !formatted.some((f) => f.record && f.record === recId)) {
+            formatted.push({
+              _id: String(q._id),
+              record: recId || `MANUAL-${q._id}`,
+              date: dateStr,
+              time: "",
+              amount: amt,
+              description: q.tailbar || "Ажилтны бүртгэсэн төлөлт",
+              relatedAccount: "",
+              accName: q.guilgeeKhiisenAjiltniiNer || "",
+              matchedGereeId: String(q.gereeniiId || ""),
+              gereeniiDugaar: String(q.gereeniiDugaar || "").trim(),
+              toot: String(q.toot || "").trim(),
+              status: "done",
+              bank: isQPay ? "qpay" : "manual",
+              isQPay,
+              isManualPayment: !isQPay,
+            });
+          }
         }
       });
     }
   } catch (err) {
-    console.warn("Could not query GuilgeeAvlaguud for QPay records:", err?.message);
+    console.warn("Could not query GuilgeeAvlaguud for ledger records:", err?.message);
   }
 
   res.json({ success: true, count: formatted.length, records: formatted });
