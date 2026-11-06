@@ -141,10 +141,29 @@ function parseStatementDescription(desc) {
   clean = clean.replace(/\b(?:\d{1,2}(?:\s*,\s*\d{1,2})*|\d{1,2}\s*-\s*\d{1,2})\s*(?:-[рr]\s*)?(?:сар|cap|sar)[а-яөүёa-z]*/gi, " ");
   clean = clean.replace(/\b(?:\d{1,2})\s*(?:-[рr]\s*)?(?:сар|cap|sar)[а-яөүёa-z]*/gi, " ");
 
-  // 4. Look for explicit bair + toot:
+  // 4. 3-part pattern: Building - Entrance - Toot
+  // e.g. "216-1-31TOOT", "216-1-31ТООТ", "216-1-31 тоот", "216-1-31", "216/1/31", "216 - 1 - 31"
+  const threePart = clean.match(
+    /\b(\d{1,4})\s*[-/. ]*(?:-?[рrR]?\s*(?:дугаар|dugaar)?\s*байр[.]*|\s*ба[йи]р[.]*|\s*bair[.]*)?\s*[-/. ]+\s*(\d{1,2})\s*(?:-?[рrR]?\s*(?:орц|orts|ortz|орт|ort)\s*)?[-/. ]*\s*(\d{1,4})(?:[А-Яа-яA-Za-z](?!(?:оот|oot|орт)))?\s*(?:-?[рrR]\s*)?(?:[nн]\s*)?(?:тоот|toot|торт|-?[тtT]\b)?/i
+  );
+  if (threePart) {
+    const bCand = threePart[1];
+    const uCand = threePart[3];
+    if (!bCand.startsWith("202") && !uCand.startsWith("202")) {
+      return {
+        type: "THREE_PART",
+        isAldangi,
+        bair: bCand,
+        toot: String(uCand).replace(/^0+/, "") || uCand,
+        phone,
+      };
+    }
+  }
+
+  // 5. Look for explicit bair + toot (with negative lookahead so 3-part pattern entrance isn't confused as toot):
   // e.g. "217-56", "219-Р БАЙР 66 ТООТ", "216 БАЙР . 125 ТООТ", "217*26 ТООТ", "218Н14ТООТ", "218 6TOOT"
   const bairToot = clean.match(
-    /\b(21[6-9]|\d{1,3})\s*(?:-?[рr]\s*байр|\s*ба[йи]р|\s*bair|\s*iin|\s*ийн|\s*н|\*|[-./])\s*(\d{1,4}[А-Яа-яA-Za-z]?)\s*(?:тоот|toot)?\b/i
+    /\b(21[6-9]|\d{1,3})\s*(?:-?[рr]\s*байр|\s*ба[йи]р|\s*bair|\s*iin|\s*ийн|\s*н|\*|[-./])\s*(\d{1,4}[А-Яа-яA-Za-z]?)(?![-/]\d)\s*(?:тоот|toot)?\b/i
   );
   if (bairToot) {
     return {
