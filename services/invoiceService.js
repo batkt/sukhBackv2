@@ -394,6 +394,11 @@ function getDaysInMonth(date) {
 
 async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
   console.log(`🚀 [createInvoiceForContract] STARTED with gereeId: ${gereeId}, options:`, JSON.stringify(options));
+  // Төрийн банк (BPay) горим: СӨХ-ийн төлбөрийг BPay нэхнэ — Sukh нэхэмжлэх үүсгэхгүй.
+  // Бүх зам (cron, гараар, Excel, шинэ гэрээ, цахилгаан) энэ функцээр дамждаг.
+  if (await require("./bpayService").bpayEsekh(kholbolt?.baiguullagiinId)) {
+    return { success: false, bpay: true, message: "Төрийн банк (BPay) горим — нэхэмжлэх үүсгэхгүй" };
+  }
   const GereeModel = Geree(kholbolt);
   const NekhemjlekhiinTuukhModel = NekhemjlekhiinTuukh(kholbolt);
 
@@ -784,6 +789,8 @@ async function ensureEkhniiUldegdel(kholbolt, geree, options = {}) {
 }
 
 async function ensureActiveInvoice(kholbolt, gereeId, options = {}) {
+  // Төрийн банк (BPay) горим — Sukh нэхэмжлэх үүсгэхгүй.
+  if (await require("./bpayService").bpayEsekh(kholbolt?.baiguullagiinId)) return null;
   const NekhemjlekhiinTuukhModel = NekhemjlekhiinTuukh(kholbolt);
   const GereeModel = Geree(kholbolt);
 

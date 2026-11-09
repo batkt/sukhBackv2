@@ -77,7 +77,13 @@ exports.orshinSuugchNiitTulbur = asyncHandler(async (req, res, next) => {
       });
     }
 
-    const orgIdList = [...orgIds];
+    // Төрийн банк (BPay) горимтой байгууллагын Sukh үлдэгдлийг нийт төлбөрт оруулахгүй —
+    // тэдний СӨХ-ийн төлбөрийг BPay нэхдэг (апп BPay-ийн биллээр харуулна).
+    const { bpayEsekh } = require("../services/bpayService");
+    const orgIdList = [];
+    for (const id of orgIds) {
+      if (!(await bpayEsekh(id))) orgIdList.push(id);
+    }
     if (orgIdList.length === 0) {
       return res.status(200).json({
         success: true,

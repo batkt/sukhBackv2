@@ -673,6 +673,27 @@ router.post("/qpayGargaya", tokenShalgakh, tulukhErkhShalgaya, async (req, res, 
       `ℹ️ [QPAY-GARGAYA] Decision: source=${detectedSource}, useWalletQPay=${useWalletQPay}, phone=${userPhoneNumber || "N/A"}`,
     );
 
+    // Төрийн банк (BPay) горим: СӨХ-ийн нэхэмжлэх/гэрээний үлдэгдлийг Sukh QPay-ээр төлүүлэхгүй
+    // (хуучин апптай хэрэглэгчийг ч хамгаална). Зогсоол (QRGadaa) зэрэг бусад төлбөр хэвээр.
+    if (!(useWalletQPay && userPhoneNumber)) {
+      const sokhTulbur =
+        !!req.body.nekhemjlekhiinId ||
+        !!req.body.gereeniiId ||
+        !!req.body.angilal ||
+        /^ГД-/.test(String(req.body.turul || ""));
+      if (sokhTulbur) {
+        const { bpayEsekh } = require("../services/bpayService");
+        const orgId = req.body.baiguullagiinId || req.body.tukhainBaaziinKholbolt?.baiguullagiinId;
+        if (await bpayEsekh(orgId)) {
+          return res.status(409).json({
+            success: false,
+            code: "BPAY_GORIM",
+            message: "СӨХ-ийн төлбөрийг Төрийн банк (BPay)-аар төлнө үү.",
+          });
+        }
+      }
+    }
+
     // If useWalletQPay is true, route to Wallet API QPay
     if (useWalletQPay && userPhoneNumber) {
       try {

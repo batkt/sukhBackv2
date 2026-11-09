@@ -185,9 +185,24 @@ const GUITSETGEGCH = {
     const idevkhteiIdnuud = idevkhtei.map((g) => String(g._id));
     if (!idevkhteiIdnuud.length) return { barilga: b.nernuud, jagsaalt: [], niitAvlagatai: 0, niitAvlaga: 0 };
 
-    const [facet] = await GuilgeeAvlaguud(kh.kholbolt).aggregate([
+    // Төрийн банк (BPay) горимд өрийг BPay-ийн төлөгдөөгүй биллээс (алдангитай) тооцно.
+    const bpayGorim = await require("../services/bpayService").bpayEsekh(kh.baiguullagiinId);
+    const ekhSurvalj = bpayGorim
+      ? require("../models/bpayBill")(kh.kholbolt).aggregate([
+          {
+            $match: {
+              baiguullagiinId: String(kh.baiguullagiinId),
+              gereeniiId: { $in: idevkhteiIdnuud },
+              tuluv: "Төлөгдөөгүй",
+            },
+          },
+          { $group: { _id: "$gereeniiId", uldegdel: { $sum: { $ifNull: ["$aldangitaiDun", "$dun"] } } } },
+        ])
+      : null;
+    const [facet] = await (bpayGorim ? ekhSurvalj : GuilgeeAvlaguud(kh.kholbolt).aggregate([
       { $match: { baiguullagiinId: kh.baiguullagiinId, gereeniiId: { $in: idevkhteiIdnuud } } },
       { $group: { _id: "$gereeniiId", uldegdel: { $sum: "$dun" } } },
+    ])).append(
       { $match: { uldegdel: { $gt: 0.5 } } },
       {
         $facet: {
@@ -196,7 +211,7 @@ const GUITSETGEGCH = {
           dooshTooluur: [{ $match: { uldegdel: { $gt: doodDun } } }, { $count: "too" }],
         },
       },
-    ]);
+    );
     const deed = facet?.deed || [];
     const gereenuud = await Geree(kh.kholbolt, true)
       .find({ _id: { $in: deed.map((r) => r._id) } })

@@ -1364,11 +1364,15 @@ async function settleWalletPayment(
   const walletInvoiceId = qpayObject.walletInvoiceId || "";
 
   let userId = null;
+  let tulsunBillingId = null;
+  let tulsunCustomerId = null;
   try {
     const walletInvoiceDoc = await WalletInvoice(db.erunkhiiKholbolt)
       .findOne({ walletInvoiceId })
       .lean();
     userId = walletInvoiceDoc?.userId || null;
+    tulsunBillingId = walletInvoiceDoc?.billingId || null;
+    tulsunCustomerId = walletInvoiceDoc?.customerId || null;
   } catch (err) {
     // ignore
   }
@@ -1394,6 +1398,17 @@ async function settleWalletPayment(
         walletPaymentId,
         paidByQpayData
       );
+
+      // Төрийн банк (BPay) горим: тухайн тоотын биллийг шууд синк хийж ажилтанд бодит
+      // цагт "Төлсөн" харагдуулна (ар талд, алдаа нь төлбөрийн урсгалд нөлөөлөхгүй).
+      try {
+        require("../services/bpayService").tulburiinDaraaSync({
+          billingId: tulsunBillingId,
+          customerId: tulsunCustomerId,
+        });
+      } catch (_) {
+        // ignore
+      }
 
       // 3.5. Create official BankniiGuilgee record for AmarSukh accountants
       try {

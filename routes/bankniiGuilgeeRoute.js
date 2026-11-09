@@ -381,7 +381,8 @@ const { tulultTaniya, guilgeeKholbyo, guilgeeSalgaya } = require("../controller/
 router.post("/dansniiUldegdelAvya", tokenShalgakh, dansniiUldegdelAvya);
 router.post("/bankniiKhuulgaTatajKhadgalya", tokenShalgakh, bankniiKhuulgaTatajKhadgalya);
 router.post("/tulultTaniya", tokenShalgakh, tulultTaniya);
-router.post("/guilgeeKholbyo", tokenShalgakh, guilgeeKholbyo);
+// Төрийн банк (BPay) горимд гүйлгээг гэрээнд холбож журналд бичихгүй.
+router.post("/guilgeeKholbyo", tokenShalgakh, require("../services/bpayService").bpayKhoriglokh, guilgeeKholbyo);
 router.post("/guilgeeSalgaya", tokenShalgakh, guilgeeSalgaya);
 
 // Дансны хуулга: гүйлгээг Excel-ээр гараар оруулах (тест / API-гүй данс)

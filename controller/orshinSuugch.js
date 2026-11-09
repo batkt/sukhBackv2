@@ -4429,6 +4429,23 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
         urdunJson.ovog = "";
       }
 
+      // Төрийн банк (BPay) горимтой байгууллагууд — апп эдгээрийн СӨХ-ийн төлбөрийг
+      // зөвхөн BPay-ээр харуулж, Sukh-ийн нэхэмжлэхийг лавлагаа болгоно.
+      try {
+        const { bpayEsekh } = require("../services/bpayService");
+        const orgIds = new Set(
+          [urdunJson.baiguullagiinId, ...(urdunJson.toots || []).map((t) => t?.baiguullagiinId)]
+            .filter(Boolean)
+            .map(String),
+        );
+        const bpayBaiguullaguud = [];
+        for (const id of orgIds) if (await bpayEsekh(id)) bpayBaiguullaguud.push(id);
+        urdunJson.bpayBaiguullaguud = bpayBaiguullaguud;
+        urdunJson.bpayAshiglakhEsekh = bpayBaiguullaguud.includes(String(urdunJson.baiguullagiinId || ""));
+      } catch (_) {
+        urdunJson.bpayBaiguullaguud = [];
+      }
+
       res.send(urdunJson);
     } catch (dbErr) {
       console.error("❌ [Profile] Database error:", dbErr.message);

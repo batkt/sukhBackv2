@@ -572,35 +572,19 @@ async function getBillingByBiller(userId, billerCode, customerCode) {
   }
 }
 
+/**
+ * Хэрэглэгчийн холбосон биллингүүдээс тухайн customerId-тайг олно.
+ *
+ * BPay дээр `GET /api/billing/customer/:id` endpoint БАЙХГҮЙ (404 буцаадаг —
+ * 2026-11-09-нд шалгав), тиймээс `/billing/list`-ийн `customerId` талбараар хайна.
+ * Холбоогүй бол null.
+ */
 async function getBillingByCustomer(userId, customerId) {
   try {
-    // Guard against hammering API for unregistered users
-    const unregistered = unregisteredUsersCache.get(userId);
-    if (unregistered && (Date.now() - unregistered.timestamp < UNREGISTERED_USER_CACHE_TTL)) {
-       return null;
-    }
-
-    const token = await getWalletServiceToken();
-    
-    const response = await axios.get(
-      `${WALLET_API_BASE_URL}/api/billing/customer/${customerId}`,
-      {
-        headers: {
-          userId: userId,
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    if (response.data && response.data.responseCode && response.data.data) {
-      return response.data.data;
-    }
-
-    return null;
+    if (!customerId) return null;
+    const list = (await getBillingList(userId)) || [];
+    return list.find((b) => String(b.customerId || "") === String(customerId)) || null;
   } catch (error) {
-    if (error.response && error.response.status === 404) {
-      return null;
-    }
     console.error("Error getting billing by customer from wallet API:", error.message);
     throw error;
   }

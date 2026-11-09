@@ -15,14 +15,19 @@
  *
  * ГОРИМУУД:
  *   1. Урьдчилан харах (анхдагч — санд бичихгүй, BPay-ээс зөвхөн уншина):
- *        node scripts/match_timetower_bpay.js
- *        node scripts/match_timetower_bpay.js --no-probe      (холбогдоогүй өрхийн кодыг BPay-ээс шалгахгүй)
- *        node scripts/match_timetower_bpay.js --probe-user 99112233  (код шалгахад ашиглах BPay хэрэглэгчийн утас)
+ *        node scripts/match_timetower_bpay.js                          (холбогдоогүй өрхийг BPay-ээс шалгахгүй)
+ *        node scripts/match_timetower_bpay.js --probe-user 95XXXXXX    (ӨӨРИЙН утсаар хаяг шалгана — заавал өгнө)
  *
  *   2. BPay-д холбох (BPay болон amarSukh.orshinSuugch-д бичнэ):
- *        node scripts/match_timetower_bpay.js --auto-register --bair 216 --toot 2
- *        node scripts/match_timetower_bpay.js --auto-register --limit 10
+ *        node scripts/match_timetower_bpay.js --auto-register --probe-user 95XXXXXX --bair 216 --toot 2
+ *        node scripts/match_timetower_bpay.js --auto-register --probe-user 95XXXXXX --limit 10
  *      --limit эсвэл --bair + --toot заавал байна.
+ *
+ *   2б. Түр цуглуулах (Sukh санд бичихгүй; зөвхөн ӨӨРИЙН BPay бүртгэлд хаяг холбоно):
+ *        node scripts/match_timetower_bpay.js --collect 95XXXXXX --limit 10   (эхлээд цөөнөөр)
+ *        node scripts/match_timetower_bpay.js --collect 95XXXXXX              (бүгд)
+ *        node scripts/match_timetower_bpay.js --cleanup-collect 95XXXXXX      (үүсгэсэн холболтыг устгах)
+ *      Дахин ажиллуулахад өмнө үүсгэсэн холболтыг дахин ашиглана (scripts/output/collect_billings_<утас>.json).
  *
  *   3. BPay-ийн хаягийн мод (хот → дүүрэг → хороо → байр)-ыг хадгалах (санд бичихгүй):
  *        node scripts/match_timetower_bpay.js --save-address              (зөвхөн Улаанбаатар)
@@ -66,6 +71,9 @@ const BUILDINGS = [
 const BUILDING_CODES = BUILDINGS.map((b) => b.code);
 const SUKH_ID_TO_CODE = new Map(BUILDINGS.map((b) => [b.sukhId, b.code]));
 
+// Аппын нэгдсэн сангийн байгууллага (controller/negdsenSan.js)
+const CENTRALIZED_ORG_ID = "698e7fd3b6dd386b6c56a808";
+
 const CUSTOMER_CODE_PREFIX = "2003260";
 const CUSTOMER_CODE_RE = /^2003260(216|217|218|219)(\d{5})(\d)$/;
 
@@ -92,6 +100,25 @@ const isSaveAddress = process.argv.includes("--save-address");
 const allCities = process.argv.includes("--all-cities");
 // BPay-ийн хаягийн мод (хувийн мэдээлэлгүй) — repo-д хадгална.
 const ADDRESS_TREE_PATH = path.join(__dirname, "data", "bpay_address_tree.json");
+
+// --collect <утас>: тухайн (өөрийн) BPay бүртгэлд хаягуудыг түр холбож биллийг нь татна.
+// Sukh-ийн санд юу ч бичихгүй. Үүсгэсэн холболтыг scripts/output/collect_billings_<утас>.json-д бүртгэнэ.
+const collectUser = normalizePhoneArg(argValue("--collect"));
+const cleanupUser = normalizePhoneArg(argValue("--cleanup-collect"));
+const collectFile = (phone) => path.join(outDir, `collect_billings_${phone}.json`);
+function normalizePhoneArg(v) {
+  if (!v) return "";
+  const d = String(v).replace(/\D/g, "");
+  if (d.length < 8) {
+    console.error(`❌ Утасны дугаар буруу: ${v}`);
+    process.exit(1);
+  }
+  return d.slice(-8);
+}
+if (collectUser && isAutoRegister) {
+  console.error("❌ --collect болон --auto-register-ийг хамт ажиллуулахгүй.");
+  process.exit(1);
+}
 
 if (isAutoRegister && !(registerLimit > 0) && !(targetBair && targetToot)) {
   console.error("❌ --auto-register нь --limit <N> эсвэл --bair <байр> --toot <тоот>-той хамт ажиллана.");
@@ -205,9 +232,13 @@ function summarizeBills(rawList) {
       paidCount++;
       continue;
     }
+    // Бодит BPay өгөгдөл (2026-11-09): billAmount = үндсэн дүн, billTotalAmount = үндсэн + алданги
+    //   (48600 + 18468 = 67068). Postman жишээнд эсрэгээрээ байсан тул бага нь үндсэн, их нь алдангитай гэж авна.
     const lateFee = toAmount(b.billLateFee ?? b.billlateFee ?? b.lateFee);
-    const amount = toAmount(b.billTotalAmount ?? b.totalAmount ?? b.amount ?? b.billAmount);
-    const withLateFee = toAmount(b.billAmount) || amount + lateFee;
+    const a1 = toAmount(b.billAmount ?? b.amount);
+    const a2 = toAmount(b.billTotalAmount ?? b.totalAmount);
+    const amount = a1 && a2 ? Math.min(a1, a2) : a1 || a2;
+    const withLateFee = a1 && a2 ? Math.max(a1, a2) : amount + lateFee;
     const biller = String(b.billerName || "").trim() || "—";
     const isSokh = isSokhBiller(biller);
     if (isSokh) {
@@ -234,7 +265,15 @@ function summarizeBills(rawList) {
     lateFeeTotal,
     otherTotal,
     sokhBillsCount: bills.filter((x) => x.isSokh).length,
-    bpayReportedTotal: header && header.newBillAmount !== undefined ? toAmount(header.newBillAmount) : null,
+    totalWithLateFee: bills.filter((x) => x.isSokh).reduce((s, x) => s + x.withLateFee, 0),
+    // Хэрэглэгч нуусан (removeBill) биллүүд — тулгалтад ороогүй, зөвхөн тоолно.
+    hiddenSokhBills: Array.isArray(header?.hiddenNewBills)
+      ? header.hiddenNewBills.filter((x) => isSokhBiller(x?.billerName)).length
+      : 0,
+    // BPay-ийн "шинэ" биллийн нийт (бүх нэхэмжлэгч) — зөвхөн лавлагаа.
+    bpayReportedTotal: header && (header.newBillsAmount ?? header.newBillAmount) !== undefined
+      ? toAmount(header.newBillsAmount ?? header.newBillAmount)
+      : null,
     byBiller,
     bills,
     paidCount,
@@ -412,7 +451,8 @@ function generateHtml(report, outputPath) {
         '<td class="py-2 px-3 bg-sky-50/30 text-right font-mono">' + (r.bpay && !r.bpay.error
           ? '<div class="font-black">' + money(r.bpay.total) + '</div>' +
             (r.bpay.lateFeeTotal ? '<div class="text-[10px] text-rose-500">+ алданги ' + money(r.bpay.lateFeeTotal) + '</div>' : '') +
-            (r.bpay.bpayReportedTotal !== null && r.bpay.bpayReportedTotal !== undefined && Math.abs(r.bpay.bpayReportedTotal - r.bpay.total) >= 1 ? '<div class="text-[10px] text-slate-500">BPay нийт: ' + money(r.bpay.bpayReportedTotal) + '</div>' : '') +
+            (r.bpay.lateFeeTotal ? '<div class="text-[10px] text-slate-500">Алдангитай: ' + money(r.bpay.totalWithLateFee) + '</div>' : '') +
+            (r.bpay.hiddenSokhBills ? '<div class="text-[10px] text-amber-600">' + r.bpay.hiddenSokhBills + ' нуусан билл</div>' : '') +
             (Object.keys(r.bpay.byBiller || {}).length > 1 ? Object.entries(r.bpay.byBiller).map(([k, v]) => '<div class="text-[10px] text-slate-500">' + esc(k) + ': ' + money(v) + '</div>').join('') : '') + (bills.length ? '<button onclick="toggle(\\'' + r.key + '\\')" class="text-[10px] text-sky-700 font-bold underline">' + bills.length + ' билл</button>' : '<div class="text-[10px] text-slate-400">Төлөх биллгүй</div>') + (r.bpay.paidCount ? '<div class="text-[10px] text-slate-400">' + r.bpay.paidCount + ' төлөгдсөн</div>' : '')
           : '—') + '</td>' +
         '<td class="py-2 px-3 text-right font-mono font-black ' + (diff > 0 ? 'text-rose-600' : diff < 0 ? 'text-amber-600' : 'text-emerald-600') + '">' + (diff === null || diff === undefined ? '—' : (diff > 0 ? '+' : '') + money(diff)) + '</td>' +
@@ -460,10 +500,22 @@ async function run() {
     return;
   }
 
+  if (cleanupUser) {
+    // Зөвхөн BPay-ээс --collect-оор үүсгэсэн холболтыг устгана — MongoDB-д холбогдохгүй.
+    await cleanupCollected(require("../services/walletApiService"), cleanupUser);
+    return;
+  }
+
   const uriTemplate = getMongoUriTemplate();
   console.log("=".repeat(80));
   console.log(`🏢 ${TIMETOWER_ORG_NAME} — СӨХ авлага ба BPay биллийн тулгалт`);
-  console.log(isAutoRegister ? "⚡ ГОРИМ: BPay-д холбох (бичилт хийнэ)" : "🛡️  ГОРИМ: Зөвхөн унших");
+  console.log(
+    isAutoRegister
+      ? "⚡ ГОРИМ: BPay-д холбох (бичилт хийнэ)"
+      : collectUser
+        ? `🧪 ГОРИМ: Түр цуглуулах — ${collectUser.slice(0, 2)}****${collectUser.slice(-2)} BPay бүртгэлд холбоно, Sukh санд бичихгүй`
+        : "🛡️  ГОРИМ: Зөвхөн унших"
+  );
   console.log("=".repeat(80));
 
   const connect = async (dbName) => {
@@ -483,6 +535,21 @@ async function run() {
     process.exit(1);
   }
 
+  // --auto-register нь оршин суугчийн апп-д WALLET_API хаяг нэмдэг. Төрийн банк горим
+  // асаагүй үед апп OWN_ORG болон BPay-г ХОЁУЛАНГ нь төлөх дүнд нэмж, давхар төлбөрийн
+  // эрсдэл үүснэ — тиймээс зөвхөн горим асаалттай үед ажиллана.
+  if (isAutoRegister) {
+    const org = await mainConn
+      .collection("baiguullaga")
+      .findOne({ _id: new mongoose.Types.ObjectId(TIMETOWER_ORG_ID) }, { projection: { "tokhirgoo.bpayAshiglakhEsekh": 1 } });
+    if (org?.tokhirgoo?.bpayAshiglakhEsekh !== true) {
+      console.error("❌ --auto-register: Төрийн банк (BPay) горим асаагүй байна. Вэбийн Тохиргоо → Нэмэлт → «Төрийн банк»-аас эхлээд асаана уу.");
+      await mainConn.close();
+      await tenantConn.close();
+      process.exit(1);
+    }
+  }
+
   let wallet = null;
   try {
     wallet = require("../services/walletApiService");
@@ -493,8 +560,8 @@ async function run() {
   }
   if (!wallet) {
     console.log("   ⚠️ BPay API-гүй ажиллаж байна — биллийн дүн, кодын шалгалт хийгдэхгүй.");
-    if (isAutoRegister) {
-      console.error("❌ BPay API-гүйгээр холбох боломжгүй.");
+    if (isAutoRegister || collectUser) {
+      console.error("❌ BPay API-гүйгээр холбох/цуглуулах боломжгүй.");
       process.exit(1);
     }
   }
@@ -719,15 +786,12 @@ async function run() {
         (!targetBair || u.building === targetBair) && (!targetToot || u.toot === normalizeToot(targetToot))
     );
 
-    if (wallet && (doProbe || isAutoRegister) && unlinked.length) {
+    if (wallet && (doProbe || isAutoRegister || collectUser) && unlinked.length) {
       // BPay API нь userId толгой шаарддаг — бүртгэлтэй хэрэглэгчийн утсыг ашиглана.
-      let probeUser = normalizePhone(probeUserArg);
+      // Оршин суугчийн утсыг өөрөө сонгохгүй — зөвхөн тодорхой өгсөн (өөрийн) дугаар.
+      const probeUser = normalizePhone(probeUserArg) || collectUser;
       if (!probeUser) {
-        const known = [...units.values()].flatMap((u) => u.bpayEntries).find((e) => e.utas && e.billingId);
-        probeUser = known ? known.utas : "";
-      }
-      if (!probeUser) {
-        console.log("\n⚠️ 5. Кодыг шалгах BPay хэрэглэгч олдсонгүй (--probe-user <утас> өгнө үү).");
+        console.log("\n⚠️ 5. Кодыг шалгахгүй: --probe-user <өөрийн утас> өгнө үү.");
       } else {
         probe.enabled = true;
         probe.userLabel = `${probeUser.slice(0, 2)}****${probeUser.slice(-2)}`;
@@ -778,6 +842,85 @@ async function run() {
     }
 
     // -----------------------------------------------------------------------
+    // 5б. Түр цуглуулах (--collect): өөрийн BPay бүртгэлд холбож билл татна. Sukh санд бичихгүй.
+    // -----------------------------------------------------------------------
+    const collectStats = { enabled: !!collectUser, created: 0, reused: 0, fetched: 0, failed: 0 };
+    if (collectUser) {
+      const candidates = unlinked.filter((u) => {
+        const p = probeResults.get(u.key);
+        return p?.found && p.codeMatches && p.customerId;
+      });
+      const max = registerLimit > 0 ? registerLimit : candidates.length;
+      const todo = candidates.slice(0, max);
+      const store = loadCollectStore(collectUser);
+      // Энэ бүртгэлд АЛЬ ХЭДИЙН байгаа холболтууд — эдгээрийг "өмнөх" гэж тэмдэглээд cleanup хэзээ ч устгахгүй.
+      if (wallet.clearBillingListCache) wallet.clearBillingListCache(collectUser);
+      let preList;
+      try {
+        preList = (await wallet.getBillingList(collectUser)) || [];
+      } catch (e) {
+        throw new Error(`Бүртгэлийн одоогийн холболтыг уншиж чадсангүй — цуглуулахыг зогсоолоо: ${e.message}`);
+      }
+      const preByCustomer = new Map(preList.filter((b) => b.customerId).map((b) => [String(b.customerId), String(b.billingId)]));
+      const preBillingIds = new Set(preList.map((b) => String(b.billingId)));
+      console.log(`\n🧪 5б. ${todo.length} өрхийг ${collectUser.slice(0, 2)}****${collectUser.slice(-2)} бүртгэлд түр холбож билл татаж байна (өмнө нь ${preList.length} холболттой)...`);
+
+      let done = 0;
+      await inBatches(todo, 4, async (u) => {
+        const p = probeResults.get(u.key);
+        try {
+          let rec = store.items[p.customerId];
+          if (rec && rec.billingId && !rec.removedAt) {
+            collectStats.reused++;
+          } else if (preByCustomer.has(p.customerId)) {
+            // Хэрэглэгч өөрөө аль хэдийн холбосон — ашиглана, гэхдээ cleanup устгахгүй.
+            rec = { key: u.key, customerId: p.customerId, customerCode: u.customerCode, billingId: preByCustomer.get(p.customerId), preExisting: true };
+            store.items[p.customerId] = rec;
+            collectStats.reused++;
+          } else {
+            const saved = await wallet.saveBilling(collectUser, { customerId: p.customerId });
+            const billingId = String(saved?.billingId || saved?.id || "");
+            if (!billingId) throw new Error("saveBilling billingId буцаасангүй");
+            rec = {
+              key: u.key,
+              customerId: p.customerId,
+              customerCode: u.customerCode,
+              billingId,
+              // BPay байгаа холболтоо буцаасан бол энэ нь бидний үүсгэсэн биш.
+              preExisting: preBillingIds.has(billingId),
+              createdAt: new Date().toISOString(),
+            };
+            store.items[p.customerId] = rec;
+            if (rec.preExisting) collectStats.reused++;
+            else collectStats.created++;
+            saveCollectStore(store); // эвдэрвэл ч цэвэрлэх боломжтой байлгахын тулд тухай бүр хадгална
+          }
+          const summary = summarizeBills(await wallet.getBillingBills(collectUser, rec.billingId));
+          bpayResults.set(u.key, { billingId: rec.billingId, ...summary, source: "COLLECT" });
+          u.bpayEntries.push({
+            source: "COLLECT",
+            ner: `${p.customerName || ""} (түр холболт)`.trim(),
+            utas: "",
+            customerCode: u.customerCode,
+            customerId: p.customerId,
+            billingId: rec.billingId,
+            walletUserId: "",
+          });
+          collectStats.fetched++;
+        } catch (e) {
+          collectStats.failed++;
+          bpayResults.set(u.key, { billingId: "", total: 0, bills: [], paidCount: 0, error: `Цуглуулах: ${e.response?.data?.responseMsg || e.message}` });
+          u.bpayEntries.push({ source: "COLLECT", ner: p.customerName || "", utas: "", customerCode: u.customerCode, billingId: "" });
+        }
+        done++;
+        if (done % 20 === 0 || done === todo.length) process.stdout.write(`   └─ ${done}/${todo.length}\r`);
+      });
+      saveCollectStore(store);
+      console.log(`\n   ✅ Шинээр холбосон: ${collectStats.created}, өмнөхийг ашигласан: ${collectStats.reused}, билл татсан: ${collectStats.fetched}, алдаа: ${collectStats.failed}`);
+      console.log(`   🧹 Дараа нь устгах: node scripts/match_timetower_bpay.js --cleanup-collect ${collectUser}`);
+    }
+
+    // -----------------------------------------------------------------------
     // 6. BPay-д холбох (--auto-register)
     // -----------------------------------------------------------------------
     const registerResults = new Map();
@@ -790,10 +933,11 @@ async function run() {
       });
       const max = registerLimit > 0 ? registerLimit : candidates.length;
       for (const u of candidates.slice(0, max)) {
-        const c = u.contracts.find((x) => x.phone) || u.contracts[0];
+        // Оршин суугчтай (апп хэрэглэгчтэй) гэрээг эхэлж; утсыг registerUnit оршин суугчаас авна.
+        const c = u.contracts.find((x) => x.orshinSuugchId) || u.contracts.find((x) => x.phone) || u.contracts[0];
         const label = `${u.building}-${u.toot}`;
-        if (!c || !c.phone) {
-          registerResults.set(u.key, { ok: false, message: "Гэрээнд утас алга" });
+        if (!c || (!c.orshinSuugchId && !c.phone)) {
+          registerResults.set(u.key, { ok: false, message: "Гэрээнд оршин суугч, утас алга" });
           continue;
         }
         try {
@@ -801,9 +945,9 @@ async function run() {
           registerResults.set(u.key, res);
           console.log(`   ${res.ok ? "✅" : "❌"} ${label}: ${res.message}`);
           if (res.ok && res.billingId) {
-            u.bpayEntries.push({ source: "AUTO_REGISTERED", ner: c.ner, utas: c.phone, customerCode: u.customerCode, billingId: res.billingId, walletUserId: res.walletUserId });
+            u.bpayEntries.push({ source: "AUTO_REGISTERED", ner: c.ner, utas: res.walletUserId, customerCode: u.customerCode, billingId: res.billingId, walletUserId: res.walletUserId });
             try {
-              bpayResults.set(u.key, { billingId: res.billingId, ...summarizeBills(await wallet.getBillingBills(c.phone, res.billingId)) });
+              bpayResults.set(u.key, { billingId: res.billingId, ...summarizeBills(await wallet.getBillingBills(res.walletUserId, res.billingId)) });
             } catch (e) {
               bpayResults.set(u.key, { billingId: res.billingId, total: 0, bills: [], paidCount: 0, error: e.message });
             }
@@ -895,6 +1039,8 @@ async function run() {
               bills: live?.bills || [],
               paidCount: live?.paidCount || 0,
               otherTotal: live?.otherTotal || 0,
+              totalWithLateFee: live?.totalWithLateFee || 0,
+              hiddenSokhBills: live?.hiddenSokhBills || 0,
               sokhBillsCount: live?.sokhBillsCount || 0,
               bpayReportedTotal: live?.bpayReportedTotal ?? null,
               byBiller: live?.byBiller || {},
@@ -913,6 +1059,7 @@ async function run() {
       organization: { id: TIMETOWER_ORG_ID, name: TIMETOWER_ORG_NAME, buildings: BUILDINGS },
       codePattern,
       probe,
+      collect: collectStats,
       counts: {
         totalUnits: allRows.filter((r) => r.sukh).length,
         bpayLinked: allRows.filter((r) => r.bpay && r.bpay.billingId).length,
@@ -965,10 +1112,11 @@ async function run() {
     fs.writeFileSync(
       unitsCsvPath,
       toCsv([
-        ["Байр", "Тоот", "Customer code", "Гэрээ", "СӨХ систем үлдэгдэл", "BPay СӨХ төлөх", "BPay СӨХ алданги", "BPay СӨХ биллийн тоо", "BPay бусад нэхэмжлэгч", "Зөрүү (СӨХ - BPay)", "Төлөв"],
+        ["Байр", "Тоот", "Customer code", "Гэрээ", "СӨХ систем үлдэгдэл", "BPay СӨХ төлөх (алдангигүй)", "BPay СӨХ алданги", "BPay СӨХ алдангитай", "BPay СӨХ биллийн тоо", "BPay СӨХ сарууд", "BPay бусад нэхэмжлэгч", "Зөрүү (СӨХ - BPay алдангигүй)", "Төлөв"],
         ...allRows.map((r) => [
           r.building, r.toot, r.customerCode, r.sukh?.gereeniiDugaar || "", r.sukh ? r.sukhBalance : "",
-          r.bpay && !r.bpay.error ? r.bpay.total : "", r.bpay?.lateFeeTotal || "", r.bpay?.sokhBillsCount ?? "",
+          r.bpay && !r.bpay.error ? r.bpay.total : "", r.bpay?.lateFeeTotal || "", r.bpay && !r.bpay.error ? r.bpay.totalWithLateFee : "",
+          r.bpay?.sokhBillsCount ?? "", (r.bpay?.bills || []).filter((b) => b.isSokh).map((b) => b.billPeriod).join(" "),
           r.bpay?.otherTotal || "", r.diff ?? "", STATUS_META[r.status]?.label || r.status,
         ]),
       ]),
@@ -1093,6 +1241,47 @@ function loadSavedBairIds(knownBpayBairIds) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// --collect / --cleanup-collect
+// ---------------------------------------------------------------------------
+function loadCollectStore(phone) {
+  const file = collectFile(phone);
+  if (fs.existsSync(file)) {
+    const s = JSON.parse(fs.readFileSync(file, "utf-8"));
+    if (s && s.user === phone && s.items) return s;
+  }
+  return { user: phone, items: {} };
+}
+
+function saveCollectStore(store) {
+  fs.mkdirSync(outDir, { recursive: true });
+  fs.writeFileSync(collectFile(store.user), JSON.stringify(store, null, 2), "utf-8");
+}
+
+/** --collect-оор ҮҮСГЭСЭН холболтуудыг л BPay-ээс устгана (өмнө нь байсныг хөндөхгүй). */
+async function cleanupCollected(wallet, phone) {
+  const store = loadCollectStore(phone);
+  // Зөвхөн --collect-оор ҮҮСГЭСЭН холболт. Хэрэглэгчийн өмнөх холболтыг (preExisting) хэзээ ч устгахгүй.
+  const items = Object.values(store.items).filter((x) => x.billingId && !x.removedAt && !x.preExisting);
+  console.log(`🧹 ${phone.slice(0, 2)}****${phone.slice(-2)} бүртгэлээс ${items.length} түр холболт устгана...`);
+  let ok = 0;
+  let failed = 0;
+  for (const it of items) {
+    try {
+      await wallet.removeBilling(phone, it.billingId);
+      it.removedAt = new Date().toISOString();
+      ok++;
+    } catch (e) {
+      it.removeError = e.response?.data?.responseMsg || e.message;
+      failed++;
+    }
+    if ((ok + failed) % 20 === 0) saveCollectStore(store);
+  }
+  saveCollectStore(store);
+  console.log(`✅ Устгасан: ${ok}, алдаа: ${failed}. Бүртгэл: ${collectFile(phone)}`);
+  if (failed) process.exitCode = 1;
+}
+
 /**
  * BPay bairId мэдэгдэхгүй байрыг BPay-ийн хаягийн модноос хайна:
  * Улаанбаатар -> Баянзүрх -> 26-р хороо -> "<байр>" (яг тоогоор, жишээ нь 2180-ийг 218 гэж авахгүй).
@@ -1125,14 +1314,34 @@ async function discoverMissingBairIds(wallet, knownBpayBairIds) {
  *   1. BPay хэрэглэгч (утсаар) — байхгүй бол бүртгэнэ. walletUserId = утас.
  *   2. Хаягаар олдсон BPay customerId (UUID)-тай billing тухайн хэрэглэгчид байвал түүнийг
  *      ашиглана, үгүй бол saveBilling({ customerId }). billingId буцаагүй бол локал санд бичихгүй.
- *   3. amarSukh.orshinSuugch-ийн toots-д WALLET_API бичлэг нэмнэ/шинэчилнэ.
- *      Оршин суугчийг гэрээний orshinSuugchId-аар, дараа нь утсаар хайна. Олдохгүй бол шинээр үүсгэхгүй.
+ *   3. amarSukh.orshinSuugch-ийн toots-д WALLET_API бичлэгийг атомик байдлаар нэмнэ/шинэчилнэ
+ *      (аппын бүтэцтэй ижил, бусад toots-д хүрэхгүй).
+ *   BPay-д бичихээс ӨМНӨ: оршин суугч олдох, утас нь гэрээний утастай ижил, үндсэн байгууллагатай
+ *   байх ёстой. Аль нэг нь таарахгүй бол BPay ба сан хоёуланд юу ч бичихгүй.
  */
 async function registerUnit(mainConn, wallet, unit, contract, probeHit) {
   if (!probeHit || !probeHit.customerId) return { ok: false, message: "BPay customerId алга" };
-  const phone = contract.phone;
+  // 0. BPay-д юу ч бичихээс ӨМНӨ локал нөхцөлийг шалгана — аль нэг нь таарахгүй бол хоёр системд хүрэхгүй.
+  const residents = mainConn.collection("orshinSuugch");
+  let resident = null;
+  if (contract.orshinSuugchId && mongoose.Types.ObjectId.isValid(contract.orshinSuugchId)) {
+    resident = await residents.findOne({ _id: new mongoose.Types.ObjectId(contract.orshinSuugchId) });
+  }
+  if (!resident && contract.phone) {
+    const p = contract.phone;
+    resident = await residents.findOne({ $or: [{ utas: p }, { utas: `+976${p}` }, { nevtrekhNer: p }] });
+  }
+  const skip = (msg) => ({ ok: false, message: `Алгаслаа (BPay, сан хоёуланд хүрээгүй): ${msg}` });
+  if (!resident) return skip("оршин суугч олдоогүй");
+  // Апп BPay-ээс оршин суугчийн ӨӨРИЙН утсаар хайдаг — тиймээс тэр утсаар бүртгэнэ.
+  const phone = normalizePhone(resident.utas);
+  if (!phone) return skip("оршин суугчийн утас алга");
   // BPay-д walletUserId нь утасны дугаар өөрөө.
   const walletUserId = phone;
+  // Апп нэгдсэн сангийн хэрэглэгчид өөр барилга үүсгэдэг — тэр замыг энд давтахгүй.
+  if (!resident.baiguullagiinId || String(resident.baiguullagiinId) === CENTRALIZED_ORG_ID) {
+    return skip("үндсэн байгууллагагүй/нэгдсэн сангийн хэрэглэгч");
+  }
 
   const userInfo = await wallet.getUserInfo(phone).catch(() => null);
   if (!userInfo) {
@@ -1148,7 +1357,13 @@ async function registerUnit(mainConn, wallet, unit, contract, probeHit) {
   // BPay-д customerId нь UUID, customerCode нь 2003260... код — хоёр өөр талбар.
   const customerId = probeHit.customerId;
   if (wallet.clearBillingListCache) wallet.clearBillingListCache(phone);
-  const existing = (await wallet.getBillingList(phone).catch(() => [])) || [];
+  let existing;
+  try {
+    existing = (await wallet.getBillingList(phone)) || [];
+  } catch (e) {
+    // Жагсаалт уншигдахгүй бол давхар холболт үүсгэх эрсдэлтэй — алгасна.
+    return { ok: false, message: `BPay холболтын жагсаалт уншигдсангүй, алгаслаа: ${e.message}` };
+  }
   let billing = existing.find(
     (b) => String(b.customerId) === customerId || String(b.customerCode) === unit.customerCode
   );
@@ -1156,47 +1371,41 @@ async function registerUnit(mainConn, wallet, unit, contract, probeHit) {
   const billingId = billing?.billingId || billing?.id || "";
   if (!billingId) return { ok: false, message: "BPay billingId буцаасангүй — локал санд бичээгүй" };
 
-  const residents = mainConn.collection("orshinSuugch");
-  let resident = null;
-  if (contract.orshinSuugchId && mongoose.Types.ObjectId.isValid(contract.orshinSuugchId)) {
-    resident = await residents.findOne({ _id: new mongoose.Types.ObjectId(contract.orshinSuugchId) });
-  }
-  if (!resident) {
-    resident = await residents.findOne({ $or: [{ utas: phone }, { utas: `+976${phone}` }, { nevtrekhNer: phone }] });
-  }
-  if (!resident) {
-    return { ok: true, billingId, walletUserId, message: `BPay-д холбогдсон (billing ${billingId.slice(0, 8)}), локал оршин суугч олдоогүй` };
-  }
-
-  const building = BUILDINGS.find((b) => b.code === unit.building);
-  const entry = {
+  // Аппын бичлэгтэй ижил бүтэц (orshinSuugch.js "havakh" урсгал): үндсэн байгууллагатай
+  // хэрэглэгчийн WALLET_API toot-д baiguullagiinId/barilgiinId бичдэггүй.
+  const fields = {
     toot: unit.toot,
     source: "WALLET_API",
-    bairniiNer: billing.customerAddress || probeHit.address || building.name,
+    bairniiNer: billing.customerAddress || probeHit.address || "",
     ovog: contract.ovog || "",
-    ner: contract.ner || billing.customerName || "",
-    baiguullagiinId: TIMETOWER_ORG_ID,
-    barilgiinId: building.sukhId,
-    walletBairId: probeHit.bairId || billing.bairId || "",
+    ner: contract.ner || "",
+    walletBairId: probeHit.bairId || "",
     walletDoorNo: unit.toot,
     walletUserId,
     walletCustomerId: customerId,
     walletCustomerCode: unit.customerCode,
     billingId,
-    createdAt: new Date(),
+  };
+  const sameEntry = {
+    source: "WALLET_API",
+    $or: [{ walletCustomerCode: unit.customerCode }, { walletCustomerId: customerId }],
   };
 
-  const toots = Array.isArray(resident.toots) ? resident.toots : [];
-  const idx = toots.findIndex(
-    (t) => t.source === "WALLET_API" &&
-      (String(t.walletCustomerCode) === unit.customerCode || String(t.walletCustomerId) === customerId)
+  // Атомик шинэчлэлт: бусад toots-д хүрэхгүй, зэрэг явж буй аппын өөрчлөлтийг дарахгүй.
+  const upd = await residents.updateOne(
+    { _id: resident._id, toots: { $elemMatch: sameEntry } },
+    { $set: Object.fromEntries(Object.entries(fields).map(([k, v]) => [`toots.$.${k}`, v])) }
   );
-  if (idx >= 0) toots[idx] = { ...toots[idx], ...entry, createdAt: toots[idx].createdAt || entry.createdAt };
-  else toots.push(entry);
-
-  const set = { toots };
-  if (!resident.walletUserId && walletUserId) set.walletUserId = walletUserId;
-  await residents.updateOne({ _id: resident._id }, { $set: set });
+  if (upd.matchedCount === 0) {
+    await residents.updateOne(
+      { _id: resident._id, toots: { $not: { $elemMatch: sameEntry } } },
+      { $push: { toots: { _id: new mongoose.Types.ObjectId(), turul: "Орон сууц", ...fields, createdAt: new Date() } } }
+    );
+  }
+  await residents.updateOne(
+    { _id: resident._id, $or: [{ walletUserId: { $exists: false } }, { walletUserId: null }, { walletUserId: "" }] },
+    { $set: { walletUserId } }
+  );
 
   return { ok: true, billingId, walletUserId, message: `Холбогдсон (billing ${billingId.slice(0, 8)})` };
 }

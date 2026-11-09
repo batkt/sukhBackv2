@@ -27,6 +27,8 @@ const {
   importTulultFromExcel,
   uriidchlekhTulultExcel,
 } = require("../controller/excelImportController");
+// Төрийн банк (BPay) горимд Sukh-ийн журналд гараар бичихийг хаана.
+const { bpayKhoriglokh } = require("../services/bpayService");
 const {
   tsakhilgaanExcelTemplateAvya,
   tsakhilgaanExcelTatya,
@@ -89,6 +91,7 @@ router.post(
   "/importInitialBalanceFromExcel",
   uploadFile.single("file"),
   tokenShalgakh,
+  bpayKhoriglokh,
   importInitialBalanceFromExcel,
 );
 
@@ -98,6 +101,7 @@ router.post(
   "/importTulultFromExcel",
   uploadFile.single("file"),
   tokenShalgakh,
+  bpayKhoriglokh,
   importTulultFromExcel,
 );
 
@@ -304,7 +308,7 @@ const {
   khungulultOruulakhErkhteiEsekh,
 } = require("../utils/khungulultErkh");
 
-router.post("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
+router.post("/guilgeeAvlaguud", tokenShalgakh, bpayKhoriglokh, async (req, res, next) => {
   const { gereeniiId, nekhemjlekhId, tukhainBaaziinKholbolt, tailbar, baiguullagiinId, barilgiinId } = req.body;
 
   const khungulultEsekh =
@@ -485,7 +489,7 @@ router.get("/guilgeeAvlaguud", tokenShalgakh, async (req, res, next) => {
 // `ekhniiUldegdel` талбарыг хамт тэглэнэ. Эс тэгвэл `invoiceService`-ийн
 // `ensureEkhniiUldegdel` болон эхний нэхэмжлэх үүсгэх урсгал устгасан мөрийг
 // талбараас нь сэргээж, дахин бичдэг.
-router.delete("/guilgeeAvlaguud/:id", tokenShalgakh, async (req, res, next) => {
+router.delete("/guilgeeAvlaguud/:id", tokenShalgakh, bpayKhoriglokh, async (req, res, next) => {
   try {
     const kholbolt = req.body.tukhainBaaziinKholbolt;
     if (!kholbolt) return next();
@@ -653,7 +657,7 @@ router.put(
 );
 
 // Хөнгөлөлт — бөөнөөр бүртгэх, устгах
-router.route("/khungulultKhadgalya").post(tokenShalgakh, khungulultKhadgalya);
+router.route("/khungulultKhadgalya").post(tokenShalgakh, bpayKhoriglokh, khungulultKhadgalya);
 router.route("/khungulultSuuriAvya").post(tokenShalgakh, khungulultSuuriAvya);
 
 // ── Гараж / агуулахын нэхэмжлэх ──
@@ -710,8 +714,8 @@ router.post("/nekhemjlekhZadargaa", tokenShalgakh, async (req, res, next) => {
     next(err);
   }
 });
-router.route("/khungulultUstgaya").post(tokenShalgakh, khungulultUstgaya);
-router.route("/khungulultZasvarlaya").post(tokenShalgakh, khungulultZasvarlaya);
+router.route("/khungulultUstgaya").post(tokenShalgakh, bpayKhoriglokh, khungulultUstgaya);
+router.route("/khungulultZasvarlaya").post(tokenShalgakh, bpayKhoriglokh, khungulultZasvarlaya);
 router
   .route("/khungulultiinTuukhJagsaalt")
   .get(tokenShalgakh, khungulultiinTuukhJagsaalt)

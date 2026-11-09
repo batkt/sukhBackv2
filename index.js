@@ -404,6 +404,8 @@ app.use(walletQpayRoute);
 // Хэтэвчний тайлан (zevtabs «Amarhome» цэс). Доорх зурагны catch-all
 // (`/:baiguullagiinId/:ner`)-аас ӨМНӨ байх ёстой.
 app.use(walletTailanRoute);
+// Төрийн банк (BPay) горим — `/:baiguullagiinId/:ner` catch-all-аас ӨМНӨ.
+app.use(require("./routes/bpayRoute"));
 app.use(baiguullagaRoute);
 app.use(ajiltanRoute);
 app.use(licenseRoute);
@@ -505,6 +507,12 @@ async function automataarNekhemjlekhUusgekh() {
 
         if (!tukhainBaaziinKholbolt) {
           console.log(`Байгууллага ${baiguullaga._id} холболт олдсонгүй`);
+          continue;
+        }
+
+        // Төрийн банк (BPay) горимд СӨХ-ийн төлбөрийг BPay нэхдэг — Sukh нэхэмжлэх үүсгэхгүй.
+        if (baiguullaga.tokhirgoo?.bpayAshiglakhEsekh === true) {
+          console.log(`⏭️ Байгууллага ${baiguullaga.ner}: Төрийн банк горим — нэхэмжлэх алгаслаа`);
           continue;
         }
 
@@ -790,7 +798,11 @@ if (
               await cgw.bankniiKhuulgaTatajKhadgalya(req, res, next);
 
               // 2. Identify resident payments (auto-matching by toot / phone)
-              await tulbur.tulultTaniya(req, res, next);
+              //    Төрийн банк (BPay) горимд төлбөрийг BPay-ээс авдаг — хуулгаас журналд бичихгүй.
+              const { bpayEsekh } = require("./services/bpayService");
+              if (!(await bpayEsekh(kholbolt.baiguullagiinId))) {
+                await tulbur.tulultTaniya(req, res, next);
+              }
 
             } catch (err) {
               console.error(`❌ [CRON] Error processing tenant ${kholbolt?.baiguullagiinId}:`, err.message || err);
@@ -813,6 +825,23 @@ if (
     "30 9 * * *",
     function () {
       require("./controller/ajiltan").orlogiinMsgIlgeeye("09:30");
+    },
+    {
+      scheduled: true,
+      timezone: "Asia/Ulaanbaatar",
+    }
+  );
+
+  // Төрийн банк (BPay) горим: 5 минут тутам СӨХ-ийн биллийг BPay-ээс синк хийнэ (bpayBill).
+  // Манай апп-аар төлсөн нь callback-аар шууд синк хийгдэнэ (bpayService.tulburiinDaraaSync).
+  cron.schedule(
+    "*/5 * * * *",
+    async function () {
+      try {
+        await require("./services/bpayService").bukhSyncKhiikh();
+      } catch (bpayErr) {
+        console.error("❌ [CRON] BPay sync error:", bpayErr.message);
+      }
     },
     {
       scheduled: true,

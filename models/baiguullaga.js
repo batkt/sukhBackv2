@@ -177,6 +177,8 @@ const baiguullagaSchema = new Schema(
             bank: String, // Банкны нэр
             ibanDugaar: String, // IBAN дугаар
           },
+          /** Төрийн банк (BPay) горим: энэ барилгын BPay хаягийн ID (address/bair). */
+          bpayBairId: String,
         },
         davkharuud: [
           {
@@ -252,6 +254,17 @@ const baiguullagaSchema = new Schema(
         type: Boolean,
         default: true,
       },
+      /**
+       * Төрийн банк (BPay) горим. Асаалттай үед СӨХ-ийн төлбөрийг ЗӨВХӨН BPay нэхнэ:
+       * Sukh нэхэмжлэх, QPay, алданги, журналд гараар бичих унтарна; Sukh-ийн
+       * тооцоо зөвхөн задаргааны лавлагаа болно. Дүн, төлөв `bpayBill`-ээс.
+       */
+      bpayAshiglakhEsekh: {
+        type: Boolean,
+        default: false,
+      },
+      /** BPay-д СӨХ-ийн билл орж эхэлсэн огноо (өмнөх өрийг тусад нь шийднэ). */
+      bpayEkhelsenOgnoo: Date,
       /**Хоногт бодох алдангийн хувь дээд тал 0.5 байна */
       aldangiinKhuvi: Number,
 
