@@ -792,7 +792,7 @@ async function kholbokhAjilEkhluulekh(kholbolt, baiguullagiinId) {
  * Нэг гэрээний BPay биллүүд + сар бүрийн Sukh задаргаа (лавлагаа, төлөх товчгүй).
  * Задаргааны нийлбэр BPay-ийн дүнтэй таарвал `taarsan: true`.
  */
-async function zadargaaAvya(kholbolt, gereeniiId) {
+async function zadargaaAvya(kholbolt, gereeniiId, { saruudToo = 12 } = {}) {
   const geree = await Geree(kholbolt).findById(gereeniiId);
   if (!geree) return null;
   const billuud = await BpayBill(kholbolt)
@@ -801,7 +801,7 @@ async function zadargaaAvya(kholbolt, gereeniiId) {
     .lean();
   const { calculateGereeCharges } = require("./invoiceService");
   const sar = [];
-  for (const b of billuud.slice(0, 12)) {
+  for (const b of billuud.slice(0, saruudToo)) {
     const [on, m] = String(b.sar || "").split("-").map(Number);
     let zadargaa = [];
     if (on && m) {
@@ -809,7 +809,12 @@ async function zadargaaAvya(kholbolt, gereeniiId) {
         const { charges } = await calculateGereeCharges(kholbolt, geree, { billingDate: new Date(on, m - 1, 15) });
         zadargaa = (charges || [])
           .filter((c) => !c.isEkhniiUldegdel && !c.ledgerDeerBaigaa && Number(c.dun) > 0)
-          .map((c) => ({ ner: c.ner, dun: Math.round(Number(c.dun) * 100) / 100 }));
+          .map((c) => ({
+            ner: c.ner,
+            dun: Math.round(Number(c.dun) * 100) / 100,
+            // "Зогсоол" = гараж, "Агуулах" = агуулах (invoiceService) — хуулгад ялгаж харуулна.
+            turul: c.zardliinTurul || "",
+          }));
       } catch (e) {
         zadargaa = [];
       }

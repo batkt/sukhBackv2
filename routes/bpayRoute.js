@@ -145,6 +145,48 @@ router.get("/bpay/billuud", tokenShalgakh, ajiltanShaardana, async (req, res, ne
   }
 });
 
+/**
+ * Ажилтны Хуулга (Гүйлгээний түүх → Хуулга): нэг гэрээний BPay-ийн сар бүрийн билл,
+ * төлөв, төлсөн огноо + сар бүрийн ашиглалтын зардлын задаргаа (гараж, агуулах орно).
+ * Төрийн банк горимгүй байгууллагад { bpay: false } буцна.
+ */
+router.get("/bpay/khuulga", tokenShalgakh, ajiltanShaardana, async (req, res, next) => {
+  try {
+    const kholbolt = kholboltAvya(req);
+    const orgId = bpay.khuseltiinBaiguullaga(req);
+    const gereeniiId = String(req.query.gereeniiId || "");
+    if (!kholbolt || !gereeniiId) return res.status(400).json({ success: false, message: "gereeniiId шаардлагатай" });
+    if (!(await bpay.bpayEsekh(orgId))) return res.json({ success: true, bpay: false });
+    const geree = await Geree(kholbolt).findById(gereeniiId).select("baiguullagiinId").lean();
+    if (!geree || String(geree.baiguullagiinId) !== orgId) {
+      return res.status(404).json({ success: false, message: "Гэрээ олдсонгүй" });
+    }
+    const h = await BpayHolbolt(kholbolt)
+      .findOne({ baiguullagiinId: orgId, gereeniiId })
+      .select("customerCode customerName suuldSync suuldAldaa salgasan")
+      .lean();
+    const ur = await bpay.zadargaaAvya(kholbolt, gereeniiId, { saruudToo: 24 });
+    const billuud = await BpayBill(kholbolt)
+      .find({ baiguullagiinId: orgId, gereeniiId })
+      .select("sar tulsunDun tulburiinEkhSurvalj davkharEsekh nuusan")
+      .lean();
+    const nemelt = new Map(billuud.map((b) => [b.sar, b]));
+    res.json({
+      success: true,
+      bpay: true,
+      holbolt: h || null,
+      ...ur,
+      saruud: (ur?.saruud || []).map((m) => ({ ...m, ...(nemelt.get(m.sar) ? {
+        tulsunDun: nemelt.get(m.sar).tulsunDun ?? null,
+        tulburiinEkhSurvalj: nemelt.get(m.sar).tulburiinEkhSurvalj || "",
+        nuusan: !!nemelt.get(m.sar).nuusan,
+      } : {}) })),
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
 router.get("/bpay/billiinTuukh/:id", tokenShalgakh, ajiltanShaardana, async (req, res, next) => {
   try {
     const kholbolt = kholboltAvya(req);
