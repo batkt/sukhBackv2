@@ -55,12 +55,13 @@ const TIMETOWER_ORG_NAME = "Тайм тауэр СӨХ";
 const TIMETOWER_DB_NAME = "timetower";
 const MAIN_DB_NAME = "amarSukh";
 
-// sukhId — СӨХ-ийн barilgiinId. bpayBairId — BPay-ийн хаягийн ID (мэдэгдэж байвал).
+// sukhId — СӨХ-ийн barilgiinId. bpayBairId — BPay-ийн хаягийн ID
+// ("БЗД 26-р хороо 21x-р байр", scripts/data/bpay_address_tree.json, 2026-11-09).
 const BUILDINGS = [
   { code: "216", sukhId: "6a978709d2d69c94c9e97f29", name: "Time tower 216", bpayBairId: "c7a26be9-32e1-4c50-866c-986e3ff8bb8c" },
-  { code: "217", sukhId: "6a979aafd2d69c94c9e9bf04", name: "Time tower 217", bpayBairId: "" },
-  { code: "218", sukhId: "6a979ad8d2d69c94c9e9bfac", name: "Time tower 218", bpayBairId: "" },
-  { code: "219", sukhId: "6a97bbebd2d69c94c9e9d915", name: "Time tower 219", bpayBairId: "" },
+  { code: "217", sukhId: "6a979aafd2d69c94c9e9bf04", name: "Time tower 217", bpayBairId: "9332131f-64bb-415a-ae8e-b43e025bf441" },
+  { code: "218", sukhId: "6a979ad8d2d69c94c9e9bfac", name: "Time tower 218", bpayBairId: "fa58c274-f0ff-45a8-becb-0b31eecba2da" },
+  { code: "219", sukhId: "6a97bbebd2d69c94c9e9d915", name: "Time tower 219", bpayBairId: "428badc2-d34b-4560-9010-43e9d09b1e1d" },
 ];
 const BUILDING_CODES = BUILDINGS.map((b) => b.code);
 const SUKH_ID_TO_CODE = new Map(BUILDINGS.map((b) => [b.sukhId, b.code]));
