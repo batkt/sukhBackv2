@@ -1,21 +1,35 @@
 /**
  * match_timetower_bpay.js
- * 
- * Тайм тауэр СӨХ (6a9786569a202a8f8f859f94) - 216, 217, 218, 219-р байрны
- * бүх оршин суугчдын хаягийг BPay-д автоматаар бүртгэж/холбон, СӨХ ба BPay-ийн
- * төлөгдөөгүй бүх төлөх боломжтой (PAYABLE) нэхэмжлэхүүдийг зэрэгцүүлэн шалгах тайлан үүсгэгч.
- * 
+ *
+ * Тайм тауэр СӨХ (216, 217, 218, 219-р байр) — СӨХ-ийн авлага ба BPay-ийн
+ * төлөх биллийг тоот бүрээр тулгах тайлан.
+ *
+ * BPay тал гэж ЗӨВХӨН BPay-ийн customer code (2003260 + байр + тоот...) эсвэл
+ * billingId-тай бичлэгийг тооцно. Аппын энгийн хэрэглэгч ("Time tower 216")
+ * BPay биш — тусдаа баганад харагдана.
+ *
+ * Customer code-ын загвар: 2003260 + байр(3) + тоот(5 орон, 0-ээр дүүргэсэн) + "0"
+ *   216-р байр, 2 тоот   -> 2003260216000020
+ *   217-р байр, 55 тоот  -> 2003260217000550
+ * Скрипт энэ загварыг BPay-д аль хэдийн холбогдсон өрхүүдээр шалгаж, тайланд гаргана.
+ *
  * ГОРИМУУД:
- *   1. [PREVIEW / AUDIT MODE] (Анхдагч - Аюулгүй, санд бичилт хийхгүй):
- *      node scripts/match_timetower_bpay.js
- *      -> BPay Live API-аас бүх төлөх боломжтой биллүүдийг татаж, тулган index.html үүсгэнэ.
- * 
- *   2. [AUTO-REGISTER MODE] (BPay-д бүртгэлгүй айлуудыг автоматаар бүртгэх):
- *      node scripts/match_timetower_bpay.js --auto-register
- *      -> BPay-д утас + тоотоор бүртгэж, хаягийг холбон, орон сууцны төлөх нэхэмжлэхийг татна.
- * 
- *   3. [TEST SINGLE UNIT] (Зөвхөн 1 айлыг туршиж шалгах):
- *      node scripts/match_timetower_bpay.js --auto-register --bair 216 --toot 2
+ *   1. Урьдчилан харах (анхдагч — санд бичихгүй, BPay-ээс зөвхөн уншина):
+ *        node scripts/match_timetower_bpay.js
+ *        node scripts/match_timetower_bpay.js --no-probe      (холбогдоогүй өрхийн кодыг BPay-ээс шалгахгүй)
+ *        node scripts/match_timetower_bpay.js --probe-user 99112233  (код шалгахад ашиглах BPay хэрэглэгчийн утас)
+ *
+ *   2. BPay-д холбох (BPay болон amarSukh.orshinSuugch-д бичнэ):
+ *        node scripts/match_timetower_bpay.js --auto-register --bair 216 --toot 2
+ *        node scripts/match_timetower_bpay.js --auto-register --limit 10
+ *      --limit эсвэл --bair + --toot заавал байна.
+ *
+ *   3. BPay-ийн хаягийн мод (хот → дүүрэг → хороо → байр)-ыг хадгалах (санд бичихгүй):
+ *        node scripts/match_timetower_bpay.js --save-address              (зөвхөн Улаанбаатар)
+ *        node scripts/match_timetower_bpay.js --save-address --all-cities (бүх хот/аймаг)
+ *      -> scripts/data/bpay_address_tree.json. Үндсэн ажиллагаа байрны BPay bairId-г эндээс авна.
+ *
+ *   Тайлан: scripts/output/ (эсвэл --out <хавтас>). Хувийн мэдээлэлтэй тул git-д орохгүй.
  */
 
 const fs = require("fs");
@@ -23,14 +37,11 @@ const path = require("path");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 
-// 1. Config & Environment auto-loading
 const configPaths = [
   path.join(__dirname, "../tokhirgoo/tokhirgoo.env"),
   path.join(__dirname, "tokhirgoo.env"),
   "./tokhirgoo/tokhirgoo.env",
-  "tokhirgoo.env",
 ];
-
 for (const p of configPaths) {
   if (fs.existsSync(p)) {
     dotenv.config({ path: p });
@@ -40,1378 +51,1052 @@ for (const p of configPaths) {
 }
 
 const TIMETOWER_ORG_ID = "6a9786569a202a8f8f859f94";
+const TIMETOWER_ORG_NAME = "Тайм тауэр СӨХ";
 const TIMETOWER_DB_NAME = "timetower";
 const MAIN_DB_NAME = "amarSukh";
 
+// sukhId — СӨХ-ийн barilgiinId. bpayBairId — BPay-ийн хаягийн ID (мэдэгдэж байвал).
 const BUILDINGS = [
-  { id: "6a978709d2d69c94c9e97f29", code: "216", name: "Time tower 216" },
-  { id: "6a979aafd2d69c94c9e9bf04", code: "217", name: "Time tower 217" },
-  { id: "6a979ad8d2d69c94c9e9bfac", code: "218", name: "Time tower 218" },
-  { id: "6a97bbebd2d69c94c9e9d915", code: "219", name: "Time tower 219" },
+  { code: "216", sukhId: "6a978709d2d69c94c9e97f29", name: "Time tower 216", bpayBairId: "c7a26be9-32e1-4c50-866c-986e3ff8bb8c" },
+  { code: "217", sukhId: "6a979aafd2d69c94c9e9bf04", name: "Time tower 217", bpayBairId: "" },
+  { code: "218", sukhId: "6a979ad8d2d69c94c9e9bfac", name: "Time tower 218", bpayBairId: "" },
+  { code: "219", sukhId: "6a97bbebd2d69c94c9e9d915", name: "Time tower 219", bpayBairId: "" },
 ];
+const BUILDING_CODES = BUILDINGS.map((b) => b.code);
+const SUKH_ID_TO_CODE = new Map(BUILDINGS.map((b) => [b.sukhId, b.code]));
 
-// CLI arguments
+const CUSTOMER_CODE_PREFIX = "2003260";
+const CUSTOMER_CODE_RE = /^2003260(216|217|218|219)(\d{5})(\d)$/;
+
+// ---------------------------------------------------------------------------
+// CLI
+// ---------------------------------------------------------------------------
+function argValue(name) {
+  const i = process.argv.indexOf(name);
+  return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : undefined;
+}
 const isAutoRegister = process.argv.includes("--auto-register");
-const targetBair = process.argv.find((a, i) => process.argv[i - 1] === "--bair");
-const targetToot = process.argv.find((a, i) => process.argv[i - 1] === "--toot");
-const limitArg = process.argv.find((a, i) => process.argv[i - 1] === "--limit");
-const registerLimit = limitArg ? parseInt(limitArg, 10) : Infinity;
+const doProbe = !process.argv.includes("--no-probe");
+const targetBair = argValue("--bair");
+const targetToot = argValue("--toot");
+const limitArg = argValue("--limit");
+const registerLimit = limitArg ? parseInt(limitArg, 10) : null;
+const probeUserArg = argValue("--probe-user");
+const outDir = argValue("--out") || path.join(__dirname, "output");
+const isSaveAddress = process.argv.includes("--save-address");
+const allCities = process.argv.includes("--all-cities");
+// BPay-ийн хаягийн мод (хувийн мэдээлэлгүй) — repo-д хадгална.
+const ADDRESS_TREE_PATH = path.join(__dirname, "data", "bpay_address_tree.json");
 
-function getMongoUriBase() {
-  const customUri = process.argv.find((a, i) => process.argv[i - 1] === "--uri");
-  if (customUri) return customUri;
-
-  const envUri =
-    process.env.MONGODB_URI ||
-    "mongodb://admin:Br1stelback1@127.0.0.1:27017/amarSukh?authSource=admin";
-  if (envUri.includes("{db}")) return envUri;
-  return envUri.replace(/\/[a-zA-Z0-9_-]+(\?|$)/, "/{db}$1");
+if (isAutoRegister && !(registerLimit > 0) && !(targetBair && targetToot)) {
+  console.error("❌ --auto-register нь --limit <N> эсвэл --bair <байр> --toot <тоот>-той хамт ажиллана.");
+  process.exit(1);
 }
 
-/** Тоот нормчлох (06 -> 6, 6 тоот -> 6, ' 15 ' -> 15) */
+function getMongoUriTemplate() {
+  const uri = argValue("--uri") || process.env.MONGODB_URI;
+  if (!uri) {
+    console.error("❌ MONGODB_URI тохиргоо олдсонгүй (tokhirgoo/tokhirgoo.env эсвэл --uri).");
+    process.exit(1);
+  }
+  if (uri.includes("{db}")) return uri;
+  return uri.replace(/\/[a-zA-Z0-9_-]+(\?|$)/, "/{db}$1");
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Тоот нормчлох: "06" -> "6", "6 тоот" -> "6" */
 function normalizeToot(val) {
-  if (!val && val !== 0) return "";
-  const s = String(val).trim().toLowerCase();
-  const cleaned = s
-    .replace(/\s*(тоот|-р тоот|р тоот|toot)$/i, "")
-    .replace(/^0+/, "")
-    .trim();
-  return cleaned || s;
+  if (val === null || val === undefined) return "";
+  const s = String(val).trim().toLowerCase().replace(/\s*(-?р\s*)?(тоот|toot)$/i, "").trim();
+  const noZeros = s.replace(/^0+(?=.)/, "");
+  return noZeros;
 }
 
-/** Утас нормчлох (Зөвхөн сүүлийн 8 орон) */
+/** Утас: сүүлийн 8 орон */
 function normalizePhone(val) {
+  if (Array.isArray(val)) val = val[0];
   if (!val) return "";
   const digits = String(val).replace(/\D/g, "");
-  return digits.length >= 8 ? digits.slice(-8) : digits;
+  return digits.length >= 8 ? digits.slice(-8) : "";
 }
 
-/** Мөнгөн дүн форматлах */
+/** Мөнгөн дүн: "145,800", "145 800.00", 145800 -> 145800 */
+function toAmount(val) {
+  if (val === null || val === undefined || val === "") return 0;
+  if (typeof val === "number") return Number.isFinite(val) ? val : 0;
+  const n = Number(String(val).replace(/[^\d.-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
 function formatMoney(num) {
   if (num === null || num === undefined || isNaN(num)) return "0 ₮";
   return Number(num).toLocaleString("mn-MN") + " ₮";
 }
 
-/** Байрны дугаарыг (216, 217, 218, 219) олох */
-function extractBuildingCodeFromAny(item, knownBairIds = {}) {
-  if (!item) return null;
-
-  // 1. Check known walletBairId
-  const bId = String(item.walletBairId || item.bairId || "");
-  if (bId) {
-    for (const [code, ids] of Object.entries(knownBairIds)) {
-      if (ids && ids.has && ids.has(bId)) return code;
-      if (Array.isArray(ids) && ids.includes(bId)) return code;
-    }
-  }
-
-  // 2. Check walletCustomerCode (e.g. 2003260216000020 -> 216)
-  const custCode = String(item.walletCustomerCode || item.customerCode || item.customerId || "");
-  const codeMatch = custCode.match(/2003260?(216|217|218|219)/);
-  if (codeMatch) return codeMatch[1];
-
-  // 3. Check barilgiinId
-  const barilgiinId = String(item.barilgiinId || "");
-  const foundBld = BUILDINGS.find((b) => b.id === barilgiinId);
-  if (foundBld) return foundBld.code;
-
-  // 4. Text inspection
-  const texts = [
-    item.bairniiNer,
-    item.customerAddress,
-    item.bairNer,
-    item.billingName,
-    item.soh,
-    item.tailbar,
-  ].filter(Boolean).join(" ");
-
-  if (/(?:time\s*tower|тайм\s*тауэр|байр)?\s*216/i.test(texts)) return "216";
-  if (/(?:time\s*tower|тайм\s*тауэр|байр)?\s*217/i.test(texts)) return "217";
-  if (/(?:time\s*tower|тайм\s*тауэр|байр)?\s*218/i.test(texts)) return "218";
-  if (/(?:time\s*tower|тайм\s*тауэр|байр)?\s*219/i.test(texts)) return "219";
-
-  return null;
+/** Байр + тоот -> BPay customer code. Тоот зөвхөн 1-5 оронтой тоо байх ёстой. */
+function makeCustomerCode(bairCode, toot) {
+  if (!BUILDING_CODES.includes(bairCode) || !/^\d{1,5}$/.test(toot)) return "";
+  return `${CUSTOMER_CODE_PREFIX}${bairCode}${toot.padStart(5, "0")}0`;
 }
 
-/** Тоот дугаарыг бүртгэлээс нормчлон олох */
-function extractTootFromAny(item) {
-  if (!item) return "";
-
-  if (item.walletDoorNo) {
-    const n = normalizeToot(item.walletDoorNo);
-    if (n) return n;
-  }
-  if (item.doorNo) {
-    const n = normalizeToot(item.doorNo);
-    if (n) return n;
-  }
-  if (item.toot) {
-    const n = normalizeToot(item.toot);
-    if (n) return n;
-  }
-
-  const texts = [item.customerAddress, item.bairniiNer].filter(Boolean).join(" ");
-  const m1 = texts.match(/,\s*(\d+)\s*$/);
-  if (m1 && m1[1] && !["216", "217", "218", "219"].includes(m1[1])) {
-    return normalizeToot(m1[1]);
-  }
-  const m2 = texts.match(/(?:216|217|218|219)[^\d]+(\d+)\s*(?:тоот|toot)?/i);
-  if (m2 && m2[1] && !["216", "217", "218", "219"].includes(m2[1])) {
-    return normalizeToot(m2[1]);
-  }
-
-  return "";
+/** BPay customer code -> { bairCode, toot } */
+function parseCustomerCode(code) {
+  const m = String(code || "").trim().match(CUSTOMER_CODE_RE);
+  if (!m) return null;
+  return { bairCode: m[1], toot: normalizeToot(m[2]), suffix: m[3] };
 }
 
-/** BPay 4 байрны walletBairId-уудыг сангаас болон BPay API-аас автоматаар олох */
-async function discoverBpayBairIds(mainConn, walletApiService) {
-  const bairIdMap = {
-    "216": new Set(["c7a26be9-32e1-4c50-866c-986e3ff8bb8c"]),
-    "217": new Set(),
-    "218": new Set(),
-    "219": new Set(),
-  };
-
-  try {
-    const docs = await mainConn.collection("orshinSuugch").find({
-      $or: [
-        { "toots.source": "WALLET_API" },
-        { "toots.bairniiNer": /216|217|218|219/ },
-        { "toots.walletCustomerCode": /2003260?(216|217|218|219)/ },
-      ],
-    }).project({ toots: 1 }).toArray();
-
-    for (const d of docs) {
-      for (const t of (d.toots || [])) {
-        if (!t.walletBairId) continue;
-        const text = `${t.bairniiNer || ""} ${t.customerAddress || ""} ${t.walletCustomerCode || ""}`;
-        for (const code of ["216", "217", "218", "219"]) {
-          if (text.includes(code)) {
-            bairIdMap[code].add(t.walletBairId);
-          }
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("   ⚠️ Сангаас bairId уншихад алдаа:", err.message);
-  }
-
-  // If any building missing, discover via BPay Address Tree API
-  const missing = Object.keys(bairIdMap).filter((k) => bairIdMap[k].size === 0);
-  if (missing.length > 0 && walletApiService) {
-    try {
-      const cities = await walletApiService.getAddressCities();
-      const ub = (cities || []).find((c) => /улаанбаатар|хот/i.test(c.name || c.cityName));
-      if (ub) {
-        const districts = await walletApiService.getAddressDistricts(ub.id || ub.cityId);
-        const bzd = (districts || []).find((d) => /баянзүрх/i.test(d.name || d.districtName));
-        if (bzd) {
-          const khoroos = await walletApiService.getAddressKhoroo(bzd.id || bzd.districtId);
-          const kh26 = (khoroos || []).find((k) => /26/i.test(k.name || k.khorooName));
-          if (kh26) {
-            const bairs = await walletApiService.getAddressBair(kh26.id || kh26.khorooId);
-            for (const b of (bairs || [])) {
-              const bName = b.name || b.bairName || "";
-              for (const code of missing) {
-                if (bName.includes(code)) {
-                  bairIdMap[code].add(b.id || b.bairId);
-                  console.log(`   └─ BPay API-аас олдсон ${code}-р байрны BairId: ${b.id || b.bairId} (${bName})`);
-                }
-              }
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("   ⚠️ BPay Address tree discovery амжилтгүй:", e.message);
-    }
-  }
-
-  return bairIdMap;
+/** СӨХ гэрээний байрыг олох: эхлээд barilgiinId, дараа нь bairNer дахь яг 216-219 тоо. */
+function sukhBuildingCode(g) {
+  const byId = SUKH_ID_TO_CODE.get(String(g.barilgiinId || ""));
+  if (byId) return byId;
+  const m = String(g.bairNer || "").match(/(?:^|\D)(216|217|218|219)(?:\D|$)/);
+  return m ? m[1] : null;
 }
 
-/** Generate Standalone Interactive HTML */
-function generateIndexHtml(reportData, outputPath) {
-  const allRows = reportData.allRows || [];
-  const counts = reportData.counts || {};
-  const totals = reportData.totals || {};
+function unitKey(bairCode, toot) {
+  return `${bairCode}_${toot}`;
+}
+
+async function inBatches(items, size, fn) {
+  for (let i = 0; i < items.length; i += size) {
+    await Promise.all(items.slice(i, i + size).map(fn));
+  }
+}
+
+/** BPay биллүүдийг нормчлох. Төлөгдсөн (isPaid) биллийг тусад нь тоолно. */
+function summarizeBills(rawList) {
+  const list = Array.isArray(rawList) ? rawList : rawList ? [rawList] : [];
+  const bills = [];
+  let total = 0;
+  let lateFeeTotal = 0;
+  let paidCount = 0;
+  for (const b of list) {
+    const isPaid = b.isPaid === true || b.isPaid === "true";
+    if (isPaid) {
+      paidCount++;
+      continue;
+    }
+    const amount = toAmount(b.billTotalAmount || b.billAmount || b.totalAmount || b.amount);
+    const lateFee = toAmount(b.billLateFee || b.billlateFee || b.lateFee);
+    total += amount;
+    lateFeeTotal += lateFee;
+    bills.push({
+      billId: b.billId || b.id || "",
+      billNo: b.billNo || "",
+      billPeriod: b.billPeriod || b.period || "",
+      billDescription: b.billDescription || b.description || "",
+      amount,
+      lateFee,
+    });
+  }
+  return { total, lateFeeTotal, bills, paidCount, rawCount: list.length };
+}
+
+// ---------------------------------------------------------------------------
+// HTML
+// ---------------------------------------------------------------------------
+const STATUS_META = {
+  MATCHED: { label: "🟢 Таарсан", cls: "bg-emerald-100 text-emerald-800 border-emerald-300" },
+  MISMATCHED: { label: "🔴 Зөрсөн", cls: "bg-rose-100 text-rose-800 border-rose-300" },
+  BPAY_ERROR: { label: "⚠️ Билл татаж чадсангүй", cls: "bg-orange-100 text-orange-800 border-orange-300" },
+  READY: { label: "⚡ BPay-д код бэлэн", cls: "bg-amber-100 text-amber-900 border-amber-300" },
+  CODE_DIFF: { label: "❗ BPay код өөр", cls: "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300" },
+  NOT_FOUND: { label: "⚪ BPay-д код алга", cls: "bg-slate-100 text-slate-600 border-slate-200" },
+  NOT_CHECKED: { label: "⚪ Шалгаагүй", cls: "bg-slate-100 text-slate-500 border-slate-200" },
+  NO_SUKH: { label: "❔ СӨХ-д гэрээгүй", cls: "bg-violet-100 text-violet-800 border-violet-300" },
+};
+
+function generateHtml(report, outputPath) {
+  const { counts, totals, allRows, codePattern } = report;
+  const safeJson = JSON.stringify({ rows: allRows, statusMeta: STATUS_META }).replace(/</g, "\\u003c");
+  const statusButtons = Object.entries(STATUS_META)
+    .map(
+      ([k, v]) =>
+        `<button onclick="setStatus('${k}')" class="status-btn px-3 py-1 rounded-lg text-xs font-medium border ${v.cls}" data-status="${k}">${v.label} (${counts.byStatus[k] || 0})</button>`
+    )
+    .join("\n        ");
+
+  const card = (title, value, sub, color) => `
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div class="text-xs font-semibold ${color} uppercase tracking-wider">${title}</div>
+        <div class="text-3xl font-black text-slate-900 mt-2">${value}</div>
+        <div class="text-xs text-slate-500 mt-1">${sub}</div>
+      </div>`;
 
   const html = `<!DOCTYPE html>
 <html lang="mn">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Тайм тауэр СӨХ & BPay Төлөх Нэхэмжлэх, Хаягийн Нэгдсэн Тулгалт (${allRows.length} Өрх)</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-    .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-    .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-    .custom-scroll::-webkit-scrollbar-track { background: #f8fafc; }
-  </style>
+  <title>Тайм тауэр BPay тулгалт</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased min-h-screen p-4 sm:p-8">
   <div class="max-w-[1700px] mx-auto space-y-6">
-
-    <!-- Header Section -->
     <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
         <div class="flex items-center gap-3">
-          <span class="px-3 py-1 ${reportData.isAutoRegister ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800'} font-bold text-xs rounded-full uppercase tracking-wider">
-            ${reportData.isAutoRegister ? '⚡ AUTO-REGISTER MODE' : '🛡️ 100% DRY RUN / LIVE BILLS FETCH'}
+          <span class="px-3 py-1 ${report.isAutoRegister ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"} font-bold text-xs rounded-full">
+            ${report.isAutoRegister ? "⚡ BPAY-Д ХОЛБОХ ГОРИМ" : "🛡️ ЗӨВХӨН УНШИХ ГОРИМ"}
           </span>
-          <span class="text-xs text-slate-500 font-medium">Үүсгэсэн: ${new Date().toLocaleString("mn-MN")}</span>
+          <span class="text-xs text-slate-500">Үүсгэсэн: ${new Date(report.generatedAt).toLocaleString("mn-MN")}</span>
         </div>
-        <h1 class="text-2xl font-black text-slate-900 mt-2 tracking-tight">
-          Тайм тауэр СӨХ — BPay Төлөх (Payable) Нэхэмжлэх & Хаягийн Нэгдсэн Тулгалт
-        </h1>
-        <p class="text-xs text-slate-500 mt-1">
-          Time tower 216, 217, 218, 219 байрны 501 өрхийг утас ба тоотоор нь холбож, төлөгдөөгүй бүх төлөх боломжтой (Payable) биллүүдийг задаргаагаар харуулсан нэгдсэн тайлан
+        <h1 class="text-2xl font-black text-slate-900 mt-2">${TIMETOWER_ORG_NAME} — СӨХ авлага ба BPay билл</h1>
+        <p class="text-xs text-slate-500 mt-1">BPay тал = зөвхөн BPay customer code / billingId-тай бичлэг. Аппын хэрэглэгч тусдаа харагдана.</p>
+        <p class="text-xs mt-1 ${codePattern.mismatched > 0 ? "text-rose-600 font-bold" : "text-slate-500"}">
+          Customer code загвар: ${codePattern.checked} холбогдсон өрхөөс ${codePattern.matched} нь таарсан${codePattern.mismatched > 0 ? ` — ${codePattern.mismatched} ЗӨРСӨН, загварт бүрэн итгэхгүй!` : ""}.
+          ${report.probe.enabled ? `Код шалгасан хэрэглэгч: ${report.probe.userLabel || "—"}.` : "Холбогдоогүй өрхийн кодыг BPay-ээс шалгаагүй (--no-probe)."}
         </p>
       </div>
-
-      <div class="flex items-center gap-3">
-        <button onclick="downloadCSV()" class="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm cursor-pointer">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-          CSV Татах (Excel)
-        </button>
-      </div>
+      <button onclick="downloadCSV()" class="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold">CSV татах</button>
     </div>
 
-    <!-- Summary Statistics Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-      <!-- Total Units -->
-      <div onclick="filterByBalanceStatus('all')" class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm cursor-pointer hover:border-slate-400 transition">
-        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Нийт Өрх / Тоот</div>
-        <div class="text-3xl font-black text-slate-900 mt-2">${counts.totalUnits || allRows.length}</div>
-        <div class="text-xs text-slate-400 mt-1">216, 217, 218, 219 байрнууд</div>
-      </div>
+      ${card("Нийт тоот", counts.totalUnits, "216–219 байр (СӨХ гэрээгээр)", "text-slate-500")}
+      ${card("BPay-д холбогдсон", counts.bpayLinked, "billingId-тай өрх", "text-sky-700")}
+      ${card("Аппын хэрэглэгчтэй", counts.appUsers, "BPay биш, апп-д бүртгэлтэй", "text-indigo-700")}
+      ${card("BPay-д код бэлэн", counts.byStatus.READY || 0, "Холбоход бэлэн", "text-amber-700")}
+      ${card("Зөрсөн / алдаа", `${counts.byStatus.MISMATCHED || 0} / ${counts.byStatus.BPAY_ERROR || 0}`, "Зөвхөн BPay-тэй өрхүүдээс", "text-rose-700")}
+    </div>
 
-      <!-- Connected to BPay -->
-      <div onclick="filterByBalanceStatus('all_connected')" class="bg-white p-5 rounded-2xl border border-sky-200 shadow-sm cursor-pointer hover:border-sky-500 transition">
-        <div class="text-xs font-semibold text-sky-700 uppercase tracking-wider flex items-center justify-between">
-          <span>🔗 BPay Холбогдсон</span>
-          <span class="w-2 h-2 rounded-full bg-sky-500"></span>
-        </div>
-        <div class="text-3xl font-black text-sky-600 mt-2">${counts.connectedToBpay || 0}</div>
-        <div class="text-xs text-slate-500 mt-1">Хаяг 100% холбогдсон өрх</div>
-      </div>
+    <div class="bg-slate-900 text-white rounded-2xl p-5 flex flex-wrap gap-8">
+      <div><div class="text-xs text-slate-400">СӨХ авлага (бүх өрх)</div><div class="text-xl font-black text-emerald-400">${formatMoney(totals.sukhAll)}</div></div>
+      <div><div class="text-xs text-slate-400">СӨХ авлага (BPay-тэй өрх)</div><div class="text-xl font-black text-emerald-300">${formatMoney(totals.sukhLinked)}</div></div>
+      <div><div class="text-xs text-slate-400">BPay төлөх билл</div><div class="text-xl font-black text-sky-400">${formatMoney(totals.bpay)}</div></div>
+      <div><div class="text-xs text-slate-400">Зөрүү (BPay-тэй өрх)</div><div class="text-xl font-black text-rose-400">${formatMoney(totals.sukhLinked - totals.bpay)}</div></div>
+      <div><div class="text-xs text-slate-400">Урьдчилгаатай (СӨХ &lt; 0)</div><div class="text-xl font-black text-amber-400">${counts.negativeSukh} өрх</div></div>
+    </div>
 
-      <!-- Balance Matched -->
-      <div onclick="filterByBalanceStatus('MATCHED')" class="bg-white p-5 rounded-2xl border border-emerald-200 shadow-sm cursor-pointer hover:border-emerald-500 transition">
-        <div class="text-xs font-semibold text-emerald-700 uppercase tracking-wider flex items-center justify-between">
-          <span>🟢 Үлдэгдэл ТААРСАН</span>
-          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+      <div class="flex flex-col md:flex-row gap-3 md:items-center justify-between">
+        <input id="q" oninput="render()" placeholder="Тоот, утас, нэр, код, гэрээ..." class="w-full md:w-96 px-4 py-2.5 rounded-xl border border-slate-300 text-xs">
+        <div class="flex gap-1.5 flex-wrap">
+          ${["ALL", ...BUILDING_CODES].map((b) => `<button onclick="setBld('${b}')" class="bld-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100" data-bld="${b}">${b === "ALL" ? "Бүх байр" : b + "-р байр"}</button>`).join("")}
         </div>
-        <div class="text-3xl font-black text-emerald-600 mt-2">${counts.balanceMatched || 0}</div>
-        <div class="text-xs text-slate-500 mt-1">Зөрүү 0 ₮ (СӨХ = BPay)</div>
       </div>
-
-      <!-- Balance Mismatched -->
-      <div onclick="filterByBalanceStatus('MISMATCHED')" class="bg-white p-5 rounded-2xl border border-rose-300 shadow-sm cursor-pointer hover:border-rose-500 transition ring-2 ring-rose-100">
-        <div class="text-xs font-bold text-rose-700 uppercase tracking-wider flex items-center justify-between">
-          <span>🔴 Үлдэгдэл ЗӨРСӨН</span>
-          <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-        </div>
-        <div class="text-3xl font-black text-rose-600 mt-2">${counts.balanceMismatched || 0}</div>
-        <div class="text-xs text-rose-600 font-semibold mt-1">Тулгах шаардлагатай (~30 өрх)</div>
-      </div>
-
-      <!-- Auto-Registrable / Newly Registered -->
-      <div onclick="filterByBalanceStatus('AUTO_REGISTRABLE')" class="bg-white p-5 rounded-2xl border border-amber-200 shadow-sm cursor-pointer hover:border-amber-500 transition">
-        <div class="text-xs font-semibold text-amber-700 uppercase tracking-wider flex items-center justify-between">
-          <span>⚡ BPay-д Холбох</span>
-          <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-        </div>
-        <div class="text-3xl font-black text-amber-600 mt-2">${counts.autoRegistrable || counts.noBpay || 0}</div>
-        <div class="text-xs text-amber-600 mt-1">Шууд бүртгэх боломжтой өрх</div>
+      <div class="flex gap-2 flex-wrap border-t border-slate-100 pt-3">
+        <button onclick="setStatus('ALL')" class="status-btn px-3 py-1 rounded-lg text-xs font-medium border" data-status="ALL">Бүгд (${allRows.length})</button>
+        ${statusButtons}
       </div>
     </div>
 
-    <!-- Financial Totals Banner -->
-    <div class="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-2xl p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-      <div class="flex items-center gap-6 flex-wrap">
-        <div>
-          <div class="text-xs text-slate-400 font-medium">Нийт СӨХ Авлагын Дүн:</div>
-          <div class="text-xl font-black text-emerald-400 mt-0.5">${formatMoney(totals.totalSukhBalance)}</div>
-        </div>
-        <div class="h-8 w-px bg-slate-700 hidden sm:block"></div>
-        <div>
-          <div class="text-xs text-slate-400 font-medium">Нийт BPay Төлөх Боломжтой Дүн:</div>
-          <div class="text-xl font-black text-sky-400 mt-0.5">${formatMoney(totals.totalBpayBalance)}</div>
-        </div>
-        <div class="h-8 w-px bg-slate-700 hidden sm:block"></div>
-        <div>
-          <div class="text-xs text-slate-400 font-medium">Нийт Зөрүүний Дүн:</div>
-          <div class="text-xl font-black ${totals.totalDiff === 0 ? 'text-slate-300' : totals.totalDiff > 0 ? 'text-rose-400' : 'text-amber-400'} mt-0.5">
-            ${totals.totalDiff > 0 ? '+' : ''}${formatMoney(totals.totalDiff)}
-          </div>
-        </div>
-        <div class="h-8 w-px bg-slate-700 hidden sm:block"></div>
-        <div>
-          <div class="text-xs text-slate-400 font-medium">Нийт BPay Нэхэмжлэхийн Тоо:</div>
-          <div class="text-xl font-black text-amber-400 mt-0.5">${totals.totalBillsCount || 0} ширхэг</div>
-        </div>
-      </div>
-      <div class="text-xs text-slate-400">
-        💡 Биллүүдийн дэлгэрэнгүй задаргааг мөр дээр дарж үзнэ үү.
-      </div>
-    </div>
-
-    <!-- Filters & Search Bar -->
-    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-        <!-- Search -->
-        <div class="relative w-full md:w-96">
-          <input 
-            type="text" 
-            id="searchInput" 
-            placeholder="Тоот, утас, нэр, CustomerCode, гэрээний №-ээр хайх..." 
-            oninput="handleSearch()"
-            class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-600 focus:outline-none"
-          />
-          <svg class="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-        </div>
-
-        <!-- Filter tabs: Buildings -->
-        <div class="flex items-center gap-1.5 flex-wrap w-full md:w-auto">
-          <button onclick="filterByBuilding('ALL')" class="bld-btn px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-slate-900 text-white" data-bld="ALL">Бүх байр</button>
-          <button onclick="filterByBuilding('216')" class="bld-btn px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-slate-100 text-slate-700 hover:bg-slate-200" data-bld="216">216-р байр</button>
-          <button onclick="filterByBuilding('217')" class="bld-btn px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-slate-100 text-slate-700 hover:bg-slate-200" data-bld="217">217-р байр</button>
-          <button onclick="filterByBuilding('218')" class="bld-btn px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-slate-100 text-slate-700 hover:bg-slate-200" data-bld="218">218-р байр</button>
-          <button onclick="filterByBuilding('219')" class="bld-btn px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-slate-100 text-slate-700 hover:bg-slate-200" data-bld="219">219-р байр</button>
-        </div>
-      </div>
-
-      <!-- Filter tabs: Statuses -->
-      <div class="flex items-center gap-2 border-t border-slate-100 pt-3 flex-wrap">
-        <span class="text-xs font-semibold text-slate-400 mr-2">Шүүлтүүр:</span>
-        <button onclick="filterByBalanceStatus('all')" class="status-btn px-3 py-1 rounded-lg text-xs font-bold bg-slate-800 text-white" data-status="all">Бүгд (<span id="count-all">${allRows.length}</span>)</button>
-        <button onclick="filterByBalanceStatus('MISMATCHED')" class="status-btn px-3 py-1 rounded-lg text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100" data-status="MISMATCHED">🔴 Үлдэгдэл Зөрсөн (<span id="count-mismatched">${counts.balanceMismatched || 0}</span>)</button>
-        <button onclick="filterByBalanceStatus('MATCHED')" class="status-btn px-3 py-1 rounded-lg text-xs font-medium text-emerald-700 hover:bg-emerald-50" data-status="MATCHED">🟢 Үлдэгдэл Таарсан (<span id="count-matched">${counts.balanceMatched || 0}</span>)</button>
-        <button onclick="filterByBalanceStatus('HAS_BILLS')" class="status-btn px-3 py-1 rounded-lg text-xs font-medium text-sky-700 hover:bg-sky-50" data-status="HAS_BILLS">💳 Төлөх Биллтэй (<span id="count-hasbills">${allRows.filter(r => r.bpay && r.bpay.billsCount > 0).length}</span>)</button>
-        <button onclick="filterByBalanceStatus('AUTO_REGISTRABLE')" class="status-btn px-3 py-1 rounded-lg text-xs font-medium text-amber-700 hover:bg-amber-50" data-status="AUTO_REGISTRABLE">⚡ Холбох Боломжтой (<span id="count-autoreg">${counts.autoRegistrable || counts.noBpay || 0}</span>)</button>
-      </div>
-    </div>
-
-    <!-- Data Table -->
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div class="overflow-x-auto custom-scroll max-h-[800px]">
-        <table class="w-full text-left text-xs border-collapse">
-          <thead class="sticky top-0 z-10 bg-slate-100 text-slate-700 font-bold border-b border-slate-200 select-none">
+      <div class="overflow-x-auto max-h-[800px]">
+        <table class="w-full text-left text-xs">
+          <thead class="sticky top-0 bg-slate-100 font-bold">
             <tr>
-              <th class="py-3 px-3 w-12 text-center">№</th>
-              <th class="py-3 px-3 w-28">Байр, Тоот</th>
-              <th class="py-3 px-4 bg-emerald-50/70 border-r border-emerald-100 font-bold text-emerald-950 min-w-[240px]">
-                🏢 СӨХ Системийн Өгөгдөл
-              </th>
-              <th class="py-3 px-3 w-36 bg-emerald-100/60 border-r border-emerald-200 text-right font-black text-emerald-950">
-                СӨХ Авлагын Дүн
-              </th>
-              <th class="py-3 px-4 bg-sky-50/70 border-r border-sky-100 font-bold text-sky-950 min-w-[260px]">
-                💳 BPay (Wallet) Өгөгдөл
-              </th>
-              <th class="py-3 px-3 w-40 bg-sky-100/60 border-r border-sky-200 text-right font-black text-sky-950">
-                BPay Төлөх (Payable)
-              </th>
-              <th class="py-3 px-3 w-36 text-right font-black border-r border-slate-200">
-                ⚖️ Зөрүү (СӨХ - BPay)
-              </th>
-              <th class="py-3 px-3 w-44 text-center">Төлөв & Үйлдэл</th>
+              <th class="py-3 px-3">№</th>
+              <th class="py-3 px-3">Байр, тоот</th>
+              <th class="py-3 px-3 bg-emerald-50">СӨХ гэрээ</th>
+              <th class="py-3 px-3 bg-emerald-50 text-right">СӨХ авлага</th>
+              <th class="py-3 px-3 bg-indigo-50">Аппын хэрэглэгч</th>
+              <th class="py-3 px-3 bg-sky-50">BPay</th>
+              <th class="py-3 px-3 bg-sky-50 text-right">BPay төлөх</th>
+              <th class="py-3 px-3 text-right">Зөрүү</th>
+              <th class="py-3 px-3 text-center">Төлөв</th>
             </tr>
           </thead>
-          <tbody id="tableBody" class="divide-y divide-slate-100 font-normal">
-            <!-- Dynamic rows injected by JavaScript -->
-          </tbody>
+          <tbody id="tb" class="divide-y divide-slate-100"></tbody>
         </table>
       </div>
-      <div class="p-4 border-t border-slate-200 bg-slate-50/70 flex items-center justify-between text-xs text-slate-500">
-        <div>Харагдаж буй бичлэг: <span id="visibleCount" class="font-bold text-slate-800">0</span> / ${allRows.length}</div>
-        <div class="text-[11px] text-slate-400">Time Tower СӨХ & BPay Payable Bills Reconciler</div>
-      </div>
+      <div class="p-3 border-t text-xs text-slate-500">Харагдаж буй: <b id="vis">0</b> / ${allRows.length}</div>
     </div>
-
   </div>
 
-  <script>
-    const RAW_DATA = ${JSON.stringify(allRows)};
-    let currentBuilding = 'ALL';
-    let currentFilter = 'all';
-    let searchQuery = '';
-    let expandedRowKeys = new Set();
+<script>
+  const DATA = ${safeJson};
+  let bld = 'ALL', status = 'ALL';
+  const open = new Set();
+  const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const money = (n) => (n === null || n === undefined || isNaN(n)) ? '—' : Number(n).toLocaleString('mn-MN') + ' ₮';
 
-    function formatNumber(num) {
-      if (num === null || num === undefined || isNaN(num)) return '0 ₮';
-      return Number(num).toLocaleString('mn-MN') + ' ₮';
-    }
+  function setBld(b) { bld = b; render(); }
+  function setStatus(s) { status = s; render(); }
+  function toggle(k) { open.has(k) ? open.delete(k) : open.add(k); render(); }
 
-    function toggleRowBills(key) {
-      if (expandedRowKeys.has(key)) {
-        expandedRowKeys.delete(key);
-      } else {
-        expandedRowKeys.add(key);
+  function render() {
+    document.querySelectorAll('.bld-btn').forEach((e) => e.classList.toggle('ring-2', e.dataset.bld === bld));
+    document.querySelectorAll('.status-btn').forEach((e) => e.classList.toggle('ring-2', e.dataset.status === status));
+    const q = document.getElementById('q').value.trim().toLowerCase();
+    const rows = DATA.rows.filter((r) => {
+      if (bld !== 'ALL' && r.building !== bld) return false;
+      if (status !== 'ALL' && r.status !== status) return false;
+      if (!q) return true;
+      return [r.building, r.toot, r.customerCode, r.sukh?.ner, r.sukh?.ovog, r.sukh?.utas, r.sukh?.gereeniiDugaar,
+        ...(r.appUsers || []).map((u) => u.utas + ' ' + u.ner),
+        ...(r.bpay?.users || []).map((u) => u.utas + ' ' + u.ner), r.bpay?.billingId, r.probe?.customerName]
+        .filter(Boolean).join(' ').toLowerCase().includes(q);
+    });
+    document.getElementById('vis').innerText = rows.length;
+    let h = '';
+    rows.forEach((r, i) => {
+      const m = DATA.statusMeta[r.status] || {};
+      const sukhPhones = new Set(r.sukh?.phones || []);
+      const phoneCls = (p) => sukhPhones.has(p) ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold';
+      let bpayCell = '<span class="text-slate-400 italic">Холбогдоогүй</span>';
+      if (r.bpay) {
+        bpayCell = (r.bpay.users || []).map((u) => '<div>' + esc(u.ner || '—') + ' · <span class="' + phoneCls(u.utas) + '">' + esc(u.utas || '—') + '</span></div>').join('') +
+          '<div class="text-[10px] text-slate-500 font-mono">Код: ' + esc(r.bpay.customerCode || '—') + ' · Bid: ' + esc((r.bpay.billingId || '').slice(0, 8)) + '…</div>' +
+          (r.bpay.error ? '<div class="text-[10px] text-orange-700">' + esc(r.bpay.error) + '</div>' : '');
+      } else if (r.probe) {
+        bpayCell = r.probe.found
+          ? '<div class="text-amber-800 font-bold">BPay-д хаяг байна' + (r.probe.candidates > 1 ? ' (' + r.probe.candidates + ' хэрэглэгч)' : '') + '</div><div class="text-[10px] text-slate-500">' + esc(r.probe.customerName || '') + ' · ' + esc(r.probe.address || '') + '</div>' +
+            '<div class="text-[10px] font-mono ' + (r.probe.codeMatches ? 'text-slate-500' : 'text-fuchsia-700 font-bold') + '">BPay код: ' + esc(r.probe.customerCode || '—') + '</div>'
+          : (r.probe.error ? '<div class="text-[10px] text-orange-700">Шалгах алдаа: ' + esc(r.probe.error) + '</div>' : '<span class="text-slate-400 italic">BPay-д код олдсонгүй</span>');
+        bpayCell += '<div class="text-[10px] text-slate-400 font-mono">Код: ' + esc(r.customerCode || '—') + '</div>';
       }
-      renderTable();
-    }
+      if (r.registerResult) bpayCell += '<div class="text-[10px] font-bold ' + (r.registerResult.ok ? 'text-emerald-700' : 'text-rose-700') + '">' + esc(r.registerResult.message) + '</div>';
 
-    function renderTable() {
-      const tbody = document.getElementById('tableBody');
-      tbody.innerHTML = '';
-
-      let filtered = RAW_DATA.filter(row => {
-        if (currentBuilding !== 'ALL' && row.building !== currentBuilding) return false;
-        
-        if (currentFilter === 'MISMATCHED' && row.balanceStatus !== 'MISMATCHED') return false;
-        if (currentFilter === 'MATCHED' && row.balanceStatus !== 'MATCHED') return false;
-        if (currentFilter === 'all_connected' && !row.bpay) return false;
-        if (currentFilter === 'HAS_BILLS' && (!row.bpay || (row.bpay.billsCount || 0) === 0)) return false;
-        if (currentFilter === 'AUTO_REGISTRABLE' && (row.balanceStatus !== 'NO_BPAY' && !row.autoRegistrable)) return false;
-
-        if (searchQuery) {
-          const q = searchQuery.toLowerCase();
-          const matchTarget = [
-            row.building,
-            row.toot,
-            row.sukh?.ner,
-            row.sukh?.ovog,
-            row.sukh?.utas,
-            row.sukh?.rawUtas,
-            row.sukh?.gereeniiDugaar,
-            row.bpay?.ner,
-            row.bpay?.utas,
-            row.bpay?.customerId,
-            row.bpay?.customerCode,
-            row.bpay?.billingId,
-            row.bpay?.customerAddress,
-            row.bpay?.bairniiNer
-          ].filter(Boolean).join(' ').toLowerCase();
-
-          if (!matchTarget.includes(q)) return false;
-        }
-        return true;
-      });
-
-      document.getElementById('visibleCount').innerText = filtered.length;
-
-      if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-slate-400 text-xs">Тохирох өрх олдсонгүй</td></tr>';
-        return;
+      const bills = r.bpay?.bills || [];
+      const diff = r.diff;
+      h += '<tr class="hover:bg-slate-50">' +
+        '<td class="py-2 px-3 text-slate-400 font-mono">' + (i + 1) + '</td>' +
+        '<td class="py-2 px-3"><div class="font-bold">' + esc(r.building) + '-р байр</div><div class="font-black text-emerald-700">' + esc(r.toot) + ' тоот</div></td>' +
+        '<td class="py-2 px-3 bg-emerald-50/30">' + (r.sukh
+          ? '<div class="font-bold">' + esc(r.sukh.ner) + ' ' + (r.sukh.ovog ? '(' + esc(r.sukh.ovog) + ')' : '') + '</div><div class="text-[11px] text-slate-600">' + esc((r.sukh.phones || []).join(', ') || '—') + ' · ' + esc(r.sukh.gereeniiDugaar) + (r.sukh.contractsCount > 1 ? ' · ' + r.sukh.contractsCount + ' гэрээ' : '') + '</div>'
+          : '<span class="text-slate-400 italic">Гэрээгүй</span>') + '</td>' +
+        '<td class="py-2 px-3 bg-emerald-50/30 text-right font-mono font-black ' + (r.sukhBalance < 0 ? 'text-amber-600' : '') + '">' + (r.sukh ? money(r.sukhBalance) : '—') + '</td>' +
+        '<td class="py-2 px-3 bg-indigo-50/30 text-[11px]">' + ((r.appUsers || []).length ? r.appUsers.map((u) => '<div>' + esc(u.ner || '—') + ' · ' + esc(u.utas || '—') + '</div>').join('') : '<span class="text-slate-400">—</span>') + '</td>' +
+        '<td class="py-2 px-3 bg-sky-50/30 text-[11px]">' + bpayCell + '</td>' +
+        '<td class="py-2 px-3 bg-sky-50/30 text-right font-mono">' + (r.bpay && !r.bpay.error
+          ? '<div class="font-black">' + money(r.bpay.total) + '</div>' + (bills.length ? '<button onclick="toggle(\\'' + r.key + '\\')" class="text-[10px] text-sky-700 font-bold underline">' + bills.length + ' билл</button>' : '<div class="text-[10px] text-slate-400">Төлөх биллгүй</div>') + (r.bpay.paidCount ? '<div class="text-[10px] text-slate-400">' + r.bpay.paidCount + ' төлөгдсөн</div>' : '')
+          : '—') + '</td>' +
+        '<td class="py-2 px-3 text-right font-mono font-black ' + (diff > 0 ? 'text-rose-600' : diff < 0 ? 'text-amber-600' : 'text-emerald-600') + '">' + (diff === null || diff === undefined ? '—' : (diff > 0 ? '+' : '') + money(diff)) + '</td>' +
+        '<td class="py-2 px-3 text-center"><span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ' + (m.cls || '') + '">' + esc(m.label || r.status) + '</span></td>' +
+        '</tr>';
+      if (open.has(r.key) && bills.length) {
+        h += '<tr class="bg-sky-50/50"><td colspan="9" class="p-3 pl-16"><div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">' +
+          bills.map((b) => '<div class="bg-white p-2 rounded-lg border"><div class="flex justify-between font-bold"><span>' + esc(b.billPeriod || 'Билл') + '</span><span class="font-mono text-sky-700">' + money(b.amount) + '</span></div><div class="text-[11px] text-slate-500">' + esc(b.billDescription) + '</div>' + (b.lateFee ? '<div class="text-[10px] text-rose-500">Алданги: ' + money(b.lateFee) + '</div>' : '') + '</div>').join('') +
+          '</div></td></tr>';
       }
+    });
+    document.getElementById('tb').innerHTML = h || '<tr><td colspan="9" class="p-8 text-center text-slate-400">Тохирох өрх олдсонгүй</td></tr>';
+  }
 
-      let html = '';
-      filtered.forEach((row, idx) => {
-        const isConnected = !!row.bpay;
-        const sukhPhone = row.sukh?.utas || row.sukh?.rawUtas || '—';
-        const bpayPhone = row.bpay?.utas || '—';
-        const isPhoneMatch = isConnected && sukhPhone !== '—' && bpayPhone !== '—' && sukhPhone === bpayPhone;
-        const isExpanded = expandedRowKeys.has(row.key);
-
-        // Status Badge
-        let badgeHtml = '';
-        if (row.balanceStatus === 'MATCHED') {
-          badgeHtml = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">🟢 Төлбөр таарсан</span>';
-        } else if (row.balanceStatus === 'MISMATCHED') {
-          badgeHtml = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 animate-pulse">🔴 Үлдэгдэл зөрсөн</span>';
-        } else if (row.autoRegistrable) {
-          badgeHtml = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">⚡ Бүртгэх боломжтой</span>';
-        } else {
-          badgeHtml = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">⚪ BPay бүртгэлгүй</span>';
-        }
-
-        // Connection note
-        let connBadge = '';
-        if (isConnected) {
-          if (isPhoneMatch) {
-            connBadge = '<div class="text-[10px] text-emerald-600 font-medium mt-0.5">✓ Утас яг таарсан</div>';
-          } else {
-            connBadge = '<div class="text-[10px] text-amber-600 font-medium mt-0.5">ℹ️ Утас өөр ч хаяг холбогдсон</div>';
-          }
-        }
-
-        // Diff display
-        let diffHtml = '';
-        if (row.balanceStatus === 'MATCHED') {
-          diffHtml = '<span class="font-bold text-emerald-600 font-mono">0 ₮</span>';
-        } else if (row.balanceStatus === 'MISMATCHED') {
-          const diff = row.diff || 0;
-          if (diff > 0) {
-            diffHtml = \`<span class="font-black text-rose-600 font-mono">+\${diff.toLocaleString('mn-MN')} ₮</span><div class="text-[9px] text-rose-500 font-medium">СӨХ илүү</div>\`;
-          } else {
-            diffHtml = \`<span class="font-black text-amber-600 font-mono">\${diff.toLocaleString('mn-MN')} ₮</span><div class="text-[9px] text-amber-500 font-medium">BPay илүү</div>\`;
-          }
-        } else {
-          diffHtml = '<span class="text-slate-400 font-mono">—</span>';
-        }
-
-        const isRowHighlight = row.balanceStatus === 'MISMATCHED';
-        const billsCount = row.bpay?.billsCount || 0;
-
-        html += \`
-          <tr class="hover:bg-slate-50 transition \${isRowHighlight ? 'bg-rose-50/20' : ''}">
-            <td class="py-2.5 px-3 text-center font-mono text-slate-400">\${idx + 1}</td>
-            <td class="py-2.5 px-3">
-              <div class="font-bold text-slate-900">\${row.building}-р байр</div>
-              <div class="font-black text-emerald-700 text-sm">\${row.toot} тоот</div>
-            </td>
-            
-            <!-- Sukh Data -->
-            <td class="py-2.5 px-4 border-r border-slate-100 bg-emerald-50/20">
-              \${row.sukh ? \`
-                <div class="font-bold text-slate-900">\${row.sukh.ner || '—'} \${row.sukh.ovog ? '(' + row.sukh.ovog + ')' : ''}</div>
-                <div class="text-[11px] text-slate-600 mt-0.5 flex items-center gap-2 flex-wrap">
-                  <span>Утас: <strong class="\${isPhoneMatch ? 'text-emerald-700 font-bold' : 'text-slate-800'}">\${sukhPhone}</strong></span>
-                  \${row.sukh.gereeniiDugaar ? \`<span class="text-slate-500">· Гэрээ: <strong class="font-mono text-slate-700">\${row.sukh.gereeniiDugaar}</strong></span>\` : ''}
-                </div>
-              \` : '<span class="text-slate-400 italic">СӨХ дээр гэрээгүй</span>'}
-            </td>
-
-            <!-- Sukh Balance -->
-            <td class="py-2.5 px-3 text-right border-r border-slate-100 bg-emerald-50/40 font-mono">
-              <div class="font-black text-slate-900 text-xs">\${formatNumber(row.sukhBalance)}</div>
-              \${row.sukh?.contractsCount > 1 ? \`<div class="text-[9px] text-slate-400">(\${row.sukh.contractsCount} гэрээ)</div>\` : ''}
-            </td>
-
-            <!-- BPay Data -->
-            <td class="py-2.5 px-4 border-r border-slate-100 bg-sky-50/20">
-              \${row.bpay ? \`
-                <div class="font-bold text-slate-900 flex items-center justify-between">
-                  <span>\${row.bpay.ner || row.bpay.customerName || '—'}</span>
-                  \${row.bpay.customerCode ? \`<span class="text-[10px] bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded font-mono font-bold">Код: \${row.bpay.customerCode}</span>\` : ''}
-                </div>
-                <div class="text-[11px] text-slate-600 mt-0.5 flex items-center gap-2 flex-wrap">
-                  <span>Утас: <strong class="\${isPhoneMatch ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}">\${bpayPhone}</strong></span>
-                  \${row.bpay.billingId ? \`<span class="text-slate-400 truncate max-w-[170px]" title="BillingId: \${row.bpay.billingId}">· Bid: \${row.bpay.billingId.slice(0, 8)}...</span>\` : ''}
-                  \${row.bpay.bairniiNer || row.bpay.customerAddress ? \`<span class="text-slate-400 truncate max-w-[190px]" title="\${row.bpay.customerAddress || row.bpay.bairniiNer}">· \${row.bpay.customerAddress || row.bpay.bairniiNer}</span>\` : ''}
-                </div>
-              \` : row.autoRegistrable ? \`
-                <div class="text-amber-800 font-bold">⚡ BPay хэрэглэгч олдсон</div>
-                <div class="text-[10px] text-slate-500 font-mono">CustomerCode: \${row.autoRegistrable.customerCode || row.autoRegistrable.customerId}</div>
-              \` : '<span class="text-slate-400 italic">BPay дээр хараахан хаягаа бүртгүүлээгүй</span>'}
-            </td>
-
-            <!-- BPay Balance & Bills Count -->
-            <td class="py-2.5 px-3 text-right border-r border-slate-100 bg-sky-50/40 font-mono">
-              \${row.bpay ? \`
-                <div class="font-black text-sky-950 text-xs">\${formatNumber(row.bpayBalance)}</div>
-                \${billsCount > 0 ? \`
-                  <button onclick="toggleRowBills('\${row.key}')" class="text-[10px] text-sky-700 font-bold hover:underline cursor-pointer flex items-center justify-end gap-1 ml-auto mt-0.5">
-                    <span>\${billsCount} нэхэмжлэх</span>
-                    <svg class="w-3 h-3 \${isExpanded ? 'rotate-180' : ''} transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                  </button>
-                \` : '<div class="text-[10px] text-slate-400">Төлөх биллгүй</div>'}
-              \` : '<span class="text-slate-400">—</span>'}
-            </td>
-
-            <!-- Balance Difference -->
-            <td class="py-2.5 px-3 text-right border-r border-slate-200">
-              \${diffHtml}
-            </td>
-
-            <!-- Status & Action -->
-            <td class="py-2.5 px-3 text-center">
-              \${badgeHtml}
-              \${connBadge}
-            </td>
-          </tr>
-        \`;
-
-        // Expandable Bills Breakdown Row
-        if (isExpanded && row.bpay && row.bpay.payableBills && row.bpay.payableBills.length > 0) {
-          html += \`
-            <tr class="bg-sky-50/50 border-b border-sky-100">
-              <td colspan="8" class="p-3 pl-16">
-                <div class="bg-white p-3 rounded-xl border border-sky-200 shadow-xs space-y-2">
-                  <div class="text-xs font-bold text-sky-900 flex items-center justify-between border-b border-slate-100 pb-1.5">
-                    <span>💳 BPay дээрх Төлөгдөөгүй Нэхэмжлэхүүд (Payable Bills) — \${row.building}-р байр \${row.toot} тоот</span>
-                    <span class="text-[11px] text-slate-500 font-mono">Нийт: \${formatNumber(row.bpayBalance)}</span>
-                  </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                    \${row.bpay.payableBills.map(b => \`
-                      <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                        <div class="flex items-center justify-between font-bold text-slate-800">
-                          <span>\${b.billPeriod || 'Билл'}</span>
-                          <span class="text-sky-700 font-mono">\${formatNumber(b.amount)}</span>
-                        </div>
-                        <div class="text-[11px] text-slate-500 mt-1 truncate">\${b.billDescription || 'СӨХ-ийн төлбөр'}</div>
-                        \${b.lateFee > 0 ? \`<div class="text-[10px] text-rose-500 font-medium mt-0.5">Алданги: \${formatNumber(b.lateFee)}</div>\` : ''}
-                        \${b.billNo ? \`<div class="text-[10px] text-slate-400 font-mono mt-0.5">№: \${b.billNo}</div>\` : ''}
-                      </div>
-                    \`).join('')}
-                  </div>
-                </div>
-              </td>
-            </tr>
-          \`;
-        }
-      });
-
-      tbody.innerHTML = html;
-    }
-
-    function filterByBuilding(bld) {
-      currentBuilding = bld;
-      document.querySelectorAll('.bld-btn').forEach(btn => {
-        if (btn.getAttribute('data-bld') === bld) {
-          btn.className = 'bld-btn px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-slate-900 text-white';
-        } else {
-          btn.className = 'bld-btn px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-slate-100 text-slate-700 hover:bg-slate-200';
-        }
-      });
-      renderTable();
-    }
-
-    function filterByBalanceStatus(status) {
-      currentFilter = status;
-      document.querySelectorAll('.status-btn').forEach(btn => {
-        if (btn.getAttribute('data-status') === status) {
-          btn.className = 'status-btn px-3 py-1 rounded-lg text-xs font-bold bg-slate-800 text-white shadow-sm';
-        } else {
-          btn.className = 'status-btn px-3 py-1 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100';
-        }
-      });
-      renderTable();
-    }
-
-    function handleSearch() {
-      searchQuery = document.getElementById('searchInput').value;
-      renderTable();
-    }
-
-    function downloadCSV() {
-      const headers = [
-        "№", "Байр", "Тоот",
-        "СӨХ Оршин суугч", "СӨХ Утас", "СӨХ Гэрээний №", "СӨХ Авлагын Дүн",
-        "BPay Хэрэглэгч", "BPay Утас", "BPay CustomerCode", "BPay BillingID", "BPay Хаяг",
-        "BPay Төлөх Дүн (Payable)", "BPay Билл Тоо", "Зөрүү (СӨХ - BPay)", "Төлбөрийн Төлөв", "Хаягийн Холболт"
-      ];
-
-      const rows = RAW_DATA.map((r, i) => [
-        i + 1,
-        r.building,
-        r.toot,
-        (r.sukh?.ner || "") + (r.sukh?.ovog ? " (" + r.sukh.ovog + ")" : ""),
-        r.sukh?.utas || r.sukh?.rawUtas || "",
-        r.sukh?.gereeniiDugaar || "",
-        r.sukhBalance || 0,
-        r.bpay?.ner || r.bpay?.customerName || "",
-        r.bpay?.utas || "",
-        r.bpay?.customerCode || r.bpay?.customerId || "",
-        r.bpay?.billingId || "",
-        (r.bpay?.customerAddress || r.bpay?.bairniiNer || "").replace(/,/g, " "),
-        r.bpay ? (r.bpayBalance || 0) : "",
-        r.bpay ? (r.bpay.billsCount || 0) : "",
-        r.bpay ? (r.diff || 0) : "",
-        r.balanceStatus === 'MATCHED' ? "Үлдэгдэл таарсан" : r.balanceStatus === 'MISMATCHED' ? "Үлдэгдэл зөрсөн" : "BPay бүртгэлгүй",
-        r.bpay ? (r.phoneMatched ? "100% Таарсан" : "Утас өөр ч холбогдсон") : "Холбогдоогүй"
-      ]);
-
-      const csvContent = "\\uFEFF" + [headers.join(","), ...rows.map(e => e.map(x => '"' + String(x).replace(/"/g, '""') + '"').join(","))].join("\\n");
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement("a");
-      const url = URL.createObjectURL(blob);
-      link.setAttribute("href", url);
-      link.setAttribute("download", "timetower_bpay_payable_reconciliation.csv");
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-
-    // Initial render
-    renderTable();
-  </script>
+  function downloadCSV() {
+    const head = ['Байр','Тоот','Customer code','СӨХ нэр','СӨХ утас','Гэрээ','СӨХ авлага','Аппын хэрэглэгч','BPay хэрэглэгч','BPay billingId','BPay төлөх','Зөрүү','Төлөв'];
+    const lines = DATA.rows.map((r) => [r.building, r.toot, r.customerCode, (r.sukh?.ner || '') + ' ' + (r.sukh?.ovog || ''), (r.sukh?.phones || []).join(' '), r.sukh?.gereeniiDugaar || '', r.sukh ? r.sukhBalance : '',
+      (r.appUsers || []).map((u) => u.utas).join(' '), (r.bpay?.users || []).map((u) => u.utas).join(' '), r.bpay?.billingId || '', r.bpay && !r.bpay.error ? r.bpay.total : '', r.diff ?? '', (DATA.statusMeta[r.status] || {}).label || r.status]);
+    const csv = '\\uFEFF' + [head, ...lines].map((l) => l.map((x) => '"' + String(x ?? '').replace(/"/g, '""') + '"').join(',')).join('\\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    a.download = 'timetower_bpay.csv';
+    a.click();
+  }
+  render();
+</script>
 </body>
 </html>`;
-
   fs.writeFileSync(outputPath, html, "utf-8");
 }
 
-async function runMatchmaking() {
-  const uriTemplate = getMongoUriBase();
-
-  console.log("=".repeat(88));
-  console.log("🏢 ТАЙМ ТАУЭР СӨХ — BPAY БА СӨХ ТӨЛӨХ (PAYABLE) НЭХЭМЖЛЭХ, ХАЯГИЙН НЭГДСЭН ТУЛГАЛТ");
-  if (isAutoRegister) {
-    console.log("⚡ РЕЖИМ: [AUTO-REGISTER MODE — BPay-д шууд бүртгэж, тоотоор нь холбоно]");
-  } else {
-    console.log("🛡️  РЕЖИМ: [PREVIEW / DRY RUN MODE — 100% ЗӨВХӨН УНШИХ ГЭМГҮЙ ГОРИМ]");
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+async function run() {
+  if (isSaveAddress) {
+    // Зөвхөн BPay-ээс хаяг уншина — MongoDB-д холбогдохгүй.
+    const wallet = require("../services/walletApiService");
+    try {
+      await saveAddressTree(wallet);
+    } catch (e) {
+      console.error(`❌ Хаягийн мод татаж чадсангүй: ${e.message}`);
+      process.exitCode = 1;
+    }
+    return;
   }
-  console.log("   Байгууллагын ID:", TIMETOWER_ORG_ID);
-  console.log("   Барилгууд       : 216, 217, 218, 219 (Нийт 4 барилга)");
-  console.log("=".repeat(88));
 
-  // 1. Auto-connect to amarSukh (Main DB)
-  const mainUri = uriTemplate.replace("{db}", MAIN_DB_NAME);
-  console.log(`\n🔌 Үндсэн сантай автоматаар холбогдож байна: ${mainUri.replace(/:([^:@]+)@/, ":****@")}`);
+  const uriTemplate = getMongoUriTemplate();
+  console.log("=".repeat(80));
+  console.log(`🏢 ${TIMETOWER_ORG_NAME} — СӨХ авлага ба BPay биллийн тулгалт`);
+  console.log(isAutoRegister ? "⚡ ГОРИМ: BPay-д холбох (бичилт хийнэ)" : "🛡️  ГОРИМ: Зөвхөн унших");
+  console.log("=".repeat(80));
+
+  const connect = async (dbName) => {
+    const uri = uriTemplate.replace("{db}", dbName);
+    console.log(`🔌 ${dbName}: ${uri.replace(/:([^:@/]+)@/, ":****@")}`);
+    return mongoose.createConnection(uri, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 5000 }).asPromise();
+  };
+
   let mainConn;
-  try {
-    mainConn = await mongoose
-      .createConnection(mainUri, {
-        serverSelectionTimeoutMS: 5000,
-        connectTimeoutMS: 5000,
-      })
-      .asPromise();
-    console.log(`✅ ${MAIN_DB_NAME} сантай холболт амжилттай.`);
-  } catch (err) {
-    console.error(`❌ [АЛДАА] ${MAIN_DB_NAME} сантай холбогдож чадсангүй: ${err.message}`);
-    process.exit(1);
-  }
-
-  // 2. Auto-connect to timetower (Tenant DB)
-  const tenantUri = uriTemplate.replace("{db}", TIMETOWER_DB_NAME);
-  console.log(`🔌 Түрээслэгчийн сантай холбогдож байна: ${tenantUri.replace(/:([^:@]+)@/, ":****@")}`);
   let tenantConn;
   try {
-    tenantConn = await mongoose
-      .createConnection(tenantUri, {
-        serverSelectionTimeoutMS: 5000,
-        connectTimeoutMS: 5000,
-      })
-      .asPromise();
-    console.log(`✅ ${TIMETOWER_DB_NAME} сантай холболт амжилттай.`);
+    mainConn = await connect(MAIN_DB_NAME);
+    tenantConn = await connect(TIMETOWER_DB_NAME);
   } catch (err) {
-    console.error(`❌ [АЛДАА] ${TIMETOWER_DB_NAME} сантай холбогдож чадсангүй: ${err.message}`);
-    await mainConn.close();
+    console.error(`❌ Сантай холбогдож чадсангүй: ${err.message}`);
+    if (mainConn) await mainConn.close();
     process.exit(1);
   }
 
-  // 3. Initialize Wallet API Service
-  let walletApiService = null;
-  let hasWalletToken = false;
+  let wallet = null;
   try {
-    walletApiService = require("../services/walletApiService");
-    const t = await walletApiService.getWalletServiceToken();
-    if (t) hasWalletToken = true;
-  } catch (wErr) {
-    console.log(`   ℹ️ [WALLET API] Үйлчилгээ одоогоор бэлэн биш байна (${wErr.message})`);
+    wallet = require("../services/walletApiService");
+    if (!(await wallet.getWalletServiceToken())) wallet = null;
+  } catch (e) {
+    console.log(`   ℹ️ BPay API бэлэн биш: ${e.message}`);
+    wallet = null;
+  }
+  if (!wallet) {
+    console.log("   ⚠️ BPay API-гүй ажиллаж байна — биллийн дүн, кодын шалгалт хийгдэхгүй.");
+    if (isAutoRegister) {
+      console.error("❌ BPay API-гүйгээр холбох боломжгүй.");
+      process.exit(1);
+    }
   }
 
   try {
-    // -------------------------------------------------------------
-    // АЛХАМ 1: BPAY БАЙРНЫ ID-УУДЫГ АВТОМАТААР ИЛРҮҮЛЭХ
-    // -------------------------------------------------------------
-    console.log("\n📍 1. BPay системийн 4 байрны ID-уудыг тодорхойлж байна...");
-    const discoveredBairIds = await discoverBpayBairIds(mainConn, walletApiService);
-    for (const [code, ids] of Object.entries(discoveredBairIds)) {
-      console.log(`   └─ ${code}-р байр: BPay BairId=[${Array.from(ids).join(", ") || "Одоогоор байхгүй"}]`);
-    }
-
-    // -------------------------------------------------------------
-    // АЛХАМ 2: СӨХ-ИЙН ГЭРЭЭ БА АВЛАГЫН ҮЛДЭГДЛИЙГ УНШИХ
-    // -------------------------------------------------------------
-    console.log("\n📦 2. СӨХ-ийн гэрээ болон авлагын журнал (guilgeeAvlaguud)-ийг уншиж байна...");
-
+    // -----------------------------------------------------------------------
+    // 1. СӨХ: гэрээ + авлагын журнал
+    // -----------------------------------------------------------------------
+    console.log("\n📦 1. СӨХ-ийн гэрээ, авлагын журнал...");
     const ledgerAgg = await tenantConn
       .collection("guilgeeAvlaguud")
-      .aggregate([
-        {
-          $group: {
-            _id: "$gereeniiId",
-            totalDun: { $sum: "$dun" },
-            totalTulukh: { $sum: "$tulukhDun" },
-            totalTulsun: { $sum: "$tulsunDun" },
-            txCount: { $sum: 1 },
-          },
-        },
-      ])
+      .aggregate([{ $group: { _id: "$gereeniiId", dun: { $sum: "$dun" } } }])
       .toArray();
-
-    const ledgerMap = new Map();
-    for (const item of ledgerAgg) {
-      if (item._id) {
-        ledgerMap.set(String(item._id), item);
-      }
-    }
-    console.log(`   └─ timetower.guilgeeAvlaguud тооцоо хийгдсэн нийт гэрээ: ${ledgerMap.size}`);
+    const ledgerMap = new Map(ledgerAgg.filter((x) => x._id).map((x) => [String(x._id), x.dun || 0]));
 
     const gereenuud = await tenantConn
       .collection("geree")
       .find({ tuluv: { $ne: "Устгасан" } })
-      .project({
-        _id: 1,
-        gereeniiDugaar: 1,
-        toot: 1,
-        bairNer: 1,
-        barilgiinId: 1,
-        orshinSuugchId: 1,
-        ner: 1,
-        ovog: 1,
-        utas: 1,
-        ekhniiUldegdel: 1,
-        tuluv: 1,
-      })
+      .project({ gereeniiDugaar: 1, toot: 1, bairNer: 1, barilgiinId: 1, orshinSuugchId: 1, ner: 1, ovog: 1, utas: 1, ekhniiUldegdel: 1 })
       .toArray();
 
-    console.log(`   └─ timetower.geree нийт идэвхтэй гэрээ: ${gereenuud.length}`);
-
-    const sukhMap = new Map(); // key: "216_2" -> [contracts]
-
-    for (const g of gereenuud) {
-      const bCode = extractBuildingCodeFromAny({
-        barilgiinId: g.barilgiinId,
-        bairNer: g.bairNer,
-      }, discoveredBairIds);
-      if (!bCode) continue;
-
-      const normToot = extractTootFromAny(g);
-      if (!normToot) continue;
-
-      const key = `${bCode}_${normToot}`;
-      if (!sukhMap.has(key)) {
-        sukhMap.set(key, []);
+    const units = new Map(); // key -> unit
+    const getUnit = (bairCode, toot) => {
+      const key = unitKey(bairCode, toot);
+      if (!units.has(key)) {
+        units.set(key, {
+          key,
+          building: bairCode,
+          toot,
+          customerCode: makeCustomerCode(bairCode, toot),
+          contracts: [],
+          appUsers: [],
+          bpayEntries: [],
+        });
       }
+      return units.get(key);
+    };
 
+    let skippedContracts = 0;
+    for (const g of gereenuud) {
+      const bairCode = sukhBuildingCode(g);
+      const toot = normalizeToot(g.toot);
+      if (!bairCode || !toot) {
+        skippedContracts++;
+        continue;
+      }
       const gid = String(g._id);
-      const ledgerItem = ledgerMap.get(gid);
-      const contractBalance =
-        ledgerItem !== undefined ? ledgerItem.totalDun || 0 : Number(g.ekhniiUldegdel) || 0;
-
-      sukhMap.get(key).push({
-        source: "SUKH_GEREE",
+      getUnit(bairCode, toot).contracts.push({
         gereeId: gid,
         gereeniiDugaar: g.gereeniiDugaar || "",
-        bairCode: bCode,
-        bairNer: g.bairNer || `Time tower ${bCode}`,
-        toot: g.toot,
-        normToot,
         ner: g.ner || "",
         ovog: g.ovog || "",
-        utas: normalizePhone(g.utas),
-        rawUtas: g.utas,
-        balance: contractBalance,
-        orshinSuugchId: String(g.orshinSuugchId || ""),
-        tuluv: g.tuluv || "Идэвхтэй",
+        phone: normalizePhone(g.utas),
+        orshinSuugchId: g.orshinSuugchId ? String(g.orshinSuugchId) : "",
+        balance: ledgerMap.has(gid) ? ledgerMap.get(gid) : toAmount(g.ekhniiUldegdel),
       });
     }
+    console.log(`   └─ Гэрээ: ${gereenuud.length}, тоот: ${units.size}, байр/тоот тодорхойгүй: ${skippedContracts}`);
 
-    console.log(`   => Нийт СӨХ дээр бүртгэлтэй өрх/тоотын түлхүүр: ${sukhMap.size}`);
-
-    // -------------------------------------------------------------
-    // АЛХАМ 3: BPAY (WALLET) ӨГӨГДЛИЙГ ЦУГЛУУЛАХ
-    // -------------------------------------------------------------
-    console.log("\n💳 3. BPay бүртгэлтэй хэрэглэгчид болон нэхэмжлэхүүдийг уншиж байна...");
-
-    const bpayResidents = await mainConn
+    // -----------------------------------------------------------------------
+    // 2. amarSukh.orshinSuugch: BPay-ийн бичлэг ба аппын хэрэглэгч
+    // -----------------------------------------------------------------------
+    console.log("\n👥 2. Оршин суугчид (BPay ба апп)...");
+    const codeRegex = /^2003260(216|217|218|219)\d{6}$/;
+    const residents = await mainConn
       .collection("orshinSuugch")
       .find({
         $or: [
-          { "toots.source": "WALLET_API" },
-          { "toots.source": "BPAY" },
-          { "toots.source": "B_PAY" },
-          { "toots.bairniiNer": /time\s*tower|тайм\s*тауэр|216|217|218|219/i },
-          { "toots.walletCustomerCode": /2003260?(216|217|218|219)/ },
-          { walletUserId: { $exists: true, $ne: null, $ne: "" } },
+          { baiguullagiinId: TIMETOWER_ORG_ID },
+          { "toots.baiguullagiinId": TIMETOWER_ORG_ID },
+          { "toots.barilgiinId": { $in: BUILDINGS.map((b) => b.sukhId) } },
+          { "toots.walletCustomerCode": codeRegex },
+          { "toots.walletCustomerId": codeRegex },
         ],
       })
-      .project({
-        _id: 1,
-        ner: 1,
-        ovog: 1,
-        utas: 1,
-        toots: 1,
-        walletUserId: 1,
-      })
+      .project({ ner: 1, ovog: 1, utas: 1, toots: 1, walletUserId: 1, baiguullagiinId: 1, barilgiinId: 1, toot: 1 })
       .toArray();
 
+    const knownBpayBairIds = Object.fromEntries(BUILDINGS.map((b) => [b.code, new Set(b.bpayBairId ? [b.bpayBairId] : [])]));
+    let unknownBpayToots = 0;
+
+    for (const r of residents) {
+      const phone = normalizePhone(r.utas);
+      const person = { residentId: String(r._id), ner: r.ner || "", ovog: r.ovog || "", utas: phone };
+      const seenAppUnits = new Set();
+
+      for (const t of r.toots || []) {
+        const code = String(t.walletCustomerCode || t.walletCustomerId || "").trim();
+        const parsed = parseCustomerCode(code);
+        if (parsed) {
+          // walletDoorNo-г кодоос гаргахгүй — загварыг шалгахад бие даасан утга хэрэгтэй.
+          const toot = normalizeToot(t.walletDoorNo);
+          if (t.walletBairId) knownBpayBairIds[parsed.bairCode].add(String(t.walletBairId));
+          getUnit(parsed.bairCode, parsed.toot).bpayEntries.push({
+            ...person,
+            source: "ORSHIN_SUUGCH_TOOT",
+            customerCode: code,
+            customerId: t.walletCustomerId && t.walletCustomerId !== code ? String(t.walletCustomerId) : "",
+            walletDoorNo: toot,
+            billingId: t.billingId || "",
+            walletUserId: t.walletUserId || r.walletUserId || "",
+            address: t.bairniiNer || "",
+          });
+          continue;
+        }
+        if (t.source === "WALLET_API") {
+          // BPay бичлэг боловч Тайм тауэрын код биш — тоолоод алгасна.
+          if (t.walletCustomerCode || t.walletCustomerId) unknownBpayToots++;
+          continue;
+        }
+        // Аппын хэрэглэгч: зөвхөн Тайм тауэрын барилгын ID-аар
+        const bairCode = SUKH_ID_TO_CODE.get(String(t.barilgiinId || ""));
+        const toot = normalizeToot(t.toot);
+        if (bairCode && toot) {
+          const key = unitKey(bairCode, toot);
+          if (!seenAppUnits.has(key)) {
+            seenAppUnits.add(key);
+            getUnit(bairCode, toot).appUsers.push(person);
+          }
+        }
+      }
+
+      // Хуучин бүтэц: toots-гүй, дээд түвшний barilgiinId/toot
+      const topBair = SUKH_ID_TO_CODE.get(String(r.barilgiinId || ""));
+      const topToot = normalizeToot(r.toot);
+      if (topBair && topToot && !seenAppUnits.has(unitKey(topBair, topToot)) && !(r.toots || []).length) {
+        getUnit(topBair, topToot).appUsers.push(person);
+      }
+    }
+
+    // walletInvoice — billingId-ийг нэмж олох. customerId нь BPay-ийн UUID эсвэл код байж болно.
+    const uuidToUnit = new Map();
+    for (const u of units.values()) {
+      for (const e of u.bpayEntries) if (e.customerId) uuidToUnit.set(e.customerId, u);
+    }
     const walletInvoices = await mainConn
       .collection("walletInvoice")
-      .find({
-        $or: [
-          { customerAddress: /time\s*tower|тайм\s*тауэр|216|217|218|219/i },
-          { billingName: /time\s*tower|тайм\s*тауэр|216|217|218|219/i },
-          { customerId: /2003260?(216|217|218|219)/ },
-        ],
-      })
-      .project({
-        walletInvoiceId: 1,
-        billingId: 1,
-        customerId: 1,
-        customerName: 1,
-        customerAddress: 1,
-        totalAmount: 1,
-        walletDoorNo: 1,
-      })
+      .find({ $or: [{ customerId: codeRegex }, { customerId: { $in: [...uuidToUnit.keys()] } }] })
+      .project({ billingId: 1, customerId: 1, customerName: 1, customerAddress: 1, userId: 1 })
       .toArray();
-
-    const bpayMap = new Map();
-    const billingToPhoneMap = new Map();
-    const billingToUnitMap = new Map();
-
-    function addBpayEntry(bCode, rawToot, meta) {
-      if (!bCode) return;
-      const normToot = normalizeToot(rawToot);
-      if (!normToot) return;
-
-      const key = `${bCode}_${normToot}`;
-      if (!bpayMap.has(key)) {
-        bpayMap.set(key, []);
-      }
-      bpayMap.get(key).push({
-        bairCode: bCode,
-        rawToot,
-        normToot,
-        ...meta,
+    for (const w of walletInvoices) {
+      if (!w.billingId) continue;
+      const parsed = parseCustomerCode(w.customerId);
+      const unit = parsed ? getUnit(parsed.bairCode, parsed.toot) : uuidToUnit.get(String(w.customerId));
+      if (!unit) continue;
+      if (unit.bpayEntries.some((e) => e.billingId === w.billingId)) continue;
+      unit.bpayEntries.push({
+        source: "WALLET_INVOICE",
+        ner: w.customerName || "",
+        utas: normalizePhone(w.userId),
+        customerCode: unit.customerCode,
+        customerId: parsed ? "" : String(w.customerId),
+        billingId: w.billingId,
+        walletUserId: "",
+        address: w.customerAddress || "",
       });
+    }
 
-      if (meta.billingId) {
-        billingToUnitMap.set(meta.billingId, key);
-        if (meta.utas) {
-          billingToPhoneMap.set(meta.billingId, meta.utas);
+    const bpayUnitCount = [...units.values()].filter((u) => u.bpayEntries.length).length;
+    console.log(`   └─ Оршин суугч: ${residents.length}, BPay-тэй тоот: ${bpayUnitCount}, Тайм тауэрын биш BPay toot: ${unknownBpayToots}`);
+
+    // -----------------------------------------------------------------------
+    // 3. Customer code загварыг шалгах
+    // -----------------------------------------------------------------------
+    const codePattern = { checked: 0, matched: 0, mismatched: 0, examples: [] };
+    for (const u of units.values()) {
+      for (const e of u.bpayEntries) {
+        if (!e.walletDoorNo) continue;
+        codePattern.checked++;
+        if (makeCustomerCode(u.building, e.walletDoorNo) === e.customerCode) codePattern.matched++;
+        else {
+          codePattern.mismatched++;
+          if (codePattern.examples.length < 10) codePattern.examples.push({ key: u.key, doorNo: e.walletDoorNo, code: e.customerCode });
         }
       }
     }
+    console.log(`\n🔢 3. Customer code загвар: ${codePattern.matched}/${codePattern.checked} таарсан`);
+    if (codePattern.mismatched) console.log("   ⚠️ Зөрсөн жишээ:", codePattern.examples);
 
-    for (const r of bpayResidents) {
-      const rPhone = normalizePhone(r.utas);
-      (r.toots || []).forEach((t) => {
-        const bCode = extractBuildingCodeFromAny(t, discoveredBairIds);
-        if (!bCode) return;
-
-        const tootVal = extractTootFromAny(t);
-        if (!tootVal) return;
-
-        addBpayEntry(bCode, tootVal, {
-          source: "BPAY_RESIDENT_TOOT",
-          utas: rPhone,
-          ner: r.ner || t.ner || "",
-          ovog: r.ovog || t.ovog || "",
-          walletUserId: r.walletUserId || t.walletUserId || "",
-          walletBairId: t.walletBairId || t.bairId || "",
-          walletDoorNo: t.walletDoorNo || t.doorNo || t.toot || "",
-          walletCustomerId: t.walletCustomerId || t.walletCustomerCode || t.customerId || "",
-          walletCustomerCode: t.walletCustomerCode || t.walletCustomerId || t.customerId || "",
-          billingId: t.billingId || "",
-          bairniiNer: t.bairniiNer || t.customerAddress || "",
-          customerAddress: t.customerAddress || t.bairniiNer || "",
-          localBalance: Number(t.ekhniiUldegdel) || 0,
-        });
-      });
-    }
-
-    for (const winv of walletInvoices) {
-      const bCode = extractBuildingCodeFromAny(winv, discoveredBairIds);
-      if (!bCode) continue;
-
-      const tootVal = extractTootFromAny(winv);
-      if (!tootVal) continue;
-
-      addBpayEntry(bCode, tootVal, {
-        source: "BPAY_WALLET_INVOICE",
-        walletInvoiceId: winv.walletInvoiceId,
-        billingId: winv.billingId,
-        customerId: winv.customerId,
-        customerName: winv.customerName,
-        customerAddress: winv.customerAddress,
-        totalAmount: Number(winv.totalAmount) || 0,
-        localBalance: Number(winv.totalAmount) || 0,
-      });
-    }
-
-    console.log(`   => BPay-тэй холбогдсон Time Tower өрх/тоотын түлхүүр: ${bpayMap.size}`);
-
-    // -------------------------------------------------------------
-    // АЛХАМ 4: АВТО-БҮРТГЭЛ (AUTO-REGISTER) & ХОЛБОЛТ
-    // -------------------------------------------------------------
-    const autoRegistrableUnits = new Map();
-    let newlyRegisteredCount = 0;
-
-    if (hasWalletToken && walletApiService) {
-      console.log("\n⚡ 4. BPay дээр хараахан холбогдоогүй өрхүүдийг шалгаж байна...");
-
-      for (const [key, contracts] of sukhMap.entries()) {
-        const [bCode, normToot] = key.split("_");
-
-        if (targetBair && bCode !== targetBair) continue;
-        if (targetToot && normToot !== targetToot) continue;
-
-        // Only process units not already in bpayMap with billingId
-        const existingBpay = bpayMap.get(key) || [];
-        const hasBillingId = existingBpay.some((b) => b.billingId);
-        if (hasBillingId) continue;
-
-        const primaryContract = contracts[0];
-        const residentPhone = primaryContract.utas;
-        if (!residentPhone) continue;
-
-        // Get primary bairId for this building
-        const bIdSet = discoveredBairIds[bCode];
-        const bairId = bIdSet && bIdSet.size > 0 ? Array.from(bIdSet)[0] : null;
-        if (!bairId) continue;
-
-        try {
-          // Check if BPay knows this address
-          const addressMatches = await walletApiService.getBillingByAddress(residentPhone, bairId, normToot);
-          const list = Array.isArray(addressMatches) ? addressMatches : addressMatches ? [addressMatches] : [];
-          if (list.length > 0) {
-            const customer = list[0];
-            autoRegistrableUnits.set(key, customer);
-
-            if (isAutoRegister && newlyRegisteredCount < registerLimit) {
-              console.log(`   ⚡ [AUTO-REGISTER] Холбож байна: ${bCode}-р байр, ${normToot} тоот (Утас: ${residentPhone}, Customer: ${customer.customerId || customer.customerCode})...`);
-
-              // 1. Ensure user is registered in BPay
-              await walletApiService.registerUser(residentPhone, `${residentPhone}@sukh.mn`).catch(() => null);
-
-              // 2. Save billing address to user in BPay
-              const saveResult = await walletApiService.saveBilling(residentPhone, {
-                customerId: customer.customerId || customer.customerCode,
-              });
-
-              const assignedBillingId = saveResult?.billingId || saveResult?.id || "";
-
-              // 3. Save to local orshinSuugch.toots
-              const existingResident = await mainConn.collection("orshinSuugch").findOne({
-                $or: [{ utas: residentPhone }, { nevtrekhNer: residentPhone }],
-              });
-
-              const newTootEntry = {
-                toot: String(normToot),
-                source: "WALLET_API",
-                bairniiNer: customer.bairName || `Time tower ${bCode}, ${normToot}`,
-                ovog: primaryContract.ovog || "",
-                ner: primaryContract.ner || customer.customerName || "",
-                walletBairId: bairId,
-                walletDoorNo: String(normToot),
-                walletUserId: residentPhone,
-                walletCustomerId: customer.customerId || customer.customerCode || "",
-                walletCustomerCode: customer.customerCode || customer.customerId || "",
-                billingId: assignedBillingId,
-                khonogoorBodokhEsekh: false,
-                bodokhKhonog: 0,
-                createdAt: new Date(),
-              };
-
-              if (existingResident) {
-                const toots = existingResident.toots || [];
-                const idx = toots.findIndex(
-                  (t) =>
-                    t.source === "WALLET_API" &&
-                    String(t.walletDoorNo) === String(normToot) &&
-                    (t.walletBairId === bairId || t.walletCustomerId === customer.customerId)
-                );
-                if (idx >= 0) {
-                  toots[idx] = { ...toots[idx], ...newTootEntry };
-                } else {
-                  toots.push(newTootEntry);
-                }
-                await mainConn.collection("orshinSuugch").updateOne(
-                  { _id: existingResident._id },
-                  { $set: { toots } }
-                );
-              } else {
-                await mainConn.collection("orshinSuugch").insertOne({
-                  ner: primaryContract.ner || customer.customerName || "",
-                  ovog: primaryContract.ovog || "",
-                  utas: residentPhone,
-                  baiguullagiinId: TIMETOWER_ORG_ID,
-                  baiguullagiinNer: "Тайм тауэр СӨХ",
-                  barilgiinId: BUILDINGS.find((b) => b.code === bCode)?.id || "",
-                  toot: String(normToot),
-                  bairniiNer: customer.bairName || `Time tower ${bCode}`,
-                  erkh: "OrshinSuugch",
-                  nevtrekhNer: residentPhone,
-                  taniltsuulgaKharakhEsekh: true,
-                  toots: [newTootEntry],
-                  createdAt: new Date(),
-                });
-              }
-
-              // Add to in-memory bpayMap
-              addBpayEntry(bCode, normToot, {
-                source: "BPAY_AUTO_REGISTERED",
-                utas: residentPhone,
-                ner: customer.customerName || primaryContract.ner || "",
-                walletCustomerCode: customer.customerCode || customer.customerId,
-                walletCustomerId: customer.customerId,
-                billingId: assignedBillingId,
-                customerAddress: customer.bairName || `Time tower ${bCode}, ${normToot}`,
-                localBalance: 0,
-              });
-
-              newlyRegisteredCount++;
+    // -----------------------------------------------------------------------
+    // 4. BPay биллүүд (холбогдсон өрхүүд)
+    // -----------------------------------------------------------------------
+    const bpayResults = new Map(); // key -> { billingId, users, customerCode, total, bills, error }
+    if (wallet) {
+      console.log("\n💳 4. BPay-ийн төлөх биллүүд...");
+      const linked = [...units.values()].filter((u) => u.bpayEntries.some((e) => e.billingId));
+      let done = 0;
+      await inBatches(linked, 8, async (u) => {
+        const withBilling = u.bpayEntries.filter((e) => e.billingId);
+        const billingIds = [...new Set(withBilling.map((e) => e.billingId))];
+        const errors = [];
+        let result = null;
+        // Аппын адил: billing бүрийг эзэмшигчийн утас, дараа нь walletUserId-аар оролдоно.
+        outer: for (const billingId of billingIds) {
+          const owners = withBilling.filter((e) => e.billingId === billingId);
+          const candidates = [...new Set(owners.flatMap((e) => [e.utas, e.walletUserId]).filter(Boolean))];
+          for (const userId of candidates) {
+            try {
+              const raw = await wallet.getBillingBills(userId, billingId);
+              result = { billingId, ...summarizeBills(raw) };
+              break outer;
+            } catch (e) {
+              errors.push(`${userId}: ${e.response?.data?.responseMsg || e.message}`);
             }
           }
-        } catch (regErr) {
-          // ignore individual lookup errors
+          if (!candidates.length) errors.push(`${billingId.slice(0, 8)}: эзэмшигчийн утас алга`);
         }
-      }
-
-      console.log(`   └─ BPay-д автоматаар бүртгэж холбох боломжтой өрх: ${autoRegistrableUnits.size}`);
-      if (isAutoRegister) {
-        console.log(`   ✅ Амжилттай шинээр бүртгэж холбосон өрх: ${newlyRegisteredCount}`);
-      }
+        bpayResults.set(u.key, result || { billingId: billingIds[0], total: 0, bills: [], paidCount: 0, error: errors.join("; ") || "Билл татаж чадсангүй" });
+        done++;
+        if (done % 20 === 0 || done === linked.length) process.stdout.write(`   └─ ${done}/${linked.length}\r`);
+      });
+      console.log("");
     }
 
-    // -------------------------------------------------------------
-    // АЛХАМ 5: БҮХ ТӨЛӨХ БОЛОМЖТОЙ (PAYABLE) БИЛЛҮҮДИЙГ ТАТАХ
-    // -------------------------------------------------------------
-    console.log("\n💳 5. BPay-ийн бүх төлөгдөөгүй, төлөх боломжтой (Payable) биллүүдийг татаж байна...");
+    // -----------------------------------------------------------------------
+    // 5. Холбогдоогүй өрхийн кодыг BPay-ээс шалгах (зөвхөн унших)
+    // -----------------------------------------------------------------------
+    const probe = { enabled: false, userLabel: "" };
+    const probeResults = new Map();
+    const unlinked = [...units.values()].filter(
+      (u) => u.contracts.length && !u.bpayEntries.some((e) => e.billingId) && u.customerCode &&
+        (!targetBair || u.building === targetBair) && (!targetToot || u.toot === normalizeToot(targetToot))
+    );
 
-    const billingBalances = new Map(); // billingId -> { totalPayable, billsCount, payableBills }
-
-    if (hasWalletToken && walletApiService) {
-      const billingIds = Array.from(billingToUnitMap.keys());
-      const concurrency = 10;
-      let processed = 0;
-
-      for (let i = 0; i < billingIds.length; i += concurrency) {
-        const batch = billingIds.slice(i, i + concurrency);
-        await Promise.all(
-          batch.map(async (billingId) => {
-            const phone = billingToPhoneMap.get(billingId) || "";
-            try {
-              const rawBills = await walletApiService.getBillingBills(phone, billingId);
-              const list = Array.isArray(rawBills) ? rawBills : rawBills ? [rawBills] : [];
-
-              let totalPayable = 0;
-              const payableBills = [];
-
-              for (const b of list) {
-                // In BPay, getBillingBills returns active unpaid bills
-                const amt = Number(b.billTotalAmount || b.billAmount || b.totalAmount || b.amount || 0) || 0;
-                const late = Number(b.billLateFee || b.lateFee || 0) || 0;
-                totalPayable += amt;
-
-                payableBills.push({
-                  billId: b.billId || b.id || "",
-                  billNo: b.billNo || "",
-                  billPeriod: b.billPeriod || b.period || "",
-                  billDescription: b.billDescription || b.description || "СӨХ төлбөр",
-                  amount: amt,
-                  lateFee: late,
-                  isPaid: b.isPaid === true,
+    if (wallet && (doProbe || isAutoRegister) && unlinked.length) {
+      // BPay API нь userId толгой шаарддаг — бүртгэлтэй хэрэглэгчийн утсыг ашиглана.
+      let probeUser = normalizePhone(probeUserArg);
+      if (!probeUser) {
+        const known = [...units.values()].flatMap((u) => u.bpayEntries).find((e) => e.utas && e.billingId);
+        probeUser = known ? known.utas : "";
+      }
+      if (!probeUser) {
+        console.log("\n⚠️ 5. Кодыг шалгах BPay хэрэглэгч олдсонгүй (--probe-user <утас> өгнө үү).");
+      } else {
+        probe.enabled = true;
+        probe.userLabel = `${probeUser.slice(0, 2)}****${probeUser.slice(-2)}`;
+        loadSavedBairIds(knownBpayBairIds);
+        await discoverMissingBairIds(wallet, knownBpayBairIds);
+        probe.bairIds = Object.fromEntries(Object.entries(knownBpayBairIds).map(([k, v]) => [k, [...v]]));
+        for (const [code, ids] of Object.entries(probe.bairIds)) {
+          console.log(`   └─ ${code}-р байр BPay bairId: ${ids.join(", ") || "ОЛДСОНГҮЙ"}`);
+        }
+        console.log(`\n🔎 5. ${unlinked.length} холбогдоогүй өрхийг BPay-ээс хаягаар шалгаж байна (хэрэглэгч ${probe.userLabel})...`);
+        let done = 0;
+        // Аппын адил: bairId + тоотоор хайж, customerId (UUID) ба customerCode-ыг авна.
+        await inBatches(unlinked, 5, async (u) => {
+          const bairIds = [...knownBpayBairIds[u.building]];
+          if (!bairIds.length) {
+            probeResults.set(u.key, { found: false, error: `${u.building}-р байрны BPay bairId тодорхойгүй` });
+          } else {
+            const errors = [];
+            for (const bairId of bairIds) {
+              try {
+                const list = (await wallet.getBillingByAddress(probeUser, bairId, u.toot)) || [];
+                if (!list.length) continue;
+                const c = list.find((x) => String(x.customerCode) === u.customerCode) || list[0];
+                probeResults.set(u.key, {
+                  found: true,
+                  bairId,
+                  customerId: c.customerId || "",
+                  customerCode: String(c.customerCode || ""),
+                  codeMatches: String(c.customerCode || "") === u.customerCode,
+                  candidates: list.length,
+                  customerName: c.customerName || "",
+                  address: c.customerAddress || c.bairName || "",
                 });
+                break;
+              } catch (e) {
+                errors.push(e.response?.data?.responseMsg || e.message);
               }
-
-              billingBalances.set(billingId, {
-                totalPayable,
-                billsCount: payableBills.length,
-                payableBills,
-              });
-            } catch (bErr) {
-              billingBalances.set(billingId, { totalPayable: 0, billsCount: 0, payableBills: [], error: bErr.message });
             }
-          })
-        );
-        processed += batch.length;
-        if (processed % 50 === 0 || processed === billingIds.length) {
-          process.stdout.write(`   └─ Төлөх биллүүд татсан: ${processed} / ${billingIds.length}\r`);
-        }
+            if (!probeResults.has(u.key)) {
+              probeResults.set(u.key, errors.length ? { found: false, error: errors.join("; ") } : { found: false });
+            }
+          }
+          done++;
+          if (done % 20 === 0 || done === unlinked.length) process.stdout.write(`   └─ ${done}/${unlinked.length}\r`);
+        });
+        console.log("");
       }
-      console.log(`\n   ✅ Нийт ${billingBalances.size} BPay биллингийн төлөх нэхэмжлэхүүд бүрэн татагдлаа.`);
-    } else {
-      console.log("   ℹ️ BPay Live API холбогдоогүй тул local walletInvoice үлдэгдлийг ашиглана.");
     }
 
-    // -------------------------------------------------------------
-    // АЛХАМ 6: НЭГДСЭН ТУЛГАЛТ БА ХАРЬЦУУЛАЛТ
-    // -------------------------------------------------------------
-    console.log("\n🧩 6. СӨХ авлага болон BPay төлөх (Payable) биллүүдийг зэрэгцүүлэн тулгаж байна...");
+    // -----------------------------------------------------------------------
+    // 6. BPay-д холбох (--auto-register)
+    // -----------------------------------------------------------------------
+    const registerResults = new Map();
+    if (isAutoRegister) {
+      console.log("\n⚡ 6. BPay-д холбож байна...");
+      // Зөвхөн BPay-ийн буцаасан customerCode нь тоотоос үүсгэсэн кодтой яг таарсан өрх.
+      const candidates = unlinked.filter((u) => {
+        const p = probeResults.get(u.key);
+        return p?.found && p.codeMatches && p.customerId;
+      });
+      const max = registerLimit > 0 ? registerLimit : candidates.length;
+      for (const u of candidates.slice(0, max)) {
+        const c = u.contracts.find((x) => x.phone) || u.contracts[0];
+        const label = `${u.building}-${u.toot}`;
+        if (!c || !c.phone) {
+          registerResults.set(u.key, { ok: false, message: "Гэрээнд утас алга" });
+          continue;
+        }
+        try {
+          const res = await registerUnit(mainConn, wallet, u, c, probeResults.get(u.key));
+          registerResults.set(u.key, res);
+          console.log(`   ${res.ok ? "✅" : "❌"} ${label}: ${res.message}`);
+          if (res.ok && res.billingId) {
+            u.bpayEntries.push({ source: "AUTO_REGISTERED", ner: c.ner, utas: c.phone, customerCode: u.customerCode, billingId: res.billingId, walletUserId: res.walletUserId });
+            try {
+              bpayResults.set(u.key, { billingId: res.billingId, ...summarizeBills(await wallet.getBillingBills(c.phone, res.billingId)) });
+            } catch (e) {
+              bpayResults.set(u.key, { billingId: res.billingId, total: 0, bills: [], paidCount: 0, error: e.message });
+            }
+          }
+        } catch (e) {
+          registerResults.set(u.key, { ok: false, message: e.response?.data?.responseMsg || e.message });
+          console.log(`   ❌ ${label}: ${e.message}`);
+        }
+      }
+    }
 
-    const allKeys = Array.from(new Set([...sukhMap.keys(), ...bpayMap.keys()])).sort((a, b) => {
-      const [bldA, tootA] = a.split("_");
-      const [bldB, tootB] = b.split("_");
-      if (bldA !== bldB) return bldA.localeCompare(bldB);
-      return parseInt(tootA, 10) - parseInt(tootB, 10);
+    // -----------------------------------------------------------------------
+    // 7. Тулгалт
+    // -----------------------------------------------------------------------
+    const keys = [...units.keys()].sort((a, b) => {
+      const [ba, ta] = a.split("_");
+      const [bb, tb] = b.split("_");
+      if (ba !== bb) return ba.localeCompare(bb);
+      return (parseInt(ta, 10) || 0) - (parseInt(tb, 10) || 0) || ta.localeCompare(tb);
     });
 
+    const byStatus = {};
+    const totals = { sukhAll: 0, sukhLinked: 0, bpay: 0 };
+    let negativeSukh = 0;
+    let appUserUnits = 0;
     const allRows = [];
-    let countBalanceMatched = 0;
-    let countBalanceMismatched = 0;
-    let countNoBpay = 0;
-    let countPhoneMatched = 0;
-    let countPhoneDifferent = 0;
-    let totalSukhBalance = 0;
-    let totalBpayBalance = 0;
-    let totalBillsCount = 0;
 
-    for (const key of allKeys) {
-      const [bCode, normToot] = key.split("_");
-      const sukhEntries = sukhMap.get(key) || [];
-      const bpayEntries = bpayMap.get(key) || [];
+    for (const key of keys) {
+      const u = units.get(key);
+      const hasSukh = u.contracts.length > 0;
+      const sukhBalance = u.contracts.reduce((s, c) => s + (c.balance || 0), 0);
+      if (hasSukh) totals.sukhAll += sukhBalance;
+      if (hasSukh && sukhBalance < 0) negativeSukh++;
+      if (u.appUsers.length) appUserUnits++;
 
-      // Sukh side
-      let sukhBalance = 0;
-      let primarySukh = null;
-      if (sukhEntries.length > 0) {
-        primarySukh = sukhEntries[0];
-        sukhBalance = sukhEntries.reduce((sum, e) => sum + (e.balance || 0), 0);
-        totalSukhBalance += sukhBalance;
-      }
-
-      // BPay side
-      let bpayBalance = 0;
-      let primaryBpay = null;
-      let billsCount = 0;
-      let payableBills = [];
-
-      if (bpayEntries.length > 0) {
-        primaryBpay =
-          bpayEntries.find((b) => b.billingId && b.walletCustomerCode) ||
-          bpayEntries.find((b) => b.billingId) ||
-          bpayEntries[0];
-
-        if (primaryBpay.billingId && billingBalances.has(primaryBpay.billingId)) {
-          const liveData = billingBalances.get(primaryBpay.billingId);
-          bpayBalance = liveData.totalPayable || 0;
-          billsCount = liveData.billsCount || 0;
-          payableBills = liveData.payableBills || [];
-        } else {
-          const invWithAmount = bpayEntries.find((b) => b.totalAmount !== undefined && b.totalAmount > 0);
-          bpayBalance = invWithAmount ? invWithAmount.totalAmount : primaryBpay.localBalance || 0;
-        }
-
-        totalBpayBalance += bpayBalance;
-        totalBillsCount += billsCount;
-      }
-
-      // Compare phones
-      const sukhPhones = new Set(sukhEntries.map((s) => s.utas).filter(Boolean));
-      const bpayPhones = new Set(bpayEntries.map((b) => b.utas).filter(Boolean));
-      let isPhoneMatch = false;
-      for (const sp of sukhPhones) {
-        if (bpayPhones.has(sp)) {
-          isPhoneMatch = true;
-          break;
+      const live = bpayResults.get(key);
+      const bpayUsers = [];
+      const seen = new Set();
+      for (const e of u.bpayEntries) {
+        const id = e.utas || e.ner;
+        if (id && !seen.has(id)) {
+          seen.add(id);
+          bpayUsers.push({ ner: e.ner, utas: e.utas });
         }
       }
 
-      // Status
-      const isConnected = sukhEntries.length > 0 && bpayEntries.length > 0;
-      let balanceStatus = "NO_BPAY";
-      let diff = 0;
-
-      if (isConnected) {
-        diff = sukhBalance - bpayBalance;
-        if (Math.abs(diff) < 1) {
-          balanceStatus = "MATCHED";
-          countBalanceMatched++;
-        } else {
-          balanceStatus = "MISMATCHED";
-          countBalanceMismatched++;
-        }
-
-        if (isPhoneMatch) {
-          countPhoneMatched++;
-        } else {
-          countPhoneDifferent++;
-        }
-      } else if (sukhEntries.length > 0 && bpayEntries.length === 0) {
-        balanceStatus = "NO_BPAY";
-        countNoBpay++;
+      let status;
+      let diff = null;
+      if (!hasSukh) status = "NO_SUKH";
+      else if (live && live.error) status = "BPAY_ERROR";
+      else if (live) {
+        diff = sukhBalance - live.total;
+        status = Math.abs(diff) < 1 ? "MATCHED" : "MISMATCHED";
+        totals.sukhLinked += sukhBalance;
+        totals.bpay += live.total;
       } else {
-        balanceStatus = "NO_SUKH";
+        const p = probeResults.get(key);
+        status = !p ? "NOT_CHECKED" : p.found ? (p.codeMatches ? "READY" : "CODE_DIFF") : p.error ? "NOT_CHECKED" : "NOT_FOUND";
       }
+      byStatus[status] = (byStatus[status] || 0) + 1;
 
-      const autoRegInfo = autoRegistrableUnits.get(key) || null;
-
-      const rowRecord = {
+      const sukhPhones = [...new Set(u.contracts.map((c) => c.phone).filter(Boolean))];
+      allRows.push({
         key,
-        building: bCode,
-        toot: normToot,
+        building: u.building,
+        toot: u.toot,
+        customerCode: u.customerCode,
+        status,
         sukhBalance,
-        bpayBalance: isConnected ? bpayBalance : null,
-        diff: isConnected ? diff : null,
-        balanceStatus,
-        phoneMatched: isPhoneMatch,
-        autoRegistrable: autoRegInfo,
-        sukh: primarySukh
+        diff,
+        sukh: hasSukh
           ? {
-              ner: primarySukh.ner,
-              ovog: primarySukh.ovog,
-              utas: primarySukh.utas,
-              rawUtas: primarySukh.rawUtas,
-              gereeniiDugaar: primarySukh.gereeniiDugaar,
-              gereeId: primarySukh.gereeId,
-              contractsCount: sukhEntries.length,
+              ner: u.contracts[0].ner,
+              ovog: u.contracts[0].ovog,
+              phones: sukhPhones,
+              gereeniiDugaar: u.contracts.map((c) => c.gereeniiDugaar).join(", "),
+              contractsCount: u.contracts.length,
             }
           : null,
-        bpay: primaryBpay
+        appUsers: u.appUsers.map((p) => ({ ner: p.ner, utas: p.utas })),
+        bpay: u.bpayEntries.length
           ? {
-              ner: primaryBpay.ner || primaryBpay.customerName || "",
-              utas: primaryBpay.utas || "",
-              customerCode: primaryBpay.walletCustomerCode || primaryBpay.walletCustomerId || "",
-              customerId: primaryBpay.walletCustomerId || primaryBpay.customerId || "",
-              billingId: primaryBpay.billingId || "",
-              customerAddress: primaryBpay.customerAddress || primaryBpay.bairniiNer || "",
-              bairniiNer: primaryBpay.bairniiNer || "",
-              billsCount,
-              payableBills,
+              customerCode: u.bpayEntries[0].customerCode,
+              billingId: live?.billingId || u.bpayEntries.find((e) => e.billingId)?.billingId || "",
+              users: bpayUsers,
+              phoneMatched: bpayUsers.some((x) => sukhPhones.includes(x.utas)),
+              total: live ? live.total : null,
+              lateFeeTotal: live?.lateFeeTotal || 0,
+              bills: live?.bills || [],
+              paidCount: live?.paidCount || 0,
+              error: live?.error || (live ? "" : "billingId алга"),
             }
           : null,
-      };
-
-      allRows.push(rowRecord);
+        probe: probeResults.get(key) || null,
+        registerResult: registerResults.get(key) || null,
+      });
     }
 
-    // -------------------------------------------------------------
-    // АЛХАМ 7: ТАЙЛАН ХЭВЛЭХ БА HTML ҮҮСГЭХ
-    // -------------------------------------------------------------
-    console.log("\n" + "=".repeat(88));
-    console.log("📊 ТӨЛӨХ БОЛОМЖТОЙ (PAYABLE) НЭХЭМЖЛЭХ БА АВЛАГЫН НЭГДСЭН ДҮН:");
-    console.log("=".repeat(88));
-    console.log(`🏢 Нийт шинжилсэн өрх / тоот         : ${allKeys.length} өрх`);
-    console.log(`🔗 BPay хаягтай холбогдсон өрх       : ${bpayMap.size} өрх`);
-    console.log(`   ├─ 🟢 Утас 100% яг таарсан        : ${countPhoneMatched} өрх`);
-    console.log(`   └─ 🟡 Утас өөр ч хаяг холбогдсон  : ${countPhoneDifferent} өрх`);
-    console.log(`⚡ BPay-д автоматаар холбох боломжтой: ${autoRegistrableUnits.size} өрх`);
-    console.log(`----------------------------------------------------------------------------------------`);
-    console.log(`🟢 ҮЛДЭГДЭЛ ЯГ ТААРСАН (Зөрүү 0 ₮)   : ${countBalanceMatched} өрх`);
-    console.log(`🔴 ҮЛДЭГДЭЛ ЗӨРСӨН (~30 тулгах айл)  : ${countBalanceMismatched} өрх`);
-    console.log(`⚪ BPay-д бүртгэлгүй (Зөвхөн СӨХ)    : ${countNoBpay} өрх`);
-    console.log(`----------------------------------------------------------------------------------------`);
-    console.log(`💰 Нийт СӨХ-ийн авлагын дүн          : ${formatMoney(totalSukhBalance)}`);
-    console.log(`💳 Нийт BPay төлөх боломжтой дүн     : ${formatMoney(totalBpayBalance)} (${totalBillsCount} нэхэмжлэх)`);
-    console.log(`⚖️  Нийт үлдэгдлийн зөрүүний дүн      : ${formatMoney(totalSukhBalance - totalBpayBalance)}`);
-    console.log("=".repeat(88));
-
-    const reportData = {
+    const report = {
       isAutoRegister,
       generatedAt: new Date().toISOString(),
-      organization: {
-        id: TIMETOWER_ORG_ID,
-        name: "Тайм тауэр СӨХ",
-        buildings: BUILDINGS,
-      },
+      organization: { id: TIMETOWER_ORG_ID, name: TIMETOWER_ORG_NAME, buildings: BUILDINGS },
+      codePattern,
+      probe,
       counts: {
-        totalUnits: allKeys.length,
-        connectedToBpay: bpayMap.size,
-        balanceMatched: countBalanceMatched,
-        balanceMismatched: countBalanceMismatched,
-        noBpay: countNoBpay,
-        autoRegistrable: autoRegistrableUnits.size,
-        phoneMatched: countPhoneMatched,
-        phoneDifferent: countPhoneDifferent,
+        totalUnits: allRows.filter((r) => r.sukh).length,
+        bpayLinked: allRows.filter((r) => r.bpay && r.bpay.billingId).length,
+        appUsers: appUserUnits,
+        negativeSukh,
+        byStatus,
       },
-      totals: {
-        totalSukhBalance,
-        totalBpayBalance,
-        totalDiff: totalSukhBalance - totalBpayBalance,
-        totalBillsCount,
-      },
+      totals,
       allRows,
     };
 
-    // 1. JSON Report
-    const jsonPath = path.join(__dirname, "timetower_bpay_match_report.json");
-    fs.writeFileSync(jsonPath, JSON.stringify(reportData, null, 2), "utf-8");
-    console.log(`📄 1. JSON тайлан хадгалагдлаа: ${jsonPath}`);
+    console.log("\n" + "=".repeat(80));
+    console.log(`🏢 СӨХ гэрээтэй тоот        : ${report.counts.totalUnits}`);
+    console.log(`💳 BPay-д холбогдсон тоот    : ${report.counts.bpayLinked}`);
+    console.log(`📱 Аппын хэрэглэгчтэй тоот   : ${report.counts.appUsers}`);
+    for (const [k, v] of Object.entries(byStatus)) console.log(`   ${STATUS_META[k]?.label || k}: ${v}`);
+    console.log(`💰 СӨХ авлага (бүгд)         : ${formatMoney(totals.sukhAll)}`);
+    console.log(`💰 СӨХ авлага (BPay-тэй)     : ${formatMoney(totals.sukhLinked)}`);
+    console.log(`💳 BPay төлөх билл           : ${formatMoney(totals.bpay)}`);
+    console.log(`⚖️  Зөрүү (BPay-тэй өрх)      : ${formatMoney(totals.sukhLinked - totals.bpay)}`);
+    console.log("=".repeat(80));
 
-    // 2. Standalone HTML Report (index.html)
-    const htmlPath = path.join(__dirname, "index.html");
-    generateIndexHtml(reportData, htmlPath);
-    console.log(`🌐 2. Дэлгэрэнгүй INDEX.HTML тайлан амжилттай үүсгэгдлээ: ${htmlPath}`);
-
-    // Copy to timetower_match_index.html
-    const htmlCopyPath = path.join(__dirname, "timetower_match_index.html");
-    fs.copyFileSync(htmlPath, htmlCopyPath);
-
-    console.log("=".repeat(88) + "\n");
+    fs.mkdirSync(outDir, { recursive: true });
+    const jsonPath = path.join(outDir, "timetower_bpay_match_report.json");
+    const htmlPath = path.join(outDir, "timetower_bpay_match.html");
+    fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2), "utf-8");
+    generateHtml(report, htmlPath);
+    console.log(`📄 ${jsonPath}\n🌐 ${htmlPath}`);
   } catch (err) {
-    console.error("❌ Алдаа гарлаа:", err);
+    console.error("❌ Алдаа:", err);
+    process.exitCode = 1;
   } finally {
     if (mainConn) await mainConn.close();
     if (tenantConn) await tenantConn.close();
   }
 }
 
-runMatchmaking().catch(console.error);
+const addrName = (x) => String(x?.name || x?.cityName || x?.districtName || x?.khorooName || x?.bairName || "").trim();
+const addrId = (x) => String(x?.id || x?.cityId || x?.districtId || x?.khorooId || x?.bairId || "");
+const exactNumber = (text, num) => new RegExp(`(?:^|\\D)${num}(?:\\D|$)`).test(String(text || ""));
+
+/**
+ * BPay-ийн хаягийн модыг татаж scripts/data/bpay_address_tree.json-д хадгална.
+ * Зөвхөн BPay-ээс уншина, санд юу ч бичихгүй.
+ */
+async function saveAddressTree(wallet) {
+  console.log("🗺️  BPay-ийн хаягийн модыг татаж байна...");
+  const cities = ((await wallet.getAddressCities()) || []).filter((c) => allCities || /улаанбаатар/i.test(addrName(c)));
+  if (!cities.length) throw new Error("Хот олдсонгүй (Улаанбаатар нэрээр таарсангүй — --all-cities оролдоно уу)");
+
+  const tree = [];
+  const flat = [];
+  const errors = [];
+  for (const city of cities) {
+    const cityNode = { id: addrId(city), name: addrName(city), districts: [] };
+    tree.push(cityNode);
+    const districts = (await wallet.getAddressDistricts(cityNode.id)) || [];
+    for (const d of districts) {
+      const dNode = { id: addrId(d), name: addrName(d), khoroos: [] };
+      cityNode.districts.push(dNode);
+      let khoroos = [];
+      try {
+        khoroos = (await wallet.getAddressKhoroo(dNode.id)) || [];
+      } catch (e) {
+        errors.push({ level: "district", id: dNode.id, name: dNode.name, error: e.message });
+      }
+      const kNodes = khoroos.map((k) => ({ id: addrId(k), name: addrName(k), bairs: [] }));
+      dNode.khoroos = kNodes;
+      await inBatches(kNodes, 5, async (kNode) => {
+        try {
+          const bairs = (await wallet.getAddressBair(kNode.id)) || [];
+          kNode.bairs = bairs.map((b) => ({ id: addrId(b), name: addrName(b) }));
+        } catch (e) {
+          errors.push({ level: "khoroo", id: kNode.id, name: `${dNode.name} ${kNode.name}`, error: e.message });
+        }
+      });
+      for (const kNode of kNodes) {
+        for (const b of kNode.bairs) {
+          flat.push({ city: cityNode.name, district: dNode.name, khoroo: kNode.name, bairId: b.id, bairName: b.name });
+        }
+      }
+      console.log(`   └─ ${cityNode.name} / ${dNode.name}: ${kNodes.length} хороо, ${kNodes.reduce((s, k) => s + k.bairs.length, 0)} байр`);
+    }
+  }
+
+  fs.mkdirSync(path.dirname(ADDRESS_TREE_PATH), { recursive: true });
+  fs.writeFileSync(
+    ADDRESS_TREE_PATH,
+    JSON.stringify({ fetchedAt: new Date().toISOString(), allCities, counts: { cities: tree.length, bairs: flat.length }, errors, tree, bairs: flat }, null, 2),
+    "utf-8"
+  );
+  console.log(`✅ ${flat.length} байр хадгаллаа: ${ADDRESS_TREE_PATH}`);
+  if (errors.length) console.log(`⚠️ ${errors.length} хэсгийг татаж чадсангүй (файлын "errors" хэсгийг үзнэ үү)`);
+
+  const ttBairs = findTimetowerBairs(flat);
+  for (const code of BUILDING_CODES) {
+    console.log(`   ${code}-р байр: ${ttBairs[code].map((b) => `${b.bairId} (${b.bairName})`).join(", ") || "ОЛДСОНГҮЙ"}`);
+  }
+}
+
+/** Хадгалсан модноос Баянзүрх, 26-р хороо дахь 216-219-р байрыг яг тоогоор нь олно. */
+function findTimetowerBairs(flat) {
+  const result = Object.fromEntries(BUILDING_CODES.map((c) => [c, []]));
+  for (const b of flat || []) {
+    if (!/баянзүрх|бзд/i.test(`${b.district} ${b.bairName}`)) continue;
+    if (!exactNumber(b.khoroo, 26)) continue;
+    // Байрны нэрээс хороог хасаад шалгана ("БЗД 26-р хороо 216-р байр" -> "216-р байр")
+    const bairPart = String(b.bairName).replace(/\d+\s*-?\s*р\s*хороо/i, "");
+    for (const code of BUILDING_CODES) if (exactNumber(bairPart, code)) result[code].push(b);
+  }
+  return result;
+}
+
+/** Хадгалсан модыг ачаалж, мэдэгдэхгүй байрны bairId-г нэмнэ. */
+function loadSavedBairIds(knownBpayBairIds) {
+  if (!fs.existsSync(ADDRESS_TREE_PATH)) {
+    console.log("   ℹ️ Хадгалсан хаягийн мод алга (--save-address-аар үүсгэнэ)");
+    return;
+  }
+  try {
+    const saved = JSON.parse(fs.readFileSync(ADDRESS_TREE_PATH, "utf-8"));
+    const found = findTimetowerBairs(saved.bairs);
+    for (const code of BUILDING_CODES) {
+      if (knownBpayBairIds[code].size) continue;
+      for (const b of found[code]) knownBpayBairIds[code].add(String(b.bairId));
+      if (found[code].length > 1) console.log(`   ⚠️ ${code}-р байрт хадгалсан модонд ${found[code].length} хаяг таарсан`);
+    }
+    console.log(`   └─ Хадгалсан хаягийн мод ачааллаа (${saved.fetchedAt}, ${saved.bairs?.length || 0} байр)`);
+  } catch (e) {
+    console.log(`   ⚠️ Хадгалсан хаягийн мод уншиж чадсангүй: ${e.message}`);
+  }
+}
+
+/**
+ * BPay bairId мэдэгдэхгүй байрыг BPay-ийн хаягийн модноос хайна:
+ * Улаанбаатар -> Баянзүрх -> 26-р хороо -> "<байр>" (яг тоогоор, жишээ нь 2180-ийг 218 гэж авахгүй).
+ */
+async function discoverMissingBairIds(wallet, knownBpayBairIds) {
+  const missing = Object.keys(knownBpayBairIds).filter((k) => knownBpayBairIds[k].size === 0);
+  if (!missing.length) return;
+  try {
+    const ub = ((await wallet.getAddressCities()) || []).find((c) => /улаанбаатар/i.test(addrName(c)));
+    if (!ub) return console.log("   ⚠️ BPay хаяг: Улаанбаатар олдсонгүй");
+    const bzd = ((await wallet.getAddressDistricts(addrId(ub))) || []).find((d) => /баянзүрх|бзд/i.test(addrName(d)));
+    if (!bzd) return console.log("   ⚠️ BPay хаяг: Баянзүрх олдсонгүй");
+    const kh = ((await wallet.getAddressKhoroo(addrId(bzd))) || []).find((k) => exactNumber(addrName(k), 26));
+    if (!kh) return console.log("   ⚠️ BPay хаяг: 26-р хороо олдсонгүй");
+    const flat = ((await wallet.getAddressBair(addrId(kh))) || []).map((b) => ({
+      district: addrName(bzd), khoroo: addrName(kh), bairId: addrId(b), bairName: addrName(b),
+    }));
+    const found = findTimetowerBairs(flat);
+    for (const code of missing) {
+      for (const b of found[code]) knownBpayBairIds[code].add(b.bairId);
+      if (found[code].length > 1) console.log(`   ⚠️ ${code}-р байрт BPay-д ${found[code].length} хаяг таарсан: ${found[code].map((b) => b.bairName).join(" | ")}`);
+    }
+  } catch (e) {
+    console.log(`   ⚠️ BPay хаягийн модноос bairId хайж чадсангүй: ${e.message}`);
+  }
+}
+
+/**
+ * Нэг тоотыг BPay-д холбох:
+ *   1. BPay хэрэглэгч (утсаар) — байхгүй бол бүртгэнэ. walletUserId = утас.
+ *   2. Хаягаар олдсон BPay customerId (UUID)-тай billing тухайн хэрэглэгчид байвал түүнийг
+ *      ашиглана, үгүй бол saveBilling({ customerId }). billingId буцаагүй бол локал санд бичихгүй.
+ *   3. amarSukh.orshinSuugch-ийн toots-д WALLET_API бичлэг нэмнэ/шинэчилнэ.
+ *      Оршин суугчийг гэрээний orshinSuugchId-аар, дараа нь утсаар хайна. Олдохгүй бол шинээр үүсгэхгүй.
+ */
+async function registerUnit(mainConn, wallet, unit, contract, probeHit) {
+  if (!probeHit || !probeHit.customerId) return { ok: false, message: "BPay customerId алга" };
+  const phone = contract.phone;
+  // BPay-д walletUserId нь утасны дугаар өөрөө.
+  const walletUserId = phone;
+
+  const userInfo = await wallet.getUserInfo(phone).catch(() => null);
+  if (!userInfo) {
+    try {
+      await wallet.registerUser(phone, `${phone}@sukh.mn`);
+    } catch (e) {
+      if (!(await wallet.getUserInfo(phone).catch(() => null))) {
+        return { ok: false, message: `BPay хэрэглэгч үүсгэж чадсангүй: ${e.message}` };
+      }
+    }
+  }
+
+  // BPay-д customerId нь UUID, customerCode нь 2003260... код — хоёр өөр талбар.
+  const customerId = probeHit.customerId;
+  if (wallet.clearBillingListCache) wallet.clearBillingListCache(phone);
+  const existing = (await wallet.getBillingList(phone).catch(() => [])) || [];
+  let billing = existing.find(
+    (b) => String(b.customerId) === customerId || String(b.customerCode) === unit.customerCode
+  );
+  if (!billing) billing = await wallet.saveBilling(phone, { customerId });
+  const billingId = billing?.billingId || billing?.id || "";
+  if (!billingId) return { ok: false, message: "BPay billingId буцаасангүй — локал санд бичээгүй" };
+
+  const residents = mainConn.collection("orshinSuugch");
+  let resident = null;
+  if (contract.orshinSuugchId && mongoose.Types.ObjectId.isValid(contract.orshinSuugchId)) {
+    resident = await residents.findOne({ _id: new mongoose.Types.ObjectId(contract.orshinSuugchId) });
+  }
+  if (!resident) {
+    resident = await residents.findOne({ $or: [{ utas: phone }, { utas: `+976${phone}` }, { nevtrekhNer: phone }] });
+  }
+  if (!resident) {
+    return { ok: true, billingId, walletUserId, message: `BPay-д холбогдсон (billing ${billingId.slice(0, 8)}), локал оршин суугч олдоогүй` };
+  }
+
+  const building = BUILDINGS.find((b) => b.code === unit.building);
+  const entry = {
+    toot: unit.toot,
+    source: "WALLET_API",
+    bairniiNer: billing.customerAddress || probeHit.address || building.name,
+    ovog: contract.ovog || "",
+    ner: contract.ner || billing.customerName || "",
+    baiguullagiinId: TIMETOWER_ORG_ID,
+    barilgiinId: building.sukhId,
+    walletBairId: probeHit.bairId || billing.bairId || "",
+    walletDoorNo: unit.toot,
+    walletUserId,
+    walletCustomerId: customerId,
+    walletCustomerCode: unit.customerCode,
+    billingId,
+    createdAt: new Date(),
+  };
+
+  const toots = Array.isArray(resident.toots) ? resident.toots : [];
+  const idx = toots.findIndex(
+    (t) => t.source === "WALLET_API" &&
+      (String(t.walletCustomerCode) === unit.customerCode || String(t.walletCustomerId) === customerId)
+  );
+  if (idx >= 0) toots[idx] = { ...toots[idx], ...entry, createdAt: toots[idx].createdAt || entry.createdAt };
+  else toots.push(entry);
+
+  const set = { toots };
+  if (!resident.walletUserId && walletUserId) set.walletUserId = walletUserId;
+  await residents.updateOne({ _id: resident._id }, { $set: set });
+
+  return { ok: true, billingId, walletUserId, message: `Холбогдсон (billing ${billingId.slice(0, 8)})` };
+}
+
+run();
