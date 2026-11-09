@@ -170,7 +170,14 @@ async function inBatches(items, size, fn) {
 
 /** BPay биллүүдийг нормчлох. Төлөгдсөн (isPaid) биллийг тусад нь тоолно. */
 function summarizeBills(rawList) {
-  const list = Array.isArray(rawList) ? rawList : rawList ? [rawList] : [];
+  let list = Array.isArray(rawList) ? rawList : rawList ? [rawList] : [];
+  // Зарим хариу биллүүдийг объект дотор массиваар буцаадаг ({ bills: [...] } гэх мэт).
+  if (list.length === 1 && list[0] && typeof list[0] === "object") {
+    const nested = ["bills", "billList", "items", "data", "billings"].find((k) => Array.isArray(list[0][k]));
+    if (nested) list = list[0][nested];
+  }
+  // Оношлогоо: BPay-ийн эхний биллийн түүхий бүтэц (талбарын нэр шалгахад).
+  const rawSample = rawList ? JSON.parse(JSON.stringify(Array.isArray(rawList) ? rawList[0] ?? null : rawList)) : null;
   const bills = [];
   let total = 0;
   let lateFeeTotal = 0;
@@ -194,7 +201,7 @@ function summarizeBills(rawList) {
       lateFee,
     });
   }
-  return { total, lateFeeTotal, bills, paidCount, rawCount: list.length };
+  return { total, lateFeeTotal, bills, paidCount, rawCount: list.length, rawSample };
 }
 
 // ---------------------------------------------------------------------------
@@ -845,6 +852,7 @@ async function run() {
               lateFeeTotal: live?.lateFeeTotal || 0,
               bills: live?.bills || [],
               paidCount: live?.paidCount || 0,
+              rawSample: live?.rawSample ?? null,
               error: live?.error || (live ? "" : "billingId алга"),
             }
           : null,
