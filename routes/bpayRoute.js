@@ -2,8 +2,9 @@
  * Төрийн банк (BPay) горимын endpoint-ууд.
  *
  * Ажилтан (sukhWeb):
- *   GET  /bpay/tokhirgoo          — тохиргоо + холболтын тоо + ажлын төлөв
- *   POST /bpay/tokhirgoo          — тохиргоо хадгалах (зөвхөн өөрийн талбарууд, $set)
+ *   GET  /bpay/medeelel          — тохиргоо + холболтын тоо + ажлын төлөв
+ *   POST /bpay/medeelel          — тохиргоо хадгалах (зөвхөн өөрийн талбарууд, $set)
+ *   ("tokhirgoo" үгийг замд ХЭРЭГЛЭХГҮЙ — index.js-ийн bot шүүлтүүр хоосон 404 буцаадаг.)
  *   GET  /bpay/bairKhaikh?q=      — BPay-ийн байр хайх (хадгалсан хаягийн мод)
  *   POST /bpay/khayagKholbokh     — тоотуудыг СӨХ-ийн BPay бүртгэлд холбох (ар талд)
  *   POST /bpay/sync               — одоо синк хийх (ар талд)
@@ -40,7 +41,7 @@ function kholboltAvya(req) {
   return req.body?.tukhainBaaziinKholbolt || null;
 }
 
-router.get("/bpay/tokhirgoo", tokenShalgakh, ajiltanShaardana, async (req, res, next) => {
+router.get("/bpay/medeelel", tokenShalgakh, ajiltanShaardana, async (req, res, next) => {
   try {
     const orgId = bpay.khuseltiinBaiguullaga(req);
     bpay.tokhirgooSanakhTseverlekh(orgId);
@@ -59,7 +60,7 @@ router.get("/bpay/tokhirgoo", tokenShalgakh, ajiltanShaardana, async (req, res, 
   }
 });
 
-router.post("/bpay/tokhirgoo", tokenShalgakh, ajiltanShaardana, async (req, res, next) => {
+router.post("/bpay/medeelel", tokenShalgakh, ajiltanShaardana, async (req, res, next) => {
   try {
     const orgId = bpay.khuseltiinBaiguullaga(req);
     const { bpayAshiglakhEsekh, bpayEkhelsenOgnoo, barilguud } = req.body;
