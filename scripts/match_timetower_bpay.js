@@ -84,6 +84,10 @@ const limitArg = argValue("--limit");
 const registerLimit = limitArg ? parseInt(limitArg, 10) : null;
 const probeUserArg = argValue("--probe-user");
 const outDir = argValue("--out") || path.join(__dirname, "output");
+// BPay дээрх СӨХ-ийн нэхэмжлэгчийн нэр. Тулгалтад зөвхөн энэ нэхэмжлэгчийн биллийг тооцно.
+const SOKH_BILLER_NAME = argValue("--biller") || "ТАЙМ ТАУЭР СӨХ";
+const normBiller = (s) => String(s || "").toUpperCase().replace(/\s+/g, " ").trim();
+const isSokhBiller = (name) => normBiller(name) === normBiller(SOKH_BILLER_NAME);
 const isSaveAddress = process.argv.includes("--save-address");
 const allCities = process.argv.includes("--all-cities");
 // BPay-ийн хаягийн мод (хувийн мэдээлэлгүй) — repo-д хадгална.
@@ -169,39 +173,74 @@ async function inBatches(items, size, fn) {
 }
 
 /** BPay биллүүдийг нормчлох. Төлөгдсөн (isPaid) биллийг тусад нь тоолно. */
+/**
+ * BPay GET /api/billing/bills/:billingId хариу (Postman жишээ):
+ *   data: { billingId, billingName, hasNewBills, newBillsCount, newBillAmount,
+ *           newBills: [{ billId, billerName, billtype, billNo, billPeriod,
+ *                        billTotalAmount, billLateFee, billAmount }] }
+ * Жишээнд billAmount = billTotalAmount + billLateFee. Аппын адил billTotalAmount-ыг үндсэн дүн гэж авна.
+ * Нэг billing-д өөр нэхэмжлэгчийн (жишээ нь дулаан) билл орж болох тул нэхэмжлэгчээр задална.
+ */
 function summarizeBills(rawList) {
-  let list = Array.isArray(rawList) ? rawList : rawList ? [rawList] : [];
-  // Зарим хариу биллүүдийг объект дотор массиваар буцаадаг ({ bills: [...] } гэх мэт).
-  if (list.length === 1 && list[0] && typeof list[0] === "object") {
-    const nested = ["bills", "billList", "items", "data", "billings"].find((k) => Array.isArray(list[0][k]));
-    if (nested) list = list[0][nested];
+  const raw = Array.isArray(rawList) ? rawList : rawList ? [rawList] : [];
+  let list = raw;
+  let header = null;
+  if (raw.length === 1 && raw[0] && typeof raw[0] === "object" && !raw[0].billId) {
+    header = raw[0];
+    const nestedKey = ["newBills", "bills", "billList", "items"].find((k) => Array.isArray(header[k]));
+    // Билл байхгүй үед BPay billing объект л буцаана — түүнийг билл гэж тоолохгүй.
+    list = nestedKey ? header[nestedKey] : [];
   }
-  // Оношлогоо: BPay-ийн эхний биллийн түүхий бүтэц (талбарын нэр шалгахад).
-  const rawSample = rawList ? JSON.parse(JSON.stringify(Array.isArray(rawList) ? rawList[0] ?? null : rawList)) : null;
+  const rawSample = raw.length ? JSON.parse(JSON.stringify(raw[0])) : null;
+
   const bills = [];
-  let total = 0;
-  let lateFeeTotal = 0;
+  const byBiller = {};
+  let total = 0; // зөвхөн СӨХ-ийн нэхэмжлэгч
+  let lateFeeTotal = 0; // зөвхөн СӨХ-ийн нэхэмжлэгч
+  let otherTotal = 0; // бусад нэхэмжлэгч (дулаан, цахилгаан гэх мэт)
   let paidCount = 0;
   for (const b of list) {
-    const isPaid = b.isPaid === true || b.isPaid === "true";
-    if (isPaid) {
+    if (!b || typeof b !== "object") continue;
+    if (b.isPaid === true || b.isPaid === "true") {
       paidCount++;
       continue;
     }
-    const amount = toAmount(b.billTotalAmount || b.billAmount || b.totalAmount || b.amount);
-    const lateFee = toAmount(b.billLateFee || b.billlateFee || b.lateFee);
-    total += amount;
-    lateFeeTotal += lateFee;
+    const lateFee = toAmount(b.billLateFee ?? b.billlateFee ?? b.lateFee);
+    const amount = toAmount(b.billTotalAmount ?? b.totalAmount ?? b.amount ?? b.billAmount);
+    const withLateFee = toAmount(b.billAmount) || amount + lateFee;
+    const biller = String(b.billerName || "").trim() || "—";
+    const isSokh = isSokhBiller(biller);
+    if (isSokh) {
+      total += amount;
+      lateFeeTotal += lateFee;
+    } else {
+      otherTotal += amount;
+    }
+    byBiller[biller] = (byBiller[biller] || 0) + amount;
     bills.push({
+      isSokh,
       billId: b.billId || b.id || "",
       billNo: b.billNo || "",
       billPeriod: b.billPeriod || b.period || "",
-      billDescription: b.billDescription || b.description || "",
+      billDescription: [biller !== "—" ? biller : "", b.billtype || b.billType || b.billDescription || ""].filter(Boolean).join(" · "),
+      billerName: biller,
       amount,
       lateFee,
+      withLateFee,
     });
   }
-  return { total, lateFeeTotal, bills, paidCount, rawCount: list.length, rawSample };
+  return {
+    total,
+    lateFeeTotal,
+    otherTotal,
+    sokhBillsCount: bills.filter((x) => x.isSokh).length,
+    bpayReportedTotal: header && header.newBillAmount !== undefined ? toAmount(header.newBillAmount) : null,
+    byBiller,
+    bills,
+    paidCount,
+    rawCount: list.length,
+    rawSample,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -274,7 +313,7 @@ function generateHtml(report, outputPath) {
     <div class="bg-slate-900 text-white rounded-2xl p-5 flex flex-wrap gap-8">
       <div><div class="text-xs text-slate-400">СӨХ авлага (бүх өрх)</div><div class="text-xl font-black text-emerald-400">${formatMoney(totals.sukhAll)}</div></div>
       <div><div class="text-xs text-slate-400">СӨХ авлага (BPay-тэй өрх)</div><div class="text-xl font-black text-emerald-300">${formatMoney(totals.sukhLinked)}</div></div>
-      <div><div class="text-xs text-slate-400">BPay төлөх билл</div><div class="text-xl font-black text-sky-400">${formatMoney(totals.bpay)}</div></div>
+      <div><div class="text-xs text-slate-400">BPay ${SOKH_BILLER_NAME.replace(/[<>&"']/g, "")} билл</div><div class="text-xl font-black text-sky-400">${formatMoney(totals.bpay)}</div></div>
       <div><div class="text-xs text-slate-400">Зөрүү (BPay-тэй өрх)</div><div class="text-xl font-black text-rose-400">${formatMoney(totals.sukhLinked - totals.bpay)}</div></div>
       <div><div class="text-xs text-slate-400">Урьдчилгаатай (СӨХ &lt; 0)</div><div class="text-xl font-black text-amber-400">${counts.negativeSukh} өрх</div></div>
     </div>
@@ -371,14 +410,17 @@ function generateHtml(report, outputPath) {
         '<td class="py-2 px-3 bg-indigo-50/30 text-[11px]">' + ((r.appUsers || []).length ? r.appUsers.map((u) => '<div>' + esc(u.ner || '—') + ' · ' + esc(u.utas || '—') + '</div>').join('') : '<span class="text-slate-400">—</span>') + '</td>' +
         '<td class="py-2 px-3 bg-sky-50/30 text-[11px]">' + bpayCell + '</td>' +
         '<td class="py-2 px-3 bg-sky-50/30 text-right font-mono">' + (r.bpay && !r.bpay.error
-          ? '<div class="font-black">' + money(r.bpay.total) + '</div>' + (bills.length ? '<button onclick="toggle(\\'' + r.key + '\\')" class="text-[10px] text-sky-700 font-bold underline">' + bills.length + ' билл</button>' : '<div class="text-[10px] text-slate-400">Төлөх биллгүй</div>') + (r.bpay.paidCount ? '<div class="text-[10px] text-slate-400">' + r.bpay.paidCount + ' төлөгдсөн</div>' : '')
+          ? '<div class="font-black">' + money(r.bpay.total) + '</div>' +
+            (r.bpay.lateFeeTotal ? '<div class="text-[10px] text-rose-500">+ алданги ' + money(r.bpay.lateFeeTotal) + '</div>' : '') +
+            (r.bpay.bpayReportedTotal !== null && r.bpay.bpayReportedTotal !== undefined && Math.abs(r.bpay.bpayReportedTotal - r.bpay.total) >= 1 ? '<div class="text-[10px] text-slate-500">BPay нийт: ' + money(r.bpay.bpayReportedTotal) + '</div>' : '') +
+            (Object.keys(r.bpay.byBiller || {}).length > 1 ? Object.entries(r.bpay.byBiller).map(([k, v]) => '<div class="text-[10px] text-slate-500">' + esc(k) + ': ' + money(v) + '</div>').join('') : '') + (bills.length ? '<button onclick="toggle(\\'' + r.key + '\\')" class="text-[10px] text-sky-700 font-bold underline">' + bills.length + ' билл</button>' : '<div class="text-[10px] text-slate-400">Төлөх биллгүй</div>') + (r.bpay.paidCount ? '<div class="text-[10px] text-slate-400">' + r.bpay.paidCount + ' төлөгдсөн</div>' : '')
           : '—') + '</td>' +
         '<td class="py-2 px-3 text-right font-mono font-black ' + (diff > 0 ? 'text-rose-600' : diff < 0 ? 'text-amber-600' : 'text-emerald-600') + '">' + (diff === null || diff === undefined ? '—' : (diff > 0 ? '+' : '') + money(diff)) + '</td>' +
         '<td class="py-2 px-3 text-center"><span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ' + (m.cls || '') + '">' + esc(m.label || r.status) + '</span></td>' +
         '</tr>';
       if (open.has(r.key) && bills.length) {
         h += '<tr class="bg-sky-50/50"><td colspan="9" class="p-3 pl-16"><div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">' +
-          bills.map((b) => '<div class="bg-white p-2 rounded-lg border"><div class="flex justify-between font-bold"><span>' + esc(b.billPeriod || 'Билл') + '</span><span class="font-mono text-sky-700">' + money(b.amount) + '</span></div><div class="text-[11px] text-slate-500">' + esc(b.billDescription) + '</div>' + (b.lateFee ? '<div class="text-[10px] text-rose-500">Алданги: ' + money(b.lateFee) + '</div>' : '') + '</div>').join('') +
+          bills.map((b) => '<div class="bg-white p-2 rounded-lg border ' + (b.isSokh ? 'border-sky-300' : 'opacity-50') + '" title="' + (b.isSokh ? 'СӨХ-ийн билл' : 'Бусад нэхэмжлэгч, тулгалтад ороогүй') + '"><div class="flex justify-between font-bold"><span>' + esc(b.billPeriod || 'Билл') + '</span><span class="font-mono text-sky-700">' + money(b.amount) + '</span></div><div class="text-[11px] text-slate-500">' + esc(b.billDescription) + '</div>' + (b.lateFee ? '<div class="text-[10px] text-rose-500">Алданги: ' + money(b.lateFee) + '</div>' : '') + '</div>').join('') +
           '</div></td></tr>';
       }
     });
@@ -852,6 +894,10 @@ async function run() {
               lateFeeTotal: live?.lateFeeTotal || 0,
               bills: live?.bills || [],
               paidCount: live?.paidCount || 0,
+              otherTotal: live?.otherTotal || 0,
+              sokhBillsCount: live?.sokhBillsCount || 0,
+              bpayReportedTotal: live?.bpayReportedTotal ?? null,
+              byBiller: live?.byBiller || {},
               rawSample: live?.rawSample ?? null,
               error: live?.error || (live ? "" : "billingId алга"),
             }
@@ -875,17 +921,34 @@ async function run() {
         byStatus,
       },
       totals,
+      sokhBillerName: SOKH_BILLER_NAME,
+      billersSeen: {},
       allRows,
     };
+    // BPay-д харагдсан бүх нэхэмжлэгчийн нэр — СӨХ-ийн нэр зөв эсэхийг шалгахад.
+    for (const r of allRows) {
+      for (const [name, amt] of Object.entries(r.bpay?.byBiller || {})) {
+        const b = (report.billersSeen[name] = report.billersSeen[name] || { units: 0, amount: 0, isSokh: isSokhBiller(name) });
+        b.units++;
+        b.amount += amt;
+      }
+    }
 
     console.log("\n" + "=".repeat(80));
+    console.log(`🧾 BPay нэхэмжлэгчид (СӨХ = "${SOKH_BILLER_NAME}"):`);
+    for (const [name, b] of Object.entries(report.billersSeen)) {
+      console.log(`   ${b.isSokh ? "✅" : "  "} ${name}: ${b.units} тоот, ${formatMoney(b.amount)}`);
+    }
+    if (Object.keys(report.billersSeen).length && !Object.values(report.billersSeen).some((b) => b.isSokh)) {
+      console.log(`   ⚠️ "${SOKH_BILLER_NAME}" нэртэй нэхэмжлэгч олдсонгүй — --biller "<нэр>" өгнө үү.`);
+    }
     console.log(`🏢 СӨХ гэрээтэй тоот        : ${report.counts.totalUnits}`);
     console.log(`💳 BPay-д холбогдсон тоот    : ${report.counts.bpayLinked}`);
     console.log(`📱 Аппын хэрэглэгчтэй тоот   : ${report.counts.appUsers}`);
     for (const [k, v] of Object.entries(byStatus)) console.log(`   ${STATUS_META[k]?.label || k}: ${v}`);
     console.log(`💰 СӨХ авлага (бүгд)         : ${formatMoney(totals.sukhAll)}`);
     console.log(`💰 СӨХ авлага (BPay-тэй)     : ${formatMoney(totals.sukhLinked)}`);
-    console.log(`💳 BPay төлөх билл           : ${formatMoney(totals.bpay)}`);
+    console.log(`💳 BPay СӨХ-ийн төлөх билл    : ${formatMoney(totals.bpay)}`);
     console.log(`⚖️  Зөрүү (BPay-тэй өрх)      : ${formatMoney(totals.sukhLinked - totals.bpay)}`);
     console.log("=".repeat(80));
 
@@ -894,7 +957,37 @@ async function run() {
     const htmlPath = path.join(outDir, "timetower_bpay_match.html");
     fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2), "utf-8");
     generateHtml(report, htmlPath);
-    console.log(`📄 ${jsonPath}\n🌐 ${htmlPath}`);
+
+    // Excel-тэй тулгах CSV: (1) тоот бүрийн дүн, (2) BPay-ийн СӨХ-ийн билл бүр.
+    const csvCell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const toCsv = (rows) => "﻿" + rows.map((r) => r.map(csvCell).join(",")).join("\n");
+    const unitsCsvPath = path.join(outDir, "timetower_units.csv");
+    fs.writeFileSync(
+      unitsCsvPath,
+      toCsv([
+        ["Байр", "Тоот", "Customer code", "Гэрээ", "СӨХ систем үлдэгдэл", "BPay СӨХ төлөх", "BPay СӨХ алданги", "BPay СӨХ биллийн тоо", "BPay бусад нэхэмжлэгч", "Зөрүү (СӨХ - BPay)", "Төлөв"],
+        ...allRows.map((r) => [
+          r.building, r.toot, r.customerCode, r.sukh?.gereeniiDugaar || "", r.sukh ? r.sukhBalance : "",
+          r.bpay && !r.bpay.error ? r.bpay.total : "", r.bpay?.lateFeeTotal || "", r.bpay?.sokhBillsCount ?? "",
+          r.bpay?.otherTotal || "", r.diff ?? "", STATUS_META[r.status]?.label || r.status,
+        ]),
+      ]),
+      "utf-8"
+    );
+    const billsCsvPath = path.join(outDir, "timetower_bpay_sokh_bills.csv");
+    fs.writeFileSync(
+      billsCsvPath,
+      toCsv([
+        ["Байр", "Тоот", "Customer code", "BillingId", "Нэхэмжлэгч", "Төрөл", "Сар", "Биллийн №", "Дүн", "Алданги", "Алдангитай дүн"],
+        ...allRows.flatMap((r) =>
+          (r.bpay?.bills || []).filter((b) => b.isSokh).map((b) => [
+            r.building, r.toot, r.customerCode, r.bpay.billingId, b.billerName, b.billDescription, b.billPeriod, b.billNo, b.amount, b.lateFee, b.withLateFee,
+          ])
+        ),
+      ]),
+      "utf-8"
+    );
+    console.log(`📄 ${jsonPath}\n🌐 ${htmlPath}\n📊 ${unitsCsvPath}\n📊 ${billsCsvPath}`);
   } catch (err) {
     console.error("❌ Алдаа:", err);
     process.exitCode = 1;
