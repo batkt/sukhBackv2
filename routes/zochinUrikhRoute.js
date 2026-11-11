@@ -1393,8 +1393,37 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
 
         console.log(`🔍 [ZOCHIN_HADGALYA] orshinSuugchResult:`, orshinSuugchResult ? { id: orshinSuugchResult._id, ner: orshinSuugchResult.ner, toot: orshinSuugchResult.toot } : "NULL (Skipped)");
 
+        // Дугааргүй («БҮРТГЭЛГҮЙ»/хоосон) хүсэлт ирэхэд эзэн аль хэдийн
+        // жинхэнэ машинтай бол машинд ОГТ хүрэхгүй. Вэбийн бүртгэлийн модал
+        // болон Excel импорт хоосон дугаарыг "БҮРТГЭЛГҮЙ" болгож илгээдэг тул
+        // өмнө нь байгаа машин "БҮРТГЭЛГҮЙ" болж дарагдаж, дараа нь OSM
+        // цэвэрлэгээ жинхэнэ дугаарыг нь ч устгадаг байв.
+        let khuchinteiMashin = null;
+        if (orshinSuugchResult && !(mashinMedeelel && mashinMedeelel._id)) {
+          const ireltDugaar = String(
+            orshinSuugchMedeelel.mashiniiDugaar || mashiniiDugaar || "",
+          )
+            .trim()
+            .toUpperCase();
+          if (!ireltDugaar || ireltDugaar === "БҮРТГЭЛГҮЙ") {
+            khuchinteiMashin = await require("../models/mashin")(
+              tukhainBaaziinKholbolt,
+            ).findOne({
+              ezemshigchiinId: orshinSuugchResult._id.toString(),
+              dugaar: { $nin: ["", null, "БҮРТГЭЛГҮЙ"] },
+            });
+            if (khuchinteiMashin) {
+              console.log(
+                "ℹ️ [ZOCHIN_HADGALYA] Дугааргүй хүсэлт — байгаа машиныг хөндөхгүй:",
+                khuchinteiMashin._id,
+              );
+              mashinResult = khuchinteiMashin;
+            }
+          }
+        }
+
         // Also save to Mashin (Vehicle with Guest/Resident Settings)
-        if (orshinSuugchResult) {
+        if (orshinSuugchResult && !khuchinteiMashin) {
           const Mashin = require("../models/mashin");
 
           // Fetch defaults from Baiguullaga/Barilga if not provided
@@ -1487,11 +1516,14 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
               targetCarId = placeholderCar._id;
             }
             else {
-              // C: Check for Single Resident Car (Implicit Edit)
-              const residentCars = await Mashin(tukhainBaaziinKholbolt).find({
-                ezemshigchiinId: orshinSuugchResult._id.toString(),
-                zochinTurul: "Оршин суугч"
-              });
+              // C: Ижил дугаартай машин байвал түүнийг шинэчилнэ.
+              //
+              // Өмнө нь энд «нэг машины стратеги» байсан: хязгаар 1 (эсвэл
+              // тохируулаагүй) үед шинэ дугаар ирвэл байгаа машиныг ЧИМЭЭГҮЙ
+              // дарж нэрлэдэг байв. Excel-ийн хоёр дахь мөр, дахин импорт,
+              // «шинэ машин нэмэх» бүр эхний машиныг устгаж байлаа. Одоо
+              // дугаар солихын тулд засах машины `_id`-г (`mashinMedeelel._id`)
+              // заавал илгээнэ; эс бөгөөс доорх хязгаарын шалгалт 403 буцаана.
 
               // Check exact match (saving same plate)
               const exactMatch = await Mashin(tukhainBaaziinKholbolt).findOne({
@@ -1502,16 +1534,6 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
               if (exactMatch) {
                 // If exact match found, update that one
                 targetCarId = exactMatch._id;
-              }
-              else if (residentCars.length === 1 && mashiniiKhyazgaar <= 1) {
-                // Зөвхөн НЭГ машин зөвшөөрөгдсөн үед шинэ дугаар нь «сольсон»
-                // гэсэн үг тул байгаа машиныг дарж нэрлэнэ.
-                //
-                // Хязгаар 2+ болсон үед үүнийг хийвэл хоёр дахь машин
-                // НЭМЭГДЭХГҮЙ, эхнийх нь шинэ дугаараар дарагдана — «нэмэлт
-                // машины слот харагдахгүй» гэдгийн гол шалтгаан яг энэ байв.
-                console.log("ℹ️ [ZOCHIN_HADGALYA] Target by Single Car strategy:", residentCars[0]._id);
-                targetCarId = residentCars[0]._id;
               }
             }
           }

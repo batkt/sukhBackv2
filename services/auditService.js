@@ -2,6 +2,7 @@ const Ajiltan = require("../models/ajiltan");
 const ZassanBarimt = require("../models/zassanBarimt");
 const ZasakhTuukh = require("../models/zasakhTuukh"); // Keep for dupe check / transition
 const UstgakhTuukh = require("../models/ustgakhTuukh");
+const { shaltgaanAvya } = require("../middleware/shaltgaan");
 
 /**
  * Get employee info from request token
@@ -242,6 +243,8 @@ async function logEdit(req, db, modelName, documentId, oldDoc, newDoc, additiona
       return;
     }
 
+    const shaltgaan = additionalContext.shaltgaan || shaltgaanAvya(req);
+
     // --- DE-DUPLICATION CHECK ---
     // Transition period: check both if possible, but mainly look for recent logs
     try {
@@ -256,6 +259,12 @@ async function logEdit(req, db, modelName, documentId, oldDoc, newDoc, additiona
       }).lean();
 
       if (duplicate) {
+        if (shaltgaan && !duplicate.shaltgaan) {
+          await ZassanBarimt(db.erunkhiiKholbolt).updateOne(
+            { _id: duplicate._id },
+            { $set: { shaltgaan } },
+          );
+        }
         return;
       }
     } catch (dupErr) {
@@ -305,6 +314,7 @@ async function logEdit(req, db, modelName, documentId, oldDoc, newDoc, additiona
       classOgnoo: classOgnoo,
       ajiltniiId: ajiltan.id,
       ajiltniiNer: ajiltan.ner,
+      shaltgaan: shaltgaan,
       uurchlult: changes,
     });
 
@@ -364,6 +374,9 @@ async function logDelete(
                               deletedDoc?.ognoo ||
                               null;
 
+    // Ажилтны бичсэн шалтгаан (X-Shaltgaan толгой / body.shaltgaan)
+    const shaltgaan = additionalContext.shaltgaan || shaltgaanAvya(req);
+
     // Давхардал: глобал аудит plugin (utils/auditPlugin.js) болон гараар
     // дуудсан logDelete хоёулаа нэг устгалыг бичиж болно. 10 секундэд ижил
     // баримт бүртгэгдсэн бол шинээр бичихгүй — шалтгаан нь дутуу бол нөхнө.
@@ -374,10 +387,16 @@ async function logDelete(
         ognoo: { $gte: new Date(Date.now() - 10000) },
       });
       if (umnukh) {
+        let uurchlugdsun = false;
         if (reason && !umnukh.reason) {
           umnukh.reason = reason;
-          await umnukh.save();
+          uurchlugdsun = true;
         }
+        if (shaltgaan && !umnukh.shaltgaan) {
+          umnukh.shaltgaan = shaltgaan;
+          uurchlugdsun = true;
+        }
+        if (uurchlugdsun) await umnukh.save();
         return;
       }
     } catch (_) {
@@ -402,6 +421,7 @@ async function logDelete(
       method: req.method || "DELETE",
       deletionType: deletionType,
       reason: reason,
+      shaltgaan: shaltgaan,
       ognoo: new Date(),
     });
 

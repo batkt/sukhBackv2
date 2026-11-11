@@ -241,6 +241,7 @@ app.use(
       "Pragma",
       "userId",
       "X-Org-Only",
+      "X-Shaltgaan",
     ],
   })
 );
@@ -389,6 +390,9 @@ app.use(shinechleltRoute);
 // Нэг эрхээр нэг л төхөөрөмж. Шинэчлэлтийн замаас ХОЙШ (тэр нь өөрийн
 // нууцтай), бусад бүх замаас ӨМНӨ байрлана.
 app.use(require("./middleware/negSession"));
+
+// Ажилтны устгал/засварт шалтгаан шаардана (аудитын түүхэнд хадгалагдана).
+app.use(require("./middleware/shaltgaan"));
 
 app.use(gishuuniiKhandalt);
 app.use(gerBuliinGishuunRoute);

@@ -34,7 +34,8 @@ const ustgakhTuukhSchema = new Schema(
       type: String,
       enum: ["hard", "soft"], // hard = actual delete, soft = marked as cancelled
     },
-    reason: String, // Optional reason for deletion
+    reason: String, // Optional reason for deletion (системийн тайлбар)
+    shaltgaan: String, // Ажилтны бичсэн устгалын шалтгаан (middleware/shaltgaan.js)
     
     // Timestamps
     ognoo: {

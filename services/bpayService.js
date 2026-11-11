@@ -25,6 +25,11 @@ const IDEVKHGUI_GEREE = ["Цуцалсан", "Дууссан", "Устгасан
 const ALGA_BOSGO = 2; // дараалан хэдэн синкэд алга бол "төлсөн"
 const ALGA_KHUVI = 0.2; // нэг синкээр төлөгдөөгүйн 20%-иас олон алга бол зогсоно
 const ALGA_DOOD = 5;
+// "Төлсөн" гэхээс өмнө билл ДОР ХАЯЖ ийм хугацаа алга байх ёстой. Хоёр процесс (prod, dev нэг
+// сан) зэрэг синк хийсэн ч, гараар дараалан дарсан ч нэг агшны алга болохыг төлсөн гэж үзэхгүй.
+let ALGA_KHUGATSAA_MS = 4 * 60 * 1000;
+// Синкийн санд суурилсан түгжээ (олон процесс) — энэ хугацааны дараа өөрөө чөлөөлөгдөнө.
+const SYNC_TUGJEE_MS = 10 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Тохиргоо
@@ -163,6 +168,15 @@ function too(v) {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
   const n = Number(String(v).replace(/[^\d.-]/g, ""));
   return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Төрийн банк сарыг тэгээр дүүргэдэггүй ("2026-7"). Эрэмбэлэх/харуулахад "2026-07" болгоно.
+ * Санд хадгалсан `sar`/`tulkhuur`-ыг ӨӨРЧЛӨХГҮЙ (өөрчилбөл бүх билл "алга болсон" болно).
+ */
+function sarTulkhuur(v) {
+  const m = String(v || "").match(/^(\d{4})-(\d{1,2})$/);
+  return m ? `${m[1]}-${m[2].padStart(2, "0")}` : String(v || "");
 }
 
 function tootKhevshuulekh(v) {
@@ -580,14 +594,44 @@ async function khayagKholbokh(kholbolt, baiguullagiinId, ajilTuluv = null) {
 // Нэг байгууллагад нэг л синк зэрэг (тоотын шуурхай синк ба цагийн синк давхцахгүй).
 const syncTugjsun = new Set();
 
+/**
+ * Санд суурилсан түгжээ: prod, dev хоёр процесс нэг санд зэрэг синк хийхгүй.
+ * Буцаах: null = өөр процесс синк хийж байна; эс бөгөөс чөлөөлөх функц.
+ * Сан ашиглах боломжгүй бол (тест г.м.) зөвхөн процессын түгжээ үйлчилнэ.
+ */
+async function dbTugjeeAvakh(kholbolt, orgId) {
+  const col = kholbolt?.kholbolt?.collection ? kholbolt.kholbolt.collection("bpaySyncTugjee") : null;
+  if (!col) return async () => {};
+  const odoo = new Date();
+  const ezen = `${process.pid}-${odoo.getTime()}-${Math.random().toString(36).slice(2, 8)}`;
+  try {
+    await col.findOneAndUpdate(
+      { _id: orgId, $or: [{ duusakh: { $lt: odoo } }, { duusakh: { $exists: false } }] },
+      { $set: { duusakh: new Date(odoo.getTime() + SYNC_TUGJEE_MS), ezen, pid: process.pid } },
+      { upsert: true },
+    );
+  } catch (e) {
+    if (e && e.code === 11000) return null; // өөр процесс эзэмшиж байна
+    console.error("[BPAY SYNC] түгжээ авахад алдаа:", e.message);
+    return async () => {};
+  }
+  return async () => {
+    await col.updateOne({ _id: orgId, ezen }, { $set: { duusakh: new Date(0) } }).catch(() => null);
+  };
+}
+
 async function syncKhiikh(kholbolt, baiguullagiinId, opts = {}) {
   const k = String(baiguullagiinId);
   if (syncTugjsun.has(k)) return { zavgui: true };
   syncTugjsun.add(k);
+  let chuluulukh = null;
   try {
+    chuluulukh = await dbTugjeeAvakh(kholbolt, k);
+    if (!chuluulukh) return { zavgui: true };
     return await syncKhiikhDotood(kholbolt, baiguullagiinId, opts);
   } finally {
     syncTugjsun.delete(k);
+    if (chuluulukh) await chuluulukh();
   }
 }
 
@@ -657,7 +701,22 @@ async function syncKhiikhDotood(kholbolt, baiguullagiinId, { albadakh = false, h
         algaToo: 0,
         algaEkhelsen: null,
       };
-      const doc = await Bill.findOne({ baiguullagiinId: orgId, tulkhuur });
+      let doc = await Bill.findOne({ baiguullagiinId: orgId, tulkhuur });
+      if (!doc && b.billId) {
+        // Тухайн сард билл нэмэгдсэн/хасагдсанаар түлхүүр ("код|сар" ↔ "код|сар|billId")
+        // солигдсон бол хуучин бичлэгийг billId-аар олж түлхүүрийг шилжүүлнэ — эс тэгвээс
+        // хуучин нь "алга болсон = төлсөн" болж, ижил билл давхар үүснэ.
+        const umnukhDoc = await Bill.findOne({
+          baiguullagiinId: orgId,
+          customerId: h.customerId,
+          sar: b.sar,
+          billId: b.billId,
+        });
+        if (umnukhDoc) {
+          await Bill.updateOne({ _id: umnukhDoc._id }, { $set: { tulkhuur } });
+          doc = { ...umnukhDoc, tulkhuur };
+        }
+      }
       if (!doc) {
         try {
           await Bill.create({
@@ -714,7 +773,12 @@ async function syncKhiikhDotood(kholbolt, baiguullagiinId, { albadakh = false, h
   const niitTulugduugui = await Bill.countDocuments({ baiguullagiinId: orgId, tuluv: "Төлөгдөөгүй" });
   // BPay-ийн төлбөрийн нотолгоотой билл — шууд "төлсөн" (хүлээх, хамгаалалтад тоолох шаардлагагүй).
   const notolgoo = ({ doc, tulburMap }) => (doc.billId ? tulburMap.get(String(doc.billId)) : null);
-  const tulukhNer = algaNer.filter((x) => !notolgoo(x) && (x.doc.algaToo || 0) + 1 >= ALGA_BOSGO);
+  // Хангалттай удаа БА хангалттай удаан алга байсан эсэх (нотолгоогүй үед).
+  const khangalttaiAlga = ({ doc }) =>
+    (doc.algaToo || 0) + 1 >= ALGA_BOSGO &&
+    !!doc.algaEkhelsen &&
+    odoo.getTime() - new Date(doc.algaEkhelsen).getTime() >= ALGA_KHUGATSAA_MS;
+  const tulukhNer = algaNer.filter((x) => !notolgoo(x) && khangalttaiAlga(x));
   const khyazgaar = Math.max(ALGA_DOOD, Math.ceil(niitTulugduugui * ALGA_KHUVI));
   // albadakh: ажилтан анхааруулгыг шалгаад гараар зөвшөөрсөн (олон айл зэрэг төлсөн гэх мэт).
   if (tulukhNer.length > khyazgaar && !albadakh) {
@@ -746,7 +810,7 @@ async function syncKhiikhDotood(kholbolt, baiguullagiinId, { albadakh = false, h
     const { doc, tulburMap, h } = x;
     const algaToo = (doc.algaToo || 0) + 1;
     const nottoi = !!notolgoo(x);
-    if (!nottoi && algaToo < ALGA_BOSGO) {
+    if (!nottoi && !khangalttaiAlga(x)) {
       await Bill.updateOne({ _id: doc._id }, { $set: { algaToo, algaEkhelsen: doc.algaEkhelsen || odoo } });
       tailan.khuleegdej++;
       continue;
@@ -946,16 +1010,22 @@ async function kholbokhAjilEkhluulekh(kholbolt, baiguullagiinId) {
 async function zadargaaAvya(kholbolt, gereeniiId, { saruudToo = 12 } = {}) {
   const geree = await Geree(kholbolt).findById(gereeniiId);
   if (!geree) return null;
-  const billuud = await BpayBill(kholbolt)
-    .find({ baiguullagiinId: String(geree.baiguullagiinId), gereeniiId: String(gereeniiId) })
-    .sort({ sar: -1 })
-    .lean();
+  // Сар нь "2026-7" хэлбэртэй тул санд текстээр эрэмбэлбэл буруу — энд дүүргэсэн түлхүүрээр.
+  const billuud = (
+    await BpayBill(kholbolt)
+      .find({ baiguullagiinId: String(geree.baiguullagiinId), gereeniiId: String(gereeniiId) })
+      .lean()
+  ).sort(
+    (a, b) =>
+      sarTulkhuur(b.sar).localeCompare(sarTulkhuur(a.sar)) || String(a.billId || "").localeCompare(String(b.billId || "")),
+  );
   const { calculateGereeCharges } = require("./invoiceService");
   const sar = [];
-  for (const b of billuud.slice(0, saruudToo)) {
+  // Бүх сарын билл буцна (нийт дүн жагсаалтын үлдэгдэлтэй таарна); задаргааг сүүлийн saruudToo сард л тооцно.
+  for (const [i, b] of billuud.entries()) {
     const [on, m] = String(b.sar || "").split("-").map(Number);
     let zadargaa = [];
-    if (on && m) {
+    if (i < saruudToo && on && m) {
       try {
         const { charges } = await calculateGereeCharges(kholbolt, geree, { billingDate: new Date(on, m - 1, 15) });
         zadargaa = (charges || [])
@@ -972,12 +1042,16 @@ async function zadargaaAvya(kholbolt, gereeniiId, { saruudToo = 12 } = {}) {
     }
     const niit = zadargaa.reduce((s, c) => s + c.dun, 0);
     sar.push({
-      sar: b.sar,
+      id: String(b._id || ""),
+      sar: sarTulkhuur(b.sar),
       tuluv: b.tuluv,
       dun: b.dun,
       aldangi: b.aldangi,
       aldangitaiDun: b.aldangitaiDun,
       tulsunOgnoo: b.tulsunOgnoo || null,
+      tulsunDun: b.tulsunDun ?? null,
+      tulburiinEkhSurvalj: b.tulburiinEkhSurvalj || "",
+      nuusan: !!b.nuusan,
       zadargaa,
       zadargaaNiit: Math.round(niit * 100) / 100,
       taarsan: zadargaa.length > 0 && Math.abs(niit - b.dun) < 1,
@@ -1036,6 +1110,11 @@ module.exports = {
   kholbokhAjilEkhluulekh,
   ajliinTuluvAvya,
   zadargaaAvya,
+  sarTulkhuur,
+  /** Зөвхөн тестэд: алга болсон хугацааны босго */
+  _algaKhugatsaaTokhiruulakh: (ms) => {
+    ALGA_KHUGATSAA_MS = ms;
+  },
   bairKhaikh,
   utasKhevshuulekh,
 };

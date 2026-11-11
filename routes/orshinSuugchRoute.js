@@ -251,6 +251,36 @@ router.post("/orshinSuugchiinMashinKhadgalya", tokenShalgakh, async (req, res, n
       }
     }
 
+    // Энэ endpoint бүтэн жагсаалтыг сольдог тул машин ХАСАХ/дугаар ЗАСАХ нь
+    // мөн энд явдаг. Ажилтан тэгэхдээ шалтгаан бичих ёстой (middleware/shaltgaan.js).
+    // Зөвхөн нэмэх үед шалтгаан шаардахгүй.
+    if (requesterRole && !(req.shaltgaan && req.shaltgaan.length >= 3)) {
+      const ireedui = new Set(validCars.map((c) => c.mashiniiDugaar));
+      const odooBaigaa = new Set();
+      for (const kholbolt of [db.erunkhiiKholbolt, tukhainBaaziinKholbolt].filter(Boolean)) {
+        try {
+          const jagsaalt = await OrshinSuugchMashin(kholbolt)
+            .find({ orshinSuugchiinId: String(resident._id) })
+            .select("mashiniiDugaar")
+            .lean();
+          jagsaalt.forEach((c) =>
+            odooBaigaa.add(String(c.mashiniiDugaar || "").trim().toUpperCase()),
+          );
+        } catch (_) {}
+      }
+      const khasagdakh = [...odooBaigaa].filter((d) => d && !ireedui.has(d));
+      if (khasagdakh.length > 0) {
+        const { KOD, MEDEGDEL } = require("../middleware/shaltgaan");
+        return res.status(400).json({
+          success: false,
+          kod: KOD,
+          aldaa: MEDEGDEL,
+          message: MEDEGDEL,
+          khasagdakhMashinuud: khasagdakh,
+        });
+      }
+    }
+
     const carDocs = validCars.map((c) => ({
       orshinSuugchiinId: String(resident._id),
       baiguullagiinId: String(baiguullagiinId || resident.baiguullagiinId || ""),
@@ -1484,7 +1514,12 @@ router.put("/orshinSuugch/:id", tokenShalgakh, async (req, res, next) => {
           }
           if (req.body.mashiniiDugaar !== undefined) {
             syncData.mashiniiDugaar = req.body.mashiniiDugaar;
-            mashinUpdateData.dugaar = req.body.mashiniiDugaar || "БҮРТГЭЛГҮЙ";
+            // `mashin.dugaar`-ыг энд ЗААВАЛ бичихгүй: доорх `updateMany` нь
+            // оршин суугчийн БҮХ машиныг (бүх байгууллагад) нэг дугаараар
+            // дарж, хаалга бусдыг нь танихаа болидог байв. Тоот холбоход вэб
+            // бичлэгийг бүтнээр нь буцаадаг тул хуучин `mashiniiDugaar` ирж,
+            // энэ нь «машин өөрөө устсан» шалтгаан болж байлаа. Машиныг зөвхөн
+            // машины тусгай endpoint-оор засна.
           }
 
           // Add address location details if they match this org context

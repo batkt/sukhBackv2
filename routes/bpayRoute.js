@@ -216,23 +216,9 @@ router.get("/bpay/khuulga", tokenShalgakh, ajiltanShaardana, async (req, res, ne
       .findOne({ baiguullagiinId: orgId, gereeniiId })
       .select("customerCode customerName suuldSync suuldAldaa salgasan")
       .lean();
+    // Бүх сарын билл (сар нь "2026-07" хэлбэрт), задаргаа сүүлийн 24 сард.
     const ur = await bpay.zadargaaAvya(kholbolt, gereeniiId, { saruudToo: 24 });
-    const billuud = await BpayBill(kholbolt)
-      .find({ baiguullagiinId: orgId, gereeniiId })
-      .select("sar tulsunDun tulburiinEkhSurvalj davkharEsekh nuusan")
-      .lean();
-    const nemelt = new Map(billuud.map((b) => [b.sar, b]));
-    res.json({
-      success: true,
-      bpay: true,
-      holbolt: h || null,
-      ...ur,
-      saruud: (ur?.saruud || []).map((m) => ({ ...m, ...(nemelt.get(m.sar) ? {
-        tulsunDun: nemelt.get(m.sar).tulsunDun ?? null,
-        tulburiinEkhSurvalj: nemelt.get(m.sar).tulburiinEkhSurvalj || "",
-        nuusan: !!nemelt.get(m.sar).nuusan,
-      } : {}) })),
-    });
+    res.json({ success: true, bpay: true, holbolt: h || null, ...ur });
   } catch (e) {
     next(e);
   }

@@ -4,6 +4,28 @@ const ZassanBarimt = require("../models/zassanBarimt");
 const UstgakhTuukh = require("../models/ustgakhTuukh");
 
 /**
+ * Шүүлтүүрийн огноог задлана. ISO (цагийн бүстэй) бол шууд. Цагийн бүсгүй
+ * «YYYY-MM-DD» / «YYYY-MM-DD HH:mm:ss» бол Монголын цагаар (+08:00) уншина —
+ * эс бөгөөс сервер UTC гэж уншиж, өдрийн эхний 8 цагийн үйлдлүүд буруу
+ * өдөрт ордог байв. Буруу утга бол null.
+ */
+function ognooZadlakh(utga, tal) {
+  if (!utga) return null;
+  const s = String(utga).trim();
+  let d;
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}(?::\d{2})?))?$/);
+  if (m) {
+    let tsag = m[2] || (tal === "duus" ? "23:59:59" : "00:00:00");
+    if (tsag.length === 5) tsag += ":00";
+    const ms = tal === "duus" ? ".999" : ".000";
+    d = new Date(`${m[1]}T${tsag}${ms}+08:00`);
+  } else {
+    d = new Date(s);
+  }
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
  * Get edit history
  * Query params:
  * - modelName: Filter by model name (e.g., "ajiltan", "geree")
@@ -59,8 +81,8 @@ exports.getZasakhTuukh = asyncHandler(async (req, res, next) => {
 
   // Date range filter
   if (ekhlekhOgnoo || duusakhOgnoo) {
-    const start = ekhlekhOgnoo ? new Date(ekhlekhOgnoo) : new Date("1970-01-01");
-    const end = duusakhOgnoo ? new Date(duusakhOgnoo) : new Date("2999-12-31");
+    const start = ognooZadlakh(ekhlekhOgnoo, "ekh") || new Date("1970-01-01");
+    const end = ognooZadlakh(duusakhOgnoo, "duus") || new Date("2999-12-31");
     matchLegacy.ognoo = { $gte: start, $lte: end };
     matchNew.createdAt = { $gte: start, $lte: end };
   }
@@ -151,8 +173,8 @@ exports.getUstgakhTuukh = asyncHandler(async (req, res, next) => {
 
   // Date range filter
   if (ekhlekhOgnoo || duusakhOgnoo) {
-    const start = ekhlekhOgnoo ? new Date(ekhlekhOgnoo) : new Date("1970-01-01");
-    const end = duusakhOgnoo ? new Date(duusakhOgnoo) : new Date("2999-12-31");
+    const start = ognooZadlakh(ekhlekhOgnoo, "ekh") || new Date("1970-01-01");
+    const end = ognooZadlakh(duusakhOgnoo, "duus") || new Date("2999-12-31");
     match.ognoo = { $gte: start, $lte: end };
   }
 
@@ -271,8 +293,8 @@ exports.getAjiltanHistory = asyncHandler(async (req, res, next) => {
 
   // Date range filter
   if (ekhlekhOgnoo || duusakhOgnoo) {
-    const start = ekhlekhOgnoo ? new Date(ekhlekhOgnoo) : new Date("1970-01-01");
-    const end = duusakhOgnoo ? new Date(duusakhOgnoo) : new Date("2999-12-31");
+    const start = ognooZadlakh(ekhlekhOgnoo, "ekh") || new Date("1970-01-01");
+    const end = ognooZadlakh(duusakhOgnoo, "duus") || new Date("2999-12-31");
     matchLegacy.ognoo = { $gte: start, $lte: end };
     matchNew.createdAt = { $gte: start, $lte: end };
   }
@@ -325,8 +347,8 @@ exports.getAuditTurluud = asyncHandler(async (req, res) => {
   const match = {};
   if (baiguullagiinId) match.baiguullagiinId = String(baiguullagiinId);
   if (barilgiinId) match.barilgiinId = String(barilgiinId);
-  const start = ekhlekhOgnoo ? new Date(ekhlekhOgnoo) : null;
-  const end = duusakhOgnoo ? new Date(duusakhOgnoo) : null;
+  const start = ognooZadlakh(ekhlekhOgnoo, "ekh");
+  const end = ognooZadlakh(duusakhOgnoo, "duus");
   const ognooMatch =
     start || end
       ? { $gte: start || new Date("1970-01-01"), $lte: end || new Date("2999-12-31") }

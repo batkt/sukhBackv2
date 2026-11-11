@@ -177,6 +177,93 @@ crudWithFile(
     }
   },
 );
+
+/**
+ * НЭВТРЭЛТИЙН ТҮҮХ — нэвтэрсэн ажилтны байгууллагаар заавал шүүнэ.
+ *
+ * Коллекц төв баазад (erunkhiiKholbolt) бүх байгууллагынх хамт хадгалагддаг.
+ * zevbackv2-ийн crud() жагсаалт нь tokenShalgakh `req.query.query`-д
+ * baiguullagiinId шахна гэдэгт найддаг. Гэвч Express 5-д `req.query` нь
+ * хандах бүрт URL-аас дахин parse хийгддэг getter тул тэр өөрчлөлт алга
+ * болдог, мөн вэб `query` параметргүй дууддаг. Иймээс доорх handler-ууд
+ * crud()-ын GET-ээс өмнө бүртгэгдэж, baiguullagiinId-ийг токеноос авна.
+ */
+function nevtreltiinTuukhBaiguullagiinId(req) {
+  const baiguullagiinId = req.body?.nevtersenAjiltniiToken?.baiguullagiinId;
+  if (!baiguullagiinId) {
+    throw new Error("Энэ үйлдлийг хийх эрх байхгүй байна!");
+  }
+  return String(baiguullagiinId);
+}
+
+function nevtreltiinTuukhBodyBeldekh(req) {
+  const baiguullagiinId = nevtreltiinTuukhBaiguullagiinId(req);
+  const parse = (v) => (typeof v === "string" ? JSON.parse(v) : v);
+  const body = { ...req.query };
+
+  let query = body.query ? parse(body.query) : {};
+  if (!query || typeof query !== "object" || Array.isArray(query)) query = {};
+  if (body.order) body.order = parse(body.order);
+  if (body.select) body.select = parse(body.select);
+  if (body.collation) body.collation = parse(body.collation);
+  body.khuudasniiDugaar = Number(body.khuudasniiDugaar) || 1;
+  body.khuudasniiKhemjee = Number(body.khuudasniiKhemjee) || 10;
+  if (body.search) body.search = String(body.search);
+
+  // Вэб огнооны мужийг ekhlekhOgnoo/duusakhOgnoo-оор явуулдаг.
+  if (!query.ognoo && (body.ekhlekhOgnoo || body.duusakhOgnoo)) {
+    const ognoo = {};
+    const ekhlekh = body.ekhlekhOgnoo ? new Date(body.ekhlekhOgnoo) : null;
+    const duusakh = body.duusakhOgnoo ? new Date(body.duusakhOgnoo) : null;
+    if (ekhlekh && !isNaN(ekhlekh)) ognoo.$gte = ekhlekh;
+    if (duusakh && !isNaN(duusakh)) ognoo.$lte = duusakh;
+    if (Object.keys(ognoo).length) query.ognoo = ognoo;
+  }
+
+  // Client юу ч явуулсан эцэст нь токены байгууллагаар дарна.
+  query.baiguullagiinId = baiguullagiinId;
+  body.query = query;
+  return body;
+}
+
+router.get("/nevtreltiinTuukh", tokenShalgakh, (req, res, next) => {
+  try {
+    const body = nevtreltiinTuukhBodyBeldekh(req);
+    khuudaslalt(NevtreltiinTuukh(db.erunkhiiKholbolt), body)
+      .then((result) => res.send(result))
+      .catch(next);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get("/nevtreltiinTuukh/tooAvya", tokenShalgakh, (req, res, next) => {
+  try {
+    const body = nevtreltiinTuukhBodyBeldekh(req);
+    body.zuvkhunTooAvakhEsekh = true;
+    khuudaslalt(NevtreltiinTuukh(db.erunkhiiKholbolt), body)
+      .then((result) => res.send(result))
+      .catch(next);
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Нэг бичлэгийг id-аар унших/засах/устгахад тухайн байгууллагынх эсэхийг шалгана.
+router.all("/nevtreltiinTuukh/:id", tokenShalgakh, async (req, res, next) => {
+  try {
+    const baiguullagiinId = nevtreltiinTuukhBaiguullagiinId(req);
+    const mur = await NevtreltiinTuukh(db.erunkhiiKholbolt)
+      .findOne({ _id: req.params.id, baiguullagiinId })
+      .select("_id")
+      .lean();
+    if (!mur) throw new Error("Мэдээлэл олдсонгүй!");
+    next();
+  } catch (e) {
+    next(e);
+  }
+});
+
 crud(router, "nevtreltiinTuukh", NevtreltiinTuukh, UstsanBarimt);
 
 router.get("/sessionAvya/:sessionId", async (req, res, next) => {

@@ -15,6 +15,7 @@ const zassanBarimtSchema = new Schema(
     classOgnoo: Date, // Primary date associated with record
     ajiltniiId: String,
     ajiltniiNer: String,
+    shaltgaan: String, // Ажилтны бичсэн засварын шалтгаан (middleware/shaltgaan.js)
     uurchlult: [
       {
         talbar: String, // Technical field name
