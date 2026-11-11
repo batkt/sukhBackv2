@@ -171,6 +171,37 @@ function tootKhevshuulekh(v) {
 
 const tsag = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Ажлын сан (pool): нэг дуусмагц дараагийнхыг шууд эхлүүлнэ — bagtsaar шиг хамгийн
+ * удаан нэгийг хүлээхгүй. Үр дүнг оролтын дарааллаар буцаана.
+ */
+async function zeregAjilluulakh(items, khemjee, fn) {
+  const ur = new Array(items.length);
+  let i = 0;
+  const ajilchin = async () => {
+    while (i < items.length) {
+      const n = i++;
+      ur[n] = await fn(items[n], n);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(khemjee, items.length) }, ajilchin));
+  return ur;
+}
+
+/**
+ * Нэг утсанд хамаарах ажлыг дараалуулна (нэг оршин суугчийн BPay бүртгэлд зэрэг
+ * бичихгүй — давхар хэрэглэгч/давхар billing үүсэхээс сэргийлнэ). Өөр утаснууд зэрэг явна.
+ */
+function utasniiDaraalalUusgekh() {
+  const suul = new Map();
+  return (utas, fn) => {
+    const umnukh = suul.get(utas) || Promise.resolve();
+    const daraa = umnukh.catch(() => {}).then(fn);
+    suul.set(utas, daraa.catch(() => {}));
+    return daraa;
+  };
+}
+
 async function bagtsaar(items, khemjee, fn) {
   for (let i = 0; i < items.length; i += khemjee) {
     await Promise.all(items.slice(i, i + khemjee).map(fn));
@@ -283,7 +314,7 @@ const CENTRALIZED_ORG_ID = "698e7fd3b6dd386b6c56a808";
  *   4. bpayHolbolt-д тэр утсыг (syncUtas) хадгална — синк түүгээр татна.
  * Оршин суугчгүй/утасгүй, BPay-д олдоогүй, олон хэрэглэгчтэй тоотыг тайланд буцаана.
  */
-async function khayagKholbokh(kholbolt, baiguullagiinId) {
+async function khayagKholbokh(kholbolt, baiguullagiinId, ajilTuluv = null) {
   const t = await bpayTokhirgooAvya(baiguullagiinId);
   if (!t) throw new Error("Байгууллага олдсонгүй");
   // Холбосон билл оршин суугчийн апп-д ШУУД харагдана. Горим асаагүй бол апп Sukh-ийн
@@ -322,11 +353,15 @@ async function khayagKholbokh(kholbolt, baiguullagiinId) {
     aldaa: [],
   };
 
+  // Тоотын төрлийг зэрэг шалгана (гэрээ бүрд санд хандаж магадгүй тул дараалан удаан байсан).
+  const turluud = await zeregAjilluulakh(gereenuud, 10, (g) =>
+    tootKhevshuulekh(g.toot) ? gereeniiTootTurul(g).catch(() => OR_SUUTS) : null,
+  );
   const ajil = [];
-  for (const g of gereenuud) {
+  for (const [n, g] of gereenuud.entries()) {
     const toot = tootKhevshuulekh(g.toot);
     if (!toot) continue;
-    if ((await gereeniiTootTurul(g)) !== OR_SUUTS) continue;
+    if (turluud[n] !== OR_SUUTS) continue;
     tailan.niit++;
     if (holbogdson.has(String(g._id))) {
       tailan.algassan++;
@@ -340,8 +375,14 @@ async function khayagKholbokh(kholbolt, baiguullagiinId) {
     ajil.push({ g, toot, bairId, salgasanH: salgasanMap.get(String(g._id)) || null });
   }
 
-  const bpayKhereglegchid = new Set(); // энэ ажилд бэлдсэн утаснууд
-  await bagtsaar(ajil, 4, async ({ g, toot, bairId, salgasanH }) => {
+  // Явц: вэб 3 секунд тутам /bpay/tuluv-аас уншина (дундын тайлан ч харагдана).
+  if (ajilTuluv) {
+    ajilTuluv.yavts = { niit: ajil.length, duussan: 0 };
+    ajilTuluv.ur = tailan;
+  }
+  const bpayKhereglegchid = new Map(); // утас → бэлдэх Promise (зэрэг бүртгэхгүй)
+  const utasaarDaraalakh = utasniiDaraalalUusgekh();
+  await zeregAjilluulakh(ajil, 8, async ({ g, toot, bairId, salgasanH }) => {
     try {
       // 0. Оршин суугч ба түүний утас (апп BPay-ээс энэ утсаар хайдаг)
       let resident = null;
@@ -359,6 +400,7 @@ async function khayagKholbokh(kholbolt, baiguullagiinId) {
         tailan.utasgui.push(toot);
         return;
       }
+      await utasaarDaraalakh(utas, async () => {
 
       // 1. Оршин суугч өөрөө аль хэдийн холбосон уу
       const toots = Array.isArray(resident?.toots) ? resident.toots : [];
@@ -387,10 +429,8 @@ async function khayagKholbokh(kholbolt, baiguullagiinId) {
 
       if (!billingId) {
         // 2. BPay хэрэглэгч → хаягаар хайх → saveBilling (оршин суугчийн өөрийн бүртгэлд)
-        if (!bpayKhereglegchid.has(utas)) {
-          await bpayKhereglegchBelden(utas);
-          bpayKhereglegchid.add(utas);
-        }
+        if (!bpayKhereglegchid.has(utas)) bpayKhereglegchid.set(utas, bpayKhereglegchBelden(utas));
+        await bpayKhereglegchid.get(utas);
         const list = (await walletApiService.getBillingByAddress(utas, bairId, toot)) || [];
         if (!list.length) {
           tailan.oldoogui.push(toot);
@@ -502,8 +542,11 @@ async function khayagKholbokh(kholbolt, baiguullagiinId) {
         },
         { upsert: true },
       );
+      });
     } catch (e) {
       tailan.aldaa.push({ toot, aldaa: e.response?.data?.responseMsg || e.message });
+    } finally {
+      if (ajilTuluv?.yavts) ajilTuluv.yavts.duussan++;
     }
   });
   return tailan;
@@ -816,7 +859,7 @@ async function syncAjilEkhluulekh(kholbolt, baiguullagiinId, { khuleekh = false,
 async function kholbokhAjilEkhluulekh(kholbolt, baiguullagiinId) {
   const ajil = ajilEkhluulekh(String(baiguullagiinId), "kholbokh");
   if (!ajil) return { ajillajBaina: true };
-  khayagKholbokh(kholbolt, baiguullagiinId)
+  khayagKholbokh(kholbolt, baiguullagiinId, ajil)
     .then((ur) => {
       ajil.ur = ur;
     })
