@@ -583,6 +583,30 @@ exports.walletBillingSave = asyncHandler(async (req, res, next) => {
   }
 });
 
+/**
+ * Устгаж буй биллингтэй ИЖИЛ хаягийн бусад биллинг (орон сууц + цахилгаан г.м).
+ * Хоосон талбараар хэзээ ч таарахгүй — зөвхөн хоёр талд утгатай үед харьцуулна.
+ */
+function ijilKhayagiinBillinguud(jagsaalt, ustgakh) {
+  const s = (v) => String(v ?? "").trim();
+  const khayag = (v) => s(v).replace(/\s+/g, "").toLowerCase();
+  const rId = s(ustgakh.billingId);
+  const rBair = s(ustgakh.bairId);
+  const rDoor = s(ustgakh.doorNo);
+  const rKhayag = khayag(ustgakh.customerAddress);
+  const rCustomer = s(ustgakh.customerId);
+  return jagsaalt.filter((b) => {
+    if (!b || !s(b.billingId) || s(b.billingId) === rId) return false;
+    const bair = s(b.bairId);
+    const door = s(b.doorNo);
+    if (rBair && rDoor && bair && door && bair === rBair && door === rDoor) return true;
+    if (rKhayag && khayag(b.customerAddress) === rKhayag) return true;
+    if (rCustomer && s(b.customerId) === rCustomer) return true;
+    return false;
+  });
+}
+exports.ijilKhayagiinBillinguud = ijilKhayagiinBillinguud;
+
 exports.walletBillingRemove = asyncHandler(async (req, res, next) => {
   try {
     const { db } = require("zevbackv2");
@@ -637,6 +661,37 @@ exports.walletBillingRemove = asyncHandler(async (req, res, next) => {
       }
     }
 
+    // 2b. Ижил хаягийн БУСАД биллинг (ж: Цахилгаан) — BPay дээр хаяг бүртгэхэд
+    // орон сууц, цахилгаан тусдаа биллинг болж үүсдэг. Өмнө нь зөвхөн дарсан
+    // биллинг устаж, цахилгаан жагсаалтад үлддэг байв.
+    const ustgasanBillingIds = [String(billingId)];
+    if (billingToRemove) {
+      let busadBillinguud = [];
+      try {
+        // Хадгалсан жагсаалтыг дахин ашиглахгүйн тулд cache цэвэрлэнэ
+        walletApiService.clearBillingListCache?.(orshinSuugch.utas);
+        const jagsaalt = await walletApiService.getBillingList(orshinSuugch.utas);
+        busadBillinguud = ijilKhayagiinBillinguud(jagsaalt || [], billingToRemove);
+      } catch (e) {
+        console.warn("⚠️ [WALLET REMOVE] Sibling billing lookup failed:", e.message);
+      }
+      for (const b of busadBillinguud) {
+        try {
+          await walletApiService.removeBilling(userId, b.billingId);
+          ustgasanBillingIds.push(String(b.billingId));
+        } catch (e) {
+          const msg = String(e.message || "").toLowerCase();
+          if (/бүртгэл хийгдээгүй|notfound|not found|олдсонгүй/.test(msg)) {
+            ustgasanBillingIds.push(String(b.billingId));
+          } else {
+            console.warn("⚠️ [WALLET REMOVE] Sibling billing remove failed:", b.billingId, e.message);
+          }
+        }
+      }
+      walletApiService.clearBillingListCache?.(orshinSuugch.utas);
+      walletApiService.clearBillingListCache?.(userId);
+    }
+
     // 3. Local Cleanup
     let localUpdated = false;
 
@@ -670,7 +725,7 @@ exports.walletBillingRemove = asyncHandler(async (req, res, next) => {
         if (t.source !== "WALLET_API") return true;
 
         let shouldRemove = false;
-        if (String(t.billingId) === String(billingId)) shouldRemove = true;
+        if (ustgasanBillingIds.includes(String(t.billingId))) shouldRemove = true;
 
         const bodyBairId = req.body?.bairId || req.query?.bairId;
         const bodyDoorNo = req.body?.doorNo || req.query?.doorNo;
@@ -772,7 +827,7 @@ exports.walletBillingRemove = asyncHandler(async (req, res, next) => {
     if (orshinSuugch.billNicknames && orshinSuugch.billNicknames.length > 0) {
       const initialNicknameLength = orshinSuugch.billNicknames.length;
       orshinSuugch.billNicknames = orshinSuugch.billNicknames.filter(
-        (n) => n.billingId !== billingId
+        (n) => !ustgasanBillingIds.includes(String(n.billingId))
       );
       if (orshinSuugch.billNicknames.length !== initialNicknameLength) {
         localUpdated = true;

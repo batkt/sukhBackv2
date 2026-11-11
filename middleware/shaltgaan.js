@@ -74,7 +74,6 @@ const POST_ZAMUUD = [
   // зөвхөн толгойгоос авна.
   { zam: /^\/gereeTsutslakh\/?$/, tolgoiZaaval: true },
   { zam: /^\/gereeNemeltTootKhasya\/?$/ },
-  { zam: /^\/zogsoolAguulakhTuluv\/?$/ },
   { zam: /^\/guilgeeSalgaya\/?$/ },
   { zam: /^\/khungulultZasvarlaya\/?$/ },
   { zam: /^\/zardalTseverlekhiya\/?$/ },
