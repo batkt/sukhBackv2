@@ -912,6 +912,40 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
       addPlate(resId, toot, plate);
     });
 
+    // Оршин суугчийн гараж / агуулах (toots доторх). Гараж нь «Гараж»,
+    // «Зогсоол» эсвэл төрөлгүй ч B1 зэрэг зоорийн давхарт хадгалагдсан байж болно.
+    const { turulNer } = require("../utils/tootTailbar");
+    const zooriinDavkhar = (d) =>
+      /^([bв]\s*[-_]?\d|-\d|гараж|зогсоол|garage|parking)/i.test(String(d || "").trim());
+    const negjiinTurul = (t) => {
+      const ner = turulNer(t?.turul);
+      if (ner !== "Орон сууц") return ner;
+      const raw = String(t?.turul || "").trim().toLowerCase();
+      if ((!raw || raw === "орон сууц" || raw === "тоот") && zooriinDavkhar(t?.davkhar)) {
+        return "Гараж";
+      }
+      return ner;
+    };
+    const minuNegj = (t) =>
+      t &&
+      t.toot &&
+      (!t.baiguullagiinId || String(t.baiguullagiinId) === String(baiguullagiinId)) &&
+      (!barilgiinId || !t.barilgiinId || String(t.barilgiinId) === String(barilgiinId));
+    const negjuud = (item, turul) => {
+      const seen = new Set();
+      return (Array.isArray(item.toots) ? item.toots : [])
+        .filter((t) => minuNegj(t) && negjiinTurul(t) === turul)
+        .filter((t) => {
+          const k = `${String(t.davkhar || "").trim().toUpperCase()}|${String(t.toot).trim()}`;
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+    };
+    const tooEremb = (a, b) =>
+      String(a || "").localeCompare(String(b || ""), "mn", { numeric: true, sensitivity: "base" });
+    const negjiinMurud = { Гараж: [], Агуулах: [] };
+
     // Format data for Excel
     const formattedData = orshinSuugchList.map((item, index) => {
       const resId = String(item._id);
@@ -921,6 +955,23 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
         ...(carMapByToot.get(toot) || []),
       ]);
       const mashiniiDugaar = Array.from(platesSet).join(", ");
+
+      const garazhuud = negjuud(item, "Гараж");
+      const aguulakhuud = negjuud(item, "Агуулах");
+      [["Гараж", garazhuud], ["Агуулах", aguulakhuud]].forEach(([turul, list]) => {
+        list.forEach((t) =>
+          negjiinMurud[turul].push({
+            negj: String(t.toot).trim(),
+            davkhar: String(t.davkhar || "").trim(),
+            ovog: item.ovog || "",
+            ner: item.ner || "",
+            utas: Array.isArray(item.utas) ? item.utas.join(", ") : item.utas || "",
+            orts: item.orts || "",
+            toot: item.toot || "",
+            mashiniiDugaar: mashiniiDugaar || "",
+          }),
+        );
+      });
 
       return {
         dugaar: index + 1,
@@ -932,6 +983,8 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
         davkhar: item.davkhar || "",
         toot: item.toot || "",
         mashiniiDugaar: mashiniiDugaar || "",
+        garaazhToot: garazhuud.map((t) => String(t.toot).trim()).sort(tooEremb).join(", "),
+        aguulakhToot: aguulakhuud.map((t) => String(t.toot).trim()).sort(tooEremb).join(", "),
         turul: item.turul || "Үндсэн",
         gereeniiTuluv: (() => {
           const raw = item.gereeniiTuluv || item.gereeTuluv || item.tuluv || item.status;
@@ -977,6 +1030,8 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
       { key: "davkhar", label: "Давхар" },
       { key: "toot", label: "Тоот" },
       { key: "mashiniiDugaar", label: "Машины дугаар" },
+      { key: "garaazhToot", label: "Гараж тоот" },
+      { key: "aguulakhToot", label: "Агуулах тоот" },
       { key: "turul", label: "Төрөл" },
       { key: "gereeniiTuluv", label: "Гэрээний төлөв" },
       { key: "ekhniiUldegdel", label: "Эхний үлдэгдэл" },
@@ -990,7 +1045,30 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
     ];
     req.body.fileName = req.body.fileName || `Оршин_суугчдын_жагсаалт_${Date.now()}`;
     req.body.sheetName = req.body.sheetName || "Оршин суугчид";
-    req.body.colWidths = [8, 15, 15, 15, 20, 8, 8, 10, 18, 12, 14, 15, 18, 20, 15, 15, 15, 12, 18];
+    req.body.colWidths = [8, 15, 15, 15, 20, 8, 8, 10, 18, 14, 14, 12, 14, 15, 18, 20, 15, 15, 15, 12, 18];
+
+    // «Гараж», «Агуулах» тусдаа хуудас — давхар, дараа нь дугаараар эрэмбэлсэн.
+    const negjiinHeaders = (turul) => [
+      { key: "dugaar", label: "№" },
+      { key: "negj", label: `${turul} дугаар` },
+      { key: "davkhar", label: "Давхар" },
+      { key: "ovog", label: "Овог" },
+      { key: "ner", label: "Нэр" },
+      { key: "utas", label: "Утас" },
+      { key: "orts", label: "Орц" },
+      { key: "toot", label: "Тоот" },
+      { key: "mashiniiDugaar", label: "Машины дугаар" },
+    ];
+    req.body.extraSheets = ["Гараж", "Агуулах"]
+      .filter((turul) => negjiinMurud[turul].length > 0)
+      .map((turul) => ({
+        sheetName: turul,
+        headers: negjiinHeaders(turul),
+        colWidths: [8, 14, 10, 15, 15, 15, 8, 10, 18],
+        data: negjiinMurud[turul]
+          .sort((a, b) => tooEremb(a.davkhar, b.davkhar) || tooEremb(a.negj, b.negj))
+          .map((m, i) => ({ dugaar: i + 1, ...m })),
+      }));
 
     // Call downloadExcelList function directly
     return exports.downloadExcelList(req, res, next);
@@ -1001,7 +1079,7 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
 
 exports.downloadExcelList = asyncHandler(async (req, res, next) => {
   try {
-    const { data, headers, fileName, sheetName, colWidths } = req.body;
+    const { data, headers, fileName, sheetName, colWidths, extraSheets } = req.body;
 
     if (!data || !Array.isArray(data)) {
       throw new aldaa("Мэдээлэл оруулах шаардлагатай!");
@@ -1048,16 +1126,8 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
       });
     }
 
-    Object.keys(groups).forEach((groupKey, index) => {
-      const groupData = groups[groupKey];
-      let sName = sheetName || "Sheet1";
-      if (hasBarilgiinId) {
-        sName = String(groupKey).substring(0, 31).replace(/[\\\/\?\*\[\]:]/g, "_");
-        if (Object.keys(groups).length > 1 && sName === sheetName) sName = `${sheetName}_${index + 1}`;
-      }
-
-      const worksheet = workbook.addWorksheet(sName);
-
+    // Нэг sheet-ийг багана, мөр, нийт, толгойн загвартай нь бөглөнө.
+    const sheetBichikh = (worksheet, groupData, headerKeys, headerLabels, colWidths) => {
       // Define columns
       worksheet.columns = headerLabels.map((label, i) => ({
         header: label,
@@ -1241,6 +1311,27 @@ exports.downloadExcelList = asyncHandler(async (req, res, next) => {
         tolgoiNud(cell);
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
       });
+    };
+
+    Object.keys(groups).forEach((groupKey, index) => {
+      let sName = sheetName || "Sheet1";
+      if (hasBarilgiinId) {
+        sName = String(groupKey).substring(0, 31).replace(/[\\\/\?\*\[\]:]/g, "_");
+        if (Object.keys(groups).length > 1 && sName === sheetName) sName = `${sheetName}_${index + 1}`;
+      }
+      sheetBichikh(workbook.addWorksheet(sName), groups[groupKey], headerKeys, headerLabels, colWidths);
+    });
+
+    // Нэмэлт sheet-үүд: [{ sheetName, headers: [{key,label}], data, colWidths }]
+    // (жишээ нь оршин суугчийн Excel-ийн «Гараж», «Агуулах» хуудас).
+    (Array.isArray(extraSheets) ? extraSheets : []).forEach((s, i) => {
+      if (!s || !Array.isArray(s.data) || !Array.isArray(s.headers)) return;
+      const keys = s.headers.map((h) => (typeof h === "string" ? h : h.key || h.field || ""));
+      const labels = s.headers.map((h) => (typeof h === "string" ? h : h.label || h.key || h.field || ""));
+      const sName = String(s.sheetName || `Sheet${i + 2}`)
+        .substring(0, 31)
+        .replace(/[\\\/\?\*\[\]:]/g, "_");
+      sheetBichikh(workbook.addWorksheet(sName), s.data, keys, labels, s.colWidths);
     });
 
     res.setHeader(
