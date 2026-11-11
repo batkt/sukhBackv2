@@ -28,7 +28,12 @@ const {
   uriidchlekhTulultExcel,
 } = require("../controller/excelImportController");
 // Төрийн банк (BPay) горимд Sukh-ийн журналд гараар бичихийг хаана.
-const { bpayKhoriglokh } = require("../services/bpayService");
+const {
+  bpayKhoriglokh,
+  bpayEsekh,
+  orshinSuugchEsekh,
+  bpayBaiguullaguudOlokh,
+} = require("../services/bpayService");
 const {
   tsakhilgaanExcelTemplateAvya,
   tsakhilgaanExcelTatya,
@@ -120,7 +125,32 @@ crud(router, "uilchilgeeniiZardluud", uilchilgeeniiZardluud, UstsanBarimt);
 
 // Lift Shalgaya
 router.post("/liftShalgaya", tokenShalgakh, gereeController.postLiftShalgaya);
-router.post("/uldegdelBodyo", tokenShalgakh, gereeController.uldegdelBodyo);
+router.post(
+  "/uldegdelBodyo",
+  tokenShalgakh,
+  // Төрийн банк горимд оршин суугчид Sukh-ийн үлдэгдэл/гүйлгээг хоосон буцаана (хуучин апп).
+  async (req, res, next) => {
+    try {
+      if (orshinSuugchEsekh(req) && (await bpayEsekh(String(req.body?.baiguullagiinId || "")))) {
+        return res.json({
+          success: true,
+          summary: {
+            totalTulbur: 0,
+            totalTulsun: 0,
+            uldegdel: 0,
+            gereeniiId: req.body?.gereeniiId,
+            nekhemjlekhuud: [],
+          },
+          items: [],
+        });
+      }
+    } catch (_) {
+      // Тохиргоо уншигдахгүй бол хуучин зан төлөвөөр.
+    }
+    next();
+  },
+  gereeController.uldegdelBodyo,
+);
 crud(router, "liftShalgaya", LiftShalgaya, UstsanBarimt);
 
 // Emit tulburUpdated on delete of avlaga records so web clients refresh
@@ -608,6 +638,23 @@ router.get("/geree", tokenShalgakh, async (req, res, next) => {
         gObj.uldegdel = balanceMap[String(g._id)] || 0;
         return gObj;
       });
+
+      // Төрийн банк горим: оршин суугчид Sukh-ийн үлдэгдэл харуулахгүй (хуучин апп).
+      // Гэрээ өөрөө (хаяг, хаалга, зогсоол) хэвээр буцна.
+      if (orshinSuugchEsekh(req)) {
+        try {
+          const bpaySet = await bpayBaiguullaguudOlokh(result.jagsaalt.map((g) => g.baiguullagiinId));
+          if (bpaySet.size) {
+            result.jagsaalt = result.jagsaalt.map((g) =>
+              bpaySet.has(String(g.baiguullagiinId))
+                ? { ...g, uldegdel: 0, globalUldegdel: 0, aldangi: 0, balance: 0 }
+                : g,
+            );
+          }
+        } catch (_) {
+          // Тохиргоо уншигдахгүй бол өөрчлөхгүй.
+        }
+      }
     }
 
     res.send(result);

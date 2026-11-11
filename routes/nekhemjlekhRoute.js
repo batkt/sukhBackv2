@@ -27,6 +27,11 @@ router.post("/nekhemjlekhiinTuukh/deleteZardal", tokenShalgakh, deleteInvoiceZar
 
 // CRUD / Standard endpoints
 router.delete("/nekhemjlekhiinTuukh/:id", tokenShalgakh, deleteInvoice);
+// Төрийн банк горимтой байгууллагын нэхэмжлэхийг оршин суугчид (хуучин апп) харуулахгүй.
+router.get(
+  "/nekhemjlekhiinTuukh",
+  require("../services/bpayService").orshinSuugchidSukhNekhemjlekhNuukh,
+);
 crud(router, "nekhemjlekhiinTuukh", nekhemjlekhiinTuukh, UstsanBarimt);
 
 module.exports = router;

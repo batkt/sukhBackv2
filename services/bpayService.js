@@ -86,6 +86,51 @@ function khuseltiinBaiguullaga(req) {
 }
 
 /**
+ * Хүсэлт оршин суугчийн токентой эсэх. Ажилтны токен `erkh`-тэй; токенгүй бол false
+ * (тэр үед юуг ч нуухгүй — зөвхөн баталгаатай оршин суугчид үйлчилнэ).
+ */
+function orshinSuugchEsekh(req) {
+  const t = req.body?.nevtersenAjiltniiToken;
+  return !!t && (!t.erkh || t.erkh === "OrshinSuugch");
+}
+
+/** Өгсөн байгууллагуудаас Төрийн банк горимтойг нь Set болгоно (60с кэштэй). */
+async function bpayBaiguullaguudOlokh(idnuud) {
+  const gants = [...new Set(idnuud.filter(Boolean).map(String))];
+  const ur = await Promise.all(gants.map((id) => bpayEsekh(id).catch(() => false)));
+  return new Set(gants.filter((_, i) => ur[i]));
+}
+
+/**
+ * Хуучин апп-д Sukh-ийн нэхэмжлэх/үлдэгдэл харагдахаас сэргийлнэ (Төрийн банк горимд
+ * төлбөрийг зөвхөн банк нэхэмжилнэ). Оршин суугчийн хүсэлтийн хариунаас Төрийн банк
+ * горимтой байгууллагын `jagsaalt` мөрүүдийг хасна. Ажилтанд огт нөлөөлөхгүй.
+ * crud-ийн ӨМНӨ тавина; токеныг crud-ийн tokenShalgakh задлах тул шийдвэрийг
+ * хариу илгээх агшинд гаргана.
+ */
+function orshinSuugchidSukhNekhemjlekhNuukh(req, res, next) {
+  const ekhSend = res.send.bind(res);
+  res.send = (body) => {
+    res.send = ekhSend;
+    if (!orshinSuugchEsekh(req) || !body || typeof body !== "object" || !Array.isArray(body.jagsaalt)) {
+      return ekhSend(body);
+    }
+    bpayBaiguullaguudOlokh(body.jagsaalt.map((m) => m?.baiguullagiinId))
+      .then((bpaySet) => {
+        if (!bpaySet.size) return ekhSend(body);
+        const uldsen = body.jagsaalt.filter((m) => !bpaySet.has(String(m?.baiguullagiinId)));
+        const khassan = body.jagsaalt.length - uldsen.length;
+        const gars = { ...body, jagsaalt: uldsen };
+        if (typeof body.niitMur === "number") gars.niitMur = Math.max(0, body.niitMur - khassan);
+        return ekhSend(gars);
+      })
+      .catch(() => ekhSend(body));
+    return res;
+  };
+  next();
+}
+
+/**
  * Middleware: BPay горимд Sukh-ийн журнал/нэхэмжлэлд гараар бичихийг хаана.
  * tokenShalgakh-ийн ДАРАА, multer-ийн ӨМНӨ тавина.
  */
@@ -872,6 +917,9 @@ module.exports = {
   bpayEsekh,
   bpayKhoriglokh,
   khuseltiinBaiguullaga,
+  orshinSuugchEsekh,
+  bpayBaiguullaguudOlokh,
+  orshinSuugchidSukhNekhemjlekhNuukh,
   billuudZadlakh,
   khayagKholbokh,
   syncKhiikh,
