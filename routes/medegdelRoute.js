@@ -20,6 +20,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { getMedegdelPublicRoot } = require("../config/medegdelPaths");
+const { resizeUploadedImages } = require("../middleware/imageResizeMiddleware");
 
 // Same root as chat uploads so both medegdel- and chat- files are served from one place
 const storage = multer.diskStorage({
@@ -77,8 +78,8 @@ const medegdelTokenShalgakh = (req, res, next) => {
   });
 };
 
-router.route("/medegdelIlgeeye").post(medegdelTokenShalgakh, upload.array("zurag", 10), medegdelIlgeeye);
-router.post("/medegdel/uploadChatFile", medegdelTokenShalgakh, uploadChatFile.single("file"), medegdelUploadChatFile);
+router.route("/medegdelIlgeeye").post(medegdelTokenShalgakh, upload.array("zurag", 10), resizeUploadedImages, medegdelIlgeeye);
+router.post("/medegdel/uploadChatFile", medegdelTokenShalgakh, uploadChatFile.single("file"), resizeUploadedImages, medegdelUploadChatFile);
 
 router.get("/medegdelZuragAvya/:baiguullagiinId/:ner", (req, res, next) => {
   const fileName = req.params.ner;
