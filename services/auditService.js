@@ -172,6 +172,9 @@ function getUserAgentFromRequest(req) {
  * Оршин суугч/харилцагчийн апп нэвтрэх, мэдэгдэл авах үед автоматаар
  * солигддог талбарууд — хүний засвар биш, «Зассан түүх»-ийг дүүргэхгүй.
  */
+/** Хэн ч өөрчилсөн «Зассан түүх»-д бичихгүй талбарууд */
+const KHEZEE_CH_BISH_TALBAR = new Set(["taniltsuulgaKharakhEsekh", "tanilsuulgaKharakhEsekh"]);
+
 const OS_TEKHNIK_TALBAR = new Set([
   "firebaseToken", "platform", "currentSessionId", "sessionId",
   "taniltsuulgaKharakhEsekh", "tanilsuulgaKharakhEsekh", "zurgiinId",
@@ -293,9 +296,24 @@ async function logEdit(req, db, modelName, documentId, oldDoc, newDoc, additiona
       return;
     }
 
-    const changes = getChanges(oldDoc, newDoc).filter(
-      (c) => !(ajiltan.isOrshinSuugch && OS_TEKHNIK_TALBAR.has(c.talbar)),
-    );
+    const tootUurchlugdsun = JSON.stringify(oldDoc?.toot ?? null) !== JSON.stringify(newDoc?.toot ?? null);
+    const changes = getChanges(oldDoc, newDoc).filter((c) => {
+      // Апп-ын танилцуулга харсан эсэх — хэн ч өөрчилсөн засвар биш
+      if (KHEZEE_CH_BISH_TALBAR.has(c.talbar)) return false;
+      if (ajiltan.isOrshinSuugch && OS_TEKHNIK_TALBAR.has(c.talbar)) return false;
+      // «Тоотууд» хоосон байсан ч оршин суугч хуучин «toot» талбартаа тоотой
+      // байв. Хадгалахад тэр тоотыг жагсаалт руу хуулдаг нь шинэ тоот НЭМСЭН
+      // биш — toot өөрчлөгдөөгүй бол бичихгүй.
+      if (
+        (c.talbar === "toots" || c.talbar === "units") &&
+        !(Array.isArray(oldDoc?.[c.talbar]) && oldDoc[c.talbar].length > 0) &&
+        !tootUurchlugdsun &&
+        oldDoc?.toot
+      ) {
+        return false;
+      }
+      return true;
+    });
     // Дуудагч монгол талбарын нэр өгсөн бол (baiguullagaAudit г.м.)
     if (additionalContext.talbarNeruud) {
       changes.forEach((c) => {
