@@ -397,7 +397,7 @@ async function createInvoiceForContract(kholbolt, gereeId, options = {}) {
   // Төрийн банк (BPay) горим: СӨХ-ийн төлбөрийг BPay нэхнэ — Sukh нэхэмжлэх үүсгэхгүй.
   // Бүх зам (cron, гараар, Excel, шинэ гэрээ, цахилгаан) энэ функцээр дамждаг.
   if (await require("./bpayService").bpayEsekh(kholbolt?.baiguullagiinId)) {
-    return { success: false, bpay: true, message: "Төрийн банк (BPay) горим — нэхэмжлэх үүсгэхгүй" };
+    return { success: false, bpay: true, message: "Төрийн банк горим — нэхэмжлэх үүсгэхгүй" };
   }
   const GereeModel = Geree(kholbolt);
   const NekhemjlekhiinTuukhModel = NekhemjlekhiinTuukh(kholbolt);

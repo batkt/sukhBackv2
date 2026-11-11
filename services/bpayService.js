@@ -96,7 +96,7 @@ async function bpayKhoriglokh(req, res, next) {
         success: false,
         code: "BPAY_GORIM",
         message:
-          "Энэ байгууллага Төрийн банк (BPay) горимд байна. СӨХ-ийн төлбөр, нэхэмжлэх, хөнгөлөлтийг BPay-ээр удирдана.",
+          "Төлбөрийг Төрийн банкаар тооцдог тул энэ үйлдэл хийх боломжгүй.",
       });
     }
   } catch (_) {
@@ -195,7 +195,7 @@ async function bpayKhereglegchBelden(utas) {
     await walletApiService.registerUser(utas, `${utas}@sukh.mn`);
   } catch (e) {
     if (!(await walletApiService.getUserInfo(utas).catch(() => null))) {
-      throw new Error(`BPay бүртгэл (${utas}) үүсгэж чадсангүй: ${e.message}`);
+      throw new Error(`Төрийн банкны бүртгэл (${utas}) үүсгэж чадсангүй: ${e.message}`);
     }
   }
 }
@@ -245,7 +245,7 @@ async function khayagKholbokh(kholbolt, baiguullagiinId) {
   // нэхэмжлэхийг ч төлөх дүнд нэмж давхар харуулна — тиймээс зөвхөн горим асаалттай үед.
   if (!t.idevkhtei) throw new Error("Эхлээд Төрийн банк горимыг асаана уу (асаагүй үед холбовол апп давхар дүн харуулна).");
   const bairMap = new Map(t.barilguud.filter((b) => b.bpayBairId).map((b) => [b.barilgiinId, b.bpayBairId]));
-  if (!bairMap.size) throw new Error("Аль ч барилгад BPay хаягийн ID (bpayBairId) тохируулаагүй байна");
+  if (!bairMap.size) throw new Error("Аль ч барилгад Төрийн банкны хаяг тохируулаагүй байна");
 
   const mongoose = require("mongoose");
   const OrshinSuugch = require("../models/orshinSuugch");
@@ -512,7 +512,7 @@ async function syncKhiikhDotood(kholbolt, baiguullagiinId, { albadakh = false, h
       // Хариу ЭНЭ холболтынх биш (оршин суугч хаягаа устгасан, хоосон/өөр хариу) бол
       // биллүүд "алга болсон" гэж үзэж болохгүй — алдаа гэж тэмдэглээд хөндөхгүй.
       if (billingId !== String(h.billingId)) {
-        throw new Error("BPay холболт олдсонгүй (оршин суугч хаягаа устгасан байж магадгүй)");
+        throw new Error("Төрийн банкны холболт олдсонгүй (оршин суугч хаягаа устгасан байж магадгүй)");
       }
       tatsan.push({ h, sokh, tulburMap: tulburiinBillMap(tulburuud) });
       tailan.amjilttai++;
@@ -619,7 +619,7 @@ async function syncKhiikhDotood(kholbolt, baiguullagiinId, { albadakh = false, h
   // albadakh: ажилтан анхааруулгыг шалгаад гараар зөвшөөрсөн (олон айл зэрэг төлсөн гэх мэт).
   if (tulukhNer.length > khyazgaar && !albadakh) {
     tailan.zogsoson = true;
-    tailan.sanuulga = `${tulukhNer.length} билл нэг дор алга болсон (хязгаар ${khyazgaar}) — "төлсөн" гэж тэмдэглээгүй. BPay-ийн алдаа байж магадгүй.`;
+    tailan.sanuulga = `${tulukhNer.length} билл нэг дор алга болсон (хязгаар ${khyazgaar}) — "төлсөн" гэж тэмдэглээгүй. Төрийн банкны алдаа байж магадгүй.`;
     console.warn(`⚠️ [BPAY SYNC] ${orgId}: ${tailan.sanuulga}`);
     return tailan;
   }
@@ -661,7 +661,7 @@ async function syncKhiikhDotood(kholbolt, baiguullagiinId, { albadakh = false, h
         h.salgasan = true;
         await BpayHolbolt(kholbolt).updateOne(
           { _id: h._id },
-          { $set: { salgasan: true, salgasanOgnoo: odoo, suuldAldaa: "Оршин суугч BPay-ээс хаягаа салгасан" } },
+          { $set: { salgasan: true, salgasanOgnoo: odoo, suuldAldaa: "Оршин суугч Төрийн банкнаас хаягаа салгасан" } },
         );
         tailan.salgasan = (tailan.salgasan || 0) + 1;
       }
@@ -678,10 +678,10 @@ async function syncKhiikhDotood(kholbolt, baiguullagiinId, { albadakh = false, h
           algaToo,
           tulsunOgnoo: ognoo,
           tulsunDun: dun,
-          tulburiinEkhSurvalj: manai ? "BPay (манай холболт)" : "Илрүүлсэн",
-          tailbar: "Төрийн банк (BPay)",
+          tulburiinEkhSurvalj: manai ? "Төрийн банк (манай холболт)" : "Илрүүлсэн",
+          tailbar: "Төрийн банк",
         },
-        $push: { tuukh: { ognoo: odoo, uildel: "Төлөгдсөн", delgerengui: manai ? "BPay төлбөр" : "BPay-ээс алга болсон" } },
+        $push: { tuukh: { ognoo: odoo, uildel: "Төлөгдсөн", delgerengui: manai ? "Төрийн банкны төлбөр" : "Төрийн банкнаас алга болсон" } },
       },
     );
     tailan.tulsun++;

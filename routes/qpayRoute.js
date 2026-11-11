@@ -688,7 +688,7 @@ router.post("/qpayGargaya", tokenShalgakh, tulukhErkhShalgaya, async (req, res, 
           return res.status(409).json({
             success: false,
             code: "BPAY_GORIM",
-            message: "СӨХ-ийн төлбөрийг Төрийн банк (BPay)-аар төлнө үү.",
+            message: "СӨХ-ийн төлбөрийг Төрийн банкаар төлнө үү.",
           });
         }
       }
