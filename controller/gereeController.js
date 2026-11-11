@@ -166,16 +166,21 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
     baiguullagiinId,
     barilgiinId,
     gereeniiId,
+    // Хэд хэдэн гэрээний үлдэгдлийг НЭГ дуудлагаар авах жагсаалт.
+    // Төлбөрийн хуудас өмнө нь гэрээ тус бүрд нэг POST явуулдаг байсан тул
+    // 100 гэрээ = 100 HTTP хүсэлт (тус бүр нь бүтэн сарын ledger-ийг дамждаг)
+    // болж, цонх удаан ачаалдаг байв. Одоо массив ирвэл бүгдийг ЦӨӨН query-гээр
+    // нэг дор боддог.
+    gereeniiIds,
     gereeniiDugaar,
     ognoo,
     // Зөвхөн summary хэрэгтэй бол гүйлгээний жагсаалтыг татахгүй.
-    // Төлбөрийн хуудас гэрээ тус бүрд нэг хүсэлт явуулдаг тул үүнгүйгээр
-    // 100 гэрээ = 100 удаа бүтэн сарын ledger дамждаг байв.
     summaryOnly,
   } = req.body;
 
   const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
   const NekhemjlekhiinTuukh = require("../models/nekhemjlekhiinTuukh");
+  const { khungulultNekhemjlekhendOnooyo } = require("../services/guilgeeService");
 
   if (!baiguullagiinId) {
     return res.status(400).json({
@@ -195,8 +200,15 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
   const GuilgeeAvlaguudModel = GuilgeeAvlaguud(kholbolt);
   const NekhemjlekhiinTuukhModel = NekhemjlekhiinTuukh(kholbolt);
 
+  const idList =
+    Array.isArray(gereeniiIds) && gereeniiIds.length > 0
+      ? [...new Set(gereeniiIds.map(String))]
+      : null;
+
   let query = { baiguullagiinId };
-  if (gereeniiId) {
+  if (idList) {
+    query.gereeniiId = { $in: idList };
+  } else if (gereeniiId) {
     query.gereeniiId = gereeniiId;
   } else if (barilgiinId) {
     query.barilgiinId = barilgiinId;
@@ -229,97 +241,156 @@ exports.uldegdelBodyo = asyncHandler(async (req, res, next) => {
         .sort({ ognoo: 1, createdAt: 1 })
         .lean();
 
-  // Үлдэгдэл, нэхэмжлэхийн төлөв бодоход хуримтлагдсан багц хэрэглэнэ
+  // Үлдэгдэл, нэхэмжлэхийн төлөв бодоход хуримтлагдсан багц хэрэглэнэ.
+  // idList ирсэн бол энэ НЭГ query-гээр бүх хүсэгдсэн гэрээний ledger-ийг авна.
   const summaryItems = await GuilgeeAvlaguudModel.find(summaryQuery)
     .sort({ ognoo: 1, createdAt: 1 })
     .lean();
 
-  let totalTulbur = 0;
-  let totalTulsun = 0;
-
-  const invoiceCharges = {};
-
-  summaryItems.forEach((it) => {
-    const dun = Number(it.dun || 0);
-    const invId = it.nekhemjlekhId ? String(it.nekhemjlekhId) : null;
-
-    if (dun > 0) {
-      totalTulbur += dun;
-      if (invId) {
-        if (!invoiceCharges[invId]) {
-          invoiceCharges[invId] = { charges: 0, date: it.ognoo || it.createdAt, id: invId };
-        }
-        invoiceCharges[invId].charges += dun;
-      }
-    } else {
-      totalTulsun += Math.abs(dun);
+  // idList ирсэн бол гэрээ тус бүрээр бүлэглэнэ; үгүй бол (хуучин ганц
+  // гэрээ/барилгын нийлбэр зам) бүгдийг нэг "бүлэг" гэж үзнэ.
+  const groups = new Map();
+  if (idList) {
+    for (const gid of idList) groups.set(gid, []);
+    for (const it of summaryItems) {
+      const gid = it.gereeniiId ? String(it.gereeniiId) : null;
+      if (gid && groups.has(gid)) groups.get(gid).push(it);
     }
-  });
+  } else {
+    groups.set(null, summaryItems);
+  }
 
-  // FIFO: sort invoices by date (oldest first), distribute total payments across them
-  const sortedInvoices = Object.values(invoiceCharges).sort((a, b) => new Date(a.date) - new Date(b.date));
-  const nekhemjlekhuud = [];
+  const groupTotals = new Map();
+  const groupInvoiceCharges = new Map();
+  const allInvoiceIds = new Set();
+
+  for (const [gid, items] of groups) {
+    let totalTulbur = 0;
+    let totalTulsun = 0;
+    const invoiceCharges = {};
+
+    items.forEach((it) => {
+      const dun = Number(it.dun || 0);
+      const invId = it.nekhemjlekhId ? String(it.nekhemjlekhId) : null;
+
+      if (dun > 0) {
+        totalTulbur += dun;
+        if (invId) {
+          if (!invoiceCharges[invId]) {
+            invoiceCharges[invId] = { charges: 0, date: it.ognoo || it.createdAt, id: invId };
+          }
+          invoiceCharges[invId].charges += dun;
+          allInvoiceIds.add(invId);
+        }
+      } else {
+        totalTulsun += Math.abs(dun);
+      }
+    });
+
+    groupTotals.set(gid, { totalTulbur, totalTulsun });
+    groupInvoiceCharges.set(gid, invoiceCharges);
+  }
 
   // Хөнгөлөлтийг тухайн нэхэмжлэхэд нь шууд оноож (syncInvoicesStatus-тай
-  // ижил дүрэм), үлдсэн төлөлтийг л FIFO-гаар хуваарилна.
+  // ижил дүрэм), үлдсэн төлөлтийг л FIFO-гаар хуваарилна. Бүх бүлгийн
+  // нэхэмжлэхийг НЭГ query-гээр авна.
   const invoiceDocs = await NekhemjlekhiinTuukhModel.find({
-    _id: { $in: sortedInvoices.map((i) => i.id).filter((id) => id !== "uninvoiced") },
+    _id: { $in: Array.from(allInvoiceIds) },
   })
     .select({ ognoo: 1, gereeniiId: 1 })
     .sort({ ognoo: 1 })
     .lean()
     .catch(() => []);
-  const { invoiceCredit, creditIds } =
-    require("../services/guilgeeService").khungulultNekhemjlekhendOnooyo(summaryItems, invoiceDocs);
-  let availableFunds = summaryItems
-    .filter((it) => Number(it.dun || 0) < 0 && !creditIds.has(String(it._id)))
-    .reduce((s, it) => s + Math.abs(Number(it.dun || 0)), 0);
+  const invoiceDocsById = new Map(invoiceDocs.map((d) => [String(d._id), d]));
 
-  for (const inv of sortedInvoices) {
-    const targetAmount = Math.max(0, inv.charges - (invoiceCredit.get(String(inv.id)) || 0));
-    const isPaid = availableFunds + 0.1 >= targetAmount;
-    const uld = isPaid ? 0 : Math.max(0, targetAmount - availableFunds);
-    const status = (isPaid && inv.charges > 0) ? "Төлсөн" : "Төлөөгүй";
+  const bulkOps = [];
+  const summaries = new Map();
 
-    nekhemjlekhuud.push({
-      nekhemjlekhId: inv.id,
-      niitTulbur: inv.charges,
-      uldegdel: Number(uld.toFixed(2)),
-      tuluv: status
-    });
+  for (const [gid, items] of groups) {
+    const { totalTulbur, totalTulsun } = groupTotals.get(gid);
+    const invoiceCharges = groupInvoiceCharges.get(gid);
 
-    // Sync real invoice status in DB
-    if (inv.id !== "uninvoiced") {
-      await NekhemjlekhiinTuukhModel.updateOne(
-        { _id: inv.id },
-        {
-          $set: {
-            tuluv: status,
-            uldegdel: Number(uld.toFixed(2)),
-            niitTulbur: inv.charges
-          }
-        }
-      ).catch(() => { });
+    // FIFO: sort invoices by date (oldest first), distribute total payments across them
+    const sortedInvoices = Object.values(invoiceCharges).sort((a, b) => new Date(a.date) - new Date(b.date));
+    const invoiceDocsForGroup = sortedInvoices
+      .map((i) => invoiceDocsById.get(i.id))
+      .filter(Boolean);
+
+    const { invoiceCredit, creditIds } = khungulultNekhemjlekhendOnooyo(items, invoiceDocsForGroup);
+    let availableFunds = items
+      .filter((it) => Number(it.dun || 0) < 0 && !creditIds.has(String(it._id)))
+      .reduce((s, it) => s + Math.abs(Number(it.dun || 0)), 0);
+
+    const nekhemjlekhuud = [];
+    for (const inv of sortedInvoices) {
+      const targetAmount = Math.max(0, inv.charges - (invoiceCredit.get(String(inv.id)) || 0));
+      const isPaid = availableFunds + 0.1 >= targetAmount;
+      const uld = isPaid ? 0 : Math.max(0, targetAmount - availableFunds);
+      const status = (isPaid && inv.charges > 0) ? "Төлсөн" : "Төлөөгүй";
+
+      nekhemjlekhuud.push({
+        nekhemjlekhId: inv.id,
+        niitTulbur: inv.charges,
+        uldegdel: Number(uld.toFixed(2)),
+        tuluv: status
+      });
+
+      // Sync real invoice status in DB — нэг дор bulkWrite-аар бичигдэнэ
+      // (доороос), асинхрон дараалсан updateOne биш.
+      if (inv.id !== "uninvoiced") {
+        bulkOps.push({
+          updateOne: {
+            filter: { _id: inv.id },
+            update: {
+              $set: {
+                tuluv: status,
+                uldegdel: Number(uld.toFixed(2)),
+                niitTulbur: inv.charges,
+              },
+            },
+          },
+        });
+      }
+
+      if (isPaid) {
+        availableFunds -= targetAmount;
+      } else {
+        availableFunds = 0;
+      }
     }
 
-    if (isPaid) {
-      availableFunds -= targetAmount;
-    } else {
-      availableFunds = 0;
-    }
-  }
-
-
-
-  res.json({
-    success: true,
-    summary: {
+    summaries.set(gid, {
       totalTulbur: Number(totalTulbur.toFixed(2)),
       totalTulsun: Number(totalTulsun.toFixed(2)),
       uldegdel: Number((totalTulbur - totalTulsun).toFixed(2)),
-      gereeniiId,
+      gereeniiId: gid,
       nekhemjlekhuud,
-    },
+    });
+  }
+
+  if (bulkOps.length > 0) {
+    await NekhemjlekhiinTuukhModel.bulkWrite(bulkOps, { ordered: false }).catch(() => {});
+  }
+
+  if (idList) {
+    const summariesObj = {};
+    for (const gid of idList) {
+      summariesObj[gid] =
+        summaries.get(gid) || {
+          totalTulbur: 0,
+          totalTulsun: 0,
+          uldegdel: 0,
+          gereeniiId: gid,
+          nekhemjlekhuud: [],
+        };
+    }
+    return res.json({ success: true, summaries: summariesObj, items: allItems });
+  }
+
+  const single = summaries.get(null);
+  res.json({
+    success: true,
+    summary: { ...single, gereeniiId },
     items: allItems,
   });
 });

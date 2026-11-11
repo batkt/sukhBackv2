@@ -584,18 +584,23 @@ const bankniiKhuulgaTatajKhadgalya = asyncHandler(async (req, res, next) => {
 
           if (khariu && khariu.transactions) {
             var guilgeenuud = [];
-            for (const mur of khariu.transactions) {
-              var existing = await BankniiGuilgee(tukhainBaaziinKholbolt, false).findOne({
-                record: mur?.record,
+            var khanBarilgiinId = dans.barilgiinId || req.body.barilgiinId || null;
+            var khanExistingDocs = await BankniiGuilgee(tukhainBaaziinKholbolt, false)
+              .find({
                 dansniiDugaar: dans.dugaar,
-                barilgiinId: dans.barilgiinId || req.body.barilgiinId || null,
-              });
-              if (!existing) {
+                barilgiinId: khanBarilgiinId,
+                record: { $in: khariu.transactions.map((t) => t?.record) },
+              })
+              .select("record")
+              .lean();
+            var khanExistingSet = new Set(khanExistingDocs.map((d) => d.record));
+            for (const mur of khariu.transactions) {
+              if (!khanExistingSet.has(mur?.record)) {
                 var g = new (BankniiGuilgee(tukhainBaaziinKholbolt))(mur);
                 g.dansniiDugaar = dans.dugaar;
                 g.bank = dans.bank;
                 g.baiguullagiinId = dans.baiguullagiinId;
-                g.barilgiinId = dans.barilgiinId || req.body.barilgiinId || null;
+                g.barilgiinId = khanBarilgiinId;
                 guilgeenuud.push(g);
               }
             }
@@ -623,13 +628,18 @@ const bankniiKhuulgaTatajKhadgalya = asyncHandler(async (req, res, next) => {
             var khariu = response?.data;
             if (!!khariu && !!khariu.txn && khariu.txn.length > 0) {
               var guilgeenuud = [];
-              for (const mur of khariu.txn) {
-                var existing = await BankniiGuilgee(tukhainBaaziinKholbolt, false).findOne({
-                  refno: mur?.refno,
+              var tdbBarilgiinId = dans.barilgiinId || req.body.barilgiinId || null;
+              var tdbExistingDocs = await BankniiGuilgee(tukhainBaaziinKholbolt, false)
+                .find({
                   dansniiDugaar: dans.dugaar,
-                  barilgiinId: dans.barilgiinId || req.body.barilgiinId || null,
-                });
-                if (!existing) {
+                  barilgiinId: tdbBarilgiinId,
+                  refno: { $in: khariu.txn.map((t) => t?.refno) },
+                })
+                .select("refno")
+                .lean();
+              var tdbExistingSet = new Set(tdbExistingDocs.map((d) => d.refno));
+              for (const mur of khariu.txn) {
+                if (!tdbExistingSet.has(mur?.refno)) {
                   var g = new (BankniiGuilgee(tukhainBaaziinKholbolt))({
                     TxDt: mur?.txndate, refno: mur?.refno, TxAddInf: mur?.txndesc,
                     Amt: mur?.credit ? mur?.credit : mur?.debit, balance: mur?.balance,
@@ -637,7 +647,7 @@ const bankniiKhuulgaTatajKhadgalya = asyncHandler(async (req, res, next) => {
                     curRate: mur?.currate, CtBankNo: mur?.bankcode,
                   });
                   g.dansniiDugaar = dans.dugaar; g.bank = dans.bank;
-                  g.baiguullagiinId = dans.baiguullagiinId; g.barilgiinId = dans.barilgiinId || req.body.barilgiinId || null;
+                  g.baiguullagiinId = dans.baiguullagiinId; g.barilgiinId = tdbBarilgiinId;
                   guilgeenuud.push(g);
                 }
               }
@@ -664,13 +674,18 @@ const bankniiKhuulgaTatajKhadgalya = asyncHandler(async (req, res, next) => {
           );
           if (!!khariu && !!khariu.statements && khariu.statements.length > 0) {
             var guilgeenuud = [];
-            for (const mur of khariu.statements) {
-              var existing = await BankniiGuilgee(tukhainBaaziinKholbolt, false).findOne({
-                tranId: mur?.tranId,
+            var golomtBarilgiinId = dans.barilgiinId || req.body.barilgiinId || null;
+            var golomtExistingDocs = await BankniiGuilgee(tukhainBaaziinKholbolt, false)
+              .find({
                 dansniiDugaar: dans.dugaar,
-                barilgiinId: dans.barilgiinId || req.body.barilgiinId || null,
-              });
-              if (!existing) {
+                barilgiinId: golomtBarilgiinId,
+                tranId: { $in: khariu.statements.map((t) => t?.tranId) },
+              })
+              .select("tranId")
+              .lean();
+            var golomtExistingSet = new Set(golomtExistingDocs.map((d) => d.tranId));
+            for (const mur of khariu.statements) {
+              if (!golomtExistingSet.has(mur?.tranId)) {
                 var g = new (BankniiGuilgee(tukhainBaaziinKholbolt))({
                   requestId: mur?.requestId, recNum: mur?.recNum, tranId: mur?.tranId,
                   tranDate: mur?.tranDate, drOrCr: mur?.drOrCr, tranAmount: mur?.tranAmount,
@@ -679,7 +694,7 @@ const bankniiKhuulgaTatajKhadgalya = asyncHandler(async (req, res, next) => {
                   accName: mur?.accName, accNum: mur?.accNum,
                 });
                 g.dansniiDugaar = dans.dugaar; g.bank = dans.bank;
-                g.baiguullagiinId = dans.baiguullagiinId; g.barilgiinId = dans.barilgiinId || req.body.barilgiinId || null;
+                g.baiguullagiinId = dans.baiguullagiinId; g.barilgiinId = golomtBarilgiinId;
                 guilgeenuud.push(g);
               }
             }
@@ -728,16 +743,19 @@ const bankniiKhuulgaTatajKhadgalya = asyncHandler(async (req, res, next) => {
               }));
             });
           }
-          // Deduplicate — skip already-saved records
-          var ustgakhJagsaalt = [];
-          for (const item of guilgeenuud) {
-            var existing = await BankniiGuilgee(tukhainBaaziinKholbolt, false).findOne({
-              requestId: item.requestId, recNum: item.recNum,
-              dansniiDugaar: dans.dugaar, barilgiinId: dans.barilgiinId,
-            });
-            if (existing) ustgakhJagsaalt.push(item);
-          }
-          guilgeenuud = guilgeenuud.filter((el) => !ustgakhJagsaalt.includes(el));
+          // Deduplicate — skip already-saved records (single batched lookup instead of one findOne per row)
+          var bogdExistingDocs = await BankniiGuilgee(tukhainBaaziinKholbolt, false)
+            .find({
+              dansniiDugaar: dans.dugaar,
+              barilgiinId: dans.barilgiinId,
+              requestId: { $in: guilgeenuud.map((item) => item.requestId) },
+            })
+            .select("requestId recNum")
+            .lean();
+          var bogdExistingSet = new Set(bogdExistingDocs.map((d) => `${d.requestId}|${d.recNum}`));
+          guilgeenuud = guilgeenuud.filter(
+            (item) => !bogdExistingSet.has(`${item.requestId}|${item.recNum}`)
+          );
           guilgeenuud.forEach((x) => {
             x.dansniiDugaar = dans.dugaar; x.bank = dans.bank;
             x.baiguullagiinId = dans.baiguullagiinId; x.barilgiinId = dans.barilgiinId;

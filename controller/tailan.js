@@ -144,7 +144,15 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
     // 3. Fetch invitations from EzenUrisanMashin (tenant DB)
     try {
       const EzenUrisanMashinModel = EzenUrisanMashin(kholbolt);
-      const ezenList = await EzenUrisanMashinModel.find({}).lean();
+      // Зөвхөн доор ашиглагдах талбаруудыг татна — энэ цуглуулга цаг
+      // хугацааны хязгаарлалтгүй, байгууллагын түүхэн бүх урьсан машиныг
+      // агуулдаг тул бусад (ашиглагдахгүй) талбаруудыг дамжуулахгүй байх нь
+      // сүлжээ/санах ойн зарцуулалтыг багасгана.
+      const ezenList = await EzenUrisanMashinModel.find({})
+        .select(
+          "urisanMashiniiDugaar mashiniiDugaar ezemshigchiinId orshinSuugchId orshinSuugchiinId ezemshigchiinNer ner orshinSuugchNer ezenToot ezemshigchiinUtas utas"
+        )
+        .lean();
       for (const ez of ezenList) {
         // ЖИЧ: ezenUrisanMashin схемийн талбарууд нь `urisanMashiniiDugaar`,
         // `ezemshigchiinId`, `ezemshigchiinNer`, `ezemshigchiinUtas` юм.
@@ -187,7 +195,15 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
     // `mashin` цуглуулгад орно (/zochinHadgalya энд бичдэг).
     try {
       const MashinModel = require("../models/mashin")(kholbolt);
-      const mashinuud = await MashinModel.find({}).lean();
+      // Доор ашиглагдах талбаруудаар хязгаарлаж, цуглуулга дахь бусад
+      // (ашиглагдахгүй) талбаруудыг дамжуулахгүй байх нь сүлжээ/санах ойн
+      // зарцуулалтыг багасгана — энэ цуглуулга ч бас цаг хугацааны
+      // хязгаарлалтгүй бүх түүхэн машиныг агуулдаг.
+      const mashinuud = await MashinModel.find({})
+        .select(
+          "dugaar mashiniiDugaar orshinSuugchiinId ezemshigchiinId ezenToot ezemshigchiinTalbainDugaar ezemshigchiinNer orshinSuugchiinNer ezemshigchiinUtas utas"
+        )
+        .lean();
 
       for (const m of mashinuud) {
         const plate = String(m.dugaar || m.mashiniiDugaar || "")
