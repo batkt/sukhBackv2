@@ -44,6 +44,12 @@ function ajiltniiKhuseltEsekh() {
   return req && req.body && req.body.nevtersenAjiltniiToken ? req : null;
 }
 
+/** Route өөрөө нарийвчилсан устгалын аудит бичдэг үед (req._auditUstgalAlgasakh) */
+function ustgalAlgasakhEsekh() {
+  const req = getCurrentRequest();
+  return !!(req && req._auditUstgalAlgasakh);
+}
+
 function modelNerAvya(schema, modelName) {
   return schema.__auditModelName || modelName || "unknown";
 }
@@ -140,7 +146,7 @@ function auditPlugin(schema) {
   /* ── Устгал: findOneAndDelete/findByIdAndDelete/findOneAndRemove, deleteOne, deleteMany ── */
   const ustgakhUmnukh = (olon) =>
     async function () {
-      if (khasakhEsekh(this) || !ajiltniiKhuseltEsekh()) return;
+      if (khasakhEsekh(this) || !ajiltniiKhuseltEsekh() || ustgalAlgasakhEsekh()) return;
       try {
         this._auditUstgakh = olon
           ? await this.model.find(this.getQuery()).limit(BOONUUR_DEED).lean()
@@ -167,7 +173,9 @@ function auditPlugin(schema) {
   schema.pre("deleteOne", { document: false, query: true }, ustgakhUmnukh(false));
   schema.post("deleteOne", { document: false, query: true }, ustgakhDaraa(null));
   schema.pre("deleteMany", ustgakhUmnukh(true));
-  schema.post("deleteMany", ustgakhDaraa("Бөөнөөр устгасан"));
+  // Шалтгаан нь хүсэлтэд ажилтны бичсэн шалтгаан (req.shaltgaan) — зохиомол
+  // «Бөөнөөр устгасан» бичвэр бичихгүй.
+  schema.post("deleteMany", ustgakhDaraa(null));
 
   // doc.deleteOne() / doc.remove() — баримт өөрөө устгах
   const barimtUstgasan = async function () {

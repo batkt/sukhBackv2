@@ -5359,7 +5359,7 @@ exports.orshinSuugchUstgakh = asyncHandler(async (req, res, next) => {
         userId.toString(),
         deletedDoc,
         "hard",
-        "Admin delete",
+        null, // Ажилтны бичсэн шалтгаан req.shaltgaan-аас бичигдэнэ
         {
           baiguullagiinId: orshinSuugch.baiguullagiinId,
           barilgiinId: null,

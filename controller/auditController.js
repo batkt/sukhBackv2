@@ -26,6 +26,37 @@ function ognooZadlakh(utga, tal) {
 }
 
 /**
+ * `khiisenTurul`-гүй хуучин бичлэгт (оршин суугч «ажилтан» гэж бичигдсэн
+ * байж болно) хэн хийснийг ID-аар нь нөхнө: ajiltan | orshinSuugch | khariltsagch.
+ */
+async function khiisenTurulNukhye(db, jagsaalt) {
+  const dutuu = [
+    ...new Set(
+      jagsaalt.filter((r) => !r.khiisenTurul && r.ajiltniiId).map((r) => String(r.ajiltniiId)),
+    ),
+  ].filter((id) => /^[a-f0-9]{24}$/i.test(id));
+  if (dutuu.length === 0) return jagsaalt;
+  const turulMap = new Map();
+  try {
+    const OrshinSuugch = require("../models/orshinSuugch");
+    const Khariltsagch = require("../models/khariltsagch");
+    const [osuud, khuud] = await Promise.all([
+      OrshinSuugch(db.erunkhiiKholbolt).find({ _id: { $in: dutuu } }).select("_id").lean(),
+      Khariltsagch(db.erunkhiiKholbolt).find({ _id: { $in: dutuu } }).select("_id").lean(),
+    ]);
+    osuud.forEach((r) => turulMap.set(String(r._id), "orshinSuugch"));
+    khuud.forEach((r) => turulMap.set(String(r._id), "khariltsagch"));
+  } catch (err) {
+    console.error("⚠️ [AUDIT] khiisenTurul нөхөхөд алдаа:", err.message);
+  }
+  return jagsaalt.map((r) =>
+    r.khiisenTurul
+      ? r
+      : { ...r, khiisenTurul: turulMap.get(String(r.ajiltniiId)) || "ajiltan" },
+  );
+}
+
+/**
  * Get edit history
  * Query params:
  * - modelName: Filter by model name (e.g., "ajiltan", "geree")
@@ -106,25 +137,9 @@ exports.getZasakhTuukh = asyncHandler(async (req, res, next) => {
     return dateB - dateA;
   });
 
-  // Filter out records made by orshinSuugch (residents)
-  const uniqueModifierIds = [...new Set(combined.map(r => r.ajiltniiId).filter(Boolean))];
-  let residentIds = new Set();
-  if (uniqueModifierIds.length > 0) {
-    try {
-      const OrshinSuugch = require("../models/orshinSuugch");
-      const residents = await OrshinSuugch(db.erunkhiiKholbolt)
-        .find({ _id: { $in: uniqueModifierIds } })
-        .select("_id")
-        .lean();
-      residentIds = new Set(residents.map(r => r._id.toString()));
-    } catch (err) {
-      console.error("⚠️ [AUDIT] Error fetching residents for filtering:", err.message);
-    }
-  }
-
-  const filteredCombined = combined.filter(
-    record => !residentIds.has(record.ajiltniiId?.toString())
-  );
+  // Оршин суугч/харилцагчийн өөрийн засвар ч харагдана — «Хийсэн» баганад
+  // тэдний нэр, khiisenTurul-аар ялгагдана.
+  const filteredCombined = await khiisenTurulNukhye(db, combined);
 
   const niitMur = filteredCombined.length;
   const paginated = filteredCombined.slice(skip, skip + Number(khuudasniiKhemjee));
@@ -194,7 +209,7 @@ exports.getUstgakhTuukh = asyncHandler(async (req, res, next) => {
 
   res.json({
     success: true,
-    data: list,
+    data: await khiisenTurulNukhye(db, list),
     pagination: {
       khuudasniiDugaar: Number(khuudasniiDugaar),
       khuudasniiKhemjee: Number(khuudasniiKhemjee),
@@ -240,25 +255,8 @@ exports.getDocumentHistory = asyncHandler(async (req, res, next) => {
     (a, b) => new Date(b.ognoo || b.createdAt) - new Date(a.ognoo || a.createdAt)
   );
 
-  // Filter out records made by orshinSuugch (residents)
-  const uniqueModifierIds = [...new Set(allHistory.map(r => r.ajiltniiId).filter(Boolean))];
-  let residentIds = new Set();
-  if (uniqueModifierIds.length > 0) {
-    try {
-      const OrshinSuugch = require("../models/orshinSuugch");
-      const residents = await OrshinSuugch(db.erunkhiiKholbolt)
-        .find({ _id: { $in: uniqueModifierIds } })
-        .select("_id")
-        .lean();
-      residentIds = new Set(residents.map(r => r._id.toString()));
-    } catch (err) {
-      console.error("⚠️ [AUDIT] Error fetching residents for filtering:", err.message);
-    }
-  }
-
-  const filteredHistory = allHistory.filter(
-    record => !residentIds.has(record.ajiltniiId?.toString())
-  );
+  // Оршин суугчийн өөрийн засвар/устгал ч харагдана (khiisenTurul-аар ялгагдана)
+  const filteredHistory = await khiisenTurulNukhye(db, allHistory);
 
   const deletedIds = new Set(deletes.map(d => d._id.toString()));
   const filteredEdits = filteredHistory.filter(r => !deletedIds.has(r._id.toString()));

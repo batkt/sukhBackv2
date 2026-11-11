@@ -18,6 +18,8 @@ const ustgakhTuukhSchema = new Schema(
     ajiltniiId: String, // Employee ID who deleted
     ajiltniiNer: String, // Employee name
     ajiltniiNevtrekhNer: String, // Employee login name
+    // Хэн хийсэн: ajiltan | orshinSuugch | khariltsagch (ajiltniiId/Ner нь тэр хүнийх)
+    khiisenTurul: String,
     
     // Context
     baiguullagiinId: String, // Organization ID

@@ -8,17 +8,67 @@ const { shaltgaanAvya } = require("../middleware/shaltgaan");
  * Get employee info from request token
  * Also handles orshinSuugch tokens
  */
+/**
+ * `erkh`-гүй токен (оршин суугч / харилцагчийн апп, эсвэл сервисийн токен)
+ * хэнийх болохыг тодорхойлно. tokenShalgakh нь бүх токенийг
+ * `nevtersenAjiltniiToken`-д хийдэг тул өмнө нь оршин суугчийн засвар
+ * «ажилтан»-ы нэр дээр бичигддэг, «Зассан түүх»-ээс шүүгдэн алга болдог байв.
+ * Нэг хүсэлтэд олон аудит бичигдэх тул богино хугацаанд санана.
+ */
+const turulSanakh = new Map();
+async function erkhguiKhereglegchOlyo(db, token) {
+  const id = token.id?.toString();
+  if (!id) return null;
+  const sanasan = turulSanakh.get(id);
+  if (sanasan && Date.now() - sanasan.tsag < 60000) return sanasan.utga;
+  let utga = null;
+  try {
+    const OrshinSuugch = require("../models/orshinSuugch");
+    const os = await OrshinSuugch(db.erunkhiiKholbolt)
+      .findById(id)
+      .select("_id ner ovog utas baiguullagiinId")
+      .lean();
+    if (os) {
+      utga = { turul: "orshinSuugch", ner: [os.ovog, os.ner].filter(Boolean).join(" ") || os.utas, nevtrekhNer: os.utas };
+    } else {
+      const Khariltsagch = require("../models/khariltsagch");
+      const kh = await Khariltsagch(db.erunkhiiKholbolt)
+        .findById(id)
+        .select("_id ner ovog utas")
+        .lean();
+      if (kh) utga = { turul: "khariltsagch", ner: [kh.ovog, kh.ner].filter(Boolean).join(" ") || kh.utas, nevtrekhNer: kh.utas };
+    }
+  } catch (_) {}
+  if (turulSanakh.size > 5000) turulSanakh.clear();
+  turulSanakh.set(id, { utga, tsag: Date.now() });
+  return utga;
+}
+
 async function getAjiltanFromRequest(req, db) {
   try {
     // First try to get from request body (set by tokenShalgakh middleware)
     if (req.body?.nevtersenAjiltniiToken) {
       const token = req.body.nevtersenAjiltniiToken;
+      if (!token.erkh) {
+        const khereglegch = await erkhguiKhereglegchOlyo(db, token);
+        if (khereglegch) {
+          return {
+            id: token.id?.toString(),
+            ner: khereglegch.ner || token.ner,
+            nevtrekhNer: khereglegch.nevtrekhNer,
+            baiguullagiinId: token.baiguullagiinId,
+            isOrshinSuugch: true,
+            khiisenTurul: khereglegch.turul,
+          };
+        }
+      }
       return {
         id: token.id?.toString(),
         ner: token.ner,
         nevtrekhNer: token.nevtrekhNer,
         baiguullagiinId: token.baiguullagiinId,
         isOrshinSuugch: false,
+        khiisenTurul: "ajiltan",
       };
     }
 
@@ -31,6 +81,7 @@ async function getAjiltanFromRequest(req, db) {
         nevtrekhNer: token.nevtrekhNer || token.utas,
         baiguullagiinId: token.baiguullagiinId,
         isOrshinSuugch: true,
+        khiisenTurul: "orshinSuugch",
       };
     }
 
@@ -58,6 +109,7 @@ async function getAjiltanFromRequest(req, db) {
             nevtrekhNer: ajiltan.nevtrekhNer,
             baiguullagiinId: ajiltan.baiguullagiinId,
             isOrshinSuugch: false,
+            khiisenTurul: "ajiltan",
           };
         }
 
@@ -75,6 +127,7 @@ async function getAjiltanFromRequest(req, db) {
             nevtrekhNer: orshinSuugch.utas,
             baiguullagiinId: orshinSuugch.baiguullagiinId,
             isOrshinSuugch: true,
+            khiisenTurul: "orshinSuugch",
           };
         }
       }
@@ -114,6 +167,15 @@ function getUserAgentFromRequest(req) {
   }
   return {};
 }
+
+/**
+ * Оршин суугч/харилцагчийн апп нэвтрэх, мэдэгдэл авах үед автоматаар
+ * солигддог талбарууд — хүний засвар биш, «Зассан түүх»-ийг дүүргэхгүй.
+ */
+const OS_TEKHNIK_TALBAR = new Set([
+  "firebaseToken", "platform", "currentSessionId", "sessionId",
+  "taniltsuulgaKharakhEsekh", "tanilsuulgaKharakhEsekh", "zurgiinId",
+]);
 
 /** Хэзээд ч засвар гэж тооцохгүй техникийн талбарууд (том жижиг үсэг хамаарахгүй) */
 const UURCHLULT_BISH_TALBARUUD = new Set(["createdat", "updatedat", "__v", "_id"]);
@@ -226,12 +288,14 @@ function classNameAvya(modelName) {
 async function logEdit(req, db, modelName, documentId, oldDoc, newDoc, additionalContext = {}) {
   try {
     const ajiltan = await getAjiltanFromRequest(req, db);
-    if (!ajiltan || ajiltan.isOrshinSuugch) {
-      // No user logged in or user is orshinSuugch - skip logging silently
+    if (!ajiltan) {
+      // Нэвтрээгүй (cron, систем) — бичихгүй
       return;
     }
 
-    const changes = getChanges(oldDoc, newDoc);
+    const changes = getChanges(oldDoc, newDoc).filter(
+      (c) => !(ajiltan.isOrshinSuugch && OS_TEKHNIK_TALBAR.has(c.talbar)),
+    );
     // Дуудагч монгол талбарын нэр өгсөн бол (baiguullagaAudit г.м.)
     if (additionalContext.talbarNeruud) {
       changes.forEach((c) => {
@@ -314,6 +378,7 @@ async function logEdit(req, db, modelName, documentId, oldDoc, newDoc, additiona
       classOgnoo: classOgnoo,
       ajiltniiId: ajiltan.id,
       ajiltniiNer: ajiltan.ner,
+      khiisenTurul: ajiltan.khiisenTurul || "ajiltan",
       shaltgaan: shaltgaan,
       uurchlult: changes,
     });
@@ -340,8 +405,8 @@ async function logDelete(
 ) {
   try {
     const ajiltan = await getAjiltanFromRequest(req, db);
-    if (!ajiltan || ajiltan.isOrshinSuugch) {
-      // No user logged in or user is orshinSuugch - skip logging silently
+    if (!ajiltan) {
+      // Нэвтрээгүй (cron, систем) — бичихгүй
       return;
     }
 
@@ -413,6 +478,7 @@ async function logDelete(
       ajiltniiId: ajiltan.id,
       ajiltniiNer: ajiltan.ner,
       ajiltniiNevtrekhNer: ajiltan.nevtrekhNer,
+      khiisenTurul: ajiltan.khiisenTurul || "ajiltan",
       baiguullagiinId: docBaiguullagiinId,
       baiguullagiinRegister: baiguullagiinRegister,
       barilgiinId: docBarilgiinId,

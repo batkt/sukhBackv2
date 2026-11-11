@@ -294,6 +294,22 @@ router.post("/orshinSuugchiinMashinKhadgalya", tokenShalgakh, async (req, res, n
 
     let savedCars = [];
 
+    // АУДИТ: доорх «бүгдийг устгаад дахин оруулах» нь машин НЭМЭХЭД ч бүх
+    // машиныг «Устгасан түүх»-д бичдэг байв. Глобал аудит plugin-ийг энэ
+    // хүсэлтийн deleteMany-д унтрааж, үнэхээр ХАСАГДСАН машиныг л доор бичнэ.
+    const ireedDugaaruud = new Set(carDocs.map((c) => c.mashiniiDugaar));
+    let khasagdsanMashinuud = [];
+    try {
+      khasagdsanMashinuud = (
+        await OrshinSuugchMashin(tukhainBaaziinKholbolt || db.erunkhiiKholbolt)
+          .find({ orshinSuugchiinId: String(resident._id) })
+          .lean()
+      ).filter(
+        (m) => !ireedDugaaruud.has(String(m.mashiniiDugaar || "").trim().toUpperCase()),
+      );
+    } catch (_) {}
+    req._auditUstgalAlgasakh = true;
+
     // 1. Tenant DB
     if (tukhainBaaziinKholbolt) {
       try {
@@ -345,6 +361,17 @@ router.post("/orshinSuugchiinMashinKhadgalya", tokenShalgakh, async (req, res, n
         }
       } catch (err) {
         console.error("Error syncing to Mashin model:", err);
+      }
+    }
+
+    req._auditUstgalAlgasakh = false;
+    if (khasagdsanMashinuud.length > 0) {
+      const { logDelete } = require("../services/auditService");
+      for (const m of khasagdsanMashinuud) {
+        await logDelete(req, db, "orshinSuugchMashin", String(m._id), m, "hard", null, {
+          baiguullagiinId: m.baiguullagiinId || resident.baiguullagiinId,
+          barilgiinId: m.barilgiinId || resident.barilgiinId || null,
+        });
       }
     }
 
