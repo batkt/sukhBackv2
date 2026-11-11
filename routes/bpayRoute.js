@@ -93,6 +93,57 @@ router.get("/bpay/bairKhaikh", tokenShalgakh, ajiltanShaardana, (req, res) => {
   res.json({ success: true, jagsaalt: bpay.bairKhaikh(req.query.q) });
 });
 
+/**
+ * Гүйлгээний түүхийн жагсаалтад: холбогдсон гэрээ бүрийн Төрийн банкны үлдэгдэл ба төлөлтүүд.
+ * { [gereeniiId]: { uldegdel, tulburuud: [{ ognoo, dun }] } } — горимгүй бол { bpay: false }.
+ * Үлдэгдэл = төлөгдөөгүй биллүүдийн алдангитай дүн (Хуулгын «Төлөх»-тэй ижил).
+ */
+router.get("/bpay/dunguud", tokenShalgakh, ajiltanShaardana, async (req, res, next) => {
+  try {
+    const kholbolt = kholboltAvya(req);
+    const orgId = bpay.khuseltiinBaiguullaga(req);
+    if (!kholbolt) return res.status(400).json({ success: false, message: "Холболт олдсонгүй" });
+    if (!(await bpay.bpayEsekh(orgId))) return res.json({ success: true, bpay: false, dunguud: {} });
+    const holboltuud = await BpayHolbolt(kholbolt)
+      .find({ baiguullagiinId: orgId, billingId: { $nin: [null, ""] }, salgasan: { $ne: true } })
+      .select("gereeniiId")
+      .lean();
+    const dunguud = {};
+    for (const h of holboltuud) dunguud[String(h.gereeniiId)] = { uldegdel: 0, tulburuud: [] };
+    const billuud = await BpayBill(kholbolt)
+      .find({ baiguullagiinId: orgId })
+      .select("gereeniiId tuluv dun aldangitaiDun tulsunOgnoo tulsunDun suuldKharsan")
+      .lean();
+    for (const b of billuud) {
+      const d = dunguud[String(b.gereeniiId)];
+      if (!d) continue;
+      if (b.tuluv === "Төлөгдсөн") {
+        d.tulburuud.push({
+          ognoo: b.tulsunOgnoo || b.suuldKharsan || null,
+          dun: Number(b.tulsunDun ?? b.aldangitaiDun ?? b.dun) || 0,
+        });
+      } else {
+        d.uldegdel += Number(b.aldangitaiDun || b.dun) || 0;
+      }
+    }
+    res.json({ success: true, bpay: true, dunguud });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** Холбогдоогүй орон сууцны тоотууд (бүх барилга), шалтгаантай. */
+router.get("/bpay/kholbogdoogui", tokenShalgakh, ajiltanShaardana, async (req, res, next) => {
+  try {
+    const kholbolt = kholboltAvya(req);
+    if (!kholbolt) return res.status(400).json({ success: false, message: "Холболт олдсонгүй" });
+    const jagsaalt = await bpay.kholbogdooguiJagsaalt(kholbolt, bpay.khuseltiinBaiguullaga(req));
+    res.json({ success: true, niit: jagsaalt.length, jagsaalt });
+  } catch (e) {
+    next(e);
+  }
+});
+
 router.post("/bpay/khayagKholbokh", tokenShalgakh, ajiltanShaardana, async (req, res, next) => {
   try {
     const kholbolt = kholboltAvya(req);
