@@ -77,6 +77,13 @@ const bankniiGuilgeeSchema = new Schema(
 bankniiGuilgeeSchema.index({ dansniiDugaar: 1, baiguullagiinId: 1, barilgiinId: 1 });
 bankniiGuilgeeSchema.index({ tranDate: -1 });
 bankniiGuilgeeSchema.index({ baiguullagiinId: 1, bank: 1 });
+// Dedup lookups during bank-statement sync (cgw.js) filter by dansniiDugaar+barilgiinId
+// plus a bank-specific unique transaction id — index each combo so those lookups stay O(log n).
+bankniiGuilgeeSchema.index({ dansniiDugaar: 1, barilgiinId: 1, record: 1 });
+bankniiGuilgeeSchema.index({ dansniiDugaar: 1, barilgiinId: 1, refno: 1 });
+bankniiGuilgeeSchema.index({ dansniiDugaar: 1, barilgiinId: 1, tranId: 1 });
+bankniiGuilgeeSchema.index({ dansniiDugaar: 1, barilgiinId: 1, jrno: 1 });
+bankniiGuilgeeSchema.index({ dansniiDugaar: 1, barilgiinId: 1, requestId: 1, recNum: 1 });
 
 // Add audit hooks for tracking changes
 const { addAuditHooks } = require("../utils/auditHooks");
