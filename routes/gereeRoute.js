@@ -639,17 +639,18 @@ router.get("/geree", tokenShalgakh, async (req, res, next) => {
         return gObj;
       });
 
-      // Төрийн банк горим: оршин суугчид Sukh-ийн үлдэгдэл харуулахгүй (хуучин апп).
-      // Гэрээ өөрөө (хаяг, хаалга, зогсоол) хэвээр буцна.
+      // Төрийн банк горим: оршин суугчид тэр байгууллагын Sukh гэрээг огт буцаахгүй —
+      // апп-ын нүүрэнд банкны хаягтай давхардсан 0 ₮-тэй карт гарахаас сэргийлнэ
+      // (хуучин апп ч). Ажилтанд нөлөөлөхгүй; гэрээ мэдээллийн санд хэвээр.
       if (orshinSuugchEsekh(req)) {
         try {
           const bpaySet = await bpayBaiguullaguudOlokh(result.jagsaalt.map((g) => g.baiguullagiinId));
           if (bpaySet.size) {
-            result.jagsaalt = result.jagsaalt.map((g) =>
-              bpaySet.has(String(g.baiguullagiinId))
-                ? { ...g, uldegdel: 0, globalUldegdel: 0, aldangi: 0, balance: 0 }
-                : g,
-            );
+            const umnukh = result.jagsaalt.length;
+            result.jagsaalt = result.jagsaalt.filter((g) => !bpaySet.has(String(g.baiguullagiinId)));
+            if (typeof result.niitMur === "number") {
+              result.niitMur = Math.max(0, result.niitMur - (umnukh - result.jagsaalt.length));
+            }
           }
         } catch (_) {
           // Тохиргоо уншигдахгүй бол өөрчлөхгүй.
