@@ -12,6 +12,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { getMedegdelPublicRoot } = require("../config/medegdelPaths");
+const { resizeUploadedImages } = require("../middleware/imageResizeMiddleware");
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -32,9 +33,9 @@ const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024 },
 });
 
-router.post("/blog", tokenShalgakh, upload.array("images", 10), blogIlgeeye);
+router.post("/blog", tokenShalgakh, upload.array("images", 10), resizeUploadedImages, blogIlgeeye);
 router.get("/blog", tokenShalgakh, blogAvya);
-router.put("/blog/:id", tokenShalgakh, upload.array("images", 10), blogZasah);
+router.put("/blog/:id", tokenShalgakh, upload.array("images", 10), resizeUploadedImages, blogZasah);
 router.post("/blog/:id/reaction", tokenShalgakh, blogReaction);
 router.delete("/blog/:id", tokenShalgakh, blogUstgakh);
 

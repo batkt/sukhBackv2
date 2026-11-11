@@ -268,18 +268,20 @@ exports.tailanZogsool = asyncHandler(async (req, res, next) => {
       }
     };
 
-    uilchluulegchNemey(await Uilchluulegch(kholbolt, true).find(ulMatch).lean());
-
-    for (const arkhivNer of arkhivNeruud) {
-      try {
-        uilchluulegchNemey(
-          await Uilchluulegch(kholbolt, true, arkhivNer).find(ulMatch).lean(),
-        );
-      } catch (arkhivErr) {
-        // Тухайн сарын архив байхгүй бол зүгээр алгасна
-        console.error(`Archive ${arkhivNer} notice:`, arkhivErr.message);
-      }
-    }
+    const arkhivJagsaaltuud = await Promise.all([
+      Uilchluulegch(kholbolt, true).find(ulMatch).lean(),
+      ...arkhivNeruud.map((arkhivNer) =>
+        Uilchluulegch(kholbolt, true, arkhivNer)
+          .find(ulMatch)
+          .lean()
+          .catch((arkhivErr) => {
+            // Тухайн сарын архив байхгүй бол зүгээр алгасна
+            console.error(`Archive ${arkhivNer} notice:`, arkhivErr.message);
+            return [];
+          }),
+      ),
+    ]);
+    arkhivJagsaaltuud.forEach(uilchluulegchNemey);
 
     const uilchluulegchuud = Array.from(uilchluulegchMap.values());
 
