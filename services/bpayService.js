@@ -578,6 +578,122 @@ async function khayagKholbokh(kholbolt, baiguullagiinId, ajilTuluv = null) {
   return tailan;
 }
 
+/**
+ * Гараар (апп, оршин суугч өөрөө г.м.) холбосон тоотыг синкийн холболтод нэмнэ.
+ *
+ * `bpayHolbolt`-ийг зөвхөн «Тоот холбох» (`khayagKholbokh`) үүсгэдэг тул оршин
+ * суугчийн `toots`-д бүрэн WALLET_API бичлэг (billingId, walletCustomerId, walletBairId,
+ * walletDoorNo) байсан ч синк тэр тоотыг татдаггүй, хуулга хоосон харагддаг байв.
+ *
+ * Энд ЗӨВХӨН манай санд бичнэ — Төрийн банк руу юу ч илгээхгүй. Тааруулалт нь
+ * `khayagKholbokh`-ийн 1-р алхамтай ижил (барилгын bpayBairId + хаалганы дугаар).
+ *
+ * Хөндөх тоот:
+ *   - холболтгүй;
+ *   - холболт нь алдаатай (`suuldAldaa`) эсвэл салгасан бөгөөд оршин суугч ӨӨР
+ *     billingId-аар дахин холбосон (хуучин, ажиллахгүй холболтыг шинээр солино).
+ * Буцаах: шинээр холбосон тоотын тоо.
+ */
+async function walletTootoosHolboltNokhokh(kholbolt, baiguullagiinId) {
+  const orgId = String(baiguullagiinId);
+  const t = await bpayTokhirgooAvya(orgId);
+  if (!t?.idevkhtei) return 0;
+  const bairMap = new Map(t.barilguud.filter((b) => b.bpayBairId).map((b) => [b.barilgiinId, String(b.bpayBairId)]));
+  if (!bairMap.size) return 0;
+
+  const gereenuud = await Geree(kholbolt)
+    .find({ baiguullagiinId: orgId, tuluv: { $nin: IDEVKHGUI_GEREE } })
+    .select("_id gereeniiDugaar toot barilgiinId tootTurul turul orshinSuugchId utas")
+    .lean();
+  const holboltMap = new Map(
+    (await BpayHolbolt(kholbolt).find({ baiguullagiinId: orgId }).lean()).map((h) => [String(h.gereeniiId), h]),
+  );
+
+  // Холбох шаардлагатай байж болох гэрээнүүд
+  const kholbokhGereenuud = gereenuud.filter((g) => {
+    if (!tootKhevshuulekh(g.toot) || !bairMap.has(String(g.barilgiinId))) return false;
+    const h = holboltMap.get(String(g._id));
+    return !h || !h.billingId || !h.syncUtas || h.salgasan || !!h.suuldAldaa;
+  });
+  if (!kholbokhGereenuud.length) return 0;
+
+  // Оршин суугчид — гэрээний orshinSuugchId, эсвэл гэрээний утсаар
+  const mongoose = require("mongoose");
+  const residents = require("../models/orshinSuugch")(db.erunkhiiKholbolt).collection;
+  const idnuud = kholbokhGereenuud
+    .map((g) => String(g.orshinSuugchId || ""))
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+  const utasnuud = kholbokhGereenuud
+    .map((g) => utasKhevshuulekh(Array.isArray(g.utas) ? g.utas[0] : g.utas))
+    .filter(Boolean);
+  const khunuud = await residents
+    .find(
+      { $or: [{ _id: { $in: idnuud } }, { utas: { $in: utasnuud } }] },
+      { projection: { _id: 1, utas: 1, ner: 1, ovog: 1, toots: 1 } },
+    )
+    .toArray();
+  const idgaar = new Map(khunuud.map((r) => [String(r._id), r]));
+  const utasaar = new Map(khunuud.filter((r) => r.utas).map((r) => [utasKhevshuulekh(r.utas), r]));
+
+  const { gereeniiTootTurul, OR_SUUTS } = require("../utils/zardalAngilal");
+  let shine = 0;
+  for (const g of kholbokhGereenuud) {
+    const toot = tootKhevshuulekh(g.toot);
+    const bairId = bairMap.get(String(g.barilgiinId));
+    const resident =
+      idgaar.get(String(g.orshinSuugchId || "")) ||
+      utasaar.get(utasKhevshuulekh(Array.isArray(g.utas) ? g.utas[0] : g.utas));
+    if (!resident) continue;
+    const x = (Array.isArray(resident.toots) ? resident.toots : []).find(
+      (tt) =>
+        tt?.source === "WALLET_API" &&
+        tt.billingId &&
+        tt.walletCustomerId &&
+        String(tt.walletBairId || "") === bairId &&
+        tootKhevshuulekh(tt.walletDoorNo) === toot,
+    );
+    if (!x) continue;
+
+    const h = holboltMap.get(String(g._id));
+    // Алдаатай/салгасан холболтыг зөвхөн ӨӨР (шинэ) billingId-аар солино — ижил бол
+    // тэр нь л ажиллахгүй байгаа холболт тул дахин бичих нь утгагүй.
+    if (h && (h.salgasan || h.suuldAldaa) && String(h.billingId) === String(x.billingId)) continue;
+
+    const utas = utasKhevshuulekh(x.walletUserId) || utasKhevshuulekh(resident.utas);
+    if (!utas) continue;
+    // Зөвхөн орон сууц (гараж/агуулахын гэрээг алгасна) — «Тоот холбох»-той ижил
+    const turul = await gereeniiTootTurul(g).catch(() => OR_SUUTS);
+    if (turul !== OR_SUUTS) continue;
+
+    await BpayHolbolt(kholbolt).updateOne(
+      { baiguullagiinId: orgId, gereeniiId: String(g._id) },
+      {
+        $set: {
+          barilgiinId: String(g.barilgiinId || ""),
+          gereeniiDugaar: g.gereeniiDugaar || "",
+          toot,
+          bpayBairId: bairId,
+          customerId: String(x.walletCustomerId),
+          customerCode: String(x.walletCustomerCode || ""),
+          customerName: [resident.ovog, resident.ner].filter(Boolean).join(" "),
+          customerAddress: x.bairniiNer || "",
+          billingId: String(x.billingId),
+          syncUtas: utas,
+          residentId: String(resident._id),
+          salgasan: false,
+          suuldAldaa: "",
+        },
+        $setOnInsert: { bidUusgesen: false },
+      },
+      { upsert: true },
+    );
+    shine++;
+  }
+  if (shine) console.log(`[BPAY SYNC] ${orgId}: гараар холбосон ${shine} тоотыг синкийн холболтод нэмлээ`);
+  return shine;
+}
+
 // ---------------------------------------------------------------------------
 // Синк
 // ---------------------------------------------------------------------------
@@ -640,12 +756,21 @@ async function syncKhiikhDotood(kholbolt, baiguullagiinId, { albadakh = false, h
   if (!t?.idevkhtei) return { algassan: true };
   const orgId = String(baiguullagiinId);
   const Bill = BpayBill(kholbolt);
+  // Бүтэн синкийн өмнө гараар холбосон тоотуудыг холболтод нэмнэ (зөвхөн манай сан).
+  // Алдаа гарсан ч синк үргэлжилнэ.
+  let garaarNemsen = 0;
+  if (!holboltIdnuud) {
+    garaarNemsen = await walletTootoosHolboltNokhokh(kholbolt, orgId).catch((e) => {
+      console.error(`[BPAY SYNC] ${orgId}: гараар холбосныг нэмэхэд алдаа:`, e.message);
+      return 0;
+    });
+  }
   // Холболт бүрийг тэр тоотын оршин суугчийн өөрийн утсаар (syncUtas) татна.
   const holboltuud = (await BpayHolbolt(kholbolt).find({ baiguullagiinId: orgId, billingId: { $ne: "" } }).lean())
     .filter((h) => h.syncUtas && !h.salgasan)
     .filter((h) => !holboltIdnuud || holboltIdnuud.includes(String(h._id)));
   const odoo = new Date();
-  const tailan = { holbolt: holboltuud.length, amjilttai: 0, aldaatai: 0, shineBill: 0, dakhinGarsan: 0, tulsun: 0, khuleegdej: 0, zogsoson: false, sanuulga: "" };
+  const tailan = { holbolt: holboltuud.length, garaarNemsen, amjilttai: 0, aldaatai: 0, shineBill: 0, dakhinGarsan: 0, tulsun: 0, khuleegdej: 0, zogsoson: false, sanuulga: "" };
 
   // 1. Татна (алдаатайг тэмдэглэнэ)
   const tatsan = []; // { h, sokh, tulburMap }
@@ -1104,6 +1229,7 @@ module.exports = {
   khayagKholbokh,
   kholbogdooguiJagsaalt,
   syncKhiikh,
+  walletTootoosHolboltNokhokh,
   bukhSyncKhiikh,
   tulburiinDaraaSync,
   syncAjilEkhluulekh,
