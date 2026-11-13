@@ -50,6 +50,7 @@ async function main() {
   }
   const client = await new MongoClient(process.env.MONGODB_URI, { readPreference: "secondaryPreferred" }).connect();
   const undsen = client.db();
+  const neeltuud = [];
 
   const orgs = await undsen
     .collection("baiguullaga")
@@ -66,11 +67,29 @@ async function main() {
       console.warn(`⚠️  ${org.ner}: DB олдсонгүй`);
       continue;
     }
-    if (baaz.cloudMongoDBEsekh) {
-      console.warn(`⚠️  ${org.ner}: cloud DB — алгаслаа`);
-      continue;
+    // «cloud» гэж тэмдэглэсэн ч ихэнхдээ энэ серверт байдаг — эхлээд үндсэн холболтоор,
+    // тэнд bpayHolbolt байхгүй бол бичлэгийн cloud хаягаар (нууц үгийг хэвлэхгүй).
+    let d = client.db(baaz.baaz);
+    if (baaz.cloudMongoDBEsekh && !(await d.listCollections({ name: "bpayHolbolt" }, { nameOnly: true }).hasNext())) {
+      try {
+        const url =
+          (baaz.appName ? "mongodb+srv://" : "mongodb://") +
+          encodeURIComponent(baaz.userName) +
+          ":" +
+          encodeURIComponent(baaz.password) +
+          "@" +
+          baaz.clusterUrl +
+          "/" +
+          baaz.baaz +
+          (baaz.appName ? `?retryWrites=true&w=majority&appName=${baaz.appName}` : "?authSource=admin");
+        const c = await new MongoClient(url, { readPreference: "secondaryPreferred", serverSelectionTimeoutMS: 15000 }).connect();
+        neeltuud.push(c);
+        d = c.db(baaz.baaz);
+      } catch (e) {
+        console.warn(`⚠️  ${org.ner}: cloud DB холболт амжилтгүй (${e.message})`);
+        continue;
+      }
     }
-    const d = client.db(baaz.baaz);
     const barilgaNer = new Map((org.barilguud || []).map((b) => [String(b._id), b.ner || ""]));
     const holboltuud = await d.collection("bpayHolbolt").find({ baiguullagiinId: orgId }).toArray();
     const billuud = await d
@@ -154,6 +173,7 @@ async function main() {
   const file = `bpay-kholbolt-${new Date().toISOString().slice(0, 10)}.csv`;
   fs.writeFileSync(file, "﻿" + csv);
   console.log(`\n💾 ${path.resolve(file)}\nЮу ч өөрчлөөгүй.`);
+  await Promise.all(neeltuud.map((c) => c.close().catch(() => {})));
   await client.close();
 }
 
