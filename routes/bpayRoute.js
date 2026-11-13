@@ -154,6 +154,48 @@ router.post("/bpay/khayagKholbokh", tokenShalgakh, ajiltanShaardana, async (req,
   }
 });
 
+/**
+ * Нэг тоотыг гараар холбох — оршин суугч апп-аас холбодогтой ижил:
+ *   GET  /bpay/garaarKhaikh?gereeniiId=&bairId=&doorNo=&utas=  → Төрийн банкны хэрэглэгчийн сонголтууд
+ *   POST /bpay/garaarKholbokh { gereeniiId, customerId, bairId?, doorNo?, utas? } → холбоод шууд синк
+ */
+router.get("/bpay/garaarKhaikh", tokenShalgakh, ajiltanShaardana, async (req, res, next) => {
+  try {
+    const kholbolt = kholboltAvya(req);
+    if (!kholbolt || !req.query.gereeniiId) {
+      return res.status(400).json({ success: false, message: "gereeniiId шаардлагатай" });
+    }
+    const ur = await bpay.garaarKhaikh(kholbolt, bpay.khuseltiinBaiguullaga(req), {
+      gereeniiId: String(req.query.gereeniiId),
+      bairId: req.query.bairId ? String(req.query.bairId) : "",
+      doorNo: req.query.doorNo ? String(req.query.doorNo) : "",
+      utas: req.query.utas ? String(req.query.utas) : "",
+    });
+    res.json({ success: true, ...ur });
+  } catch (e) {
+    res.status(400).json({ success: false, message: e.response?.data?.responseMsg || e.message });
+  }
+});
+
+router.post("/bpay/garaarKholbokh", tokenShalgakh, ajiltanShaardana, async (req, res, next) => {
+  try {
+    const kholbolt = kholboltAvya(req);
+    if (!kholbolt || !req.body.gereeniiId) {
+      return res.status(400).json({ success: false, message: "gereeniiId шаардлагатай" });
+    }
+    const ur = await bpay.garaarKholbokh(kholbolt, bpay.khuseltiinBaiguullaga(req), {
+      gereeniiId: String(req.body.gereeniiId),
+      customerId: req.body.customerId ? String(req.body.customerId) : "",
+      bairId: req.body.bairId ? String(req.body.bairId) : "",
+      doorNo: req.body.doorNo ? String(req.body.doorNo) : "",
+      utas: req.body.utas ? String(req.body.utas) : "",
+    });
+    res.json({ success: true, ...ur });
+  } catch (e) {
+    res.status(400).json({ success: false, message: e.response?.data?.responseMsg || e.message });
+  }
+});
+
 router.post("/bpay/sync", tokenShalgakh, ajiltanShaardana, async (req, res, next) => {
   try {
     const kholbolt = kholboltAvya(req);

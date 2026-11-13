@@ -578,6 +578,188 @@ async function khayagKholbokh(kholbolt, baiguullagiinId, ajilTuluv = null) {
   return tailan;
 }
 
+// ---------------------------------------------------------------------------
+// Ажилтан нэг тоотыг гараар холбох — оршин суугч апп-аас холбодогтой ижил урсгал
+// (хаягаар хайх → хэрэглэгч сонгох → saveBilling), оршин суугчийн утсаар.
+// ---------------------------------------------------------------------------
+/** Гэрээ, оршин суугч, анхдагч утас/байр/тоот */
+async function garaarKholbokhSuuri(kholbolt, baiguullagiinId, gereeniiId) {
+  const orgId = String(baiguullagiinId);
+  const t = await bpayTokhirgooAvya(orgId);
+  if (!t) throw new Error("Байгууллага олдсонгүй");
+  if (!t.idevkhtei) throw new Error("Эхлээд Төрийн банк горимыг асаана уу.");
+  const g = await Geree(kholbolt)
+    .findById(gereeniiId)
+    .select("_id baiguullagiinId gereeniiDugaar toot barilgiinId orshinSuugchId utas ovog ner")
+    .lean();
+  if (!g || String(g.baiguullagiinId) !== orgId) throw new Error("Гэрээ олдсонгүй");
+
+  const mongoose = require("mongoose");
+  const residents = require("../models/orshinSuugch")(db.erunkhiiKholbolt).collection;
+  let resident = null;
+  if (g.orshinSuugchId && mongoose.Types.ObjectId.isValid(String(g.orshinSuugchId))) {
+    resident = await residents.findOne({ _id: new mongoose.Types.ObjectId(String(g.orshinSuugchId)) });
+  }
+  const gereeUtas = utasKhevshuulekh(Array.isArray(g.utas) ? g.utas[0] : g.utas);
+  if (!resident && gereeUtas) {
+    resident = await residents.findOne({
+      $or: [{ utas: gereeUtas }, { utas: `+976${gereeUtas}` }, { nevtrekhNer: gereeUtas }],
+    });
+  }
+  const barilga = t.barilguud.find((b) => b.barilgiinId === String(g.barilgiinId));
+  return {
+    t,
+    g,
+    residents,
+    resident,
+    utas: utasKhevshuulekh(resident?.utas) || gereeUtas,
+    bairId: barilga?.bpayBairId || "",
+    toot: tootKhevshuulekh(g.toot),
+  };
+}
+
+/**
+ * Хаягаар Төрийн банкны хэрэглэгч хайна (сонголт харуулах). Утас/байр/тоотыг
+ * ажилтан сольж болно — анхдагч нь гэрээний оршин суугч, барилгын банкны хаяг.
+ */
+async function garaarKhaikh(kholbolt, baiguullagiinId, { gereeniiId, bairId, doorNo, utas } = {}) {
+  const s = await garaarKholbokhSuuri(kholbolt, baiguullagiinId, gereeniiId);
+  const u = utasKhevshuulekh(utas) || s.utas;
+  const b = String(bairId || s.bairId || "");
+  const d = tootKhevshuulekh(doorNo) || s.toot;
+  const suuri = {
+    utas: u,
+    bairId: b,
+    doorNo: d,
+    ner: [s.resident?.ovog, s.resident?.ner].filter(Boolean).join(" ") || [s.g.ovog, s.g.ner].filter(Boolean).join(" "),
+    barilguud: s.t.barilguud.filter((x) => x.bpayBairId).map((x) => ({ ner: x.ner, bpayBairId: x.bpayBairId })),
+  };
+  if (!u) return { ...suuri, songoltuud: [], aldaa: "Оршин суугчийн утас алга — утсаа оруулна уу" };
+  if (!b || !d) return { ...suuri, songoltuud: [], aldaa: "Банкны байр, тоотоо сонгоно уу" };
+  await bpayKhereglegchBelden(u);
+  const list = (await walletApiService.getBillingByAddress(u, b, d)) || [];
+  return {
+    ...suuri,
+    songoltuud: list.map((x) => ({
+      customerId: String(x.customerId || ""),
+      customerCode: String(x.customerCode || ""),
+      customerName: x.customerName || "",
+      customerAddress: x.customerAddress || "",
+    })),
+  };
+}
+
+/**
+ * Сонгосон хэрэглэгчийг оршин суугчийн Төрийн банкны бүртгэлд холбоно (апп-ийн
+ * «хаяг нэмэх»-тэй ижил), апп-д харагдуулна, синкийн холболт үүсгээд тэр тоотыг
+ * ШУУД синк хийнэ. Оршин суугч өмнө нь салгасан байсан ч ажилтан шийдсэн тул холбоно.
+ */
+async function garaarKholbokh(kholbolt, baiguullagiinId, { gereeniiId, customerId, bairId, doorNo, utas } = {}) {
+  const s = await garaarKholbokhSuuri(kholbolt, baiguullagiinId, gereeniiId);
+  const orgId = String(baiguullagiinId);
+  const u = utasKhevshuulekh(utas) || s.utas;
+  const b = String(bairId || s.bairId || "");
+  const d = tootKhevshuulekh(doorNo) || s.toot;
+  if (!customerId) throw new Error("Хэрэглэгчээ сонгоно уу");
+  if (!u) throw new Error("Оршин суугчийн утас алга");
+  if (!b || !d) throw new Error("Банкны байр, тоот шаардлагатай");
+
+  await bpayKhereglegchBelden(u);
+  // Сонголтыг дахин баталгаажуулна (хуучирсан/буруу customerId-г холбохгүй)
+  const list = (await walletApiService.getBillingByAddress(u, b, d)) || [];
+  const c = list.find((x) => String(x.customerId || "") === String(customerId));
+  if (!c) throw new Error("Сонгосон хэрэглэгч энэ хаягт олдсонгүй — дахин хайна уу");
+
+  // Оршин суугчийн бүртгэлд аль хэдийн байвал түүнийг, үгүй бол шинээр
+  if (walletApiService.clearBillingListCache) walletApiService.clearBillingListCache(u);
+  const umnukh = ((await walletApiService.getBillingList(u)) || []).find(
+    (x) => String(x.customerId || "") === String(customerId),
+  );
+  let billingId = umnukh?.billingId ? String(umnukh.billingId) : "";
+  let bidUusgesen = false;
+  if (!billingId) {
+    const saved = await walletApiService.saveBilling(u, { customerId: String(customerId) });
+    billingId = String(saved?.billingId || saved?.id || "");
+    if (!billingId) throw new Error("Төрийн банк billingId буцаасангүй");
+    bidUusgesen = true;
+  }
+
+  // Оршин суугчийн апп-д харагдуулах (khayagKholbokh-ийн 3-р алхамтай ижил)
+  const resident = s.resident;
+  if (
+    resident &&
+    utasKhevshuulekh(resident.utas) === u &&
+    resident.baiguullagiinId &&
+    String(resident.baiguullagiinId) !== CENTRALIZED_ORG_ID
+  ) {
+    const mongoose = require("mongoose");
+    const fields = {
+      toot: d,
+      source: "WALLET_API",
+      bairniiNer: c.customerAddress || "",
+      ovog: resident.ovog || "",
+      ner: resident.ner || "",
+      walletBairId: b,
+      walletDoorNo: d,
+      walletUserId: u,
+      walletCustomerId: String(customerId),
+      walletCustomerCode: String(c.customerCode || ""),
+      billingId,
+    };
+    const sameEntry = {
+      source: "WALLET_API",
+      $or: [{ walletCustomerId: String(customerId) }, ...(c.customerCode ? [{ walletCustomerCode: String(c.customerCode) }] : [])],
+    };
+    const upd = await s.residents.updateOne(
+      { _id: resident._id, toots: { $elemMatch: sameEntry } },
+      { $set: Object.fromEntries(Object.entries(fields).map(([k, v]) => [`toots.$.${k}`, v])) },
+    );
+    if (!upd.matchedCount) {
+      await s.residents.updateOne(
+        { _id: resident._id, toots: { $not: { $elemMatch: sameEntry } } },
+        { $push: { toots: { _id: new mongoose.Types.ObjectId(), turul: "Орон сууц", ...fields, createdAt: new Date() } } },
+      );
+    }
+    await s.residents.updateOne(
+      { _id: resident._id, $or: [{ walletUserId: { $exists: false } }, { walletUserId: null }, { walletUserId: "" }] },
+      { $set: { walletUserId: u } },
+    );
+  }
+
+  await BpayHolbolt(kholbolt).updateOne(
+    { baiguullagiinId: orgId, gereeniiId: String(s.g._id) },
+    {
+      $set: {
+        barilgiinId: String(s.g.barilgiinId || ""),
+        gereeniiDugaar: s.g.gereeniiDugaar || "",
+        toot: d,
+        bpayBairId: b,
+        customerId: String(customerId),
+        customerCode: String(c.customerCode || ""),
+        customerName: c.customerName || "",
+        customerAddress: c.customerAddress || "",
+        billingId,
+        syncUtas: u,
+        residentId: resident?._id ? String(resident._id) : "",
+        salgasan: false,
+        suuldAldaa: "",
+      },
+      $setOnInsert: { bidUusgesen },
+    },
+    { upsert: true },
+  );
+
+  // Тэр тоотыг шууд синк — хуулга тэр даруй бүрдэнэ
+  const h = await BpayHolbolt(kholbolt).findOne({ baiguullagiinId: orgId, gereeniiId: String(s.g._id) }).select("_id").lean();
+  let sync = null;
+  try {
+    sync = h ? await syncKhiikh(kholbolt, orgId, { holboltIdnuud: [String(h._id)] }) : null;
+  } catch (e) {
+    sync = { aldaa: e.message };
+  }
+  return { billingId, customerCode: String(c.customerCode || ""), shineBilling: bidUusgesen, sync };
+}
+
 /**
  * Гараар (апп, оршин суугч өөрөө г.м.) холбосон тоотыг синкийн холболтод нэмнэ.
  *
@@ -1230,6 +1412,8 @@ module.exports = {
   kholbogdooguiJagsaalt,
   syncKhiikh,
   walletTootoosHolboltNokhokh,
+  garaarKhaikh,
+  garaarKholbokh,
   bukhSyncKhiikh,
   tulburiinDaraaSync,
   syncAjilEkhluulekh,
