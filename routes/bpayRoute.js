@@ -137,7 +137,10 @@ router.get("/bpay/kholbogdoogui", tokenShalgakh, ajiltanShaardana, async (req, r
   try {
     const kholbolt = kholboltAvya(req);
     if (!kholbolt) return res.status(400).json({ success: false, message: "Холболт олдсонгүй" });
-    const jagsaalt = await bpay.kholbogdooguiJagsaalt(kholbolt, bpay.khuseltiinBaiguullaga(req));
+    // ?bugd=1 — холбогдсон тоотуудыг ч (засахад) буцаана
+    const jagsaalt = await bpay.kholbogdooguiJagsaalt(kholbolt, bpay.khuseltiinBaiguullaga(req), {
+      bugd: req.query.bugd === "1" || req.query.bugd === "true",
+    });
     res.json({ success: true, niit: jagsaalt.length, jagsaalt });
   } catch (e) {
     next(e);

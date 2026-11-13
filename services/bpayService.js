@@ -634,6 +634,20 @@ async function garaarKhaikh(kholbolt, baiguullagiinId, { gereeniiId, bairId, doo
     ner: [s.resident?.ovog, s.resident?.ner].filter(Boolean).join(" ") || [s.g.ovog, s.g.ner].filter(Boolean).join(" "),
     barilguud: s.t.barilguud.filter((x) => x.bpayBairId).map((x) => ({ ner: x.ner, bpayBairId: x.bpayBairId })),
   };
+  // Одоогийн холболт (засах үед сонголтыг урьдчилан тэмдэглэнэ)
+  const odoogiin = await BpayHolbolt(kholbolt)
+    .findOne({ baiguullagiinId: String(baiguullagiinId), gereeniiId: String(s.g._id) })
+    .select("customerId customerCode customerName syncUtas salgasan")
+    .lean();
+  suuri.odoogiin =
+    odoogiin && !odoogiin.salgasan
+      ? {
+          customerId: String(odoogiin.customerId || ""),
+          customerCode: String(odoogiin.customerCode || ""),
+          customerName: odoogiin.customerName || "",
+          syncUtas: odoogiin.syncUtas || "",
+        }
+      : null;
   if (!u) return { ...suuri, songoltuud: [], aldaa: "Оршин суугчийн утас алга — утсаа оруулна уу" };
   if (!b || !d) return { ...suuri, songoltuud: [], aldaa: "Банкны байр, тоотоо сонгоно уу" };
   await bpayKhereglegchBelden(u);
@@ -726,6 +740,31 @@ async function garaarKholbokh(kholbolt, baiguullagiinId, { gereeniiId, customerI
     );
   }
 
+  // Өөр хэрэглэгч рүү сольж байвал хуучин хэрэглэгчийн ТӨЛӨГДӨӨГҮЙ биллийг энэ
+  // гэрээнээс салгана — эс бөгөөс хуулгын «төлөх дүн»-д үлдэнэ (синк зөвхөн одоогийн
+  // хэрэглэгчээр шинэчилдэг). Устгахгүй: буцааж холбовол синк дахин энэ гэрээнд холбоно.
+  const umnukhH = await BpayHolbolt(kholbolt)
+    .findOne({ baiguullagiinId: orgId, gereeniiId: String(s.g._id) })
+    .select("customerId customerCode")
+    .lean();
+  let salgasanBill = 0;
+  if (umnukhH?.customerId && String(umnukhH.customerId) !== String(customerId)) {
+    const r = await BpayBill(kholbolt).updateMany(
+      { baiguullagiinId: orgId, gereeniiId: String(s.g._id), customerId: String(umnukhH.customerId), tuluv: "Төлөгдөөгүй" },
+      {
+        $set: { gereeniiId: "" },
+        $push: {
+          tuukh: {
+            ognoo: new Date(),
+            uildel: "Холболт солигдсон",
+            delgerengui: `${umnukhH.customerCode || umnukhH.customerId} → ${c.customerCode || customerId} (гэрээнээс салгав)`,
+          },
+        },
+      },
+    );
+    salgasanBill = r?.modifiedCount || 0;
+  }
+
   await BpayHolbolt(kholbolt).updateOne(
     { baiguullagiinId: orgId, gereeniiId: String(s.g._id) },
     {
@@ -757,7 +796,7 @@ async function garaarKholbokh(kholbolt, baiguullagiinId, { gereeniiId, customerI
   } catch (e) {
     sync = { aldaa: e.message };
   }
-  return { billingId, customerCode: String(c.customerCode || ""), shineBilling: bidUusgesen, sync };
+  return { billingId, customerCode: String(c.customerCode || ""), shineBilling: bidUusgesen, salgasanBill, sync };
 }
 
 /**
@@ -1243,7 +1282,7 @@ async function syncAjilEkhluulekh(kholbolt, baiguullagiinId, { khuleekh = false,
  * Холбогдоогүй орон сууцны тоотууд (бүх барилга) — шалтгаантай.
  * Шалтгаан: сүүлийн «Тоот холбох»-ын үр дүн (санах ойд) → холболтын сүүлийн алдаа → «Холбож үзээгүй».
  */
-async function kholbogdooguiJagsaalt(kholbolt, baiguullagiinId) {
+async function kholbogdooguiJagsaalt(kholbolt, baiguullagiinId, { bugd = false } = {}) {
   const orgId = String(baiguullagiinId);
   const t = await bpayTokhirgooAvya(orgId);
   if (!t) throw new Error("Байгууллага олдсонгүй");
@@ -1265,10 +1304,12 @@ async function kholbogdooguiJagsaalt(kholbolt, baiguullagiinId) {
     const toot = tootKhevshuulekh(g.toot);
     if (!toot || turluud[n] !== OR_SUUTS) continue;
     const h = holboltMap.get(String(g._id));
-    if (h && h.billingId && h.syncUtas && !h.salgasan) continue; // холбогдсон
+    const kholbogdson = !!(h && h.billingId && h.syncUtas && !h.salgasan);
+    if (kholbogdson && !bugd) continue; // холбогдсон (bugd=true үед бүгдийг буцаана)
     const barilga = barilgaMap.get(String(g.barilgiinId));
     let shaltgaan;
-    if (h?.salgasan) shaltgaan = "Оршин суугч хаягаа салгасан";
+    if (kholbogdson) shaltgaan = h.suuldAldaa ? `Холбогдсон · синк алдаа: ${h.suuldAldaa}` : "Холбогдсон";
+    else if (h?.salgasan) shaltgaan = "Оршин суугч хаягаа салгасан";
     else if (!barilga?.bpayBairId) shaltgaan = "Барилгад банкны хаяг тохируулаагүй";
     else shaltgaan = suuliinUr[String(g._id)] || h?.suuldAldaa || "Холбож үзээгүй";
     jagsaalt.push({
@@ -1279,6 +1320,11 @@ async function kholbogdooguiJagsaalt(kholbolt, baiguullagiinId) {
       ner: [g.ovog, g.ner].filter(Boolean).join(" "),
       utas: Array.isArray(g.utas) ? g.utas.filter(Boolean).join(", ") : String(g.utas || ""),
       shaltgaan,
+      kholbogdson,
+      customerCode: kholbogdson ? h.customerCode || "" : "",
+      customerName: kholbogdson ? h.customerName || "" : "",
+      syncUtas: kholbogdson ? h.syncUtas || "" : "",
+      suuldSync: kholbogdson ? h.suuldSync || null : null,
     });
   }
   jagsaalt.sort(
