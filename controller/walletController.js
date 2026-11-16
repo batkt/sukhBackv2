@@ -643,22 +643,42 @@ exports.walletBillingRemove = asyncHandler(async (req, res, next) => {
       );
     }
 
-    // 2. Remove from Wallet API using the proper mapping (UUID or phone) from the token
+    // 2. Remove from Wallet API.
+    //
+    // Биллинг Wallet-д walletUserId-аар ч, утасны дугаараар ч бүртгэгдсэн
+    // байж болно (жагсаалтыг утсаар татдаг). Өмнө нь зөвхөн walletUserId-аар
+    // устгадаг байсан тул таарахгүй үед Wallet «олдсонгүй» буцааж, backend
+    // үүнийг амжилт гэж үзэн зөвхөн локал toots-ыг цэвэрлэдэг байв — биллинг
+    // Wallet-д үлдэж, дараагийн жагсаалтад дахин гарч ирдэг байв (ж: Скаймедиа).
+    const olddoguiEsekh = (e) =>
+      /бүртгэл хийгдээгүй|notfound|not found|олдсонгүй/i.test(String(e?.message || ""));
+    const walletIdnuud = [...new Set([userId, orshinSuugch.utas].filter(Boolean).map(String))];
+    const billingUstgakh = async (bId) => {
+      let suuliinAldaa = null;
+      for (const uid of walletIdnuud) {
+        try {
+          return await walletApiService.removeBilling(uid, bId);
+        } catch (e) {
+          if (!olddoguiEsekh(e)) throw e;
+          suuliinAldaa = e;
+        }
+      }
+      throw suuliinAldaa || new Error("not found");
+    };
+
     let result = null;
     try {
-      result = await walletApiService.removeBilling(userId, billingId);
+      result = await billingUstgakh(billingId);
     } catch (apiErr) {
-      if (apiErr.message && (
-          apiErr.message.toLowerCase().includes('бүртгэл хийгдээгүй') || 
-          apiErr.message.toLowerCase().includes('notfound error') || 
-          apiErr.message.toLowerCase().includes('not found') ||
-          apiErr.message.toLowerCase().includes('олдсонгүй')
-      )) {
-        console.warn("⚠️ [WALLET REMOVE] API rejected with not found/unregistered, proceeding with local cleanup anyway:", apiErr.message);
-        result = { success: true, message: "API record not found, continuing local cleanup" };
-      } else {
-        throw apiErr;
+      if (!olddoguiEsekh(apiErr)) throw apiErr;
+      if (billingToRemove) {
+        // Хэрэглэгчийн жагсаалтад байгаа ч аль ч ID-гаар устгагдсангүй —
+        // «амжилттай» гэж худал буцаахгүй.
+        console.error("❌ [WALLET REMOVE] Billing is listed but Wallet refused removal:", billingId, apiErr.message);
+        throw new aldaa("Биллингийг Wallet системээс салгаж чадсангүй. Дахин оролдоно уу.");
       }
+      console.warn("⚠️ [WALLET REMOVE] API rejected with not found/unregistered, proceeding with local cleanup anyway:", apiErr.message);
+      result = { success: true, message: "API record not found, continuing local cleanup" };
     }
 
     // 2b. Ижил хаягийн БУСАД биллинг (ж: Цахилгаан) — BPay дээр хаяг бүртгэхэд
@@ -677,7 +697,7 @@ exports.walletBillingRemove = asyncHandler(async (req, res, next) => {
       }
       for (const b of busadBillinguud) {
         try {
-          await walletApiService.removeBilling(userId, b.billingId);
+          await billingUstgakh(b.billingId);
           ustgasanBillingIds.push(String(b.billingId));
         } catch (e) {
           const msg = String(e.message || "").toLowerCase();
@@ -690,6 +710,21 @@ exports.walletBillingRemove = asyncHandler(async (req, res, next) => {
       }
       walletApiService.clearBillingListCache?.(orshinSuugch.utas);
       walletApiService.clearBillingListCache?.(userId);
+
+      // Wallet-д үнэхээр устсан эсэхийг шалгана — үлдсэн бол амжилт гэж
+      // буцаахгүй (эс бөгөөс апп дээр «салгасан» гэж гараад буцаж гарч ирдэг).
+      let uldsen = false;
+      try {
+        const daraaJagsaalt = await walletApiService.getBillingList(orshinSuugch.utas);
+        uldsen = (daraaJagsaalt || []).some((b) => String(b.billingId) === String(billingId));
+      } catch (e) {
+        console.warn("⚠️ [WALLET REMOVE] Post-remove verification failed:", e.message);
+      }
+      if (uldsen) {
+        walletApiService.clearBillingListCache?.(orshinSuugch.utas);
+        console.error("❌ [WALLET REMOVE] Billing still listed after removal:", billingId);
+        throw new aldaa("Биллинг Wallet системд хэвээр байна. Түр хүлээгээд дахин оролдоно уу.");
+      }
     }
 
     // 3. Local Cleanup
