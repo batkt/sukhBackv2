@@ -38,6 +38,10 @@ const arg = (ner, anhdagch) => {
   return i >= 0 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : anhdagch;
 };
 const APPLY = args.includes("--apply");
+// --tulsun: «Төлсөн» нэхэмжлэхтэй мөрийг ч засна. Илүү төлсөн дүн (мөр бүрт
+// khuuchin − shine) гэрээний урьдчилгаа болж, syncInvoicesStatus-ийн FIFO-гоор
+// дараагийн нэхэмжлэхээс хасагдана. ebarimt гарсан мөрийг энэ туг ч хөндөхгүй.
+const TULSUN = args.includes("--tulsun");
 const ORG = arg("org", "Хархорум");
 const SAR = arg("sar", "2026-11");
 const KHUUCHIN = Number(arg("khuuchin", "50000"));
@@ -137,7 +141,7 @@ async function main() {
     const item = { r, inv, eb };
     if (r2(r.dun) !== r2(KHUUCHIN)) ondoo.push(item);
     else if (eb) ebarimttai.push(item);
-    else if (inv && inv.tuluv === "Төлсөн") tulsun.push(item);
+    else if (inv && inv.tuluv === "Төлсөн" && !TULSUN) tulsun.push(item);
     else zasakh.push(item);
   }
 
@@ -146,7 +150,8 @@ async function main() {
     `«${r.zardliinNer || r.tailbar}»  ${fmt(r.dun)}  src=${r.source}  нэх=${inv ? `${inv.nekhemjlekhiinDugaar || inv._id} (${inv.tuluv})` : r.nekhemjlekhId ? "олдсонгүй" : "-"}` +
     (eb ? `  ebarimt=${eb.status} ${fmt(eb.totalAmount)}` : "");
 
-  console.log(`\n--- ЗАСАХ: ${zasakh.length} мөр (${fmt(KHUUCHIN)} → ${fmt(SHINE)}) ---`);
+  const tulsunZasakh = zasakh.filter((x) => x.inv && x.inv.tuluv === "Төлсөн").length;
+  console.log(`\n--- ЗАСАХ: ${zasakh.length} мөр (${fmt(KHUUCHIN)} → ${fmt(SHINE)})${TULSUN ? `, үүнээс «Төлсөн» ${tulsunZasakh} — илүү төлөлт ${fmt(tulsunZasakh * ZORUU)} урьдчилгаа болно` : ""} ---`);
   zasakh.forEach((x) => console.log("   " + mur(x)));
   console.log(`\n--- ХӨНДӨХГҮЙ: нэхэмжлэх «Төлсөн» — ${tulsun.length} мөр ---`);
   tulsun.forEach((x) => console.log("   " + mur(x)));
