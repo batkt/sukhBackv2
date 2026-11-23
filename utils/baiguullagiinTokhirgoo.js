@@ -56,6 +56,22 @@ function gerBuliinGishuunZovshoorokhEsekh(baiguullaga, barilgiinId) {
   return utga !== false;
 }
 
+/**
+ * Шилэн дансыг оршин суугчийн аппад харуулах эсэх.
+ * Вебийн «Нэмэлт тохиргоо → Шилэн данс»-аас. Тохируулаагүй бол ХАРУУЛАХГҮЙ —
+ * санхүүгийн мэдээллийг удирдлага өөрөө нээх ёстой.
+ */
+function shilenDansAppKharuulakhEsekh(baiguullaga, barilgiinId) {
+  return tokhirgooniiTalbar(baiguullaga, barilgiinId, "shilenDansAppEsekh") === true;
+}
+
+/** Шилэн дансанд авлагатай айлуудын (тоот, дүн) жагсаалтыг харуулах эсэх. Анхдагч: үгүй. */
+function shilenDansAilKharuulakhEsekh(baiguullaga, barilgiinId) {
+  return (
+    tokhirgooniiTalbar(baiguullaga, barilgiinId, "shilenDansAilKharuulakhEsekh") === true
+  );
+}
+
 const TULBURIIN_SMS_KHAASAN = [
   "69f3f56a2899d5fdc24251d1",
   "6a4b3d1c124040b3dad66792",
@@ -156,6 +172,8 @@ async function tulburiinSmsZovshoorokhEsekh(baiguullagaIdOrDoc, barilgiinId) {
 module.exports = {
   tokhirgooniiTalbar,
   gerBuliinGishuunZovshoorokhEsekh,
+  shilenDansAppKharuulakhEsekh,
+  shilenDansAilKharuulakhEsekh,
   isVerifySms,
   tulburiinSmsZovshoorokhEsekh,
   TULBURIIN_SMS_KHAASAN,

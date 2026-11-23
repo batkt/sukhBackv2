@@ -12,6 +12,7 @@ const {
 } = require("../utils/mashinBurtgel");
 const {
   gerBuliinGishuunZovshoorokhEsekh,
+  shilenDansAppKharuulakhEsekh,
 } = require("../utils/baiguullagiinTokhirgoo");
 const NevtreltiinTuukh = require("../models/nevtreltiinTuukh");
 const MsgTuukh = require("../models/msgTuukh");
@@ -4407,6 +4408,13 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
           // Апп «Гэр бүлийн гишүүн» хэсгийг харуулах/нуухад хэрэглэнэ.
           // Вебийн «Нэмэлт тохиргоо → Гэр бүлийн гишүүн урих» чекээс.
           urdunJson.gerBuliinGishuunEsekh = gerBuliinGishuunZovshoorokhEsekh(
+            mashiniiBaiguullaga,
+            urdunJson.barilgiinId,
+          );
+
+          // Апп «Шилэн данс» табыг харуулах/нуухад хэрэглэнэ.
+          // Вебийн «Нэмэлт тохиргоо → Шилэн данс» чекээс.
+          urdunJson.shilenDansEsekh = shilenDansAppKharuulakhEsekh(
             mashiniiBaiguullaga,
             urdunJson.barilgiinId,
           );

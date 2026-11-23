@@ -45,6 +45,17 @@ const baiguullagaSchema = new Schema(
             type: Boolean,
             default: true,
           },
+          /**
+           * Шилэн дансыг оршин суугчийн аппад харуулах эсэх.
+           * Вебийн «Нэмэлт тохиргоо → Шилэн данс»-аас. Default тавихгүй: барилгын default нь байгууллагын утгыг дарна. Тохируулаагүй = харуулахгүй.
+           */
+          shilenDansAppEsekh: {
+            type: Boolean,
+          },
+          /** Шилэн дансанд авлагатай айлуудын (тоот, дүн) жагсаалтыг харуулах эсэх. */
+          shilenDansAilKharuulakhEsekh: {
+            type: Boolean,
+          },
           /**Хоногт бодох алдангийн хувь дээд тал 0.5 байна */
           aldangiinKhuvi: Number,
           /**Алданги авалгүйгээр хүлээх хоног */
@@ -240,6 +251,17 @@ const baiguullagaSchema = new Schema(
       gerBuliinGishuunEsekh: {
         type: Boolean,
         default: true,
+      },
+      /**
+       * Шилэн дансыг оршин суугчийн аппад харуулах эсэх.
+       * Вебийн «Нэмэлт тохиргоо → Шилэн данс»-аас. Default тавихгүй: барилгын default нь байгууллагын утгыг дарна. Тохируулаагүй = харуулахгүй.
+       */
+      shilenDansAppEsekh: {
+        type: Boolean,
+      },
+      /** Шилэн дансанд авлагатай айлуудын (тоот, дүн) жагсаалтыг харуулах эсэх. */
+      shilenDansAilKharuulakhEsekh: {
+        type: Boolean,
       },
       /**
        * Нэг эрхээр зөвхөн 1 төхөөрөмжөөс хандах эсэх (Single session policy).
