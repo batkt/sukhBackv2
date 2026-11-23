@@ -1,31 +1,35 @@
 /**
- * Шилэн данс — СӨХ-ийн тухайн хугацааны орлого, зарлага, авлага, дансны
- * үлдэгдлийг нэгтгэнэ.
+ * Шилэн данс — СӨХ-ийн дансны үлдэгдэл, орлого, зарлага, авлага.
  *
- *  - POST /shilenDans/tailan          — вэб (Санхүү → Шилэн данс), зөвхөн ажилтан
- *  - POST /shilenDans/zarlagaAngilal  — зарлагын мөрд ангилал онооно, зөвхөн ажилтан
- *  - POST /shilenDans/app             — оршин суугчийн апп; «Нэмэлт тохиргоо →
- *                                       Шилэн данс» асаалттай үед л хариулна
+ * Банкны хуулга (CGW) АШИГЛАХГҮЙ — бүгд гараар:
+ *  - Эхний үлдэгдэл: ажилтан барилга тус бүрд огноотой нь оруулна
+ *    (shilenDansEkhniiUldegdel).
+ *  - Орлого: оршин суугчдын ТӨЛСӨН мөнгө (guilgeeAvlaguud, dun < 0, хөнгөлөлтгүй).
+ *  - Зарлага: ажилтан гараар бүртгэнэ (shilenDansZarlaga).
+ *  - Үлдэгдэл(T) = эхний үлдэгдэл + орлого − зарлага, эхний үлдэгдлийн
+ *    огнооноос T хүртэл.
+ *  - Авлага: оршин суугчдын ТӨЛӨӨГҮЙ мөнгө.
  *
- * Эх сурвалж:
- *  - bankniiGuilgee      — дансны хуулга: орлого/зарлага, үлдэгдэл, зарлагын ангилал
- *  - guilgeeAvlaguud     — нэхэмжилсэн / төлөгдсөн / хөнгөлөлт, авлага
- *                          (/tailan/tulbur-dugnelt-тэй ижил тэмдгийн дүрэм:
- *                           dun > 0 нэхэмжилсэн, dun < 0 төлсөн)
- *  - Uilchluulegch (+сарын архив), zogsoolGaraarOrlogo — зогсоолын орлого
- *
- * Төсөв одоогоор байхгүй (тусдаа model шаардлагатай).
+ * Замууд (routes/shilenDansRoute.js):
+ *  - POST   /shilenDans/tailan             — вэб тайлан (ажилтан)
+ *  - POST   /shilenDans/ekhniiUldegdel     — эхний үлдэгдэл анх оруулах (ажилтан)
+ *  - PUT    /shilenDans/ekhniiUldegdel     — засах (шалтгаантай)
+ *  - POST   /shilenDansZarlaga             — зарлага нэмэх (ажилтан)
+ *  - PUT    /shilenDansZarlaga/:id         — засах (шалтгаантай)
+ *  - DELETE /shilenDansZarlaga/:id         — устгах (шалтгаантай)
+ *  - POST   /shilenDans/app                — оршин суугчийн апп
  */
 const asyncHandler = require("express-async-handler");
 const GuilgeeAvlaguud = require("../models/guilgeeAvlaguud");
-const BankniiGuilgee = require("../models/bankniiGuilgee");
 const ZogsoolGaraarOrlogo = require("../models/zogsoolGaraarOrlogo");
+const ShilenDansZarlaga = require("../models/shilenDansZarlaga");
+const ShilenDansEkhniiUldegdel = require("../models/shilenDansEkhniiUldegdel");
 const {
   shilenDansAppKharuulakhEsekh,
   shilenDansAilKharuulakhEsekh,
 } = require("../utils/baiguullagiinTokhirgoo");
 
-/** Зарлагын ангилал. sukhWeb sankhuu/shilenDans/page.tsx-тэй ижил байх ёстой. */
+/** Зарлагын ангилал. sukhWeb sankhuu/shilenDans хуудас үүнийг серверээс авна. */
 const ZARLAGIIN_ANGILAL = [
   "Цалин",
   "НДШ, татвар",
@@ -39,10 +43,10 @@ const ZARLAGIIN_ANGILAL = [
   "Банкны шимтгэл",
   "Бусад",
 ];
-const ANGILAAGUI = "Ангилаагүй";
 
 /** Хугацаа хэтэрсэн гэж үзэх хоног (нэхэмжилсэн огнооноос). */
 const KHETERSEN_KHONOG = 30;
+const TZ = "Asia/Ulaanbaatar";
 
 const ognooTsaggui = (utga) =>
   typeof utga === "string" && /^\d{4}-\d{2}-\d{2}$/.test(utga.trim());
@@ -58,180 +62,102 @@ function khugatsaaZadlakh(ekhlekhOgnoo, duusakhOgnoo) {
   return { ekhlel, tugsgul };
 }
 
+/** "YYYY-MM-DD" эсвэл ISO → өдрийн эхлэл. */
+function udriinEkhlel(utga) {
+  if (!utga) return null;
+  const d = new Date(utga);
+  if (isNaN(d.getTime())) return null;
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 const pad = (n) => String(n).padStart(2, "0");
 const sarTulkhuur = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 
-/** Банк бүр огноог өөр талбарт хадгалдаг — dansKhuulga хуудастай ижил дараалал. */
-const bankOgnoo = (r) =>
-  r.postDate || r.tranDate || r.TxDt || r.tranPostedDate || r.createdAt || null;
+/** Хөнгөлөлт биш төлөлтийн мөр (dun < 0). */
+const TULSUN_MATCH = {
+  dun: { $lt: 0 },
+  turul: { $ne: "Хөнгөлөлт" },
+  source: { $ne: "khungulult" },
+};
 
-/**
- * Тэмдэгтэй дүн (хасах = зарлага). Банк бүр өөрөөр тэмдэглэдэг: хасах дүн
- * (khan/tdb/bogd), drOrCr "Debit" (golomt), эсвэл outcome (trans).
- * sukhWeb dansKhuulga/page.tsx-ийн логиктой ижил.
- */
-function bankDun(r) {
-  const tuukhii =
-    Number(r.amount ?? r.Amt ?? r.tranAmount ?? r.income ?? r.kholbosonDun ?? 0) || 0;
-  const zarlagaEsekh =
-    tuukhii < 0 ||
-    r.drOrCr === "Debit" ||
-    (Number(r.outcome) > 0 && !(Number(r.income) > 0));
-  const dun =
-    Math.abs(tuukhii) || (zarlagaEsekh ? Math.abs(Number(r.outcome) || 0) : 0);
-  return zarlagaEsekh ? -dun : dun;
+/** Хугацааны төлсөн мөнгө (орлого). */
+async function tulsunNiilber(kholbolt, baseMatch, ekhlel, tugsgul) {
+  const r = await GuilgeeAvlaguud(kholbolt).aggregate([
+    { $match: { ...baseMatch, ...TULSUN_MATCH, ognoo: { $gte: ekhlel, $lte: tugsgul } } },
+    { $group: { _id: null, dun: { $sum: { $abs: "$dun" } } } },
+  ]);
+  return r[0]?.dun || 0;
 }
 
-const tooOrNull = (v) =>
-  v === undefined || v === null || v === "" || isNaN(Number(v)) ? null : Number(v);
+/** Хугацааны гар зарлага. */
+async function zarlagaNiilber(kholbolt, baseMatch, ekhlel, tugsgul) {
+  const r = await ShilenDansZarlaga(kholbolt).aggregate([
+    { $match: { ...baseMatch, ognoo: { $gte: ekhlel, $lte: tugsgul } } },
+    { $group: { _id: null, dun: { $sum: "$dun" } } },
+  ]);
+  return r[0]?.dun || 0;
+}
+
+/**
+ * T агшин дахь дансны үлдэгдэл. Эхний үлдэгдэл оруулаагүй бол null.
+ * T нь эхний үлдэгдлийн огнооноос өмнө бол мөн null (мэдэгдэхгүй), харин
+ * яг өмнөх агшин бол эхний үлдэгдэл өөрөө.
+ */
+async function uldegdelAvya(kholbolt, baseMatch, ekhnii, T) {
+  if (!ekhnii) return null;
+  const ekhlel = new Date(ekhnii.ognoo);
+  if (T < ekhlel) return T.getTime() === ekhlel.getTime() - 1 ? ekhnii.dun : null;
+  const [orlogo, zarlaga] = await Promise.all([
+    tulsunNiilber(kholbolt, baseMatch, ekhlel, T),
+    zarlagaNiilber(kholbolt, baseMatch, ekhlel, T),
+  ]);
+  return ekhnii.dun + orlogo - zarlaga;
+}
+
+/** Сар бүрийн орлого/зарлага (мөнгөн урсгалын график). */
+async function saraarAvya(kholbolt, baseMatch, ekhlel, tugsgul) {
+  const sarGroup = {
+    $dateToString: { format: "%Y-%m", date: "$ognoo", timezone: TZ },
+  };
+  const [orlogo, zarlaga] = await Promise.all([
+    GuilgeeAvlaguud(kholbolt).aggregate([
+      { $match: { ...baseMatch, ...TULSUN_MATCH, ognoo: { $gte: ekhlel, $lte: tugsgul } } },
+      { $group: { _id: sarGroup, dun: { $sum: { $abs: "$dun" } } } },
+    ]),
+    ShilenDansZarlaga(kholbolt).aggregate([
+      { $match: { ...baseMatch, ognoo: { $gte: ekhlel, $lte: tugsgul } } },
+      { $group: { _id: sarGroup, dun: { $sum: "$dun" } } },
+    ]),
+  ]);
+  const map = new Map();
+  for (const o of orlogo) map.set(o._id, { orlogo: o.dun, zarlaga: 0 });
+  for (const z of zarlaga) {
+    const m = map.get(z._id) || { orlogo: 0, zarlaga: 0 };
+    m.zarlaga = z.dun;
+    map.set(z._id, m);
+  }
+  return map;
+}
 
 function angilalaarNiilberle(zarlaguud) {
   const map = {};
   for (const z of zarlaguud) {
-    const k = z.angilal || ANGILAAGUI;
-    map[k] = (map[k] || 0) + z.dun;
+    const k = z.angilal || "Бусад";
+    map[k] = (map[k] || 0) + (Number(z.dun) || 0);
   }
   return Object.entries(map)
     .map(([angilal, dun]) => ({ angilal, dun }))
     .sort((a, b) => b.dun - a.dun);
 }
 
-/**
- * Дансны хуулгыг [ekhlel, tugsgul] мужаар уншиж данс тус бүр, сар тус бүрээр
- * нэгтгэнэ. `saraar` нь мөнгөн урсгалын графикт.
- */
-async function bankKhesegAvya(kholbolt, baseMatch, ekhlel, tugsgul) {
-  const range = { $gte: ekhlel, $lte: tugsgul };
-  const muruud = await BankniiGuilgee(kholbolt, true)
-    .find({
-      ...baseMatch,
-      $or: [
-        { postDate: range },
-        { tranDate: range },
-        { TxDt: range },
-        { tranPostedDate: range },
-        {
-          createdAt: range,
-          postDate: null,
-          tranDate: null,
-          TxDt: null,
-          tranPostedDate: null,
-        },
-      ],
-    })
-    .select(
-      "postDate tranDate TxDt tranPostedDate createdAt amount Amt tranAmount income outcome kholbosonDun drOrCr balance dansniiDugaar bank description TxAddInf relatedAccount accName zarlagiinAngilal",
-    )
-    .lean();
-
-  const dansMap = new Map();
-  const saraarMap = new Map();
-  const zarlaguud = [];
-  let orlogo = 0;
-  let zarlaga = 0;
-
-  const mur = muruud
-    .map((r) => ({ r, ognoo: new Date(bankOgnoo(r)), dun: bankDun(r) }))
-    .filter((m) => !isNaN(m.ognoo.getTime()) && m.ognoo >= ekhlel && m.ognoo <= tugsgul)
-    .sort((a, b) => a.ognoo - b.ognoo);
-
-  for (const { r, ognoo, dun } of mur) {
-    const key = String(r.dansniiDugaar || "—");
-    if (!dansMap.has(key)) {
-      dansMap.set(key, {
-        dansniiDugaar: key,
-        bank: r.bank || "",
-        orlogo: 0,
-        zarlaga: 0,
-        ekhniiUldegdel: null,
-        etssiinUldegdel: null,
-        guilgeeniiToo: 0,
-      });
-    }
-    const d = dansMap.get(key);
-    d.guilgeeniiToo += 1;
-    const uldegdel = tooOrNull(r.balance);
-    // Эхний үлдэгдэл = анхны гүйлгээний дараах үлдэгдэл − тухайн гүйлгээ
-    if (d.ekhniiUldegdel === null && uldegdel !== null) {
-      d.ekhniiUldegdel = uldegdel - dun;
-    }
-    if (uldegdel !== null) d.etssiinUldegdel = uldegdel;
-
-    const sar = sarTulkhuur(ognoo);
-    if (!saraarMap.has(sar)) saraarMap.set(sar, { sar, orlogo: 0, zarlaga: 0 });
-    const s = saraarMap.get(sar);
-
-    if (dun >= 0) {
-      d.orlogo += dun;
-      s.orlogo += dun;
-      orlogo += dun;
-    } else {
-      d.zarlaga += -dun;
-      s.zarlaga += -dun;
-      zarlaga += -dun;
-      zarlaguud.push({
-        _id: r._id,
-        ognoo,
-        dun: -dun,
-        dansniiDugaar: key,
-        bank: r.bank || "",
-        utga: r.description || r.TxAddInf || "",
-        kharitsakhDans: r.relatedAccount || "",
-        kharitsakhNer: r.accName || "",
-        angilal: r.zarlagiinAngilal || "",
-      });
-    }
-  }
-
-  const dansuud = Array.from(dansMap.values());
-  const medeeltei = dansuud.filter((d) => d.ekhniiUldegdel !== null);
-
-  return {
-    orlogo,
-    zarlaga,
-    ekhniiUldegdel: medeeltei.length
-      ? medeeltei.reduce((s, d) => s + d.ekhniiUldegdel, 0)
-      : null,
-    etssiinUldegdel: medeeltei.length
-      ? medeeltei.reduce((s, d) => s + (d.etssiinUldegdel || 0), 0)
-      : null,
-    dansuud,
-    saraar: Array.from(saraarMap.values()),
-    zarlaguud: zarlaguud.sort((a, b) => b.ognoo - a.ognoo),
-    zarlagaAngilalaar: angilalaarNiilberle(zarlaguud),
-  };
-}
-
-/**
- * Оршин суугчдын төлбөр: төлсөн мөнгө = орлого (хугацаанд), төлөөгүй мөнгө =
- * авлага (хугацааны эцэст). Зардлаар задлахгүй — төлөлтийн мөр зардлын нэргүй
- * ирдэг тул задаргаа нь «төлсөн 0» гэж буруу харагддаг.
- * Тэмдгийн дүрэм /tailan/tulbur-dugnelt-тэй ижил (dun < 0 = төлсөн).
- */
-async function avlagaKhesegAvya(kholbolt, baseMatch, ekhlel, tugsgul) {
-  const isDisc = {
-    $or: [{ $eq: ["$turul", "Хөнгөлөлт"] }, { $eq: ["$source", "khungulult"] }],
-  };
-  const GA = GuilgeeAvlaguud(kholbolt);
-  const [tulsun, etssiinAvlaga] = await Promise.all([
-    GA.aggregate([
-      { $match: { ...baseMatch, ognoo: { $gte: ekhlel, $lte: tugsgul }, dun: { $lt: 0 } } },
-      {
-        $group: {
-          _id: null,
-          dun: { $sum: { $cond: [isDisc, 0, { $abs: "$dun" }] } },
-        },
-      },
-    ]),
-    GA.aggregate([
-      { $match: { ...baseMatch, ognoo: { $lte: tugsgul } } },
-      { $group: { _id: null, dun: { $sum: "$dun" } } },
-    ]),
+/** Хугацааны эцсийн авлага (төлөөгүй мөнгө). */
+async function avlagaAvya(kholbolt, baseMatch, tugsgul) {
+  const r = await GuilgeeAvlaguud(kholbolt).aggregate([
+    { $match: { ...baseMatch, ognoo: { $lte: tugsgul } } },
+    { $group: { _id: null, dun: { $sum: "$dun" } } },
   ]);
-  return {
-    tulsun: tulsun[0]?.dun || 0,
-    etssiinAvlaga: Math.max(0, etssiinAvlaga[0]?.dun || 0),
-  };
+  return Math.max(0, r[0]?.dun || 0);
 }
 
 /**
@@ -390,81 +316,176 @@ async function ajiltanEsekh(req) {
   }
 }
 
+
+const aldaaKhariu = (res, kod, message) => res.status(kod).json({ success: false, message });
+
+/** Ажилтны хүсэлтийн нийтлэг шалгалт: ажилтан мөн, холболт, барилга. */
+async function ajiltniiKhuselt(req, res, { barilgaZaaval = true } = {}) {
+  if (!(await ajiltanEsekh(req))) {
+    aldaaKhariu(res, 403, "Энэ үйлдлийг хийх эрх байхгүй байна!");
+    return null;
+  }
+  const kholbolt = req.body.tukhainBaaziinKholbolt;
+  if (!kholbolt) {
+    aldaaKhariu(res, 404, "Холболтын мэдээлэл олдсонгүй");
+    return null;
+  }
+  const barilgiinId = req.body.barilgiinId ? String(req.body.barilgiinId) : "";
+  if (barilgaZaaval && !barilgiinId) {
+    aldaaKhariu(res, 400, "Барилга сонгоно уу");
+    return null;
+  }
+  const token = req.body.nevtersenAjiltniiToken || {};
+  return {
+    kholbolt,
+    baiguullagiinId: String(kholbolt.baiguullagiinId),
+    barilgiinId,
+    ajiltan: { ajiltniiId: String(token.id || ""), ajiltniiNer: token.ner || "" },
+  };
+}
+
+function zarlagaShalgakh(body) {
+  const ognoo = udriinEkhlel(body.ognoo);
+  const dun = Number(body.dun);
+  const angilal = String(body.angilal || "");
+  if (!ognoo) return { aldaa: "Огноо буруу байна" };
+  if (!(dun > 0)) return { aldaa: "Дүн 0-ээс их байх ёстой" };
+  if (!ZARLAGIIN_ANGILAL.includes(angilal)) return { aldaa: "Ангилал буруу байна" };
+  return {
+    utga: {
+      ognoo,
+      dun,
+      angilal,
+      tailbar: body.tailbar ? String(body.tailbar).slice(0, 500) : "",
+    },
+  };
+}
+
 exports.ZARLAGIIN_ANGILAL = ZARLAGIIN_ANGILAL;
 
 exports.shilenDansTailan = asyncHandler(async (req, res) => {
-  if (!(await ajiltanEsekh(req))) {
-    return res.status(403).json({ success: false, message: "Энэ үйлдлийг хийх эрх байхгүй байна!" });
-  }
-  // Холболтыг токеноос авна — body-н baiguullagiinId-д найдахгүй.
-  const kholbolt = req.body.tukhainBaaziinKholbolt;
-  if (!kholbolt) {
-    return res
-      .status(404)
-      .json({ success: false, message: "Холболтын мэдээлэл олдсонгүй" });
-  }
-  const baiguullagiinId = String(kholbolt.baiguullagiinId);
-  const { barilgiinId, ekhlekhOgnoo, duusakhOgnoo } = req.body || {};
-  const { ekhlel, tugsgul } = khugatsaaZadlakh(ekhlekhOgnoo, duusakhOgnoo);
+  const k = await ajiltniiKhuselt(req, res);
+  if (!k) return;
+  const { ekhlel, tugsgul } = khugatsaaZadlakh(req.body.ekhlekhOgnoo, req.body.duusakhOgnoo);
   if (isNaN(ekhlel.getTime()) || isNaN(tugsgul.getTime()) || ekhlel > tugsgul) {
-    return res.status(400).json({ success: false, message: "Огноо буруу байна" });
+    return aldaaKhariu(res, 400, "Огноо буруу байна");
   }
+  const baseMatch = { baiguullagiinId: k.baiguullagiinId, barilgiinId: k.barilgiinId };
 
-  const baseMatch = { baiguullagiinId };
-  if (barilgiinId) baseMatch.barilgiinId = String(barilgiinId);
+  const ekhnii = await ShilenDansEkhniiUldegdel(k.kholbolt).findOne(baseMatch).lean();
 
-  const [bank, avlaga, zogsool] = await Promise.all([
-    bankKhesegAvya(kholbolt, baseMatch, ekhlel, tugsgul),
-    avlagaKhesegAvya(kholbolt, baseMatch, ekhlel, tugsgul),
-    zogsoolKhesegAvya(kholbolt, baseMatch, ekhlel, tugsgul).catch((err) => {
-      console.error("shilenDans zogsool:", err.message);
-      return null;
-    }),
-  ]);
+  const [ekhniiUldegdel, etssiinUldegdel, orlogo, zarlaguud, avlaga, zogsool] =
+    await Promise.all([
+      uldegdelAvya(k.kholbolt, baseMatch, ekhnii, new Date(ekhlel.getTime() - 1)),
+      uldegdelAvya(k.kholbolt, baseMatch, ekhnii, tugsgul),
+      tulsunNiilber(k.kholbolt, baseMatch, ekhlel, tugsgul),
+      ShilenDansZarlaga(k.kholbolt)
+        .find({ ...baseMatch, ognoo: { $gte: ekhlel, $lte: tugsgul } })
+        .sort({ ognoo: -1, createdAt: -1 })
+        .lean(),
+      avlagaAvya(k.kholbolt, baseMatch, tugsgul),
+      zogsoolKhesegAvya(k.kholbolt, baseMatch, ekhlel, tugsgul).catch((err) => {
+        console.error("shilenDans zogsool:", err.message);
+        return null;
+      }),
+    ]);
 
   res.json({
     success: true,
     ekhlekhOgnoo: ekhlel,
     duusakhOgnoo: tugsgul,
     zarlagiinAngilaluud: ZARLAGIIN_ANGILAL,
-    bank,
+    ekhniiUldegdelBichlel: ekhnii
+      ? { ognoo: ekhnii.ognoo, dun: ekhnii.dun, ajiltniiNer: ekhnii.ajiltniiNer || "" }
+      : null,
+    ekhniiUldegdel,
+    orlogo,
+    zarlaga: zarlaguud.reduce((s, z) => s + (Number(z.dun) || 0), 0),
+    etssiinUldegdel,
     avlaga,
+    zarlaguud,
+    zarlagaAngilalaar: angilalaarNiilberle(zarlaguud),
     zogsool,
   });
 });
 
-exports.shilenDansZarlagaAngilal = asyncHandler(async (req, res) => {
-  if (!(await ajiltanEsekh(req))) {
-    return res.status(403).json({ success: false, message: "Энэ үйлдлийг хийх эрх байхгүй байна!" });
+/** Эхний үлдэгдэл анх оруулах. Байгаа бол PUT-ээр (шалтгаантай) засна. */
+exports.shilenDansEkhniiUldegdelNemekh = asyncHandler(async (req, res) => {
+  const k = await ajiltniiKhuselt(req, res);
+  if (!k) return;
+  const ognoo = udriinEkhlel(req.body.ognoo);
+  const dun = Number(req.body.dun);
+  if (!ognoo || !Number.isFinite(dun)) return aldaaKhariu(res, 400, "Огноо, дүн буруу байна");
+  const M = ShilenDansEkhniiUldegdel(k.kholbolt);
+  const baseMatch = { baiguullagiinId: k.baiguullagiinId, barilgiinId: k.barilgiinId };
+  if (await M.exists(baseMatch)) {
+    return aldaaKhariu(
+      res,
+      409,
+      "Эхний үлдэгдэл аль хэдийн оруулсан байна — засах товчоор өөрчилнө үү",
+    );
   }
-  const kholbolt = req.body.tukhainBaaziinKholbolt;
-  if (!kholbolt) {
-    return res.status(404).json({ success: false, message: "Холболтын мэдээлэл олдсонгүй" });
-  }
-  const { id, angilal } = req.body || {};
-  const shine = angilal ? String(angilal) : "";
-  if (!id || (shine && !ZARLAGIIN_ANGILAL.includes(shine))) {
-    return res.status(400).json({ success: false, message: "Ангилал буруу байна" });
-  }
-  const urdun = await BankniiGuilgee(kholbolt).updateOne(
-    { _id: id, baiguullagiinId: String(kholbolt.baiguullagiinId) },
-    shine
-      ? {
-          $set: {
-            zarlagiinAngilal: shine,
-            zarlagiinAngilalOnoosonAjiltniiNer: req.body.nevtersenAjiltniiToken?.ner || "",
-          },
-        }
-      : { $unset: { zarlagiinAngilal: 1, zarlagiinAngilalOnoosonAjiltniiNer: 1 } },
+  const doc = await new M({ ...baseMatch, ognoo, dun, ...k.ajiltan }).save();
+  res.json({ success: true, result: doc });
+});
+
+exports.shilenDansEkhniiUldegdelZasakh = asyncHandler(async (req, res) => {
+  const k = await ajiltniiKhuselt(req, res);
+  if (!k) return;
+  const ognoo = udriinEkhlel(req.body.ognoo);
+  const dun = Number(req.body.dun);
+  if (!ognoo || !Number.isFinite(dun)) return aldaaKhariu(res, 400, "Огноо, дүн буруу байна");
+  const doc = await ShilenDansEkhniiUldegdel(k.kholbolt).findOneAndUpdate(
+    { baiguullagiinId: k.baiguullagiinId, barilgiinId: k.barilgiinId },
+    { $set: { ognoo, dun, ...k.ajiltan } },
+    { new: true },
   );
-  if (!urdun.matchedCount) {
-    return res.status(404).json({ success: false, message: "Гүйлгээ олдсонгүй" });
-  }
+  if (!doc) return aldaaKhariu(res, 404, "Эхний үлдэгдэл олдсонгүй");
+  res.json({ success: true, result: doc });
+});
+
+exports.shilenDansZarlagaNemekh = asyncHandler(async (req, res) => {
+  const k = await ajiltniiKhuselt(req, res);
+  if (!k) return;
+  const { aldaa, utga } = zarlagaShalgakh(req.body || {});
+  if (aldaa) return aldaaKhariu(res, 400, aldaa);
+  const M = ShilenDansZarlaga(k.kholbolt);
+  const doc = await new M({
+    baiguullagiinId: k.baiguullagiinId,
+    barilgiinId: k.barilgiinId,
+    ...utga,
+    ...k.ajiltan,
+  }).save();
+  res.json({ success: true, result: doc });
+});
+
+exports.shilenDansZarlagaZasakh = asyncHandler(async (req, res) => {
+  const k = await ajiltniiKhuselt(req, res, { barilgaZaaval: false });
+  if (!k) return;
+  const { aldaa, utga } = zarlagaShalgakh(req.body || {});
+  if (aldaa) return aldaaKhariu(res, 400, aldaa);
+  const doc = await ShilenDansZarlaga(k.kholbolt).findOneAndUpdate(
+    { _id: req.params.id, baiguullagiinId: k.baiguullagiinId },
+    { $set: { ...utga, ...k.ajiltan } },
+    { new: true },
+  );
+  if (!doc) return aldaaKhariu(res, 404, "Зарлага олдсонгүй");
+  res.json({ success: true, result: doc });
+});
+
+exports.shilenDansZarlagaUstgakh = asyncHandler(async (req, res) => {
+  const k = await ajiltniiKhuselt(req, res, { barilgaZaaval: false });
+  if (!k) return;
+  const doc = await ShilenDansZarlaga(k.kholbolt).findOneAndDelete({
+    _id: req.params.id,
+    baiguullagiinId: k.baiguullagiinId,
+  });
+  if (!doc) return aldaaKhariu(res, 404, "Зарлага олдсонгүй");
   res.json({ success: true });
 });
 
 /**
- * Оршин суугчийн апп — «Шилэн данс» таб.
+ * Оршин суугчийн апп — «Шилэн данс».
  * body: { songosonBaiguullagiinId, barilgiinId, sar: "YYYY-MM" }
  * (tokenShalgakh нь body.baiguullagiinId-г токеноор дардаг тул өөр нэр.)
  */
@@ -476,7 +497,7 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
 
   const token = req.body?.nevtersenAjiltniiToken;
   if (!token?.id || token.id === "zochin") {
-    return res.status(401).json({ success: false, message: "Нэвтрэх шаардлагатай" });
+    return aldaaKhariu(res, 401, "Нэвтрэх шаардлагатай");
   }
 
   const orshinSuugchiinId = String(token.undsenId || token.id);
@@ -484,9 +505,7 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
     .findById(orshinSuugchiinId)
     .select("baiguullagiinId barilgiinId toots")
     .lean();
-  if (!orshinSuugch) {
-    return res.status(404).json({ success: false, message: "Хэрэглэгч олдсонгүй" });
-  }
+  if (!orshinSuugch) return aldaaKhariu(res, 404, "Хэрэглэгч олдсонгүй");
 
   const baiguullagiinId = String(
     req.body.songosonBaiguullagiinId || orshinSuugch.baiguullagiinId || "",
@@ -501,7 +520,7 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
         String(t.barilgiinId) === barilgiinId,
     );
   if (!baiguullagiinId || !barilgiinId || !kharyaalagdakh) {
-    return res.status(403).json({ success: false, message: "Энэ байрны мэдээлэл харах эрх байхгүй" });
+    return aldaaKhariu(res, 403, "Энэ байрны мэдээлэл харах эрх байхгүй");
   }
 
   const baiguullaga = await Baiguullaga(db.erunkhiiKholbolt)
@@ -509,15 +528,15 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
     .select("ner tokhirgoo barilguud._id barilguud.ner barilguud.tokhirgoo")
     .lean();
   if (!baiguullaga || !shilenDansAppKharuulakhEsekh(baiguullaga, barilgiinId)) {
-    return res.status(403).json({ success: false, message: "Шилэн данс нээгдээгүй байна", khaalttai: true });
+    return res
+      .status(403)
+      .json({ success: false, message: "Шилэн данс нээгдээгүй байна", khaalttai: true });
   }
 
   const kholbolt = db.kholboltuud.find(
     (k) => String(k.baiguullagiinId) === baiguullagiinId,
   );
-  if (!kholbolt) {
-    return res.status(404).json({ success: false, message: "Холболтын мэдээлэл олдсонгүй" });
-  }
+  if (!kholbolt) return aldaaKhariu(res, 404, "Холболтын мэдээлэл олдсонгүй");
 
   // Сонгосон сар (анхдагч: энэ сар) ба мөнгөн урсгалын 6 сар
   const sarMatch = /^(\d{4})-(\d{2})$/.exec(String(req.body.sar || ""));
@@ -527,7 +546,6 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
   const sarEkhlel = new Date(jil, sarIndex, 1, 0, 0, 0, 0);
   const sarTugsgul = new Date(jil, sarIndex + 1, 0, 23, 59, 59, 999);
   const urgalEkhlel = new Date(jil, sarIndex - 5, 1, 0, 0, 0, 0);
-  // Ирээдүйн сар сонговол өнөөдрөөр хязгаарлана
   const tugsgul = sarTugsgul > odoo ? odoo : sarTugsgul;
 
   const baseMatch = { baiguullagiinId, barilgiinId };
@@ -538,47 +556,47 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
     .lean();
   const gereeniiIduud = gereenuud.map((g) => String(g._id));
 
-  const [bank, avlaga, ailiinAvlaga, miniiUldegdel] = await Promise.all([
-    bankKhesegAvya(kholbolt, baseMatch, urgalEkhlel, tugsgul),
-    avlagaKhesegAvya(kholbolt, baseMatch, sarEkhlel, tugsgul),
-    ailiinAvlagaAvya(kholbolt, baseMatch, tugsgul),
-    gereeniiIduud.length
-      ? GuilgeeAvlaguud(kholbolt).aggregate([
-          { $match: { baiguullagiinId, gereeniiId: { $in: gereeniiIduud } } },
-          { $group: { _id: null, dun: { $sum: "$dun" } } },
-        ])
-      : Promise.resolve([]),
-  ]);
+  const ekhnii = await ShilenDansEkhniiUldegdel(kholbolt).findOne(baseMatch).lean();
 
-  const sar = sarTulkhuur(sarEkhlel);
+  const [uldegdel, saraarMap, sariinZarlaguud, ailiinAvlaga, miniiUldegdel] =
+    await Promise.all([
+      uldegdelAvya(kholbolt, baseMatch, ekhnii, tugsgul),
+      saraarAvya(kholbolt, baseMatch, urgalEkhlel, tugsgul),
+      ShilenDansZarlaga(kholbolt)
+        .find({ ...baseMatch, ognoo: { $gte: sarEkhlel, $lte: tugsgul } })
+        .select("angilal dun")
+        .lean(),
+      ailiinAvlagaAvya(kholbolt, baseMatch, tugsgul),
+      gereeniiIduud.length
+        ? GuilgeeAvlaguud(kholbolt).aggregate([
+            { $match: { baiguullagiinId, gereeniiId: { $in: gereeniiIduud } } },
+            { $group: { _id: null, dun: { $sum: "$dun" } } },
+          ])
+        : Promise.resolve([]),
+    ]);
+
   const saraar = [];
   for (let i = 5; i >= 0; i--) {
-    const d = new Date(jil, sarIndex - i, 1);
-    const k = sarTulkhuur(d);
-    const s = bank.saraar.find((x) => x.sar === k);
-    saraar.push({ sar: k, orlogo: s?.orlogo || 0, zarlaga: s?.zarlaga || 0 });
+    const key = sarTulkhuur(new Date(jil, sarIndex - i, 1));
+    const s = saraarMap.get(key);
+    saraar.push({ sar: key, orlogo: s?.orlogo || 0, zarlaga: s?.zarlaga || 0 });
   }
   const songosonSar = saraar[saraar.length - 1];
-  const sariinZarlaguud = bank.zarlaguud.filter((z) => z.ognoo >= sarEkhlel);
 
   const ailKharuulakh = shilenDansAilKharuulakhEsekh(baiguullaga, barilgiinId);
-  const barilga = (baiguullaga.barilguud || []).find(
-    (b) => String(b._id) === barilgiinId,
-  );
+  const barilga = (baiguullaga.barilguud || []).find((b) => String(b._id) === barilgiinId);
 
   res.json({
     success: true,
-    sar,
+    sar: sarTulkhuur(sarEkhlel),
     baiguullagiinNer: baiguullaga.ner || "",
     barilgiinNer: barilga?.ner || "",
-    dansniiUldegdel: bank.etssiinUldegdel,
+    dansniiUldegdel: uldegdel,
     orlogo: songosonSar.orlogo,
     zarlaga: songosonSar.zarlaga,
     sariinZuruu: songosonSar.orlogo - songosonSar.zarlaga,
     saraar,
     zarlagaAngilalaar: angilalaarNiilberle(sariinZarlaguud),
-    // Төлсөн мөнгө = орлого, төлөөгүй мөнгө = авлага
-    tulsunOrlogo: avlaga.tulsun,
     ailiinAvlaga: {
       niit: ailiinAvlaga.niit,
       khetersen: ailiinAvlaga.khetersen,

@@ -68,10 +68,6 @@ const bankniiGuilgeeSchema = new Schema(
     excelEsekh: Boolean,
     oruulsanAjiltniiNer: String,
     magadlaltaiGereenuud: mongoose.Schema.Types.Mixed,
-    // Шилэн данс → зарлагын ангилал (Цалин, Цэвэрлэгээ...). Зөвхөн зарлагын
-    // мөрөнд ажилтан гараар онооно; хоосон бол «Ангилаагүй».
-    zarlagiinAngilal: String,
-    zarlagiinAngilalOnoosonAjiltniiNer: String,
   },
   {
     timestamps: true,
