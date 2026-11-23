@@ -4,19 +4,21 @@
  * Банкны хуулга (CGW) АШИГЛАХГҮЙ — бүгд гараар:
  *  - Эхний үлдэгдэл: ажилтан барилга тус бүрд огноотой нь оруулна
  *    (shilenDansEkhniiUldegdel).
- *  - Орлого: оршин суугчдын ТӨЛСӨН мөнгө (guilgeeAvlaguud, dun < 0, хөнгөлөлтгүй).
- *  - Зарлага: ажилтан гараар бүртгэнэ (shilenDansZarlaga).
- *  - Үлдэгдэл(T) = эхний үлдэгдэл + орлого − зарлага, эхний үлдэгдлийн
- *    огнооноос T хүртэл.
+ *  - Орлого: оршин суугчдын ТӨЛСӨН мөнгө (guilgeeAvlaguud, dun < 0, хөнгөлөлтгүй)
+ *    + ажилтны гараар бүртгэсэн бусад орлого.
+ *  - Гар гүйлгээ (shilenDansZarlaga цуглуулга — нэрийг нь dev-ийн өгөгдөл
+ *    алдагдахгүйн тулд хадгалав): turul "orlogo" | "zarlaga" (хоосон = зарлага).
+ *  - Үлдэгдэл(T) = эхний үлдэгдэл + төлсөн мөнгө + гар орлого − зарлага,
+ *    эхний үлдэгдлийн огнооноос T хүртэл.
  *  - Авлага: оршин суугчдын ТӨЛӨӨГҮЙ мөнгө.
  *
  * Замууд (routes/shilenDansRoute.js):
  *  - POST   /shilenDans/tailan             — вэб тайлан (ажилтан)
  *  - POST   /shilenDans/ekhniiUldegdel     — эхний үлдэгдэл анх оруулах (ажилтан)
  *  - PUT    /shilenDans/ekhniiUldegdel     — засах (шалтгаантай)
- *  - POST   /shilenDansZarlaga             — зарлага нэмэх (ажилтан)
- *  - PUT    /shilenDansZarlaga/:id         — засах (шалтгаантай)
- *  - DELETE /shilenDansZarlaga/:id         — устгах (шалтгаантай)
+ *  - POST   /shilenDansGuilgee             — орлого/зарлага нэмэх (ажилтан)
+ *  - PUT    /shilenDansGuilgee/:id         — засах (шалтгаантай)
+ *  - DELETE /shilenDansGuilgee/:id         — устгах (шалтгаантай)
  *  - POST   /shilenDans/app                — оршин суугчийн апп
  */
 const asyncHandler = require("express-async-handler");
@@ -43,6 +45,20 @@ const ZARLAGIIN_ANGILAL = [
   "Банкны шимтгэл",
   "Бусад",
 ];
+
+/** Гараар бүртгэх орлогын ангилал (оршин суугчдын төлбөр автоматаар орно). */
+const ORLOGIIN_ANGILAL = [
+  "Түрээсийн орлого",
+  "Зар сурталчилгаа",
+  "Хандив, тусламж",
+  "Хүүгийн орлого",
+  "Зогсоол",
+  "Бусад",
+];
+
+/** Гар гүйлгээний turul-ийн шүүлтүүр. Хоосон turul = зарлага (хуучин бичлэг). */
+const ZARLAGA_MATCH = { turul: { $ne: "orlogo" } };
+const GAR_ORLOGO_MATCH = { turul: "orlogo" };
 
 /** Хугацаа хэтэрсэн гэж үзэх хоног (нэхэмжилсэн огнооноос). */
 const KHETERSEN_KHONOG = 30;
@@ -90,10 +106,10 @@ async function tulsunNiilber(kholbolt, baseMatch, ekhlel, tugsgul) {
   return r[0]?.dun || 0;
 }
 
-/** Хугацааны гар зарлага. */
-async function zarlagaNiilber(kholbolt, baseMatch, ekhlel, tugsgul) {
+/** Хугацааны гар гүйлгээний нийлбэр (turulMatch: зарлага эсвэл гар орлого). */
+async function garNiilber(kholbolt, baseMatch, turulMatch, ekhlel, tugsgul) {
   const r = await ShilenDansZarlaga(kholbolt).aggregate([
-    { $match: { ...baseMatch, ognoo: { $gte: ekhlel, $lte: tugsgul } } },
+    { $match: { ...baseMatch, ...turulMatch, ognoo: { $gte: ekhlel, $lte: tugsgul } } },
     { $group: { _id: null, dun: { $sum: "$dun" } } },
   ]);
   return r[0]?.dun || 0;
@@ -108,11 +124,12 @@ async function uldegdelAvya(kholbolt, baseMatch, ekhnii, T) {
   if (!ekhnii) return null;
   const ekhlel = new Date(ekhnii.ognoo);
   if (T < ekhlel) return T.getTime() === ekhlel.getTime() - 1 ? ekhnii.dun : null;
-  const [orlogo, zarlaga] = await Promise.all([
+  const [tulsun, garOrlogo, zarlaga] = await Promise.all([
     tulsunNiilber(kholbolt, baseMatch, ekhlel, T),
-    zarlagaNiilber(kholbolt, baseMatch, ekhlel, T),
+    garNiilber(kholbolt, baseMatch, GAR_ORLOGO_MATCH, ekhlel, T),
+    garNiilber(kholbolt, baseMatch, ZARLAGA_MATCH, ekhlel, T),
   ]);
-  return ekhnii.dun + orlogo - zarlaga;
+  return ekhnii.dun + tulsun + garOrlogo - zarlaga;
 }
 
 /** Сар бүрийн орлого/зарлага (мөнгөн урсгалын график). */
@@ -120,22 +137,29 @@ async function saraarAvya(kholbolt, baseMatch, ekhlel, tugsgul) {
   const sarGroup = {
     $dateToString: { format: "%Y-%m", date: "$ognoo", timezone: TZ },
   };
-  const [orlogo, zarlaga] = await Promise.all([
+  const [tulsun, gar] = await Promise.all([
     GuilgeeAvlaguud(kholbolt).aggregate([
       { $match: { ...baseMatch, ...TULSUN_MATCH, ognoo: { $gte: ekhlel, $lte: tugsgul } } },
       { $group: { _id: sarGroup, dun: { $sum: { $abs: "$dun" } } } },
     ]),
     ShilenDansZarlaga(kholbolt).aggregate([
       { $match: { ...baseMatch, ognoo: { $gte: ekhlel, $lte: tugsgul } } },
-      { $group: { _id: sarGroup, dun: { $sum: "$dun" } } },
+      {
+        $group: {
+          _id: sarGroup,
+          orlogo: { $sum: { $cond: [{ $eq: ["$turul", "orlogo"] }, "$dun", 0] } },
+          zarlaga: { $sum: { $cond: [{ $ne: ["$turul", "orlogo"] }, "$dun", 0] } },
+        },
+      },
     ]),
   ]);
   const map = new Map();
-  for (const o of orlogo) map.set(o._id, { orlogo: o.dun, zarlaga: 0 });
-  for (const z of zarlaga) {
-    const m = map.get(z._id) || { orlogo: 0, zarlaga: 0 };
-    m.zarlaga = z.dun;
-    map.set(z._id, m);
+  for (const o of tulsun) map.set(o._id, { orlogo: o.dun, zarlaga: 0 });
+  for (const g of gar) {
+    const m = map.get(g._id) || { orlogo: 0, zarlaga: 0 };
+    m.orlogo += g.orlogo;
+    m.zarlaga += g.zarlaga;
+    map.set(g._id, m);
   }
   return map;
 }
@@ -344,15 +368,20 @@ async function ajiltniiKhuselt(req, res, { barilgaZaaval = true } = {}) {
   };
 }
 
-function zarlagaShalgakh(body) {
+function guilgeeShalgakh(body) {
+  const turul =
+    body.turul === "orlogo" ? "orlogo" : body.turul === "zarlaga" ? "zarlaga" : "";
   const ognoo = udriinEkhlel(body.ognoo);
-  const dun = Number(body.dun);
+  const dun = Math.round(Number(body.dun) * 100) / 100;
   const angilal = String(body.angilal || "");
+  if (!turul) return { aldaa: "Төрөл (орлого/зарлага) сонгоно уу" };
   if (!ognoo) return { aldaa: "Огноо буруу байна" };
   if (!(dun > 0)) return { aldaa: "Дүн 0-ээс их байх ёстой" };
-  if (!ZARLAGIIN_ANGILAL.includes(angilal)) return { aldaa: "Ангилал буруу байна" };
+  const angilaluud = turul === "orlogo" ? ORLOGIIN_ANGILAL : ZARLAGIIN_ANGILAL;
+  if (!angilaluud.includes(angilal)) return { aldaa: "Ангилал буруу байна" };
   return {
     utga: {
+      turul,
       ognoo,
       dun,
       angilal,
@@ -362,6 +391,7 @@ function zarlagaShalgakh(body) {
 }
 
 exports.ZARLAGIIN_ANGILAL = ZARLAGIIN_ANGILAL;
+exports.ORLOGIIN_ANGILAL = ORLOGIIN_ANGILAL;
 
 exports.shilenDansTailan = asyncHandler(async (req, res) => {
   const k = await ajiltniiKhuselt(req, res);
@@ -374,7 +404,7 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
 
   const ekhnii = await ShilenDansEkhniiUldegdel(k.kholbolt).findOne(baseMatch).lean();
 
-  const [ekhniiUldegdel, etssiinUldegdel, orlogo, zarlaguud, avlaga, zogsool] =
+  const [ekhniiUldegdel, etssiinUldegdel, tulsun, guilgeenuud, avlaga, zogsool] =
     await Promise.all([
       uldegdelAvya(k.kholbolt, baseMatch, ekhnii, new Date(ekhlel.getTime() - 1)),
       uldegdelAvya(k.kholbolt, baseMatch, ekhnii, tugsgul),
@@ -390,20 +420,35 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
       }),
     ]);
 
+  // Хуучин (turul-гүй) бичлэг = зарлага
+  for (const g of guilgeenuud) if (g.turul !== "orlogo") g.turul = "zarlaga";
+  const garOrlogod = guilgeenuud.filter((g) => g.turul === "orlogo");
+  const zarlaguud = guilgeenuud.filter((g) => g.turul === "zarlaga");
+  const niilber = (j) => j.reduce((sum, z) => sum + (Number(z.dun) || 0), 0);
+  const garOrlogo = niilber(garOrlogod);
+
   res.json({
     success: true,
     ekhlekhOgnoo: ekhlel,
     duusakhOgnoo: tugsgul,
     zarlagiinAngilaluud: ZARLAGIIN_ANGILAL,
+    orlogiinAngilaluud: ORLOGIIN_ANGILAL,
     ekhniiUldegdelBichlel: ekhnii
       ? { ognoo: ekhnii.ognoo, dun: ekhnii.dun, ajiltniiNer: ekhnii.ajiltniiNer || "" }
       : null,
     ekhniiUldegdel,
-    orlogo,
-    zarlaga: zarlaguud.reduce((s, z) => s + (Number(z.dun) || 0), 0),
+    // Орлого = оршин суугчдын төлсөн мөнгө + гараар бүртгэсэн орлого
+    orlogo: tulsun + garOrlogo,
+    tulsunOrlogo: tulsun,
+    garOrlogo,
+    zarlaga: niilber(zarlaguud),
     etssiinUldegdel,
     avlaga,
-    zarlaguud,
+    guilgeenuud,
+    orlogoAngilalaar: [
+      ...(tulsun > 0 ? [{ angilal: "Оршин суугчдын төлбөр", dun: tulsun }] : []),
+      ...angilalaarNiilberle(garOrlogod),
+    ],
     zarlagaAngilalaar: angilalaarNiilberle(zarlaguud),
     zogsool,
   });
@@ -444,10 +489,10 @@ exports.shilenDansEkhniiUldegdelZasakh = asyncHandler(async (req, res) => {
   res.json({ success: true, result: doc });
 });
 
-exports.shilenDansZarlagaNemekh = asyncHandler(async (req, res) => {
+exports.shilenDansGuilgeeNemekh = asyncHandler(async (req, res) => {
   const k = await ajiltniiKhuselt(req, res);
   if (!k) return;
-  const { aldaa, utga } = zarlagaShalgakh(req.body || {});
+  const { aldaa, utga } = guilgeeShalgakh(req.body || {});
   if (aldaa) return aldaaKhariu(res, 400, aldaa);
   const M = ShilenDansZarlaga(k.kholbolt);
   const doc = await new M({
@@ -459,28 +504,28 @@ exports.shilenDansZarlagaNemekh = asyncHandler(async (req, res) => {
   res.json({ success: true, result: doc });
 });
 
-exports.shilenDansZarlagaZasakh = asyncHandler(async (req, res) => {
+exports.shilenDansGuilgeeZasakh = asyncHandler(async (req, res) => {
   const k = await ajiltniiKhuselt(req, res, { barilgaZaaval: false });
   if (!k) return;
-  const { aldaa, utga } = zarlagaShalgakh(req.body || {});
+  const { aldaa, utga } = guilgeeShalgakh(req.body || {});
   if (aldaa) return aldaaKhariu(res, 400, aldaa);
   const doc = await ShilenDansZarlaga(k.kholbolt).findOneAndUpdate(
     { _id: req.params.id, baiguullagiinId: k.baiguullagiinId },
     { $set: { ...utga, ...k.ajiltan } },
     { new: true },
   );
-  if (!doc) return aldaaKhariu(res, 404, "Зарлага олдсонгүй");
+  if (!doc) return aldaaKhariu(res, 404, "Гүйлгээ олдсонгүй");
   res.json({ success: true, result: doc });
 });
 
-exports.shilenDansZarlagaUstgakh = asyncHandler(async (req, res) => {
+exports.shilenDansGuilgeeUstgakh = asyncHandler(async (req, res) => {
   const k = await ajiltniiKhuselt(req, res, { barilgaZaaval: false });
   if (!k) return;
   const doc = await ShilenDansZarlaga(k.kholbolt).findOneAndDelete({
     _id: req.params.id,
     baiguullagiinId: k.baiguullagiinId,
   });
-  if (!doc) return aldaaKhariu(res, 404, "Зарлага олдсонгүй");
+  if (!doc) return aldaaKhariu(res, 404, "Гүйлгээ олдсонгүй");
   res.json({ success: true });
 });
 
@@ -563,7 +608,7 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
       uldegdelAvya(kholbolt, baseMatch, ekhnii, tugsgul),
       saraarAvya(kholbolt, baseMatch, urgalEkhlel, tugsgul),
       ShilenDansZarlaga(kholbolt)
-        .find({ ...baseMatch, ognoo: { $gte: sarEkhlel, $lte: tugsgul } })
+        .find({ ...baseMatch, ...ZARLAGA_MATCH, ognoo: { $gte: sarEkhlel, $lte: tugsgul } })
         .select("angilal dun")
         .lean(),
       ailiinAvlagaAvya(kholbolt, baseMatch, tugsgul),

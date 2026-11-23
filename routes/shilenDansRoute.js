@@ -5,9 +5,9 @@ const {
   shilenDansTailan,
   shilenDansEkhniiUldegdelNemekh,
   shilenDansEkhniiUldegdelZasakh,
-  shilenDansZarlagaNemekh,
-  shilenDansZarlagaZasakh,
-  shilenDansZarlagaUstgakh,
+  shilenDansGuilgeeNemekh,
+  shilenDansGuilgeeZasakh,
+  shilenDansGuilgeeUstgakh,
   shilenDansApp,
 } = require("../controller/shilenDans");
 
@@ -16,9 +16,9 @@ router.post("/shilenDans/tailan", tokenShalgakh, shilenDansTailan);
 router.post("/shilenDans/ekhniiUldegdel", tokenShalgakh, shilenDansEkhniiUldegdelNemekh);
 // PUT/DELETE нь middleware/shaltgaan.js-ээр шалтгаан шаардана
 router.put("/shilenDans/ekhniiUldegdel", tokenShalgakh, shilenDansEkhniiUldegdelZasakh);
-router.post("/shilenDansZarlaga", tokenShalgakh, shilenDansZarlagaNemekh);
-router.put("/shilenDansZarlaga/:id", tokenShalgakh, shilenDansZarlagaZasakh);
-router.delete("/shilenDansZarlaga/:id", tokenShalgakh, shilenDansZarlagaUstgakh);
+router.post("/shilenDansGuilgee", tokenShalgakh, shilenDansGuilgeeNemekh);
+router.put("/shilenDansGuilgee/:id", tokenShalgakh, shilenDansGuilgeeZasakh);
+router.delete("/shilenDansGuilgee/:id", tokenShalgakh, shilenDansGuilgeeUstgakh);
 // Оршин суугчийн апп — «Нэмэлт тохиргоо → Шилэн данс» асаалттай үед
 router.post("/shilenDans/app", tokenShalgakh, shilenDansApp);
 
