@@ -32,6 +32,8 @@ const KHASAKH_MODELUUD = new Set([
   "session",
   "batalgaajuulahCode",
   "zevtabsNevtreltCode",
+  // Барилгын чат: мессеж бүрт suuliinMessej шинэчлэгддэг — аудитын түүх биш
+  "barilgiinChat",
   "cronSchedule",
   "zogsooliinIp",
 ]);

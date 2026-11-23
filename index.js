@@ -67,6 +67,8 @@ const neeyeRoute = require("./routes/neeyeRoute");
 const urgatsRoute = require("./routes/urgatsRoute");
 const gerBuliinGishuunRoute = require("./routes/gerBuliinGishuunRoute");
 const shinechleltRoute = require("./routes/shinechleltRoute");
+const barilgiinChatRoute = require("./routes/barilgiinChatRoute");
+const barilgiinChatService = require("./services/barilgiinChatService");
 const gishuuniiKhandalt = require("./middleware/gishuuniiKhandalt");
 
 
@@ -171,9 +173,14 @@ process.env.UV_THREADPOOL_SIZE = 20;
     app.set("socketio", io);
     // Гүйлгээ өөрчлөгдөхөд оршин суугчийн апп руу бодит цагт мэдэгдэнэ
     require("./utils/realtimeTulbur").setIo(io);
+    // Барилгын групп чат: зөвхөн `chat:<barilgiinId>` room руу цацна
+    barilgiinChatService.setIo(io);
 
     // --- GATE WORKER SOCKET REGISTRATION ---
     io.on("connection", (socket) => {
+      // Барилгын чатын room-д токен + гишүүнчлэл шалгаж нэгдүүлнэ
+      barilgiinChatService.socketHolbokh(socket);
+
       socket.on("register-gate-worker", (barilgiinId) => {
         socket.join(`gate-room-${barilgiinId}`);
         console.log(
@@ -424,6 +431,8 @@ app.use(dansRoute);
 app.use(ebarimtRoute);
 app.use("/nekhemjlekhCron", nekhemjlekhCronRoute);
 app.use(medegdelRoute);
+// `/:baiguullagiinId/:ner` зурагны catch-all-аас ӨМНӨ
+app.use(barilgiinChatRoute);
 // Serve medegdel images only after API routes; otherwise /medegdel/thread/:id would be caught as :baiguullagiinId/:ner
 app.get("/medegdel/:baiguullagiinId/:ner", serveMedegdelImage);
 app.get("/api/medegdel/:baiguullagiinId/:ner", serveMedegdelImage);
