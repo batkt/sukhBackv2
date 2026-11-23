@@ -175,6 +175,92 @@ function angilalaarNiilberle(zarlaguud) {
     .sort((a, b) => b.dun - a.dun);
 }
 
+/**
+ * Тоот (гэрээ) тус бүрийн тооцоо: эхний үлдэгдэл, Дебет (нэхэмжилсэн, dun > 0),
+ * Кредит (төлсөн + хөнгөлөлт, dun < 0), эцсийн үлдэгдэл.
+ * Эхний + Дебет − Кредит = Эцсийн. Барилгын бүх идэвхтэй гэрээ орно —
+ * хөдөлгөөнгүй айл ч 0-ээр харагдана; цуцалсан гэрээ зөвхөн тооцоотой бол.
+ */
+async function ailiinTootsooAvya(kholbolt, baseMatch, ekhlel, tugsgul) {
+  const Geree = require("../models/geree");
+  const [tootsoo, gereenuud] = await Promise.all([
+    GuilgeeAvlaguud(kholbolt).aggregate([
+      { $match: { ...baseMatch, ognoo: { $lte: tugsgul } } },
+      {
+        $group: {
+          _id: "$gereeniiId",
+          toot: { $last: "$toot" },
+          ekhnii: { $sum: { $cond: [{ $lt: ["$ognoo", ekhlel] }, "$dun", 0] } },
+          debet: {
+            $sum: {
+              $cond: [
+                { $and: [{ $gte: ["$ognoo", ekhlel] }, { $gt: ["$dun", 0] }] },
+                "$dun",
+                0,
+              ],
+            },
+          },
+          kredit: {
+            $sum: {
+              $cond: [
+                { $and: [{ $gte: ["$ognoo", ekhlel] }, { $lt: ["$dun", 0] }] },
+                { $abs: "$dun" },
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ]),
+    Geree(kholbolt, true)
+      .find(baseMatch)
+      .select("gereeniiDugaar toot orts davkhar ovog ner tuluv")
+      .lean(),
+  ]);
+
+  const gereeMap = new Map(gereenuud.map((g) => [String(g._id), g]));
+  const toots = new Map(tootsoo.map((t) => [String(t._id || ""), t]));
+  const urdun = [];
+  const id_uud = new Set([
+    ...gereenuud.filter((g) => g.tuluv !== "Цуцалсан").map((g) => String(g._id)),
+    ...toots.keys(),
+  ]);
+  for (const id of id_uud) {
+    if (!id) continue;
+    const g = gereeMap.get(id);
+    const t = toots.get(id);
+    const ekhnii = t?.ekhnii || 0;
+    const debet = t?.debet || 0;
+    const kredit = t?.kredit || 0;
+    const etssiin = ekhnii + debet - kredit;
+    // Цуцалсан, тооцоо 0 гэрээг харуулахгүй
+    if (g?.tuluv === "Цуцалсан" && !ekhnii && !debet && !kredit) continue;
+    urdun.push({
+      gereeniiId: id,
+      gereeniiDugaar: g?.gereeniiDugaar || "",
+      toot: g?.toot || t?.toot || "",
+      orts: g?.orts || "",
+      davkhar: g?.davkhar || "",
+      ner: [g?.ovog, g?.ner].filter(Boolean).join(" "),
+      tsutsalsan: g?.tuluv === "Цуцалсан",
+      ekhnii,
+      debet,
+      kredit,
+      etssiin,
+    });
+  }
+  const tootToo = (v) => {
+    const n = parseInt(String(v).replace(/\D/g, ""), 10);
+    return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+  };
+  return urdun.sort(
+    (a, b) =>
+      String(a.orts).localeCompare(String(b.orts), "mn", { numeric: true }) ||
+      tootToo(a.toot) - tootToo(b.toot) ||
+      String(a.toot).localeCompare(String(b.toot), "mn", { numeric: true }),
+  );
+}
+
 /** Хугацааны эцсийн авлага (төлөөгүй мөнгө). */
 async function avlagaAvya(kholbolt, baseMatch, tugsgul) {
   const r = await GuilgeeAvlaguud(kholbolt).aggregate([
@@ -404,7 +490,7 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
 
   const ekhnii = await ShilenDansEkhniiUldegdel(k.kholbolt).findOne(baseMatch).lean();
 
-  const [ekhniiUldegdel, etssiinUldegdel, tulsun, guilgeenuud, avlaga, zogsool] =
+  const [ekhniiUldegdel, etssiinUldegdel, tulsun, guilgeenuud, avlaga, zogsool, ailuud] =
     await Promise.all([
       uldegdelAvya(k.kholbolt, baseMatch, ekhnii, new Date(ekhlel.getTime() - 1)),
       uldegdelAvya(k.kholbolt, baseMatch, ekhnii, tugsgul),
@@ -418,6 +504,7 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
         console.error("shilenDans zogsool:", err.message);
         return null;
       }),
+      ailiinTootsooAvya(k.kholbolt, baseMatch, ekhlel, tugsgul),
     ]);
 
   // Хуучин (turul-гүй) бичлэг = зарлага
@@ -451,6 +538,8 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
     ],
     zarlagaAngilalaar: angilalaarNiilberle(zarlaguud),
     zogsool,
+    // Тоот тус бүрийн Дебет/Кредит
+    ailuud,
   });
 });
 
