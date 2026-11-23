@@ -25,6 +25,11 @@ const {
   mashiniiKhyazgaarOlya,
   ezniiMashinuudOlya,
 } = require("../utils/mashinBurtgel");
+const {
+  kvotAshiglaltTootsoolyo,
+  zeregGorimEsekh,
+  KHULEELGIIN_KHUGATSAA_TSAG,
+} = require("../utils/zochinKvot");
 
 // Session validation for multiple device login prevention
 const orshinSuugchSessionShalgaya = async (req, res, next) => {
@@ -133,36 +138,16 @@ async function checkQuotaAndPermissions(residentId, baiguullagiinId, barilgiinId
     hasRight = residentRight === true;
   }
 
-  let startOfPeriod;
-  if (effectiveType === "udruur") {
-    startOfPeriod = moment().startOf("day").toDate();
-  } else if (effectiveType === "7khonogoor") {
-    startOfPeriod = moment().startOf("week").toDate();
-  } else if (effectiveType === "saraar") {
-    let candidate = moment().date(effectiveValue || 1).startOf('day');
-    if (moment().isBefore(candidate)) candidate.subtract(1, 'month');
-    startOfPeriod = candidate.toDate();
-  } else if (effectiveType === "jileer") {
-    const targetMonth = (effectiveValue || 1) - 1;
-    let candidate = moment().month(targetMonth).date(1).startOf('day');
-    if (moment().isBefore(candidate)) candidate.subtract(1, 'year');
-    startOfPeriod = candidate.toDate();
-  } else {
-    startOfPeriod = moment().startOf("month").toDate();
-  }
-
-  const usedMatchQuery = {
-    $or: [
-      { ezenId: residentId },
-      { ezemshigchiinId: residentId },
-      { ezenId: String(residentId) },
-      { ezemshigchiinId: String(residentId) }
-    ],
-    createdAt: { $gte: startOfPeriod }
-  };
-  if (baiguullagiinId) usedMatchQuery.baiguullagiinId = String(baiguullagiinId);
-
-  const usedCount = await EzenUrisanMashinModel(tukhainBaaziinKholbolt).countDocuments(usedMatchQuery);
+  // Квотын горим нь зөвхөн барилгын тохиргооноос (хоосон = хуучин давтамж).
+  const ashiglalt = await kvotAshiglaltTootsoolyo({
+    Model: EzenUrisanMashinModel(tukhainBaaziinKholbolt),
+    ezniiId: residentId,
+    baiguullagiinId,
+    gorim: buildingSettings?.zochinKvotGorim,
+    davtamjiinTurul: effectiveType,
+    davtamjUtga: effectiveValue,
+  });
+  const usedCount = ashiglalt.usedCount;
   const remaining = Math.max(0, effectiveTotal - usedCount);
 
   return {
@@ -171,6 +156,9 @@ async function checkQuotaAndPermissions(residentId, baiguullagiinId, barilgiinId
     effectiveTotal,
     usedCount,
     remaining,
+    kvotGorim: ashiglalt.gorim,
+    dotorToo: ashiglalt.dotorToo,
+    khuleelgendToo: ashiglalt.khuleelgendToo,
     effectiveType,
     effectiveMinutes,
     baiguullagiinId,
@@ -200,7 +188,13 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
     }
 
     if (quotaInfo.effectiveTotal > 0 && quotaInfo.remaining <= 0) {
-      return res.status(403).json({ success: false, message: "Таны зочин урих лимит дууссан байна" });
+      return res.status(403).json({
+        success: false,
+        message:
+          quotaInfo.kvotGorim === "zereg"
+            ? `Нэг зэрэг ${quotaInfo.effectiveTotal} зочин урих боломжтой. Уригдсан зочин зогсоолоос гарсны дараа дахин урина уу.`
+            : "Таны зочин урих лимит дууссан байна",
+      });
     }
 
     const EzenUrisanMashinModel = require("sukhParking-v1").EzenUrisanMashin;
@@ -974,57 +968,33 @@ router.get("/zochinQuotaStatus", tokenShalgakh, async (req, res, next) => {
     }
 
 
-    let startOfPeriod;
-
-    if (effectiveType === "udruur") {
-      startOfPeriod = moment().startOf("day").toDate();
-    }
-    else if (effectiveType === "7khonogoor") {
-      startOfPeriod = moment().startOf("week").toDate();
-    }
-    else if (effectiveType === "saraar") {
-      let candidate = moment().date(effectiveValue || 1).startOf('day');
-      if (moment().isBefore(candidate)) {
-        candidate.subtract(1, 'month');
-      }
-      startOfPeriod = candidate.toDate();
-    }
-    else if (effectiveType === "jileer") {
-      const targetMonth = (effectiveValue || 1) - 1;
-      let candidate = moment().month(targetMonth).date(1).startOf('day');
-      if (moment().isBefore(candidate)) {
-        candidate.subtract(1, 'year');
-      }
-      startOfPeriod = candidate.toDate();
-    }
-    else {
-      startOfPeriod = moment().startOf("month").toDate();
-    }
-
     const EzenUrisanMashinModel = require("sukhParking-v1").EzenUrisanMashin;
-    // tukhainBaaziinKholbolt is already defined above at line 276
 
-    // EXTREMELY ROBUST usedCount lookup
-    const usedMatchQuery = {
-      $or: [
-        { ezenId: residentId },
-        { ezemshigchiinId: residentId },
-        { ezenId: String(residentId) },
-        { ezemshigchiinId: String(residentId) }
-      ],
-      createdAt: { $gte: startOfPeriod }
-    };
-
-    if (baiguullagiinId) {
-      usedMatchQuery.baiguullagiinId = String(baiguullagiinId);
-    }
-
-    const usedCount = await EzenUrisanMashinModel(tukhainBaaziinKholbolt).countDocuments(usedMatchQuery);
+    const ashiglalt = await kvotAshiglaltTootsoolyo({
+      Model: EzenUrisanMashinModel(tukhainBaaziinKholbolt),
+      ezniiId: residentId,
+      baiguullagiinId,
+      gorim: buildingSettings?.zochinKvotGorim,
+      davtamjiinTurul: effectiveType,
+      davtamjUtga: effectiveValue,
+    });
+    const usedCount = ashiglalt.usedCount;
+    const zereg = zeregGorimEsekh(ashiglalt.gorim);
 
     res.send({
       total: effectiveTotal,
       used: Math.min(usedCount, effectiveTotal),
       remaining: Math.max(0, effectiveTotal - usedCount),
+      // Квотын горим: "davtamj" (өдөр/сар бүр шинэчлэгдэнэ) | "zereg" (нэг
+      // зэрэг зогсоолд байх дээд тоо, машин гармагц квот сэргэнэ). Хуучин апп
+      // эдгээрийг үл тоомсорлоод total/used/remaining-ээр зөв харуулна.
+      kvotGorim: ashiglalt.gorim,
+      zeregEsekh: zereg,
+      dotorToo: ashiglalt.dotorToo,
+      khuleelgendToo: ashiglalt.khuleelgendToo,
+      khuleelgiinKhugatsaaTsag: zereg ? KHULEELGIIN_KHUGATSAA_TSAG : undefined,
+      // `period` хуучин утгаараа үлдэнэ — апп үүнийг davtamjiinTurul болгон
+      // буцааж илгээдэг тул "zereg" гэж солих нь хуучин апп-ыг эвдэнэ.
       period: effectiveType,
       freeMinutesPerGuest: effectiveMinutes,
       hasRight: hasRight,
@@ -1198,6 +1168,23 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
           return res.status(403).json({ success: false, message: "Танд зочин урих эрх байхгүй байна" });
         }
 
+        // Нэг зэрэг горимд барилгын тохиргоог (горим + дээд тоо) мөрдөнө —
+        // эс тэгвэл энэ хуучин замаар зэрэг хязгаарыг тойрч урих боломжтой.
+        const zeregKvot = await checkQuotaAndPermissions(
+          inviterId,
+          baiguullagiinId,
+          barilgiinId,
+          tukhainBaaziinKholbolt
+        ).catch(() => null);
+
+        if (zeregKvot && zeregKvot.kvotGorim === "zereg") {
+          if (zeregKvot.effectiveTotal > 0 && zeregKvot.remaining <= 0) {
+            return res.status(403).json({
+              success: false,
+              message: `Нэг зэрэг ${zeregKvot.effectiveTotal} зочин урих боломжтой. Уригдсан зочин зогсоолоос гарсны дараа дахин урина уу.`,
+            });
+          }
+        } else {
         let startOfPeriod;
         if (inviterSettings.davtamjiinTurul === "udruur") {
           startOfPeriod = moment().startOf("day").toDate();
@@ -1226,6 +1213,7 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
           if (!(inviterSettings.zochinTusBurUneguiMinut > 0)) {
             return res.status(403).json({ success: false, message: "Таны зочин урих лимит дууссан байна" });
           }
+        }
         }
 
         // AFFECT MINUTE: Inherit free minutes from inviter to guest car

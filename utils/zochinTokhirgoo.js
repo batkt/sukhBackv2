@@ -21,6 +21,7 @@ const KHARILTSAGCHID_SALGAKH = [
   "zochinTailbar",
   "davtamjiinTurul",
   "davtamjUtga",
+  "zochinKvotGorim",
 ];
 
 /** `zochinTurul`/`ezemshigchiinTurul`-ээс харилцагч эсэхийг тогтооно */

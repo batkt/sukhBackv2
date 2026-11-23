@@ -119,6 +119,13 @@ const baiguullagaSchema = new Schema(
             davtamjiinTurul: String,
             davtamjUtga: Number,
             /**
+             * Квотын горим: "davtamj" (эсвэл хоосон) = өдөр/сар бүр шинэчлэгдэнэ
+             * (хуучин зан төлөв); "zereg" = `zochinErkhiinToo` нь НЭГ ЗЭРЭГ
+             * зогсоолд байж болох зочны машины дээд тоо — урьсан машин гармагц
+             * квот буцаж нэмэгдэнэ. `utils/zochinKvot.js`.
+             */
+            zochinKvotGorim: String,
+            /**
              * ХАРИЛЦАГЧИД тусад нь. Оршин суугч, харилцагч хоёр өөр тооны зочин
              * урьдаг тул квот нь салсан. Энд тохируулаагүй талбар нь дээрх (оршин
              * суугчийн) утгыг ӨВЛӨНӨ — `utils/zochinTokhirgoo.js`.
@@ -132,6 +139,7 @@ const baiguullagaSchema = new Schema(
               zochinTailbar: String,
               davtamjiinTurul: String,
               davtamjUtga: Number,
+              zochinKvotGorim: String,
             },
             orshinSuugchMashiniiLimit: Number,
             /**
@@ -367,6 +375,13 @@ const baiguullagaSchema = new Schema(
         davtamjiinTurul: String,
         davtamjUtga: Number,
         /**
+         * Квотын горим: "davtamj" (эсвэл хоосон) = өдөр/сар бүр шинэчлэгдэнэ
+         * (хуучин зан төлөв); "zereg" = `zochinErkhiinToo` нь НЭГ ЗЭРЭГ
+         * зогсоолд байж болох зочны машины дээд тоо — урьсан машин гармагц
+         * квот буцаж нэмэгдэнэ. `utils/zochinKvot.js`.
+         */
+        zochinKvotGorim: String,
+        /**
          * ХАРИЛЦАГЧИД тусад нь. Оршин суугч, харилцагч хоёр өөр тооны зочин
          * урьдаг тул квот нь салсан. Энд тохируулаагүй талбар нь дээрх (оршин
          * суугчийн) утгыг ӨВЛӨНӨ — `utils/zochinTokhirgoo.js`.
@@ -380,6 +395,7 @@ const baiguullagaSchema = new Schema(
           zochinTailbar: String,
           davtamjiinTurul: String,
           davtamjUtga: Number,
+          zochinKvotGorim: String,
         },
         orshinSuugchMashiniiLimit: Number,
         /**

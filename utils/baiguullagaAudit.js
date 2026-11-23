@@ -49,6 +49,7 @@ const NER = {
   zochinTailbar: "Зочны тайлбар",
   davtamjiinTurul: "Давтамжийн төрөл",
   davtamjUtga: "Давтамж",
+  zochinKvotGorim: "Зочны квотын горим",
   orshinSuugchMashiniiLimit: "Оршин суугчийн машины хязгаар",
   khariltsagchMashiniiLimit: "Харилцагчийн машины хязгаар",
   bodokhArgaEnabled: "Бодох арга идэвхтэй",
