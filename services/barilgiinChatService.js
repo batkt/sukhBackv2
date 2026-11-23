@@ -11,6 +11,14 @@
  *     өөрөө хэвээр.
  *   Барилга нь тухайн байгууллагын barilguud-д байх ёстой.
  *
+ * ЧАТЫН ТӨРӨЛ (`barilgiinId` талбар нь чатын түлхүүр):
+ *   • "barilga" — барилга бүрт нэг («Миний байр»), түлхүүр = барилгын id.
+ *   • "buh"     — байгууллага бүрт нэг («Бүх байр»), түлхүүр = `buh_<baiguullagiinId>`.
+ *     Байгууллагын бүх ажилтан, тэр байгууллагад тоот бүхий бүх оршин суугч.
+ *
+ * НЭР: оршин суугч чатад нэрээрээ биш тоотоороо харагдана («12 тоот»,
+ * «Бүх байр»-д «А байр 12 тоот»). Ажилтан нэрээрээ.
+ *
  * ХАМГААЛАЛТ: мессеж зөвхөн `chat:<barilgiinId>` room руу явна; room-д зөвхөн
  * гишүүнчлэл шалгасан socket нэгдэнэ. Мессеж тухайн байгууллагын өөрийн баазад.
  */
@@ -43,6 +51,28 @@ function aldaa(status, message) {
   const e = new Error(message);
   e.status = status;
   return e;
+}
+
+const BUH = "buh_";
+const buhTulkhuur = (baiguullagiinId) => `${BUH}${baiguullagiinId}`;
+
+/** Байгууллага бүрт нэг «Бүх байр» чатын мөр */
+function buhChatuud(chatuud, nerAvya) {
+  const ur = [];
+  const kharsan = new Set();
+  for (const c of chatuud) {
+    if (kharsan.has(c.baiguullagiinId)) continue;
+    kharsan.add(c.baiguullagiinId);
+    ur.push({
+      turul: "buh",
+      baiguullagiinId: c.baiguullagiinId,
+      baiguullagiinNer: c.baiguullagiinNer,
+      barilgiinId: buhTulkhuur(c.baiguullagiinId),
+      barilgiinNer: "Бүх байр",
+      ilgeegchNer: nerAvya(c),
+    });
+  }
+  return ur;
 }
 
 const kholboltOlyo = (baiguullagiinId) =>
@@ -96,22 +126,31 @@ async function ajiltanTodorkhoiloh(token) {
 
   const baiguullagiinId = String(ajiltan.baiguullagiinId);
   const baiguullaga = (await baiguullaguudAvya([baiguullagiinId])).get(baiguullagiinId);
-  const buh = (baiguullaga?.barilguud || []).map((b) => ({ id: String(b._id), ner: b.ner || "" }));
+  const buhBarilga = (baiguullaga?.barilguud || []).map((b) => ({ id: String(b._id), ner: b.ner || "" }));
   const admin = String(ajiltan.erkh || "").toLowerCase() === "admin";
   const onooson = new Set((ajiltan.barilguud || []).map(String));
-  const barilguud = admin || onooson.size === 0 ? buh : buh.filter((b) => onooson.has(b.id));
+  const barilguud = admin || onooson.size === 0 ? buhBarilga : buhBarilga.filter((b) => onooson.has(b.id));
+
+  const ner = String(token.ner || ajiltan.ner || "Ажилтан");
+  const barilgaChat = barilguud.map((b) => ({
+    turul: "barilga",
+    baiguullagiinId,
+    baiguullagiinNer: baiguullaga?.ner || "",
+    barilgiinId: b.id,
+    barilgiinNer: b.ner,
+    ilgeegchNer: ner,
+  }));
+  // «Бүх байр» — байгууллагын бүх ажилтан (оноосон барилгаас үл хамааран)
+  const buh = baiguullaga
+    ? buhChatuud([{ baiguullagiinId, baiguullagiinNer: baiguullaga.ner || "" }], () => ner)
+    : [];
 
   return {
     turul: "ajiltan",
     id: String(ajiltan._id),
-    ner: String(token.ner || ajiltan.ner || "Ажилтан"),
+    ner,
     tailbar: ajiltan.albanTushaal || "Ажилтан",
-    chatuud: barilguud.map((b) => ({
-      baiguullagiinId,
-      baiguullagiinNer: baiguullaga?.ner || "",
-      barilgiinId: b.id,
-      barilgiinNer: b.ner,
-    })),
+    chatuud: [...buh, ...barilgaChat],
   };
 }
 
@@ -146,21 +185,31 @@ async function orshinSuugchTodorkhoiloh(token) {
     const baiguullaga = baiguullaguud.get(String(baId));
     const barilga = (baiguullaga?.barilguud || []).find((b) => String(b._id) === String(bId));
     if (!barilga || !kholboltOlyo(baId)) continue;
+    const toot = tootuud.join(", ");
     chatuud.push({
+      turul: "barilga",
       baiguullagiinId: String(baId),
       baiguullagiinNer: baiguullaga.ner || "",
       barilgiinId: String(bId),
       barilgiinNer: barilga.ner || "",
-      toot: tootuud.join(", "),
+      toot,
+      ilgeegchNer: toot ? `${toot} тоот` : "",
     });
   }
+
+  const ner = String(uuruu.ner || token.ner || "Оршин суугч");
+  // Нэр нь тоот; тоотгүй (ховор) бол нэрээр
+  for (const c of chatuud) if (!c.ilgeegchNer) c.ilgeegchNer = ner;
+  const buh = buhChatuud(chatuud, (c) =>
+    c.toot ? `${c.barilgiinNer ? `${c.barilgiinNer} ` : ""}${c.toot} тоот` : ner,
+  );
 
   return {
     turul: "orshinSuugch",
     id: String(uuruu._id),
-    ner: String(uuruu.ner || token.ner || "Оршин суугч"),
+    ner,
     tailbar: "",
-    chatuud,
+    chatuud: [...buh, ...chatuud],
   };
 }
 
@@ -200,8 +249,10 @@ exports.miniiChatuud = async (token) => {
           baiguullagiinId: c.baiguullagiinId,
           baiguullagiinNer: c.baiguullagiinNer,
           barilgiinId: c.barilgiinId,
+          turul: c.turul,
           ner: c.barilgiinNer,
           toot: c.toot || "",
+          miniiNer: c.ilgeegchNer,
           suuliinMessej: doc.suuliinMessej || null,
         };
       } catch (e) {
@@ -250,7 +301,7 @@ function khyazgaarShalgaya(id) {
 }
 
 /** Мессеж илгээх: хадгалаад `chat:<barilgiinId>` room руу цацна. */
-exports.messejIlgeekh = async (token, barilgiinId, { text, clientId } = {}) => {
+exports.messejIlgeekh = async (token, barilgiinId, { text, clientId, khariuId } = {}) => {
   const tsever = String(text || "").replace(/\r\n/g, "\n").trim();
   if (!tsever) throw aldaa(400, "Мессеж хоосон байна");
   if (tsever.length > MAX_URT) throw aldaa(400, `Мессеж ${MAX_URT} тэмдэгтээс хэтэрсэн байна`);
@@ -267,6 +318,19 @@ exports.messejIlgeekh = async (token, barilgiinId, { text, clientId } = {}) => {
     if (umnukh) return umnukh;
   }
 
+  let khariu;
+  if (khariuId) {
+    if (!mongoose.Types.ObjectId.isValid(String(khariuId))) throw aldaa(400, "khariuId буруу");
+    // Зөвхөн ИЖИЛ чатын мессежид хариулна (өөр чатын агуулга алдагдахгүй)
+    const ekh = await Messej.findOne({
+      _id: String(khariuId),
+      baiguullagiinId: chat.baiguullagiinId,
+      barilgiinId: chat.barilgiinId,
+    }).lean();
+    if (!ekh) throw aldaa(404, "Хариулах мессеж олдсонгүй");
+    khariu = { messejId: String(ekh._id), ilgeegchNer: ekh.ilgeegchNer || "", text: String(ekh.text || "").slice(0, 200) };
+  }
+
   const messej = (
     await Messej.create({
       baiguullagiinId: chat.baiguullagiinId,
@@ -274,10 +338,11 @@ exports.messejIlgeekh = async (token, barilgiinId, { text, clientId } = {}) => {
       chatId: String(chatDoc._id),
       ilgeegchId: kh.id,
       ilgeegchTurul: kh.turul,
-      ilgeegchNer: kh.ner,
-      ilgeegchTailbar: kh.turul === "orshinSuugch" ? (chat.toot ? `${chat.toot} тоот` : "") : kh.tailbar,
+      ilgeegchNer: chat.ilgeegchNer || kh.ner,
+      ilgeegchTailbar: kh.turul === "orshinSuugch" ? "" : kh.tailbar,
       text: tsever,
       clientId: cId,
+      ...(khariu ? { khariu } : {}),
     })
   ).toObject();
   delete messej.__v;
@@ -288,7 +353,7 @@ exports.messejIlgeekh = async (token, barilgiinId, { text, clientId } = {}) => {
       $set: {
         suuliinMessej: {
           text: tsever.slice(0, 200),
-          ilgeegchNer: kh.ner,
+          ilgeegchNer: messej.ilgeegchNer,
           ilgeegchTurul: kh.turul,
           ognoo: messej.createdAt,
         },
@@ -299,6 +364,56 @@ exports.messejIlgeekh = async (token, barilgiinId, { text, clientId } = {}) => {
   if (io) {
     try {
       io.to(roomNer(chat.barilgiinId)).emit(EVENT, messej);
+    } catch (e) {
+      console.error("[barilgiinChat] emit:", e.message);
+    }
+  }
+  return messej;
+};
+
+/** Мессеж засах — зөвхөн илгээгч өөрөө. Засвар "barilgiinChat:zasvar" event-ээр цацагдана. */
+exports.messejZasakh = async (token, barilgiinId, messejId, { text } = {}) => {
+  const tsever = String(text || "").replace(/\r\n/g, "\n").trim();
+  if (!tsever) throw aldaa(400, "Мессеж хоосон байна");
+  if (tsever.length > MAX_URT) throw aldaa(400, `Мессеж ${MAX_URT} тэмдэгтээс хэтэрсэн байна`);
+  if (!mongoose.Types.ObjectId.isValid(String(messejId))) throw aldaa(400, "Мессежийн id буруу");
+
+  const { kh, chat } = await gishuunShalgakh(token, barilgiinId);
+  khyazgaarShalgaya(kh.id);
+  const kholbolt = kholboltOlyo(chat.baiguullagiinId);
+  if (!kholbolt) throw aldaa(404, "Байгууллагын холболт олдсонгүй");
+
+  const Messej = BarilgiinChatMessej(kholbolt);
+  const olson = await Messej.findOne({
+    _id: String(messejId),
+    baiguullagiinId: chat.baiguullagiinId,
+    barilgiinId: chat.barilgiinId,
+  }).lean();
+  if (!olson) throw aldaa(404, "Мессеж олдсонгүй");
+  if (String(olson.ilgeegchId) !== kh.id) throw aldaa(403, "Зөвхөн өөрийн мессежээ засах боломжтой");
+  if (olson.text === tsever) return olson;
+
+  const messej = await Messej.findOneAndUpdate(
+    { _id: olson._id },
+    { $set: { text: tsever, zassanEsekh: true, zassanOgnoo: new Date() } },
+    { new: true },
+  )
+    .select("-__v")
+    .lean();
+
+  // Хамгийн сүүлийн мессеж засагдсан бол жагсаалтын урьдчилсан харагдацыг шинэчилнэ
+  await BarilgiinChat(kholbolt).updateOne(
+    {
+      baiguullagiinId: chat.baiguullagiinId,
+      barilgiinId: chat.barilgiinId,
+      "suuliinMessej.ognoo": olson.createdAt,
+    },
+    { $set: { "suuliinMessej.text": tsever.slice(0, 200) } },
+  );
+
+  if (io) {
+    try {
+      io.to(roomNer(chat.barilgiinId)).emit("barilgiinChat:zasvar", messej);
     } catch (e) {
       console.error("[barilgiinChat] emit:", e.message);
     }

@@ -1,6 +1,8 @@
 /**
  * Барилгын групп чатын мессеж. Байгууллагын өөрийн баазад хадгалагдана.
- * Одоогоор зөвхөн текст; засах/устгах endpoint байхгүй.
+ * Зөвхөн текст. Илгээгч өөрийн мессежээ засна; устгах боломжгүй.
+ * `barilgiinId` нь чатын түлхүүр: барилгын чат бол барилгын id, байгууллагын
+ * «Бүх байр» чат бол `buh_<baiguullagiinId>`.
  */
 const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
@@ -21,6 +23,14 @@ const barilgiinChatMessejSchema = new Schema(
     text: { type: String, required: true },
     // Клиентийн үүсгэсэн id — давхар илгээлт, optimistic мөрийг тааруулахад
     clientId: String,
+    // Хариулсан мессежийн хуулбар (эх мессеж засагдсан ч энд хэвээр)
+    khariu: {
+      messejId: String,
+      ilgeegchNer: String,
+      text: String,
+    },
+    zassanEsekh: { type: Boolean, default: false },
+    zassanOgnoo: Date,
   },
   { timestamps: true },
 );

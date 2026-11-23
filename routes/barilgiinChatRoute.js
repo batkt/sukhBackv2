@@ -2,9 +2,13 @@
  * Барилгын групп чат (ажилтан — вэб, оршин суугч — апп).
  *   GET  /barilgiinChat/minii                          миний чатууд (lazy үүсгэнэ)
  *   GET  /barilgiinChat/:barilgiinId/messejuud?umnukh=<messejId>&khemjee=30
- *   POST /barilgiinChat/:barilgiinId/messej             body: { text, clientId? }
+ *   POST /barilgiinChat/:barilgiinId/messej             body: { text, clientId?, khariuId? }
+ *   POST /barilgiinChat/:barilgiinId/messej/:messejId/zasakh   body: { text }  (зөвхөн өөрийн)
+ *     Засвар POST-оор: middleware/shaltgaan.js PUT/PATCH-д ажилтнаас шалтгаан
+ *     шаарддаг — өөрийн чатын мессеж засахад шалтгаан асуух нь утгагүй.
+ * «Бүх байр» чатын түлхүүр нь `buh_<baiguullagiinId>` (barilgiinId-ийн оронд).
  * Бодит цаг: socket "barilgiinChat:join" → room `chat:<barilgiinId>`,
- *            шинэ мессеж "barilgiinChat:messej" event-ээр ирнэ.
+ *            шинэ мессеж "barilgiinChat:messej", засвар "barilgiinChat:zasvar".
  * Гишүүнчлэл, хамгаалалт: services/barilgiinChatService.js
  */
 const express = require("express");
@@ -44,7 +48,22 @@ router.post("/barilgiinChat/:barilgiinId/messej", tokenShalgakh, async (req, res
     const messej = await service.messejIlgeekh(req.body.nevtersenAjiltniiToken, req.params.barilgiinId, {
       text: req.body.text,
       clientId: req.body.clientId,
+      khariuId: req.body.khariuId,
     });
+    res.json({ success: true, messej });
+  } catch (e) {
+    aldaaKhariu(res, e);
+  }
+});
+
+router.post("/barilgiinChat/:barilgiinId/messej/:messejId/zasakh", tokenShalgakh, async (req, res) => {
+  try {
+    const messej = await service.messejZasakh(
+      req.body.nevtersenAjiltniiToken,
+      req.params.barilgiinId,
+      req.params.messejId,
+      { text: req.body.text },
+    );
     res.json({ success: true, messej });
   } catch (e) {
     aldaaKhariu(res, e);
