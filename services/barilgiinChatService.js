@@ -23,6 +23,8 @@
  * гишүүнчлэл шалгасан socket нэгдэнэ. Мессеж тухайн байгууллагын өөрийн баазад.
  */
 const jwt = require("jsonwebtoken");
+const fs = require("fs");
+const path = require("path");
 const mongoose = require("mongoose");
 const { db } = require("zevbackv2");
 const Ajiltan = require("../models/ajiltan");
@@ -38,6 +40,72 @@ const KHADGALAKH_MS = 30 * 1000; // гишүүнчлэлийн кэш
 const KHYAZGAAR = 20; // хэрэглэгч бүрд...
 const KHYAZGAAR_MS = 10 * 1000; // ...10 секундэд
 const EVENT = "barilgiinChat:messej";
+const MAX_KHAVSRALT = 10;
+
+/* ── Хавсралт (зураг, видео) ────────────────────────────────────────────
+ * Файл: <root>/<baiguullagiinId>/<chatTulkhuur>/<32 hex>.<ext>
+ * Нэр нь 128 бит санамсаргүй тул URL нь таамаглах боломжгүй (medegdel-ийн
+ * файлуудын адил нээлттэй serve хийгдэнэ — <img>/<video> Authorization толгой
+ * явуулж чаддаггүй). Мессеж илгээхэд клиент зөвхөн файлын НЭРийг өгнө; сервер
+ * нь тухайн чатын хавтаст байгаа эсэхийг шалгаад turul/zam-ыг өөрөө бүрдүүлнэ.
+ */
+const ZURAG_EXT = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic"]);
+const VIDEO_EXT = new Set([".mp4", ".mov", ".webm", ".m4v", ".3gp"]);
+const FAIL_NER = /^[a-f0-9]{32}\.[a-z0-9]{2,5}$/;
+const CHAT_TULKHUUR = /^[A-Za-z0-9_]{1,64}$/;
+
+function chatFailRoot() {
+  return process.env.BARILGIIN_CHAT_UPLOAD_ROOT
+    ? path.resolve(process.env.BARILGIIN_CHAT_UPLOAD_ROOT)
+    : path.join(process.cwd(), "public", "barilgiinChat");
+}
+exports.chatFailRoot = chatFailRoot;
+
+/** Тухайн чатын файлын хавтас (id-уудыг шалгасны дараа л) */
+function chatFailKhavtas(baiguullagiinId, chatTulkhuur) {
+  if (!mongoose.Types.ObjectId.isValid(String(baiguullagiinId)) || !CHAT_TULKHUUR.test(String(chatTulkhuur))) {
+    throw aldaa(400, "Буруу зам");
+  }
+  return path.join(chatFailRoot(), String(baiguullagiinId), String(chatTulkhuur));
+}
+exports.chatFailKhavtas = chatFailKhavtas;
+
+function failTurul(ner) {
+  const ext = path.extname(String(ner)).toLowerCase();
+  if (ZURAG_EXT.has(ext)) return "zurag";
+  if (VIDEO_EXT.has(ext)) return "video";
+  return null;
+}
+exports.failTurul = failTurul;
+exports.FAIL_NER = FAIL_NER;
+
+const failZam = (chat, ner) => `barilgiinChat/file/${chat.baiguullagiinId}/${chat.barilgiinId}/${ner}`;
+
+/** Клиентийн өгсөн файлын нэрсээс хавсралтыг сервер дээр шалгаж бүрдүүлнэ */
+function khavsraltBeldekh(chat, irsen) {
+  if (!Array.isArray(irsen) || !irsen.length) return [];
+  if (irsen.length > MAX_KHAVSRALT) throw aldaa(400, `Нэг мессежинд ${MAX_KHAVSRALT}-аас олон файл хавсаргах боломжгүй`);
+  const khavtas = chatFailKhavtas(chat.baiguullagiinId, chat.barilgiinId);
+  return irsen.map((x) => {
+    const ner = String((x && typeof x === "object" ? x.ner : x) || "");
+    const turul = failTurul(ner);
+    if (!FAIL_NER.test(ner) || !turul) throw aldaa(400, "Хавсралтын нэр буруу");
+    let khemjee = 0;
+    try {
+      khemjee = fs.statSync(path.join(khavtas, ner)).size;
+    } catch (_) {
+      throw aldaa(400, "Хавсралт олдсонгүй. Дахин upload хийнэ үү.");
+    }
+    return { ner, turul, zam: failZam(chat, ner), khemjee };
+  });
+}
+
+const urdchilsanText = (text, khavsralt) => {
+  if (text) return text.slice(0, 200);
+  if ((khavsralt || []).some((k) => k.turul === "video")) return "🎥 Видео";
+  if ((khavsralt || []).length) return "📷 Зураг";
+  return "";
+};
 
 let io = null;
 exports.setIo = (socketIo) => {
@@ -290,6 +358,52 @@ exports.messejuud = async (token, barilgiinId, { umnukh, khemjee } = {}) => {
   return { messejuud: rows.slice(0, limit).reverse(), dakhiadBii };
 };
 
+/**
+ * Чатын дэлгэрэнгүй: илгээгдсэн зураг, видеонууд (шинээс хуучин руу).
+ * umnukh = мессежийн _id cursor.
+ */
+exports.media = async (token, barilgiinId, { umnukh, khemjee } = {}) => {
+  const { chat } = await gishuunShalgakh(token, barilgiinId);
+  const kholbolt = kholboltOlyo(chat.baiguullagiinId);
+  if (!kholbolt) throw aldaa(404, "Байгууллагын холболт олдсонгүй");
+  const limit = Math.min(Math.max(parseInt(khemjee, 10) || KHUUDAS_DEFAULT, 1), KHUUDAS_MAX);
+  const query = {
+    baiguullagiinId: chat.baiguullagiinId,
+    barilgiinId: chat.barilgiinId,
+    "khavsralt.0": { $exists: true },
+  };
+  if (umnukh) {
+    if (!mongoose.Types.ObjectId.isValid(String(umnukh))) throw aldaa(400, "umnukh буруу");
+    query._id = { $lt: new mongoose.Types.ObjectId(String(umnukh)) };
+  }
+  const rows = await BarilgiinChatMessej(kholbolt)
+    .find(query)
+    .sort({ _id: -1 })
+    .limit(limit + 1)
+    .select("khavsralt ilgeegchNer ilgeegchId createdAt")
+    .lean();
+  const dakhiadBii = rows.length > limit;
+  const khuudas = rows.slice(0, limit);
+  const media = [];
+  for (const m of khuudas) {
+    for (const k of m.khavsralt || []) {
+      media.push({
+        messejId: String(m._id),
+        ilgeegchNer: m.ilgeegchNer || "",
+        createdAt: m.createdAt,
+        turul: k.turul,
+        zam: k.zam,
+        ner: k.ner,
+      });
+    }
+  }
+  return {
+    media,
+    dakhiadBii,
+    umnukh: khuudas.length ? String(khuudas[khuudas.length - 1]._id) : null,
+  };
+};
+
 const khereglee = new Map();
 function khyazgaarShalgaya(id) {
   const odoo = Date.now();
@@ -301,12 +415,13 @@ function khyazgaarShalgaya(id) {
 }
 
 /** Мессеж илгээх: хадгалаад `chat:<barilgiinId>` room руу цацна. */
-exports.messejIlgeekh = async (token, barilgiinId, { text, clientId, khariuId } = {}) => {
+exports.messejIlgeekh = async (token, barilgiinId, { text, clientId, khariuId, khavsralt: irsenKhavsralt } = {}) => {
   const tsever = String(text || "").replace(/\r\n/g, "\n").trim();
-  if (!tsever) throw aldaa(400, "Мессеж хоосон байна");
   if (tsever.length > MAX_URT) throw aldaa(400, `Мессеж ${MAX_URT} тэмдэгтээс хэтэрсэн байна`);
 
   const { kh, chat } = await gishuunShalgakh(token, barilgiinId);
+  const khavsralt = khavsraltBeldekh(chat, irsenKhavsralt);
+  if (!tsever && !khavsralt.length) throw aldaa(400, "Мессеж хоосон байна");
   khyazgaarShalgaya(kh.id);
   const { kholbolt, doc: chatDoc } = await chatBatalgaajuulakh(chat);
 
@@ -328,7 +443,11 @@ exports.messejIlgeekh = async (token, barilgiinId, { text, clientId, khariuId } 
       barilgiinId: chat.barilgiinId,
     }).lean();
     if (!ekh) throw aldaa(404, "Хариулах мессеж олдсонгүй");
-    khariu = { messejId: String(ekh._id), ilgeegchNer: ekh.ilgeegchNer || "", text: String(ekh.text || "").slice(0, 200) };
+    khariu = {
+      messejId: String(ekh._id),
+      ilgeegchNer: ekh.ilgeegchNer || "",
+      text: urdchilsanText(String(ekh.text || ""), ekh.khavsralt),
+    };
   }
 
   const messej = (
@@ -342,6 +461,7 @@ exports.messejIlgeekh = async (token, barilgiinId, { text, clientId, khariuId } 
       ilgeegchTailbar: kh.turul === "orshinSuugch" ? "" : kh.tailbar,
       text: tsever,
       clientId: cId,
+      ...(khavsralt.length ? { khavsralt } : {}),
       ...(khariu ? { khariu } : {}),
     })
   ).toObject();
@@ -352,7 +472,7 @@ exports.messejIlgeekh = async (token, barilgiinId, { text, clientId, khariuId } 
     {
       $set: {
         suuliinMessej: {
-          text: tsever.slice(0, 200),
+          text: urdchilsanText(tsever, khavsralt),
           ilgeegchNer: messej.ilgeegchNer,
           ilgeegchTurul: kh.turul,
           ognoo: messej.createdAt,
@@ -374,7 +494,6 @@ exports.messejIlgeekh = async (token, barilgiinId, { text, clientId, khariuId } 
 /** Мессеж засах — зөвхөн илгээгч өөрөө. Засвар "barilgiinChat:zasvar" event-ээр цацагдана. */
 exports.messejZasakh = async (token, barilgiinId, messejId, { text } = {}) => {
   const tsever = String(text || "").replace(/\r\n/g, "\n").trim();
-  if (!tsever) throw aldaa(400, "Мессеж хоосон байна");
   if (tsever.length > MAX_URT) throw aldaa(400, `Мессеж ${MAX_URT} тэмдэгтээс хэтэрсэн байна`);
   if (!mongoose.Types.ObjectId.isValid(String(messejId))) throw aldaa(400, "Мессежийн id буруу");
 
@@ -391,6 +510,7 @@ exports.messejZasakh = async (token, barilgiinId, messejId, { text } = {}) => {
   }).lean();
   if (!olson) throw aldaa(404, "Мессеж олдсонгүй");
   if (String(olson.ilgeegchId) !== kh.id) throw aldaa(403, "Зөвхөн өөрийн мессежээ засах боломжтой");
+  if (!tsever && !(olson.khavsralt || []).length) throw aldaa(400, "Мессеж хоосон байна");
   if (olson.text === tsever) return olson;
 
   const messej = await Messej.findOneAndUpdate(
@@ -408,7 +528,7 @@ exports.messejZasakh = async (token, barilgiinId, messejId, { text } = {}) => {
       barilgiinId: chat.barilgiinId,
       "suuliinMessej.ognoo": olson.createdAt,
     },
-    { $set: { "suuliinMessej.text": tsever.slice(0, 200) } },
+    { $set: { "suuliinMessej.text": urdchilsanText(tsever, olson.khavsralt) } },
   );
 
   if (io) {

@@ -1,6 +1,6 @@
 /**
  * Барилгын групп чатын мессеж. Байгууллагын өөрийн баазад хадгалагдана.
- * Зөвхөн текст. Илгээгч өөрийн мессежээ засна; устгах боломжгүй.
+ * Текст ба/эсвэл зураг, видео. Илгээгч өөрийн мессежээ засна; устгах боломжгүй.
  * `barilgiinId` нь чатын түлхүүр: барилгын чат бол барилгын id, байгууллагын
  * «Бүх байр» чат бол `buh_<baiguullagiinId>`.
  */
@@ -20,7 +20,19 @@ const barilgiinChatMessejSchema = new Schema(
     ilgeegchNer: String,
     // Оршин суугчийн тоот (ажилтны хувьд албан тушаал) — зөвхөн харуулахад
     ilgeegchTailbar: String,
-    text: { type: String, required: true },
+    // Хавсралттай бол хоосон байж болно
+    text: { type: String, default: "" },
+    // Зураг / видео (services/barilgiinChatService.js khavsraltBeldekh)
+    khavsralt: [
+      {
+        _id: false,
+        ner: String,
+        turul: { type: String, enum: ["zurag", "video"] },
+        // API-ийн үндсээс харьцангуй: barilgiinChat/file/<org>/<chat>/<ner>
+        zam: String,
+        khemjee: Number,
+      },
+    ],
     // Клиентийн үүсгэсэн id — давхар илгээлт, optimistic мөрийг тааруулахад
     clientId: String,
     // Хариулсан мессежийн хуулбар (эх мессеж засагдсан ч энд хэвээр)
