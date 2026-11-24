@@ -779,9 +779,11 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
     .lean();
   const gereeniiIduud = gereenuud.map((g) => String(g._id));
 
-  const [niit, saraarMap, khetersen, miniiUldegdel, sariinZarlaguud] = await Promise.all([
+  const saraarEkhlel = new Date(jil - 2, 0, 1, 0, 0, 0, 0);
+
+  const [niit, saraarMap, khetersen, miniiUldegdel, sariinZarlaguud, orloguud] = await Promise.all([
     niitAvya(kholbolt, baseMatch, sarEkhlel, tugsgul),
-    saraarAvya(kholbolt, baseMatch, grafikEkhlel, tugsgul),
+    saraarAvya(kholbolt, baseMatch, saraarEkhlel, tugsgul),
     khetersenAvya(kholbolt, baseMatch, tugsgul),
     gereeniiIduud.length
       ? GuilgeeAvlaguud(kholbolt).aggregate([
@@ -790,15 +792,41 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
         ])
       : Promise.resolve([]),
     zarlaguudAvya(kholbolt, zarlagaMatch, sarEkhlel, tugsgul),
+    GuilgeeAvlaguud(kholbolt)
+      .find({
+        baiguullagiinId: String(kholbolt.baiguullagiinId),
+        $and: [
+          {
+            $or: [
+              { barilgiinId: { $in: allBarilgaIds } },
+              { gereeniiId: { $in: allGereeIds } },
+            ],
+          },
+          {
+            $or: [{ dun: { $lt: 0 } }, { tulsunDun: { $gt: 0 } }],
+          },
+        ],
+        turul: { $ne: "Хөнгөлөлт" },
+        source: { $ne: "khungulult" },
+      })
+      .select("ognoo dun tulsunDun tailbar toot createdAt guilgeeKhiisenAjiltniiNer")
+      .sort({ ognoo: -1, createdAt: -1 })
+      .limit(100)
+      .lean(),
   ]);
   const zardal = niilber(sariinZarlaguud);
 
+  // Сүүлийн 24 сарын сар тутмын өгөгдөл (хамгийн сүүлээсээ эхлэн)
   const saraar = [];
-  for (let i = 5; i >= 0; i--) {
-    const key = sarTulkhuur(new Date(jil, sarIndex - i, 1));
+  const startMonthIndex = (jil - (jil - 2)) * 12 + sarIndex;
+  for (let i = startMonthIndex; i >= 0; i--) {
+    const d = new Date(jil - 2, i, 1);
+    const key = sarTulkhuur(d);
     const s = saraarMap.get(key);
     saraar.push({
       sar: key,
+      jil: d.getFullYear(),
+      sarDugaar: d.getMonth() + 1,
       nekhemjilsen: s?.nekhemjilsen || 0,
       tulsun: s?.tulsun || 0,
       zardal: s?.zardal || 0,
@@ -825,6 +853,14 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
       angilal: z.angilal || "Бусад",
       tailbar: z.tailbar || "",
       ajiltniiNer: z.ajiltniiNer || "",
+    })),
+    orloguud: orloguud.map((o) => ({
+      _id: String(o._id),
+      toot: o.toot || "—",
+      dun: Math.abs(Number(o.dun < 0 ? o.dun : o.tulsunDun) || 0),
+      ognoo: o.ognoo ? new Date(o.ognoo).toISOString().slice(0, 10) : "",
+      tailbar: o.tailbar || "Төлбөр төлөлт",
+      ajiltniiNer: o.guilgeeKhiisenAjiltniiNer || "",
     })),
     tuluugui: niit.tuluugui,
     saraar,
