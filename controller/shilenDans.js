@@ -426,7 +426,7 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
         turul: { $ne: "Хөнгөлөлт" },
         source: { $ne: "khungulult" },
       })
-      .select("ognoo dun tulsunDun tailbar toot turul zardliinNer nemeltTailbar createdAt")
+      .select("ognoo dun tulsunDun tailbar toot turul zardliinNer nemeltTailbar createdAt guilgeeKhiisenAjiltniiNer")
       .sort({ ognoo: -1, createdAt: -1 })
       .lean(),
   ]);
@@ -442,6 +442,8 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
       toot: o.toot || "",
       tailbar: o.tailbar || o.zardliinNer || o.nemeltTailbar || o.turul || "Төлбөр",
       turul: o.turul || "Төлбөр",
+      ajiltniiNer: o.guilgeeKhiisenAjiltniiNer || "",
+      createdAt: o.createdAt || o.ognoo,
     };
   });
 
