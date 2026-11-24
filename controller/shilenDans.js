@@ -63,6 +63,15 @@ function khugatsaaZadlakh(ekhlekhOgnoo, duusakhOgnoo) {
 const pad = (n) => String(n).padStart(2, "0");
 const sarTulkhuur = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 
+const toId = (id) => {
+  try {
+    const mongoose = require("mongoose");
+    return new mongoose.Types.ObjectId(String(id));
+  } catch {
+    return null;
+  }
+};
+
 /** Хөнгөлөлтийн мөр мөн эсэх (aggregate илэрхийлэл). */
 const KHUNGULULT_ESEKH = {
   $or: [{ $eq: ["$turul", "Хөнгөлөлт"] }, { $eq: ["$source", "khungulult"] }],
