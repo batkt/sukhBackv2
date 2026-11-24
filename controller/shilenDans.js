@@ -386,11 +386,16 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
       baiguullagiinId: String(kholbolt.baiguullagiinId),
       barilgiinId: { $in: allBarilgaIds },
     })
-    .select("_id")
+    .select("_id toot burtgesenAjiltan orshinSuugchNer")
     .lean();
   const buildingGereeIdStrs = buildingGerees.map((g) => String(g._id));
   const buildingGereeObjIds = buildingGerees.map((g) => toId(g._id)).filter(Boolean);
   const allGereeIds = Array.from(new Set([...buildingGereeIdStrs, ...buildingGereeObjIds]));
+
+  const gereeMap = new Map();
+  buildingGerees.forEach((g) => {
+    gereeMap.set(String(g._id), g);
+  });
 
   const baseMatch = {
     baiguullagiinId: String(kholbolt.baiguullagiinId),
@@ -426,12 +431,104 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
         turul: { $ne: "Хөнгөлөлт" },
         source: { $ne: "khungulult" },
       })
-      .select("ognoo dun tulsunDun tailbar toot turul zardliinNer nemeltTailbar createdAt guilgeeKhiisenAjiltniiNer")
+      .select("ognoo dun tulsunDun tailbar toot toots turul zardliinNer nemeltTailbar createdAt guilgeeKhiisenAjiltniiNer gereeniiId bankniiGuilgeeId source")
       .sort({ ognoo: -1, createdAt: -1 })
       .lean(),
   ]);
   const zardal = niilber(zarlaguud);
   const ailuud = await ailiinTootsooAvya(kholbolt, baseMatch, barilgiinId, ekhlel, tugsgul, khetersen.ailuud);
+
+  // Дутуу гэрээнүүдийг гүйцээн татах
+  const extraGereeIds = Array.from(
+    new Set(
+      orloguud
+        .map((o) => (o.gereeniiId ? String(o.gereeniiId) : null))
+        .filter((id) => id && !gereeMap.has(id)),
+    ),
+  );
+  if (extraGereeIds.length > 0) {
+    const extraGerees = await Geree(kholbolt, true)
+      .find({ _id: { $in: extraGereeIds } })
+      .select("_id toot burtgesenAjiltan orshinSuugchNer")
+      .lean();
+    extraGerees.forEach((g) => gereeMap.set(String(g._id), g));
+  }
+
+  // Банкны гүйлгээнээс холбосон ажилтныг татах
+  const BankniiGuilgee = require("../models/bankniiGuilgee");
+  const bankniiGuilgeeIds = Array.from(
+    new Set(
+      orloguud
+        .map((o) => (o.bankniiGuilgeeId ? String(o.bankniiGuilgeeId) : null))
+        .filter(Boolean),
+    ),
+  );
+  const bankGuilgeeMap = new Map();
+  if (bankniiGuilgeeIds.length > 0) {
+    const bGuilgeenuud = await BankniiGuilgee(kholbolt)
+      .find({ _id: { $in: bankniiGuilgeeIds } })
+      .select("_id kholbosonAjiltniiNer guilgeeUusgesenAjiltan toot")
+      .lean();
+    bGuilgeenuud.forEach((bg) => bankGuilgeeMap.set(String(bg._id), bg));
+  }
+
+  const tootOlyo = (o) => {
+    if (o.toot && String(o.toot).trim() && String(o.toot).trim() !== "—") {
+      return String(o.toot).trim();
+    }
+    if (Array.isArray(o.toots) && o.toots.length > 0 && o.toots[0]) {
+      return String(o.toots[0]).trim();
+    }
+    const bg = o.bankniiGuilgeeId ? bankGuilgeeMap.get(String(o.bankniiGuilgeeId)) : null;
+    if (bg?.toot && String(bg.toot).trim()) {
+      return String(bg.toot).trim();
+    }
+    const g = o.gereeniiId ? gereeMap.get(String(o.gereeniiId)) : null;
+    if (g?.toot && String(g.toot).trim()) {
+      return String(g.toot).trim();
+    }
+    const texts = [o.tailbar, o.nemeltTailbar, o.turul, o.zardliinNer].filter(Boolean).join(" ");
+    if (texts) {
+      const m1 = texts.match(/\(?[Тт]оот[:\s\-]*([A-Za-z0-9А-Яа-я_\-]+)\)?/i);
+      if (m1 && m1[1] && m1[1].toLowerCase() !== "төлөлт") return m1[1].trim();
+
+      const m2 = texts.match(/([A-Za-z0-9А-Яа-я_\-]+)(?:-?р)?\s*тоот/i);
+      if (m2 && m2[1] && m2[1].toLowerCase() !== "нэмэлт") return m2[1].trim();
+    }
+    return "";
+  };
+
+  const ajiltanOlyo = (o) => {
+    if (o.guilgeeKhiisenAjiltniiNer && String(o.guilgeeKhiisenAjiltniiNer).trim() && String(o.guilgeeKhiisenAjiltniiNer).trim() !== "—") {
+      return String(o.guilgeeKhiisenAjiltniiNer).trim();
+    }
+    const bg = o.bankniiGuilgeeId ? bankGuilgeeMap.get(String(o.bankniiGuilgeeId)) : null;
+    if (bg?.kholbosonAjiltniiNer && String(bg.kholbosonAjiltniiNer).trim()) {
+      return String(bg.kholbosonAjiltniiNer).trim();
+    }
+    if (bg?.guilgeeUusgesenAjiltan && String(bg.guilgeeUusgesenAjiltan).trim()) {
+      return String(bg.guilgeeUusgesenAjiltan).trim();
+    }
+    const g = o.gereeniiId ? gereeMap.get(String(o.gereeniiId)) : null;
+    if (g?.burtgesenAjiltan && String(g.burtgesenAjiltan).trim()) {
+      return String(g.burtgesenAjiltan).trim();
+    }
+    const src = String(o.source || "").toLowerCase();
+    const txt = [o.tailbar, o.nemeltTailbar, o.turul].filter(Boolean).join(" ").toLowerCase();
+    if (src === "qpay" || txt.includes("qpay")) {
+      return "QPay";
+    }
+    if (src === "bank" || o.bankniiGuilgeeId || txt.includes("банк") || txt.includes("данс")) {
+      return "Банк тулгалт";
+    }
+    if (src === "gar") {
+      return "Ажилтан";
+    }
+    if (src === "system" || src === "excel_import") {
+      return "Систем";
+    }
+    return "Систем";
+  };
 
   const formattedOrloguud = orloguud.map((o) => {
     const rawDun = Number(o.tulsunDun) > 0 ? Number(o.tulsunDun) : Math.abs(Number(o.dun) || 0);
@@ -439,10 +536,10 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
       _id: String(o._id),
       ognoo: o.ognoo,
       dun: rawDun,
-      toot: o.toot || "",
+      toot: tootOlyo(o),
       tailbar: o.tailbar || o.zardliinNer || o.nemeltTailbar || o.turul || "Төлбөр",
       turul: o.turul || "Төлбөр",
-      ajiltniiNer: o.guilgeeKhiisenAjiltniiNer || "",
+      ajiltniiNer: ajiltanOlyo(o),
       createdAt: o.createdAt || o.ognoo,
     };
   });
