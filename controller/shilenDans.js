@@ -335,13 +335,33 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
   }
   const baseMatch = { baiguullagiinId: String(kholbolt.baiguullagiinId), barilgiinId };
 
-  const [niit, khetersen, zarlaguud] = await Promise.all([
+  const [niit, khetersen, zarlaguud, orloguud] = await Promise.all([
     niitAvya(kholbolt, baseMatch, ekhlel, tugsgul),
     khetersenAvya(kholbolt, baseMatch, tugsgul),
     zarlaguudAvya(kholbolt, baseMatch, ekhlel, tugsgul),
+    GuilgeeAvlaguud(kholbolt)
+      .find({
+        ...baseMatch,
+        ognoo: { $gte: ekhlel, $lte: tugsgul },
+        dun: { $lt: 0 },
+        turul: { $ne: "Хөнгөлөлт" },
+        source: { $ne: "khungulult" },
+      })
+      .select("ognoo dun tailbar toot turul zardliinNer nemeltTailbar createdAt")
+      .sort({ ognoo: -1, createdAt: -1 })
+      .lean(),
   ]);
   const zardal = niilber(zarlaguud);
   const ailuud = await ailiinTootsooAvya(kholbolt, baseMatch, ekhlel, tugsgul, khetersen.ailuud);
+
+  const formattedOrloguud = orloguud.map((o) => ({
+    _id: String(o._id),
+    ognoo: o.ognoo,
+    dun: Math.abs(Number(o.dun) || 0),
+    toot: o.toot || "",
+    tailbar: o.tailbar || o.zardliinNer || o.nemeltTailbar || o.turul || "Төлбөр",
+    turul: o.turul || "Төлбөр",
+  }));
 
   res.json({
     success: true,
@@ -355,6 +375,7 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
     khurimtlal: niit.tulsun - zardal,
     zarlagiinAngilaluud: ZARLAGIIN_ANGILAL,
     zarlaguud,
+    orloguud: formattedOrloguud,
     zarlagaAngilalaar: angilalaarNiilberle(zarlaguud),
     ailuud,
   });
