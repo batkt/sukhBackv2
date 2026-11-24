@@ -343,11 +343,11 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
       .find({
         ...baseMatch,
         ognoo: { $gte: ekhlel, $lte: tugsgul },
-        dun: { $lt: 0 },
+        $or: [{ dun: { $lt: 0 } }, { tulsunDun: { $gt: 0 } }],
         turul: { $ne: "Хөнгөлөлт" },
         source: { $ne: "khungulult" },
       })
-      .select("ognoo dun tailbar toot turul zardliinNer nemeltTailbar createdAt")
+      .select("ognoo dun tulsunDun tailbar toot turul zardliinNer nemeltTailbar createdAt")
       .sort({ ognoo: -1, createdAt: -1 })
       .lean(),
   ]);
@@ -357,7 +357,7 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
   const formattedOrloguud = orloguud.map((o) => ({
     _id: String(o._id),
     ognoo: o.ognoo,
-    dun: Math.abs(Number(o.dun) || 0),
+    dun: Math.abs(Number(o.tulsunDun || o.dun) || 0),
     toot: o.toot || "",
     tailbar: o.tailbar || o.zardliinNer || o.nemeltTailbar || o.turul || "Төлбөр",
     turul: o.turul || "Төлбөр",
