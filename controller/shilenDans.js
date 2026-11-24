@@ -793,6 +793,14 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
     zardal,
     khurimtlal: niit.tulsun - zardal,
     zarlagaAngilalaar: angilalaarNiilberle(sariinZarlaguud),
+    zarlaguud: sariinZarlaguud.map((z) => ({
+      _id: String(z._id),
+      ognoo: z.ognoo ? new Date(z.ognoo).toISOString().slice(0, 10) : "",
+      dun: Number(z.dun) || 0,
+      angilal: z.angilal || "Бусад",
+      tailbar: z.tailbar || "",
+      ajiltniiNer: z.ajiltniiNer || "",
+    })),
     tuluugui: niit.tuluugui,
     saraar,
     ailiinAvlaga: {
