@@ -204,7 +204,7 @@ async function saraarAvya(kholbolt, baseMatch, ekhlel, tugsgul) {
 async function khetersenAvya(kholbolt, baseMatch, tugsgul) {
   const muruud = await GuilgeeAvlaguud(kholbolt)
     .find({ ...baseMatch, ognoo: { $lte: tugsgul } })
-    .select("gereeniiId toot dun tulsunDun ognoo")
+    .select("gereeniiId toot dun tulsunDun ognoo turul source")
     .sort({ ognoo: 1 })
     .lean();
 
@@ -212,14 +212,35 @@ async function khetersenAvya(kholbolt, baseMatch, tugsgul) {
   for (const m of muruud) {
     const id = String(m.gereeniiId || "");
     if (!id) continue;
-    if (!gereenuud.has(id)) gereenuud.set(id, { toot: "", nekhemjlel: [], khasakh: 0 });
+    if (!gereenuud.has(id)) {
+      gereenuud.set(id, {
+        toot: "",
+        nekhemjlel: [],
+        khasakh: 0,
+        suuliinTulsunOgnoo: null,
+      });
+    }
     const g = gereenuud.get(id);
     if (m.toot) g.toot = String(m.toot);
     const dun = Number(m.dun) || 0;
     const tulsun = Number(m.tulsunDun) || 0;
-    if (dun > 0) g.nekhemjlel.push({ ognoo: new Date(m.ognoo), dun });
-    else if (dun < 0) g.khasakh += -dun;
-    else if (tulsun > 0) g.khasakh += tulsun;
+    const mOgnoo = m.ognoo ? new Date(m.ognoo) : null;
+    const isKhungulult =
+      m.turul === "Хөнгөлөлт" || m.turul === "khungulult" || m.source === "khungulult";
+
+    if (dun > 0) {
+      g.nekhemjlel.push({ ognoo: mOgnoo, dun });
+    } else if (dun < 0) {
+      g.khasakh += -dun;
+      if (!isKhungulult && mOgnoo && (!g.suuliinTulsunOgnoo || mOgnoo > g.suuliinTulsunOgnoo)) {
+        g.suuliinTulsunOgnoo = mOgnoo;
+      }
+    } else if (tulsun > 0) {
+      g.khasakh += tulsun;
+      if (!isKhungulult && mOgnoo && (!g.suuliinTulsunOgnoo || mOgnoo > g.suuliinTulsunOgnoo)) {
+        g.suuliinTulsunOgnoo = mOgnoo;
+      }
+    }
   }
 
   const odoo = tugsgul.getTime();
@@ -242,10 +263,14 @@ async function khetersenAvya(kholbolt, baseMatch, tugsgul) {
     }
     if (ailKhetersen > 0) {
       khetersen += ailKhetersen;
+      // Сүүлийн төлөлтөөс хойш өнгөрсөн хоног (төлөлт хийгээгүй бол хамгийн хуучин нэхэмжлэл/эхний үлдэгдлээс)
+      const lavlakhOgnoo = g.suuliinTulsunOgnoo || khamgiinKhuuchin || new Date(odoo);
+      const ungursunKhonog = Math.max(0, Math.floor((odoo - lavlakhOgnoo.getTime()) / KHONOG_MS));
+
       ailuud.set(gereeniiId, {
         toot: g.toot,
         dun: ailKhetersen,
-        khonog: Math.floor((odoo - khamgiinKhuuchin.getTime()) / KHONOG_MS),
+        khonog: ungursunKhonog,
       });
     }
   }
