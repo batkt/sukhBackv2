@@ -767,9 +767,9 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
       khetersen: khetersen.khetersen,
       boloogui: Math.max(0, niit.tuluugui - khetersen.khetersen),
       khetersenAilToo: khetersen.ailuud.size,
-      // Зөвхөн тоот + дүн
+      // Тоот + дүн + хэтэрсэн хоног
       ailuud: Array.from(khetersen.ailuud.values())
-        .map((a) => ({ toot: a.toot, dun: a.dun }))
+        .map((a) => ({ toot: a.toot, dun: a.dun, khonog: a.khonog || 0 }))
         .sort(tootoorEremblekh),
     },
     miniiTulbur: Math.max(0, miniiUldegdel[0]?.dun || 0),
