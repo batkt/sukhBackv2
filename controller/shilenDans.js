@@ -80,8 +80,19 @@ async function niitAvya(kholbolt, baseMatch, ekhlel, tugsgul) {
           tulsun: {
             $sum: {
               $cond: [
-                { $and: [{ $lt: ["$dun", 0] }, { $not: KHUNGULULT_ESEKH }] },
-                { $abs: "$dun" },
+                {
+                  $and: [
+                    { $or: [{ $lt: ["$dun", 0] }, { $gt: ["$tulsunDun", 0] }] },
+                    { $not: KHUNGULULT_ESEKH },
+                  ],
+                },
+                {
+                  $cond: [
+                    { $gt: ["$tulsunDun", 0] },
+                    "$tulsunDun",
+                    { $abs: "$dun" },
+                  ],
+                },
                 0,
               ],
             },
@@ -149,8 +160,19 @@ async function saraarAvya(kholbolt, baseMatch, ekhlel, tugsgul) {
         tulsun: {
           $sum: {
             $cond: [
-              { $and: [{ $lt: ["$dun", 0] }, { $not: KHUNGULULT_ESEKH }] },
-              { $abs: "$dun" },
+              {
+                $and: [
+                  { $or: [{ $lt: ["$dun", 0] }, { $gt: ["$tulsunDun", 0] }] },
+                  { $not: KHUNGULULT_ESEKH },
+                ],
+              },
+              {
+                $cond: [
+                  { $gt: ["$tulsunDun", 0] },
+                  "$tulsunDun",
+                  { $abs: "$dun" },
+                ],
+              },
               0,
             ],
           },
@@ -173,7 +195,7 @@ async function saraarAvya(kholbolt, baseMatch, ekhlel, tugsgul) {
 async function khetersenAvya(kholbolt, baseMatch, tugsgul) {
   const muruud = await GuilgeeAvlaguud(kholbolt)
     .find({ ...baseMatch, ognoo: { $lte: tugsgul } })
-    .select("gereeniiId toot dun ognoo")
+    .select("gereeniiId toot dun tulsunDun ognoo")
     .sort({ ognoo: 1 })
     .lean();
 
@@ -185,8 +207,10 @@ async function khetersenAvya(kholbolt, baseMatch, tugsgul) {
     const g = gereenuud.get(id);
     if (m.toot) g.toot = String(m.toot);
     const dun = Number(m.dun) || 0;
+    const tulsun = Number(m.tulsunDun) || 0;
     if (dun > 0) g.nekhemjlel.push({ ognoo: new Date(m.ognoo), dun });
     else if (dun < 0) g.khasakh += -dun;
+    else if (tulsun > 0) g.khasakh += tulsun;
   }
 
   const odoo = tugsgul.getTime();
@@ -234,7 +258,7 @@ const tootoorEremblekh = (a, b) =>
  * үлдэгдэл, хугацаа хэтэрсэн дүн/хоног. Барилгын бүх идэвхтэй гэрээ орно;
  * цуцалсан гэрээ зөвхөн тооцоотой бол (тухайн сард төлсөн г.м.).
  */
-async function ailiinTootsooAvya(kholbolt, baseMatch, ekhlel, tugsgul, khetersenMap) {
+async function ailiinTootsooAvya(kholbolt, baseMatch, barilgiinId, ekhlel, tugsgul, khetersenMap) {
   const Geree = require("../models/geree");
   const [tootsoo, gereenuud] = await Promise.all([
     GuilgeeAvlaguud(kholbolt).aggregate([
@@ -252,8 +276,19 @@ async function ailiinTootsooAvya(kholbolt, baseMatch, ekhlel, tugsgul, khetersen
           kredit: {
             $sum: {
               $cond: [
-                { $and: [{ $gte: ["$ognoo", ekhlel] }, { $lt: ["$dun", 0] }] },
-                { $abs: "$dun" },
+                {
+                  $and: [
+                    { $gte: ["$ognoo", ekhlel] },
+                    { $or: [{ $lt: ["$dun", 0] }, { $gt: ["$tulsunDun", 0] }] },
+                  ],
+                },
+                {
+                  $cond: [
+                    { $gt: ["$tulsunDun", 0] },
+                    "$tulsunDun",
+                    { $abs: "$dun" },
+                  ],
+                },
                 0,
               ],
             },
@@ -262,7 +297,7 @@ async function ailiinTootsooAvya(kholbolt, baseMatch, ekhlel, tugsgul, khetersen
       },
     ]),
     Geree(kholbolt, true)
-      .find(baseMatch)
+      .find({ baiguullagiinId: String(kholbolt.baiguullagiinId), barilgiinId: String(barilgiinId) })
       .select("gereeniiDugaar toot orts davkhar ovog ner utas tuluv")
       .lean(),
   ]);
@@ -333,17 +368,61 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
   if (isNaN(ekhlel.getTime()) || isNaN(tugsgul.getTime()) || ekhlel > tugsgul) {
     return aldaaKhariu(res, 400, "Огноо буруу байна");
   }
-  const baseMatch = { baiguullagiinId: String(kholbolt.baiguullagiinId), barilgiinId };
+  const Geree = require("../models/geree");
+  const mongoose = require("mongoose");
+  const toId = (id) => {
+    try {
+      return new mongoose.Types.ObjectId(String(id));
+    } catch {
+      return null;
+    }
+  };
+
+  const barilgiinIdObj = toId(barilgiinId);
+  const allBarilgaIds = barilgiinIdObj ? [String(barilgiinId), barilgiinIdObj] : [String(barilgiinId)];
+
+  const buildingGerees = await Geree(kholbolt, true)
+    .find({
+      baiguullagiinId: String(kholbolt.baiguullagiinId),
+      barilgiinId: { $in: allBarilgaIds },
+    })
+    .select("_id")
+    .lean();
+  const buildingGereeIdStrs = buildingGerees.map((g) => String(g._id));
+  const buildingGereeObjIds = buildingGerees.map((g) => toId(g._id)).filter(Boolean);
+  const allGereeIds = Array.from(new Set([...buildingGereeIdStrs, ...buildingGereeObjIds]));
+
+  const baseMatch = {
+    baiguullagiinId: String(kholbolt.baiguullagiinId),
+    $or: [
+      { barilgiinId: { $in: allBarilgaIds } },
+      { gereeniiId: { $in: allGereeIds } },
+    ],
+  };
+  const zarlagaMatch = {
+    baiguullagiinId: String(kholbolt.baiguullagiinId),
+    barilgiinId: { $in: allBarilgaIds },
+  };
 
   const [niit, khetersen, zarlaguud, orloguud] = await Promise.all([
     niitAvya(kholbolt, baseMatch, ekhlel, tugsgul),
     khetersenAvya(kholbolt, baseMatch, tugsgul),
-    zarlaguudAvya(kholbolt, baseMatch, ekhlel, tugsgul),
+    zarlaguudAvya(kholbolt, zarlagaMatch, ekhlel, tugsgul),
     GuilgeeAvlaguud(kholbolt)
       .find({
-        ...baseMatch,
+        baiguullagiinId: String(kholbolt.baiguullagiinId),
+        $and: [
+          {
+            $or: [
+              { barilgiinId: { $in: allBarilgaIds } },
+              { gereeniiId: { $in: allGereeIds } },
+            ],
+          },
+          {
+            $or: [{ dun: { $lt: 0 } }, { tulsunDun: { $gt: 0 } }],
+          },
+        ],
         ognoo: { $gte: ekhlel, $lte: tugsgul },
-        $or: [{ dun: { $lt: 0 } }, { tulsunDun: { $gt: 0 } }],
         turul: { $ne: "Хөнгөлөлт" },
         source: { $ne: "khungulult" },
       })
@@ -352,16 +431,19 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
       .lean(),
   ]);
   const zardal = niilber(zarlaguud);
-  const ailuud = await ailiinTootsooAvya(kholbolt, baseMatch, ekhlel, tugsgul, khetersen.ailuud);
+  const ailuud = await ailiinTootsooAvya(kholbolt, baseMatch, barilgiinId, ekhlel, tugsgul, khetersen.ailuud);
 
-  const formattedOrloguud = orloguud.map((o) => ({
-    _id: String(o._id),
-    ognoo: o.ognoo,
-    dun: Math.abs(Number(o.tulsunDun || o.dun) || 0),
-    toot: o.toot || "",
-    tailbar: o.tailbar || o.zardliinNer || o.nemeltTailbar || o.turul || "Төлбөр",
-    turul: o.turul || "Төлбөр",
-  }));
+  const formattedOrloguud = orloguud.map((o) => {
+    const rawDun = Number(o.tulsunDun) > 0 ? Number(o.tulsunDun) : Math.abs(Number(o.dun) || 0);
+    return {
+      _id: String(o._id),
+      ognoo: o.ognoo,
+      dun: rawDun,
+      toot: o.toot || "",
+      tailbar: o.tailbar || o.zardliinNer || o.nemeltTailbar || o.turul || "Төлбөр",
+      turul: o.turul || "Төлбөр",
+    };
+  });
 
   res.json({
     success: true,
