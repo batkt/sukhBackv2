@@ -713,7 +713,31 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
   const grafikEkhlel = new Date(jil, sarIndex - 5, 1, 0, 0, 0, 0);
   const tugsgul = sarTugsgul > odoo ? odoo : sarTugsgul;
 
-  const baseMatch = { baiguullagiinId, barilgiinId };
+  const barilgiinIdObj = toId(barilgiinId);
+  const allBarilgaIds = barilgiinIdObj ? [String(barilgiinId), barilgiinIdObj] : [String(barilgiinId)];
+
+  const buildingGerees = await Geree(kholbolt, true)
+    .find({
+      baiguullagiinId: String(kholbolt.baiguullagiinId),
+      barilgiinId: { $in: allBarilgaIds },
+    })
+    .select("_id")
+    .lean();
+  const buildingGereeIdStrs = buildingGerees.map((g) => String(g._id));
+  const buildingGereeObjIds = buildingGerees.map((g) => toId(g._id)).filter(Boolean);
+  const allGereeIds = Array.from(new Set([...buildingGereeIdStrs, ...buildingGereeObjIds]));
+
+  const baseMatch = {
+    baiguullagiinId: String(kholbolt.baiguullagiinId),
+    $or: [
+      { barilgiinId: { $in: allBarilgaIds } },
+      { gereeniiId: { $in: allGereeIds } },
+    ],
+  };
+  const zarlagaMatch = {
+    baiguullagiinId: String(kholbolt.baiguullagiinId),
+    barilgiinId: { $in: allBarilgaIds },
+  };
 
   const gereenuud = await Geree(kholbolt)
     .find({ baiguullagiinId, orshinSuugchId: orshinSuugchiinId })
@@ -731,7 +755,7 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
           { $group: { _id: null, dun: { $sum: "$dun" } } },
         ])
       : Promise.resolve([]),
-    zarlaguudAvya(kholbolt, baseMatch, sarEkhlel, tugsgul),
+    zarlaguudAvya(kholbolt, zarlagaMatch, sarEkhlel, tugsgul),
   ]);
   const zardal = niilber(sariinZarlaguud);
 
