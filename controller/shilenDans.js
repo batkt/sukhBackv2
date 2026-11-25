@@ -247,11 +247,13 @@ async function khetersenAvya(kholbolt, baseMatch, tugsgul) {
   const khetersenZaag = odoo - KHETERSEN_KHONOG * KHONOG_MS;
   let khetersen = 0;
   let boloogui = 0;
+  let tuluuguiAilToo = 0;
   const ailuud = new Map();
 
   for (const [gereeniiId, g] of gereenuud) {
     let khasakh = g.khasakh;
     let ailKhetersen = 0;
+    let ailBoloogui = 0;
     let khamgiinKhuuchin = null;
     for (const n of g.nekhemjlel) {
       const tulugduugui = Math.max(0, n.dun - khasakh);
@@ -259,8 +261,10 @@ async function khetersenAvya(kholbolt, baseMatch, tugsgul) {
       if (tulugduugui <= 0) continue;
       if (!khamgiinKhuuchin) khamgiinKhuuchin = n.ognoo;
       if (n.ognoo.getTime() < khetersenZaag) ailKhetersen += tulugduugui;
-      else boloogui += tulugduugui;
+      else ailBoloogui += tulugduugui;
     }
+    boloogui += ailBoloogui;
+    if (ailKhetersen + ailBoloogui > 0) tuluuguiAilToo++;
     if (ailKhetersen > 0) {
       khetersen += ailKhetersen;
       // Сүүлийн төлөлтөөс хойш өнгөрсөн хоног (төлөлт хийгээгүй бол хамгийн хуучин нэхэмжлэл/эхний үлдэгдлээс)
@@ -275,7 +279,7 @@ async function khetersenAvya(kholbolt, baseMatch, tugsgul) {
     }
   }
 
-  return { khetersen, boloogui, ailuud };
+  return { khetersen, boloogui, tuluuguiAilToo, ailuud };
 }
 
 const tootToo = (v) => {
@@ -805,7 +809,7 @@ async function bpayShilenDansAppAvya(kholbolt, baseMatch, gereeniiIduud, selecte
   return {
     niit: { nekhemjilsen, tulsun, khungulult: 0, tuluugui },
     saraarMap,
-    khetersen: { khetersen, boloogui, ailuudList: ailuud },
+    khetersen: { khetersen, boloogui, tuluuguiAilToo: unpaidByGeree.size, ailuudList: ailuud },
     miniiTulbur,
     orloguud: cleanOrloguud,
   };
@@ -1070,6 +1074,7 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
       khetersen: khetersen.khetersen,
       boloogui: Math.max(0, niit.tuluugui - khetersen.khetersen),
       khetersenAilToo,
+      tuluuguiAilToo: khetersen.tuluuguiAilToo || 0,
       // Тоот + дүн + хэтэрсэн хоног
       ailuud: khetersenAilList,
     },
