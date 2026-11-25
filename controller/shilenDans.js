@@ -1028,7 +1028,7 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
   }
   const zardal = niilber(sariinZarlaguud);
 
-  // Сүүлийн 24 сарын сар тутмын өгөгдөл (хамгийн сүүлээсээ эхлэн)
+  // Сүүлийн 24 сарын сар тутмын өгөгдөл (хамгийн сүүлээсээ эхлэн, эхний идэвхтэй сараас өмнөх хоосон саруудыг хасна)
   const saraar = [];
   const startMonthIndex = (jil - (jil - 2)) * 12 + sarIndex;
   for (let i = startMonthIndex; i >= 0; i--) {
@@ -1043,6 +1043,14 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
       tulsun: s?.tulsun || 0,
       zardal: s?.zardal || 0,
     });
+  }
+  while (
+    saraar.length > 1 &&
+    saraar[saraar.length - 1].nekhemjilsen === 0 &&
+    saraar[saraar.length - 1].tulsun === 0 &&
+    saraar[saraar.length - 1].zardal === 0
+  ) {
+    saraar.pop();
   }
 
   const barilga = (baiguullaga.barilguud || []).find((b) => String(b._id) === barilgiinId);
