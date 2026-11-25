@@ -1047,7 +1047,7 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
     req.body.sheetName = req.body.sheetName || "Оршин суугчид";
     req.body.colWidths = [8, 15, 15, 15, 20, 8, 8, 10, 18, 14, 14, 12, 14, 15, 18, 20, 15, 15, 15, 12, 18];
 
-    // «Гараж», «Агуулах» тусдаа хуудас — давхар, дараа нь дугаараар эрэмбэлсэн.
+    // «Гараж», «Агуулах»-ыг давхар бүрээр (B1, B2, B3, B4...) тусдаа хуудас болгон гаргана.
     const negjiinHeaders = (turul) => [
       { key: "dugaar", label: "№" },
       { key: "negj", label: `${turul} дугаар` },
@@ -1059,16 +1059,42 @@ exports.downloadOrshinSuugchExcel = asyncHandler(async (req, res, next) => {
       { key: "toot", label: "Тоот" },
       { key: "mashiniiDugaar", label: "Машины дугаар" },
     ];
-    req.body.extraSheets = ["Гараж", "Агуулах"]
-      .filter((turul) => negjiinMurud[turul].length > 0)
-      .map((turul) => ({
-        sheetName: turul,
-        headers: negjiinHeaders(turul),
-        colWidths: [8, 14, 10, 15, 15, 15, 8, 10, 18],
-        data: negjiinMurud[turul]
-          .sort((a, b) => tooEremb(a.davkhar, b.davkhar) || tooEremb(a.negj, b.negj))
-          .map((m, i) => ({ dugaar: i + 1, ...m })),
-      }));
+    const normalizeDavkhar = (d) =>
+      String(d || "")
+        .trim()
+        .toUpperCase()
+        .replace(/^В/, "B");
+    const safeSheetName = (name) =>
+      String(name).replace(/[\\/?*[\]:]/g, " ").trim().slice(0, 31);
+
+    const extraSheets = [];
+    for (const turul of ["Гараж", "Агуулах"]) {
+      const list = negjiinMurud[turul];
+      if (!list || list.length === 0) continue;
+
+      const byFloor = new Map();
+      for (const m of list) {
+        const floorKey = normalizeDavkhar(m.davkhar) || "Бусад";
+        if (!byFloor.has(floorKey)) byFloor.set(floorKey, []);
+        byFloor.get(floorKey).push(m);
+      }
+
+      const sortedFloors = Array.from(byFloor.keys()).sort(tooEremb);
+      for (const floorKey of sortedFloors) {
+        const rows = byFloor
+          .get(floorKey)
+          .sort((a, b) => tooEremb(a.negj, b.negj));
+        const label =
+          floorKey === "Бусад" ? turul : safeSheetName(`${turul} ${floorKey}`);
+        extraSheets.push({
+          sheetName: label,
+          headers: negjiinHeaders(turul),
+          colWidths: [8, 14, 10, 15, 15, 15, 8, 10, 18],
+          data: rows.map((m, i) => ({ dugaar: i + 1, ...m })),
+        });
+      }
+    }
+    req.body.extraSheets = extraSheets;
 
     // Call downloadExcelList function directly
     return exports.downloadExcelList(req, res, next);
