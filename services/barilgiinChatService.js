@@ -240,10 +240,21 @@ async function orshinSuugchTodorkhoiloh(token) {
     if (!khosuud.has(k)) khosuud.set(k, []);
     if (toot && !khosuud.get(k).includes(String(toot))) khosuud.get(k).push(String(toot));
   };
+  const garaazhEsvelAguulakh = (t) => {
+    const turul = String(t?.turul || "").trim().toLowerCase();
+    if (turul.includes("гараж") || turul.includes("зогсоол") || turul.includes("агуулах")) {
+      return true;
+    }
+    const dav = String(t?.davkhar || "").trim();
+    if ((!turul || turul === "орон сууц" || turul === "тоот") && /^[bв]\d+$/i.test(dav)) {
+      return true;
+    }
+    return false;
+  };
   nemye(ezen.baiguullagiinId, ezen.barilgiinId, ezen.toot);
   for (const t of Array.isArray(ezen.toots) ? ezen.toots : []) {
     if (t?.source && t.source !== "OWN_ORG") continue;
-    nemye(t?.baiguullagiinId, t?.barilgiinId, t?.toot);
+    nemye(t?.baiguullagiinId, t?.barilgiinId, garaazhEsvelAguulakh(t) ? "" : t?.toot);
   }
 
   const baiguullaguud = await baiguullaguudAvya([...khosuud.keys()].map((k) => k.split("|")[0]));
