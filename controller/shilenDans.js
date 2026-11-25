@@ -806,12 +806,12 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
             $or: [{ dun: { $lt: 0 } }, { tulsunDun: { $gt: 0 } }],
           },
         ],
+        ognoo: { $gte: sarEkhlel, $lte: tugsgul },
         turul: { $ne: "Хөнгөлөлт" },
         source: { $ne: "khungulult" },
       })
-      .select("ognoo dun tulsunDun tailbar toot createdAt guilgeeKhiisenAjiltniiNer")
+      .select("ognoo dun tulsunDun tailbar toot toots turul zardliinNer nemeltTailbar createdAt guilgeeKhiisenAjiltniiNer source")
       .sort({ ognoo: -1, createdAt: -1 })
-      .limit(100)
       .lean(),
   ]);
   const zardal = niilber(sariinZarlaguud);
@@ -854,14 +854,38 @@ exports.shilenDansApp = asyncHandler(async (req, res) => {
       tailbar: z.tailbar || "",
       ajiltniiNer: z.ajiltniiNer || "",
     })),
-    orloguud: orloguud.map((o) => ({
-      _id: String(o._id),
-      toot: o.toot || "—",
-      dun: Math.abs(Number(o.dun < 0 ? o.dun : o.tulsunDun) || 0),
-      ognoo: o.ognoo ? new Date(o.ognoo).toISOString().slice(0, 10) : "",
-      tailbar: o.tailbar || "Төлбөр төлөлт",
-      ajiltniiNer: o.guilgeeKhiisenAjiltniiNer || "",
-    })),
+    orloguud: orloguud.map((o) => {
+      const tootStr =
+        o.toot && String(o.toot).trim() && String(o.toot).trim() !== "—"
+          ? String(o.toot).trim()
+          : Array.isArray(o.toots) && o.toots.length > 0 && o.toots[0]
+            ? String(o.toots[0]).trim()
+            : "";
+      const src = String(o.source || "").toLowerCase();
+      const txt = [o.tailbar, o.nemeltTailbar, o.turul].filter(Boolean).join(" ").toLowerCase();
+      const ajiltan =
+        o.guilgeeKhiisenAjiltniiNer && String(o.guilgeeKhiisenAjiltniiNer).trim() && String(o.guilgeeKhiisenAjiltniiNer).trim() !== "—"
+          ? String(o.guilgeeKhiisenAjiltniiNer).trim()
+          : src === "qpay" || txt.includes("qpay")
+            ? "QPay"
+            : src === "bank" || txt.includes("банк") || txt.includes("данс")
+              ? "Банк"
+              : src === "gar"
+                ? "Ажилтан"
+                : src === "system" || src === "excel_import"
+                  ? "Систем"
+                  : "";
+      return {
+        _id: String(o._id),
+        toot: tootStr,
+        dun: Math.abs(Number(o.dun < 0 ? o.dun : o.tulsunDun) || 0),
+        ognoo: o.ognoo ? new Date(o.ognoo).toISOString().slice(0, 10) : "",
+        tailbar: o.tailbar || o.zardliinNer || o.nemeltTailbar || o.turul || "Төлбөр төлөлт",
+        turul: o.turul || "",
+        source: o.source || "",
+        ajiltniiNer: ajiltan,
+      };
+    }),
     tuluugui: niit.tuluugui,
     saraar,
     ailiinAvlaga: {
