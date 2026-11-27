@@ -54,10 +54,100 @@ const orshinSuugchSessionShalgaya = async (req, res, next) => {
 
 router.use(orshinSuugchSessionShalgaya);
 
+const CENTRALIZED_ORG_ID = "698e7fd3b6dd386b6c56a808";
+
+/**
+ * WALLET_API-аар (Амарсөх 698e7fd3b6dd386b6c56a808) нэвтэрсэн оршин суугчийн
+ * `walletBairId`-аар Төрийн банк (BPay) горимтой СӨХ болон барилгыг олно.
+ */
+async function resolveBpaySukhContext({
+  residentId,
+  baiguullagiinId,
+  barilgiinId,
+  tukhainBaaziinKholbolt,
+}) {
+  const orgIdStr = String(baiguullagiinId || "");
+  if (orgIdStr && orgIdStr !== CENTRALIZED_ORG_ID) {
+    return { baiguullagiinId, barilgiinId, tukhainBaaziinKholbolt };
+  }
+  if (!residentId) {
+    return { baiguullagiinId, barilgiinId, tukhainBaaziinKholbolt };
+  }
+
+  try {
+    const Baiguullaga = require("../models/baiguullaga");
+    const resObj = await OrshinSuugch(db.erunkhiiKholbolt)
+      .findById(residentId)
+      .select("toots walletBairId baiguullagiinId barilgiinId")
+      .lean();
+
+    const toots = Array.isArray(resObj?.toots) ? resObj.toots : [];
+    const matchingToot = barilgiinId
+      ? toots.find((t) => String(t?.barilgiinId || "") === String(barilgiinId))
+      : null;
+
+    const walletBairIds = Array.from(
+      new Set(
+        [
+          matchingToot?.walletBairId,
+          ...toots.map((t) => t?.walletBairId),
+          resObj?.walletBairId,
+        ]
+          .filter(Boolean)
+          .map(String),
+      ),
+    );
+
+    if (walletBairIds.length === 0) {
+      return { baiguullagiinId, barilgiinId, tukhainBaaziinKholbolt };
+    }
+
+    const bpayOrg = await Baiguullaga(db.erunkhiiKholbolt)
+      .findOne({
+        "tokhirgoo.bpayAshiglakhEsekh": true,
+        "barilguud.tokhirgoo.bpayBairId": { $in: walletBairIds },
+      })
+      .lean();
+
+    if (!bpayOrg) {
+      return { baiguullagiinId, barilgiinId, tukhainBaaziinKholbolt };
+    }
+
+    const matchedBarilga = (bpayOrg.barilguud || []).find((b) =>
+      walletBairIds.includes(String(b?.tokhirgoo?.bpayBairId || "")),
+    );
+    const resolvedOrgId = String(bpayOrg._id);
+    const resolvedBarilgaId = matchedBarilga
+      ? String(matchedBarilga._id)
+      : barilgiinId;
+    const resolvedKholbolt =
+      getKholboltByBaiguullagiinId(resolvedOrgId) || tukhainBaaziinKholbolt;
+
+    return {
+      baiguullagiinId: resolvedOrgId,
+      barilgiinId: resolvedBarilgaId,
+      tukhainBaaziinKholbolt: resolvedKholbolt,
+    };
+  } catch (err) {
+    console.warn("⚠️ [ZOCHIN] resolveBpaySukhContext error:", err.message);
+    return { baiguullagiinId, barilgiinId, tukhainBaaziinKholbolt };
+  }
+}
+
 /**
  * Shared Quota & Permission Checker Helper
  */
 async function checkQuotaAndPermissions(residentId, baiguullagiinId, barilgiinId, tukhainBaaziinKholbolt) {
+  const ctx = await resolveBpaySukhContext({
+    residentId,
+    baiguullagiinId,
+    barilgiinId,
+    tukhainBaaziinKholbolt,
+  });
+  baiguullagiinId = ctx.baiguullagiinId;
+  barilgiinId = ctx.barilgiinId;
+  tukhainBaaziinKholbolt = ctx.tukhainBaaziinKholbolt;
+
   const Mashin = require("../models/mashin");
   const Baiguullaga = require("../models/baiguullaga");
   const OrshinSuugch = require("../models/orshinSuugch");
@@ -162,7 +252,8 @@ async function checkQuotaAndPermissions(residentId, baiguullagiinId, barilgiinId
     effectiveType,
     effectiveMinutes,
     baiguullagiinId,
-    barilgiinId
+    barilgiinId,
+    tukhainBaaziinKholbolt
   };
 }
 
@@ -182,6 +273,7 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
     const barilgiinId = req.body.barilgiinId;
 
     const quotaInfo = await checkQuotaAndPermissions(residentId, baiguullagiinId, barilgiinId, tukhainBaaziinKholbolt);
+    const activeKholbolt = quotaInfo.tukhainBaaziinKholbolt || tukhainBaaziinKholbolt;
 
     if (!quotaInfo.hasRight) {
       return res.status(403).json({ success: false, message: "Танд зочин урих эрх байхгүй байна" });
@@ -207,7 +299,7 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
 
     // 1. Локал зогсоолын систем (Uilchluulegch) дээр машин одоо зогсоол дотор байгаа эсэх
     try {
-      const latestUilchluulegch = await Uilchluulegch(tukhainBaaziinKholbolt, true)
+      const latestUilchluulegch = await Uilchluulegch(activeKholbolt, true)
         .findOne({
           baiguullagiinId: orgId,
           mashiniiDugaar: plateRegex,
@@ -236,7 +328,7 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
     // 2. Түрээсийн зогсоол (ZochinZogsooliinTuukh) дээр машин одоо зогсоол дотор байгаа эсэх
     if (!isInside) {
       try {
-        const activeZochin = await ZochinZogsooliinTuukh(tukhainBaaziinKholbolt)
+        const activeZochin = await ZochinZogsooliinTuukh(activeKholbolt)
           .findOne({
             baiguullagiinId: orgId,
             mashiniiDugaar: plateRegex,
@@ -265,7 +357,7 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
     }
 
     // Check for duplicate pending invitation for exact same plate
-    const existingPending = await EzenUrisanMashinModel(tukhainBaaziinKholbolt).findOne({
+    const existingPending = await EzenUrisanMashinModel(activeKholbolt).findOne({
       baiguullagiinId: orgId,
       urisanMashiniiDugaar: plate,
       tuluv: 0
@@ -285,7 +377,7 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
        * хаагаад шинийг нь зөвшөөрнө.
        */
       const urilgiinOgnoo = existingPending.createdAt || existingPending.ognoo;
-      const duussanZochlolt = await ZochinZogsooliinTuukh(tukhainBaaziinKholbolt)
+      const duussanZochlolt = await ZochinZogsooliinTuukh(activeKholbolt)
         .findOne({
           baiguullagiinId: orgId,
           mashiniiDugaar: new RegExp(`^\\s*${plate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i"),
@@ -297,7 +389,7 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
         .catch(() => null);
 
       if (duussanZochlolt) {
-        await EzenUrisanMashinModel(tukhainBaaziinKholbolt)
+        await EzenUrisanMashinModel(activeKholbolt)
           .updateOne({ _id: existingPending._id }, { $set: { tuluv: 2 } })
           .catch(() => null);
         console.log(
@@ -330,7 +422,7 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
             : "zochin";
 
         await zochinTureesSyncService.urilgaSynclii(savedDoc, {
-          kholbolt: tukhainBaaziinKholbolt,
+          kholbolt: activeKholbolt,
           tulburiinTurul: zuvshuurugdsunTulburiinTurul,
           gereeniiId: req.body.gereeniiId,
         });
@@ -356,7 +448,7 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
       }
     }
 
-    const newDoc = new (EzenUrisanMashinModel(tukhainBaaziinKholbolt))({
+    const newDoc = new (EzenUrisanMashinModel(activeKholbolt))({
       baiguullagiinId: String(quotaInfo.baiguullagiinId || baiguullagiinId),
       barilgiinId: quotaInfo.barilgiinId || barilgiinId ? String(quotaInfo.barilgiinId || barilgiinId) : undefined,
       ezenId: String(residentId),
@@ -394,7 +486,7 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
     }
 
     const tureesKhariu = await zochinTureesSyncService.urilgaSynclii(savedDoc, {
-      kholbolt: tukhainBaaziinKholbolt,
+      kholbolt: activeKholbolt,
       tulburiinTurul: zuvshuurugdsunTulburiinTurul,
       gereeniiId: req.body.gereeniiId,
     });
@@ -405,7 +497,7 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
       (tureesKhariu.status === 409 ||
         (tureesKhariu.message && tureesKhariu.message.includes("зогсоолд орсон")))
     ) {
-      await EzenUrisanMashinModel(tukhainBaaziinKholbolt)
+      await EzenUrisanMashinModel(activeKholbolt)
         .deleteOne({ _id: savedDoc._id })
         .catch(() => null);
       return res.status(400).json({
@@ -463,10 +555,23 @@ router.post("/ezenUrisanMashin", tokenShalgakh, async (req, res, next) => {
  */
 router.delete("/ezenUrisanMashin/:id", tokenShalgakh, async (req, res, next) => {
   try {
-    const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
+    let tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
     const EzenUrisanMashinModel = require("sukhParking-v1").EzenUrisanMashin;
 
-    const doc = await EzenUrisanMashinModel(tukhainBaaziinKholbolt).findById(req.params.id);
+    let doc = await EzenUrisanMashinModel(tukhainBaaziinKholbolt).findById(req.params.id);
+    if (!doc) {
+      const tokenResidentId = ugugdliinEzniiId(req.body.nevtersenAjiltniiToken);
+      const ctx = await resolveBpaySukhContext({
+        residentId: tokenResidentId,
+        baiguullagiinId: req.body.baiguullagiinId || req.body.nevtersenAjiltniiToken?.baiguullagiinId,
+        barilgiinId: req.body.barilgiinId,
+        tukhainBaaziinKholbolt,
+      });
+      if (ctx.tukhainBaaziinKholbolt && ctx.tukhainBaaziinKholbolt !== tukhainBaaziinKholbolt) {
+        tukhainBaaziinKholbolt = ctx.tukhainBaaziinKholbolt;
+        doc = await EzenUrisanMashinModel(tukhainBaaziinKholbolt).findById(req.params.id);
+      }
+    }
     if (!doc) {
       return res.status(404).json({ success: false, message: "Урилга олдсонгүй" });
     }
@@ -739,6 +844,16 @@ router.get("/zochinSettings", tokenShalgakh, async (req, res, next) => {
       );
     }
 
+    const bpayCtx = await resolveBpaySukhContext({
+      residentId,
+      baiguullagiinId,
+      barilgiinId,
+      tukhainBaaziinKholbolt,
+    });
+    baiguullagiinId = bpayCtx.baiguullagiinId;
+    barilgiinId = bpayCtx.barilgiinId;
+    tukhainBaaziinKholbolt = bpayCtx.tukhainBaaziinKholbolt;
+
     let settings = null;
     if (tukhainBaaziinKholbolt) {
       try {
@@ -837,11 +952,21 @@ router.get("/zochinQuotaStatus", tokenShalgakh, async (req, res, next) => {
     const Mashin = require("../models/mashin");
     // const EzenUrisanMashin = require("../models/ezenUrisanMashin"); // Using sdk version instead
     const residentId = ugugdliinEzniiId(req.body.nevtersenAjiltniiToken);
-    const tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
-    const baiguullagiinId = req.query.baiguullagiinId || req.body.baiguullagiinId;
-    const barilgiinId = req.query.barilgiinId || req.body.barilgiinId;
+    let tukhainBaaziinKholbolt = req.body.tukhainBaaziinKholbolt;
+    let baiguullagiinId = req.query.baiguullagiinId || req.body.baiguullagiinId;
+    let barilgiinId = req.query.barilgiinId || req.body.barilgiinId;
 
     if (!residentId) return res.status(401).send("Нэвтрэх шаардлагатай");
+
+    const bpayCtx = await resolveBpaySukhContext({
+      residentId,
+      baiguullagiinId,
+      barilgiinId,
+      tukhainBaaziinKholbolt,
+    });
+    baiguullagiinId = bpayCtx.baiguullagiinId;
+    barilgiinId = bpayCtx.barilgiinId;
+    tukhainBaaziinKholbolt = bpayCtx.tukhainBaaziinKholbolt;
 
     // Эзэмшигч нь ОРШИН СУУГЧ уу, ХАРИЛЦАГЧ уу? Зочны квот хоёуланд өөр
     // байж болох тул энд шийднэ. Өмнө нь доорх хайлтууд нь
@@ -1838,25 +1963,25 @@ router.post("/zochinHadgalya", tokenShalgakh, async (req, res, next) => {
  */
 router.get("/zochin/urisanMashin", tokenShalgakh, async (req, res, next) => {
   try {
-    const baiguullagiinId = req.query.baiguullagiinId;
-    if (!baiguullagiinId)
-      return res
-        .status(400)
-        .json({ success: false, message: "baiguullagiinId шаардлагатай" });
-
     const token = req.body.nevtersenAjiltniiToken || {};
-    const kholbolt =
-      getKholboltByBaiguullagiinId(baiguullagiinId) ||
-      req.body.tukhainBaaziinKholbolt ||
-      db.erunkhiiKholbolt;
-
-    const query = { baiguullagiinId: String(baiguullagiinId) };
-    if (req.query.barilgiinId)
-      query.barilgiinId = String(req.query.barilgiinId);
-
-    // Оршин суугч зөвхөн өөрийнхөө урилгыг харна
     const orshinSuugchId =
       token.erkh === "OrshinSuugch" ? token.id : req.query.orshinSuugchId;
+
+    const bpayCtx = await resolveBpaySukhContext({
+      residentId: orshinSuugchId,
+      baiguullagiinId: req.query.baiguullagiinId,
+      barilgiinId: req.query.barilgiinId,
+      tukhainBaaziinKholbolt:
+        getKholboltByBaiguullagiinId(req.query.baiguullagiinId) ||
+        req.body.tukhainBaaziinKholbolt ||
+        db.erunkhiiKholbolt,
+    });
+    const baiguullagiinId = bpayCtx.baiguullagiinId;
+    const kholbolt = bpayCtx.tukhainBaaziinKholbolt;
+
+    const query = { baiguullagiinId: String(baiguullagiinId) };
+    if (bpayCtx.barilgiinId || req.query.barilgiinId)
+      query.barilgiinId = String(bpayCtx.barilgiinId || req.query.barilgiinId);
 
     if (orshinSuugchId) {
       query.$or = [
@@ -1891,10 +2016,19 @@ router.post("/ezenUrisanTuukh", tokenShalgakh, async (req, res, next) => {
       return res.send({ ezenList: [], jagsaalt: [] });
     }
 
-    var ezenJagsaalt = await EzenUrisanMashin(
-      req.body.tukhainBaaziinKholbolt
-    ).find({
+    const bpayCtx = await resolveBpaySukhContext({
+      residentId: searchId,
       baiguullagiinId: req.body.baiguullagiinId,
+      barilgiinId: req.body.barilgiinId,
+      tukhainBaaziinKholbolt: req.body.tukhainBaaziinKholbolt,
+    });
+    const activeKholbolt = bpayCtx.tukhainBaaziinKholbolt;
+    const activeOrgId = bpayCtx.baiguullagiinId;
+
+    var ezenJagsaalt = await EzenUrisanMashin(
+      activeKholbolt
+    ).find({
+      baiguullagiinId: activeOrgId,
       $or: [{ ezenId: searchId }, { ezemshigchiinId: searchId }],
     });
 
@@ -1910,10 +2044,10 @@ router.post("/ezenUrisanTuukh", tokenShalgakh, async (req, res, next) => {
       );
 
       jagsaalt = await Uilchluulegch(
-        req.body.tukhainBaaziinKholbolt,
+        activeKholbolt,
         true
       ).find({
-        baiguullagiinId: req.body.baiguullagiinId,
+        baiguullagiinId: activeOrgId,
         $or: [
           { "urisanMashin._id": { $in: invitationIds } },
           { mashiniiDugaar: { $in: plateRegexes } },
