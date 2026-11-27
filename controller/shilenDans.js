@@ -474,7 +474,20 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
       .lean(),
   ]);
   const zardal = niilber(zarlaguud);
-  const ailuud = await ailiinTootsooAvya(kholbolt, baseMatch, barilgiinId, ekhlel, tugsgul, khetersen.ailuud);
+  const [distinctAngilals, ailuud] = await Promise.all([
+    ShilenDansZarlaga(kholbolt).distinct("angilal", {
+      baiguullagiinId: String(kholbolt.baiguullagiinId),
+      barilgiinId: String(barilgiinId),
+      ...ZARLAGA_MATCH,
+    }),
+    ailiinTootsooAvya(kholbolt, baseMatch, barilgiinId, ekhlel, tugsgul, khetersen.ailuud),
+  ]);
+  const allAngilals = Array.from(
+    new Set([
+      ...ZARLAGIIN_ANGILAL,
+      ...(distinctAngilals || []).map((a) => String(a || "").trim()).filter(Boolean),
+    ]),
+  );
 
   // Дутуу гэрээнүүдийг гүйцээн татах
   const extraGereeIds = Array.from(
@@ -592,7 +605,7 @@ exports.shilenDansTailan = asyncHandler(async (req, res) => {
     khetersenAilToo: khetersen.ailuud.size,
     zardal,
     khurimtlal: niit.tulsun - zardal,
-    zarlagiinAngilaluud: ZARLAGIIN_ANGILAL,
+    zarlagiinAngilaluud: allAngilals,
     zarlaguud,
     orloguud: formattedOrloguud,
     zarlagaAngilalaar: angilalaarNiilberle(zarlaguud),
@@ -631,10 +644,10 @@ function udriinEkhlel(utga) {
 function zarlagaShalgakh(body) {
   const ognoo = udriinEkhlel(body.ognoo);
   const dun = Math.round(Number(body.dun) * 100) / 100;
-  const angilal = String(body.angilal || "");
+  const angilal = String(body.angilal || "").trim().slice(0, 100);
   if (!ognoo) return { aldaa: "Огноо буруу байна" };
   if (!(dun > 0)) return { aldaa: "Дүн 0-ээс их байх ёстой" };
-  if (!ZARLAGIIN_ANGILAL.includes(angilal)) return { aldaa: "Ангилал буруу байна" };
+  if (!angilal) return { aldaa: "Ангилал оруулна уу" };
   return {
     utga: {
       turul: "zarlaga",
