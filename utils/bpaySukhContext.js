@@ -74,6 +74,7 @@ async function resolveBpaySukhContext({
     return {
       baiguullagiinId: resolvedOrgId,
       barilgiinId: resolvedBarilgaId,
+      baiguullagiinNer: bpayOrg.ner || "",
       tukhainBaaziinKholbolt: resolvedKholbolt,
     };
   } catch (err) {

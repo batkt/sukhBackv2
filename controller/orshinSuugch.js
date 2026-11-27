@@ -2739,6 +2739,23 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
       resultUser.ovog = "";
     }
 
+    let resolvedKholboltNer = null;
+    if (isWalletLoginUser) {
+      const { resolveBpaySukhContext } = require("../utils/bpaySukhContext");
+      const bpayCtx = await resolveBpaySukhContext({
+        residentId: resultUser._id,
+        baiguullagiinId: resultUser.baiguullagiinId,
+        barilgiinId: resultUser.barilgiinId,
+        tukhainBaaziinKholbolt: null,
+      });
+      if (bpayCtx.baiguullagiinId && String(bpayCtx.baiguullagiinId) !== CENTRALIZED_ORG_ID) {
+        resultUser.baiguullagiinId = bpayCtx.baiguullagiinId;
+        resultUser.barilgiinId = bpayCtx.barilgiinId;
+        if (bpayCtx.baiguullagiinNer) resultUser.baiguullagiinNer = bpayCtx.baiguullagiinNer;
+        resolvedKholboltNer = bpayCtx.tukhainBaaziinKholbolt?.kholboltNer || null;
+      }
+    }
+
     const butsaakhObject = {
       result: resultUser,
       success: true,
@@ -2747,7 +2764,9 @@ exports.orshinSuugchNevtrey = asyncHandler(async (req, res, next) => {
     };
 
     // Add tukhainBaaziinKholbolt to response so the app knows which DB to use for contracts/billing
-    if (orshinSuugch.baiguullagiinId) {
+    if (resolvedKholboltNer) {
+      butsaakhObject.tukhainBaaziinKholbolt = resolvedKholboltNer;
+    } else if (orshinSuugch.baiguullagiinId) {
       const matchingKholbolt = db.kholboltuud.find(
         (k) => k.baiguullagiinId === orshinSuugch.baiguullagiinId.toString(),
       );
@@ -4435,6 +4454,21 @@ exports.tokenoorOrshinSuugchAvya = asyncHandler(async (req, res, next) => {
       if (isWalletUser && urdunJson.hasCustomName !== true) {
         urdunJson.ner = "";
         urdunJson.ovog = "";
+      }
+
+      if (isWalletUser) {
+        const { resolveBpaySukhContext } = require("../utils/bpaySukhContext");
+        const bpayCtx = await resolveBpaySukhContext({
+          residentId: urdunJson._id,
+          baiguullagiinId: urdunJson.baiguullagiinId,
+          barilgiinId: urdunJson.barilgiinId,
+          tukhainBaaziinKholbolt: null,
+        });
+        if (bpayCtx.baiguullagiinId && String(bpayCtx.baiguullagiinId) !== CENTRALIZED_ORG_ID) {
+          urdunJson.baiguullagiinId = bpayCtx.baiguullagiinId;
+          urdunJson.barilgiinId = bpayCtx.barilgiinId;
+          if (bpayCtx.baiguullagiinNer) urdunJson.baiguullagiinNer = bpayCtx.baiguullagiinNer;
+        }
       }
 
       // Төрийн банк (BPay) горимтой байгууллагууд — апп эдгээрийн СӨХ-ийн төлбөрийг
