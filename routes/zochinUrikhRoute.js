@@ -134,6 +134,78 @@ async function resolveBpaySukhContext({
   }
 }
 
+async function findResidentMasterSetting({
+  residentId,
+  baiguullagiinId,
+  barilgiinId,
+  tukhainBaaziinKholbolt,
+  zochinTurul = "Оршин суугч",
+}) {
+  const Mashin = require("../models/mashin");
+  const ids = [String(residentId), residentId];
+
+  const tryFind = async (targetIds) => {
+    const baseOr = targetIds.flatMap((id) => [
+      { ezemshigchiinId: id },
+      { orshinSuugchiinId: id },
+    ]);
+    const q = { $or: baseOr, zochinTurul };
+    if (baiguullagiinId) q.baiguullagiinId = String(baiguullagiinId);
+    if (barilgiinId) q.barilgiinId = String(barilgiinId);
+
+    let found =
+      (await Mashin(tukhainBaaziinKholbolt).findOne(q)) ||
+      (await Mashin(tukhainBaaziinKholbolt).findOne({
+        $or: baseOr,
+        zochinTurul,
+      }));
+    if (found) return found;
+
+    found =
+      (await OrshinSuugchMashin(tukhainBaaziinKholbolt).findOne(q)) ||
+      (await OrshinSuugchMashin(tukhainBaaziinKholbolt).findOne({
+        $or: baseOr,
+        zochinTurul,
+      }));
+    return found;
+  };
+
+  let masterSetting = await tryFind(ids);
+  if (masterSetting) return masterSetting;
+
+  // WALLET_API хэрэглэгч (өөр _id-тай) өөрийн утасны дугаараар тухайн СӨХ-д
+  // бүртгэлтэй OrshinSuugch / OrshinSuugchMashin-тэй бол түүнээс олж авна.
+  try {
+    const resObj = await OrshinSuugch(db.erunkhiiKholbolt)
+      .findById(residentId)
+      .select("utas")
+      .lean();
+    const utasList = Array.isArray(resObj?.utas)
+      ? resObj.utas.filter(Boolean).map(String)
+      : resObj?.utas
+        ? [String(resObj.utas)]
+        : [];
+    if (utasList.length > 0) {
+      const orgResidents = await OrshinSuugch(db.erunkhiiKholbolt)
+        .find({
+          utas: { $in: utasList },
+          ...(baiguullagiinId ? { baiguullagiinId: String(baiguullagiinId) } : {}),
+        })
+        .select("_id")
+        .lean();
+      const altIds = orgResidents
+        .map((r) => String(r._id))
+        .filter((id) => id !== String(residentId));
+      if (altIds.length > 0) {
+        masterSetting = await tryFind(altIds);
+      }
+    }
+  } catch (err) {
+    console.warn("⚠️ [ZOCHIN] findResidentMasterSetting utas lookup error:", err.message);
+  }
+  return masterSetting;
+}
+
 /**
  * Shared Quota & Permission Checker Helper
  */
@@ -148,32 +220,18 @@ async function checkQuotaAndPermissions(residentId, baiguullagiinId, barilgiinId
   barilgiinId = ctx.barilgiinId;
   tukhainBaaziinKholbolt = ctx.tukhainBaaziinKholbolt;
 
-  const Mashin = require("../models/mashin");
   const Baiguullaga = require("../models/baiguullaga");
   const OrshinSuugch = require("../models/orshinSuugch");
   const EzenUrisanMashinModel = require("sukhParking-v1").EzenUrisanMashin;
   const { db } = require("zevbackv2");
 
-  const query = {
-    $or: [
-      { ezemshigchiinId: String(residentId) },
-      { orshinSuugchiinId: String(residentId) }
-    ],
-    zochinTurul: "Оршин суугч"
-  };
-  if (baiguullagiinId) query.baiguullagiinId = String(baiguullagiinId);
-  if (barilgiinId) query.barilgiinId = String(barilgiinId);
-
-  let masterSetting = await Mashin(tukhainBaaziinKholbolt).findOne(query);
-  if (!masterSetting) {
-    masterSetting = await Mashin(tukhainBaaziinKholbolt).findOne({
-      $or: [
-        { ezemshigchiinId: residentId },
-        { orshinSuugchiinId: residentId }
-      ],
-      zochinTurul: "Оршин суугч"
-    });
-  }
+  const masterSetting = await findResidentMasterSetting({
+    residentId,
+    baiguullagiinId,
+    barilgiinId,
+    tukhainBaaziinKholbolt,
+    zochinTurul: "Оршин суугч",
+  });
 
   let buildingSettings = null;
   if (!baiguullagiinId || !barilgiinId) {
@@ -198,7 +256,11 @@ async function checkQuotaAndPermissions(residentId, baiguullagiinId, barilgiinId
     if (!targetBarilga && baiguullagaRecord?.barilguud?.length > 0) {
       targetBarilga = baiguullagaRecord.barilguud[0];
     }
-    buildingSettings = targetBarilga?.zochinTokhirgoo || targetBarilga?.tokhirgoo?.zochinTokhirgoo;
+    buildingSettings =
+      targetBarilga?.zochinTokhirgoo ||
+      targetBarilga?.tokhirgoo?.zochinTokhirgoo ||
+      baiguullagaRecord?.zochinTokhirgoo ||
+      baiguullagaRecord?.tokhirgoo?.zochinTokhirgoo;
   }
 
   const effectiveTotal = Math.max(
@@ -857,14 +919,12 @@ router.get("/zochinSettings", tokenShalgakh, async (req, res, next) => {
     let settings = null;
     if (tukhainBaaziinKholbolt) {
       try {
-        settings = await Mashin(tukhainBaaziinKholbolt).findOne({
-          $or: [
-            { ezemshigchiinId: residentId },
-            { orshinSuugchiinId: residentId },
-            { ezemshigchiinId: String(residentId) },
-            { orshinSuugchiinId: String(residentId) }
-          ],
-          zochinTurul: "Оршин суугч"
+        settings = await findResidentMasterSetting({
+          residentId,
+          baiguullagiinId,
+          barilgiinId,
+          tukhainBaaziinKholbolt,
+          zochinTurul: "Оршин суугч",
         });
       } catch (findErr) {
         console.error("⚠️ [zochinSettings] Error finding resident mashin:", findErr.message);
@@ -877,7 +937,11 @@ router.get("/zochinSettings", tokenShalgakh, async (req, res, next) => {
       const targetBarilga = baiguullagaRecord?.barilguud?.find(
         (b) => String(b._id) === String(barilgiinId)
       );
-      buildingSettings = targetBarilga?.zochinTokhirgoo || targetBarilga?.tokhirgoo?.zochinTokhirgoo;
+      buildingSettings =
+      targetBarilga?.zochinTokhirgoo ||
+      targetBarilga?.tokhirgoo?.zochinTokhirgoo ||
+      baiguullagaRecord?.zochinTokhirgoo ||
+      baiguullagaRecord?.tokhirgoo?.zochinTokhirgoo;
     }
 
     // Merge: Resident settings take priority for custom needs, but Building settings can provide defaults
@@ -990,35 +1054,13 @@ router.get("/zochinQuotaStatus", tokenShalgakh, async (req, res, next) => {
     res.setHeader('Expires', '0');
     res.setHeader('Surrogate-Control', 'no-store');
 
-    const query = {
-      $or: [
-        { ezemshigchiinId: String(residentId) },
-        { orshinSuugchiinId: String(residentId) }
-      ],
-      zochinTurul: zochinTurulNer
-    };
-
-    // Filter by organization and building if provided
-    if (baiguullagiinId) {
-      query.baiguullagiinId = String(baiguullagiinId);
-    }
-    if (barilgiinId) {
-      query.barilgiinId = String(barilgiinId);
-    }
-
-    let masterSetting = await Mashin(tukhainBaaziinKholbolt).findOne(query);
-
-    // Initial Fallback: Resident search only
-    if (!masterSetting) {
-      console.log("🔍 [QUOTA] Master setting not found with filters, trying resident-only search...");
-      masterSetting = await Mashin(tukhainBaaziinKholbolt).findOne({
-        $or: [
-          { ezemshigchiinId: residentId },
-          { orshinSuugchiinId: residentId }
-        ],
-        zochinTurul: zochinTurulNer
-      });
-    }
+    const masterSetting = await findResidentMasterSetting({
+      residentId,
+      baiguullagiinId,
+      barilgiinId,
+      tukhainBaaziinKholbolt,
+      zochinTurul: zochinTurulNer,
+    });
 
     // Secondary Fallback: Building settings (using Baiguullaga model)
     const Baiguullaga = require("../models/baiguullaga");
@@ -1058,7 +1100,10 @@ router.get("/zochinQuotaStatus", tokenShalgakh, async (req, res, next) => {
       // Харилцагч бол `zochinTokhirgoo.khariltsagch`-аас, тохируулаагүй
       // талбарыг оршин суугчийнхаар нөхөж авна.
       buildingSettings = zochniiTokhirgooAvya(
-        targetBarilga?.zochinTokhirgoo || targetBarilga?.tokhirgoo?.zochinTokhirgoo,
+        targetBarilga?.zochinTokhirgoo ||
+          targetBarilga?.tokhirgoo?.zochinTokhirgoo ||
+          baiguullagaRecord?.zochinTokhirgoo ||
+          baiguullagaRecord?.tokhirgoo?.zochinTokhirgoo,
         zochinTurulNer,
       );
     }
