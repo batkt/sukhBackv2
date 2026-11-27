@@ -54,12 +54,20 @@ const client = require("../routes/redisClient");
 const crypto = require("crypto");
 const { QuickQpayObject } = require("quickqpaypackv2");
 const axios = require("axios");
+const { resolveBpaySukhContext } = require("../utils/bpaySukhContext");
 
 /*crud(router, "parking", Parking, UstsanBarimt, async (req, res, next) => {
 });*/
 router.get("/parking", tokenShalgakh, async (req, res, next) => {
   try {
-    const { baiguullagiinId, barilgiinId } = req.query;
+    const bpayCtx = await resolveBpaySukhContext({
+      residentId: req.body?.nevtersenAjiltniiToken?.id,
+      baiguullagiinId: req.query.baiguullagiinId,
+      barilgiinId: req.query.barilgiinId,
+      tukhainBaaziinKholbolt: req.body.tukhainBaaziinKholbolt || db.erunkhiiKholbolt,
+    });
+    const baiguullagiinId = bpayCtx.baiguullagiinId;
+    const barilgiinId = bpayCtx.barilgiinId;
     const page = parseInt(req.query.khuudasniiDugaar) || 1;
     const limit = parseInt(req.query.khuudasniiKhemjee) || 10;
 
@@ -86,7 +94,7 @@ router.get("/parking", tokenShalgakh, async (req, res, next) => {
       ];
     }
 
-    const kholbolt = req.body.tukhainBaaziinKholbolt || db.erunkhiiKholbolt;
+    const kholbolt = bpayCtx.tukhainBaaziinKholbolt || db.erunkhiiKholbolt;
     const ParkingModel = Parking(kholbolt);
     const list = await ParkingModel.find(query)
       .skip((page - 1) * limit)
