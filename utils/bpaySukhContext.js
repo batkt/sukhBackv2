@@ -17,7 +17,15 @@ async function resolveBpaySukhContext({
 }) {
   const orgIdStr = String(baiguullagiinId || "");
   if (orgIdStr && orgIdStr !== CENTRALIZED_ORG_ID) {
-    return { baiguullagiinId, barilgiinId, tukhainBaaziinKholbolt };
+    const matchedKholbolt =
+      String(tukhainBaaziinKholbolt?.baiguullagiinId || "") === orgIdStr
+        ? tukhainBaaziinKholbolt
+        : getKholboltByBaiguullagiinId(orgIdStr) || tukhainBaaziinKholbolt;
+    return {
+      baiguullagiinId,
+      barilgiinId,
+      tukhainBaaziinKholbolt: matchedKholbolt,
+    };
   }
   if (!residentId) {
     return { baiguullagiinId, barilgiinId, tukhainBaaziinKholbolt };
